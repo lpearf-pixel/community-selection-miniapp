@@ -95,7 +95,7 @@ Web Codex 请按本文件顺序执行，并参考 docs/08_CODEX_TASKS.md 的详�
 - scripts/check.sh
 - scripts/e2e-smoke.sh
 - scripts/e2e-refund.sh
-- scripts/e2e-group-expired.sh
+- scripts/e2e-group-failed.sh
 
 覆盖主流程、退款流程和过期未成团流程。
 

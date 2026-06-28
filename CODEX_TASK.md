@@ -53,7 +53,7 @@ scripts/check.sh
 ```bash
 scripts/e2e-smoke.sh
 scripts/e2e-refund.sh
-scripts/e2e-group-expired.sh
+scripts/e2e-group-failed.sh
 ```
 
 ## 强制合规约束
