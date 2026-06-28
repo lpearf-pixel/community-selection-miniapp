@@ -46,3 +46,10 @@ declare namespace JSX {
 declare module 'vite' {
   export function defineConfig(config: unknown): unknown;
 }
+
+
+interface ImportMeta {
+  env?: {
+    VITE_API_BASE_URL?: string;
+  };
+}

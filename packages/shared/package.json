@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "node ../../scripts/lint-placeholder.js",
@@ -11,5 +11,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {},
-  "types": "dist/index.d.ts"
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  }
 }

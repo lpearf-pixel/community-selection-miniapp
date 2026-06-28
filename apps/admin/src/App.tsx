@@ -5,6 +5,8 @@ import { formatYuan } from '@community-selection/shared';
 type CommissionType = 'none' | 'fixed' | 'percent';
 type ProductStatus = 'draft' | 'active' | 'inactive';
 
+const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
+
 type Category = {
   id: string;
   name: string;
@@ -40,7 +42,7 @@ const emptyProduct: Product = {
 };
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await fetch(`${apiBaseUrl}${url}`);
   const json = await response.json();
   if (!json.success) throw new Error(json.message || '请求失败');
   return json.data as T;

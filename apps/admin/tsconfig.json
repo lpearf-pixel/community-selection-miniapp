@@ -1,9 +1,21 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
+    "target": "ES2022",
     "outDir": "dist",
-    "rootDir": "."
+    "noEmit": true,
+    "types": [
+      "vite/client",
+      "node"
+    ],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
   },
   "include": [
     "src/**/*.ts",
