@@ -73,7 +73,7 @@ community-selection-miniapp/
 ```env
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/community_selection
+DATABASE_URL=postgresql://postgres:postgres@localhost:15432/community_selection
 ADMIN_TOKEN=dev-admin-token
 MOCK_WECHAT_PAY=true
 
