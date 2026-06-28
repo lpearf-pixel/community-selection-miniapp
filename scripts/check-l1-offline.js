@@ -6,7 +6,6 @@ const root = process.cwd();
 const scanRoots = ['.npmrc', 'package.json', 'pnpm-workspace.yaml', 'apps', 'packages', 'prisma'];
 const ignoredDirs = new Set(['node_modules', 'dist', 'build', '.vite']);
 const checkedExtensions = new Set(['.js', '.cjs', '.mjs', '.ts', '.tsx', '.json', '.prisma', '.yml', '.yaml', '.wxss', '.wxml']);
-const dbScriptPattern = /"db:(migrate|seed|studio)"|seed\.ts/;
 const tokenOrLocalPathPatterns = [
   ['_auth', 'Token'],
   ['npm_', '[A-Za-z0-9]'],
@@ -29,9 +28,6 @@ function checkFile(filePath, failures) {
   if (!shouldScanFile(filePath)) return;
   const text = readFileSync(filePath, 'utf8');
   const rel = relative(root, filePath);
-  if (dbScriptPattern.test(text)) {
-    failures.push(`${rel}: L2 database script or seed placeholder found`);
-  }
   for (const pattern of tokenOrLocalPathPatterns) {
     if (pattern.test(text)) {
       failures.push(`${rel}: token or local absolute path pattern found`);

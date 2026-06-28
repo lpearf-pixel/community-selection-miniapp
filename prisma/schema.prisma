@@ -6,3 +6,309 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserRole {
+  customer
+  leader
+  admin
+}
+
+enum ProductStatus {
+  draft
+  active
+  inactive
+}
+
+enum GroupBuyStatus {
+  pending
+  success
+  failed
+  cancelled
+  preparing
+  ready
+  fulfilled
+  closed
+}
+
+enum OrderStatus {
+  unpaid
+  paid
+  grouped
+  preparing
+  ready
+  picked
+  delivered
+  completed
+  refunding
+  refunded
+  closed
+}
+
+enum PayStatus {
+  unpaid
+  paid
+  failed
+  closed
+}
+
+enum RefundStatus {
+  none
+  pending
+  approved
+  processing
+  success
+  failed
+  rejected
+}
+
+enum CommissionStatus {
+  estimated
+  frozen
+  pending
+  available
+  withdrawn
+  deducted
+  cancelled
+}
+
+enum CommissionType {
+  none
+  fixed
+  percent
+}
+
+enum PickupType {
+  store
+  delivery
+}
+
+enum WithdrawalStatus {
+  pending
+  approved
+  paid
+  rejected
+}
+
+model User {
+  id                  String              @id @default(cuid())
+  openid              String              @unique
+  unionid             String?
+  nickname            String
+  avatar_url          String?
+  phone               String?
+  role                UserRole            @default(customer)
+  status              String              @default("active")
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  group_buys          GroupBuy[]          @relation("GroupBuyLeader")
+  orders              Order[]             @relation("OrderUser")
+  leader_orders       Order[]             @relation("OrderLeader")
+  commissions         Commission[]        @relation("CommissionLeader")
+  leader_applications LeaderApplication[]
+  withdrawals         Withdrawal[]        @relation("WithdrawalLeader")
+  audit_logs          AuditLog[]          @relation("AuditActor")
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  name       String    @unique
+  sort_order Int       @default(0)
+  status     String    @default("active")
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  products   Product[]
+}
+
+model Product {
+  id                   String          @id @default(cuid())
+  name                 String          @unique
+  category_id          String
+  cover_image          String?
+  images               Json            @default("[]")
+  description          String?
+  price_cents          Int
+  cost_price_cents     Int
+  stock                Int             @default(0)
+  unit                 String
+  is_group_enabled     Boolean         @default(false)
+  commission_type      CommissionType  @default(none)
+  commission_value     Int             @default(0)
+  status               ProductStatus   @default(draft)
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
+  category             Category        @relation(fields: [category_id], references: [id])
+  group_buys           GroupBuy[]
+}
+
+model Community {
+  id                  String              @id @default(cuid())
+  name                String              @unique
+  address             String
+  status              String              @default("active")
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  group_buys          GroupBuy[]
+  orders              Order[]
+  leader_applications LeaderApplication[]
+}
+
+model PickupStore {
+  id         String   @id @default(cuid())
+  name       String
+  address    String
+  phone      String
+  latitude   Decimal? @db.Decimal(10, 6)
+  longitude  Decimal? @db.Decimal(10, 6)
+  status     String   @default("active")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  orders     Order[]
+}
+
+model GroupBuy {
+  id               String         @id @default(cuid())
+  product_id       String
+  leader_user_id   String
+  community_id     String
+  min_people       Int
+  min_quantity     Int
+  current_people   Int            @default(0)
+  current_quantity Int            @default(0)
+  price_cents      Int
+  start_time       DateTime
+  end_time         DateTime
+  pickup_time      DateTime
+  status           GroupBuyStatus @default(pending)
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @updatedAt
+  product          Product        @relation(fields: [product_id], references: [id])
+  leader_user      User           @relation("GroupBuyLeader", fields: [leader_user_id], references: [id])
+  community        Community      @relation(fields: [community_id], references: [id])
+  orders           Order[]
+  commissions      Commission[]
+
+  @@index([product_id])
+  @@index([leader_user_id])
+}
+
+model Order {
+  id                  String       @id @default(cuid())
+  order_no            String       @unique
+  client_request_id   String?      @unique
+  user_id             String
+  group_buy_id        String?
+  leader_user_id      String?
+  total_amount_cents  Int
+  pay_amount_cents    Int
+  refund_amount_cents Int          @default(0)
+  pay_status          PayStatus    @default(unpaid)
+  order_status        OrderStatus  @default(unpaid)
+  refund_status       RefundStatus @default(none)
+  pickup_type         PickupType   @default(store)
+  pickup_store_id     String?
+  community_id        String?
+  receiver_name       String
+  receiver_phone      String
+  receiver_address    String?
+  created_at          DateTime     @default(now())
+  paid_at             DateTime?
+  completed_at        DateTime?
+  updated_at          DateTime     @updatedAt
+  user                User         @relation("OrderUser", fields: [user_id], references: [id])
+  group_buy           GroupBuy?    @relation(fields: [group_buy_id], references: [id])
+  leader_user         User?        @relation("OrderLeader", fields: [leader_user_id], references: [id])
+  pickup_store        PickupStore? @relation(fields: [pickup_store_id], references: [id])
+  community           Community?   @relation(fields: [community_id], references: [id])
+  payments            Payment[]
+  refunds             Refund[]
+  commissions         Commission[]
+
+  @@index([user_id])
+  @@index([group_buy_id])
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  order_id       String
+  out_trade_no   String   @unique
+  transaction_id String?  @unique
+  prepay_id      String?
+  amount_cents   Int
+  trade_state    String
+  raw_notify     Json?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  order          Order    @relation(fields: [order_id], references: [id])
+}
+
+model Refund {
+  id                  String       @id @default(cuid())
+  order_id            String
+  out_refund_no       String       @unique
+  refund_id           String?      @unique
+  refund_amount_cents Int
+  reason              String
+  status              RefundStatus @default(pending)
+  raw_notify          Json?
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
+  order               Order        @relation(fields: [order_id], references: [id])
+}
+
+model Commission {
+  id                     String           @id @default(cuid())
+  leader_user_id         String
+  order_id               String
+  group_buy_id           String
+  base_amount_cents      Int
+  commission_type        CommissionType
+  commission_value       Int
+  estimated_amount_cents Int
+  deduct_amount_cents    Int              @default(0)
+  final_amount_cents     Int
+  status                 CommissionStatus @default(estimated)
+  available_at           DateTime?
+  created_at             DateTime         @default(now())
+  updated_at             DateTime         @updatedAt
+  leader_user            User             @relation("CommissionLeader", fields: [leader_user_id], references: [id])
+  order                  Order            @relation(fields: [order_id], references: [id])
+  group_buy              GroupBuy         @relation(fields: [group_buy_id], references: [id])
+
+  @@index([leader_user_id])
+}
+
+model LeaderApplication {
+  id           String    @id @default(cuid())
+  user_id      String
+  real_name    String
+  phone        String
+  community_id String?
+  status       String    @default("pending")
+  admin_remark String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  user         User      @relation(fields: [user_id], references: [id])
+  community    Community? @relation(fields: [community_id], references: [id])
+}
+
+model Withdrawal {
+  id             String           @id @default(cuid())
+  leader_user_id String
+  amount_cents   Int
+  status         WithdrawalStatus @default(pending)
+  admin_remark   String?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+  leader_user    User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  actor_user_id String?
+  action        String
+  target_type   String
+  target_id     String?
+  payload       Json?
+  created_at    DateTime @default(now())
+  actor_user    User?    @relation("AuditActor", fields: [actor_user_id], references: [id])
+}
