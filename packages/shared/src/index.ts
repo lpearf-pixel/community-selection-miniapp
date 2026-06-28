@@ -19,3 +19,7 @@ export function ok<T>(data: T, message = ''): ApiSuccessResponse<T> {
 export function fail(message: string): ApiErrorResponse {
   return { success: false, data: null, message };
 }
+
+export function formatYuan(cents: number): string {
+  return (cents / 100).toFixed(2);
+}

@@ -1,0 +1,10 @@
+<view class="page" wx:if="{{product}}">
+  <image class="cover" src="{{product.cover_image}}" mode="aspectFill" />
+  <view class="card">
+    <view class="name">{{product.name}}</view>
+    <view class="price">¥{{product.price_yuan}}</view>
+    <view class="meta">库存 {{product.stock}}{{product.unit}}</view>
+    <view class="meta">{{product.is_group_enabled ? '支持开团' : '普通商品'}}</view>
+    <view class="description">{{product.description}}</view>
+  </view>
+</view>

@@ -1,8 +1,8 @@
 declare module 'fastify' {
-  type RouteHandler = () => unknown | Promise<unknown>;
-  type InjectOptions = { method: string; url: string };
-  type InjectResponse = { statusCode: number; json(): unknown };
-  type FastifyInstance = {
+  export type RouteHandler = (request: { query?: unknown; params?: unknown }, reply: { code(statusCode: number): void }) => unknown | Promise<unknown>;
+  export type InjectOptions = { method: string; url: string };
+  export type InjectResponse = { statusCode: number; json(): unknown };
+  export type FastifyInstance = {
     get(path: string, handler: RouteHandler): void;
     listen(options: { host: string; port: number }): Promise<string>;
     inject(options: InjectOptions): Promise<InjectResponse>;
@@ -17,4 +17,19 @@ declare module 'vitest' {
     toBe(expected: unknown): void;
     toEqual(expected: unknown): void;
   };
+}
+
+declare module '@prisma/client' {
+  type QueryArgs = Record<string, unknown>;
+  type Delegate = {
+    findMany(args?: QueryArgs): Promise<unknown[]>;
+    findUnique(args?: QueryArgs): Promise<unknown | null>;
+    count(args?: QueryArgs): Promise<number>;
+  };
+  export class PrismaClient {
+    category: Delegate;
+    product: Delegate;
+    community: Delegate;
+    pickupStore: Delegate;
+  }
 }

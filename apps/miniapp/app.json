@@ -1,5 +1,9 @@
 {
-  "pages": ["pages/index/index"],
+  "pages": [
+    "pages/index/index",
+    "pages/products/index",
+    "pages/product-detail/index"
+  ],
   "window": {
     "navigationBarTitleText": "社区甄选",
     "navigationBarBackgroundColor": "#1677ff",
