@@ -7,7 +7,6 @@
   },
   "include": [
     "src/**/*.ts",
-    "test/**/*.ts",
-    "../../packages/config/src/types.d.ts"
+    "test/**/*.ts"
   ]
 }

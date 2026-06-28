@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter @community-selection/api --filter @community-selection/admin dev",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/api build && pnpm --filter @community-selection/admin build",
     "lint": "node scripts/lint-placeholder.js",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm -r typecheck",
     "test": "pnpm -r test",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",

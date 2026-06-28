@@ -8,15 +8,6 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": {
-      "@community-selection/shared": [
-        "packages/shared/src/index.ts"
-      ],
-      "@community-selection/config": [
-        "packages/config/src/index.ts"
-      ]
-    }
+    "isolatedModules": true
   }
 }
