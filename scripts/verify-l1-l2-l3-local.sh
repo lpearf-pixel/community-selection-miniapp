@@ -92,31 +92,28 @@ if (body.success !== true || !("data" in body) || body.message !== "") {
 }
 
 assert_seed_counts() {
-  pnpm exec tsx -e '
-import { PrismaClient, UserRole } from "@prisma/client";
-const prisma = new PrismaClient();
-const [categories, products, communities, pickupStores, admins] = await Promise.all([
-  prisma.category.count(),
-  prisma.product.count(),
-  prisma.community.count(),
-  prisma.pickupStore.count(),
-  prisma.user.count({ where: { role: UserRole.admin } })
-]);
-await prisma.$disconnect();
+  local categories products communities pickup_stores admins
+  categories=$(docker compose exec -T postgres psql -U postgres -d community_selection -t -A -c 'SELECT COUNT(*) FROM "Category";')
+  products=$(docker compose exec -T postgres psql -U postgres -d community_selection -t -A -c 'SELECT COUNT(*) FROM "Product";')
+  communities=$(docker compose exec -T postgres psql -U postgres -d community_selection -t -A -c 'SELECT COUNT(*) FROM "Community";')
+  pickup_stores=$(docker compose exec -T postgres psql -U postgres -d community_selection -t -A -c 'SELECT COUNT(*) FROM "PickupStore";')
+  admins=$(docker compose exec -T postgres psql -U postgres -d community_selection -t -A -c "SELECT COUNT(*) FROM \"User\" WHERE role = 'admin';")
+
+  CATEGORIES="$categories" PRODUCTS="$products" COMMUNITIES="$communities" PICKUP_STORES="$pickup_stores" ADMINS="$admins" node -e '
 const checks = [
-  ["Category", categories, 5],
-  ["Product", products, 10],
-  ["Community", communities, 3],
-  ["PickupStore", pickupStores, 1],
-  ["admin user", admins, 1]
+  ["Category", Number(process.env.CATEGORIES), 5],
+  ["Product", Number(process.env.PRODUCTS), 10],
+  ["Community", Number(process.env.COMMUNITIES), 3],
+  ["PickupStore", Number(process.env.PICKUP_STORES), 1],
+  ["admin user", Number(process.env.ADMINS), 1]
 ];
 for (const [name, actual, min] of checks) {
-  if (actual < min) {
+  if (!Number.isFinite(actual) || actual < min) {
     console.error(`${name} count ${actual} < ${min}`);
     process.exit(1);
   }
 }
-console.log("Seed counts passed", { categories, products, communities, pickupStores, admins });
+console.log("Seed counts passed", Object.fromEntries(checks.map(([name, actual]) => [name, actual])));
 '
 }
 
