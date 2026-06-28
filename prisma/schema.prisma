@@ -275,6 +275,7 @@ model Commission {
   group_buy              GroupBuy         @relation(fields: [group_buy_id], references: [id])
 
   @@index([leader_user_id])
+  @@unique([order_id, leader_user_id])
 }
 
 model LeaderApplication {

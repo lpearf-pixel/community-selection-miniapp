@@ -1,9 +1,17 @@
 declare module 'react' {
-  export const StrictMode: unknown;
+  type Component = (props: { children?: unknown }) => unknown;
+  export const StrictMode: Component;
 }
 
 declare module 'react-dom/client' {
   export function createRoot(element: Element): { render(node: unknown): void };
+}
+
+
+declare module 'react/jsx-runtime' {
+  export function jsx(type: unknown, props: unknown, key?: unknown): unknown;
+  export function jsxs(type: unknown, props: unknown, key?: unknown): unknown;
+  export const Fragment: unknown;
 }
 
 declare module 'antd' {
@@ -20,4 +28,9 @@ declare namespace JSX {
   interface IntrinsicElements {
     [elemName: string]: unknown;
   }
+}
+
+
+declare module 'vite' {
+  export function defineConfig(config: unknown): unknown;
 }
