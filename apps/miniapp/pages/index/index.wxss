@@ -1,0 +1,12 @@
+.page {
+  padding: 48rpx 32rpx;
+}
+.title {
+  font-size: 40rpx;
+  font-weight: 700;
+  margin-bottom: 20rpx;
+}
+.desc {
+  color: #4b5563;
+  font-size: 28rpx;
+}

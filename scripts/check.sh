@@ -1,22 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Codex 阶段 1 需要补齐 package scripts 后，让本脚本真正可运行。
-# 目标命令：
-# pnpm install
-# pnpm db:generate
-# pnpm typecheck
-# pnpm lint
-# pnpm test
-# pnpm build
-
-if [ ! -f package.json ]; then
-  echo "package.json not found. Run Codex stage 1 first."
-  exit 1
-fi
+PNPM_CLI="${PNPM_CLI:-/root/.nvm/versions/node/v24.15.0/lib/node_modules/pnpm/bin/pnpm.cjs}"
+pnpm() {
+  COREPACK_ENABLE_PROJECT_SPEC=0 node "$PNPM_CLI" "$@"
+}
 
 pnpm install
-pnpm db:generate || true
+pnpm db:generate
 pnpm typecheck
 pnpm lint
 pnpm test

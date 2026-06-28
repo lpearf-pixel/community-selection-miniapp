@@ -1,0 +1,8 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTitleText": "社区甄选",
+    "navigationBarBackgroundColor": "#1677ff",
+    "navigationBarTextStyle": "white"
+  }
+}
