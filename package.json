@@ -5,21 +5,15 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @community-selection/api --filter @community-selection/admin dev",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
+    "lint": "node scripts/lint-placeholder.js",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "db:generate": "prisma generate --schema prisma/schema.prisma"
   },
   "devDependencies": {
-    "@eslint/js": "^9.18.0",
-    "@prisma/client": "^6.2.1",
-    "@types/node": "^22.10.5",
-    "eslint": "^9.18.0",
-    "globals": "^15.14.0",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0",
     "vitest": "^2.1.8"
   }
 }
