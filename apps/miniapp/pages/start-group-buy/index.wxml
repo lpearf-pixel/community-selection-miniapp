@@ -1,0 +1,5 @@
+<view class="page">
+  <view class="title">发起开团</view>
+  <view class="hint">选择支持开团的商品、社区和截止时间后即可发起。</view>
+  <button type="primary" bindtap="submit">提交开团</button>
+</view>

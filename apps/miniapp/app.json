@@ -2,7 +2,12 @@
   "pages": [
     "pages/index/index",
     "pages/products/index",
-    "pages/product-detail/index"
+    "pages/product-detail/index",
+    "pages/group-buys/index",
+    "pages/group-buy-detail/index",
+    "pages/start-group-buy/index",
+    "pages/join-order/index",
+    "pages/orders/index"
   ],
   "window": {
     "navigationBarTitleText": "社区甄选",

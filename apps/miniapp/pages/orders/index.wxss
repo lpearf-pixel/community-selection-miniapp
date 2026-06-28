@@ -1,0 +1,3 @@
+.page { padding: 24rpx; background: #f7f8fa; min-height: 100vh; }
+.title { font-size: 38rpx; font-weight: 700; margin-bottom: 24rpx; }
+.card { padding: 24rpx; margin-bottom: 18rpx; background: #fff; border-radius: 18rpx; }

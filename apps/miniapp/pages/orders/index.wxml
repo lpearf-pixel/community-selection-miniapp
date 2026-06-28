@@ -1,0 +1,10 @@
+<view class="page">
+  <view class="title">我的订单</view>
+  <block wx:for="{{orders}}" wx:key="id">
+    <view class="card">
+      <view>{{item.order_no}}</view>
+      <view>{{item.group_buy.product.name}}</view>
+      <view>¥{{item.pay_amount_cents / 100}} · {{item.order_status}}</view>
+    </view>
+  </block>
+</view>

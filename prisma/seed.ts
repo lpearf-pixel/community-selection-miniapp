@@ -46,6 +46,39 @@ async function main() {
     }
   });
 
+
+  await prisma.user.upsert({
+    where: { openid: 'leader-openid' },
+    update: {
+      nickname: '测试开团人',
+      role: UserRole.leader,
+      status: 'active'
+    },
+    create: {
+      openid: 'leader-openid',
+      nickname: '测试开团人',
+      phone: '13800000001',
+      role: UserRole.leader,
+      status: 'active'
+    }
+  });
+
+  await prisma.user.upsert({
+    where: { openid: 'customer-openid' },
+    update: {
+      nickname: '测试用户',
+      role: UserRole.customer,
+      status: 'active'
+    },
+    create: {
+      openid: 'customer-openid',
+      nickname: '测试用户',
+      phone: '13800000002',
+      role: UserRole.customer,
+      status: 'active'
+    }
+  });
+
   for (const category of categories) {
     await prisma.category.upsert({
       where: { name: category.name },
