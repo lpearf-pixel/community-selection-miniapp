@@ -121,14 +121,7 @@ echo "Selected registry: $SELECTED_REGISTRY"
 
 section "L1 boundary static checks"
 node scripts/lint-placeholder.js
-if rg -n '"db:(migrate|seed|studio)"|seed\.ts' package.json prisma scripts; then
-  echo "L2 database script/seed found; stop." >&2
-  exit 1
-fi
-if rg -n '(_authToken|//.*:_authToken|npm_[A-Za-z0-9]|/root/|/Users/|C:\\)' .npmrc package.json scripts; then
-  echo "Token or local absolute path found; stop." >&2
-  exit 1
-fi
+node scripts/check-l1-offline.js
 echo "L1 boundary static checks passed."
 
 if [ "$FULL" -ne 1 ]; then
