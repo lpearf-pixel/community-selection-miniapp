@@ -17,7 +17,6 @@
       "@community-selection/config": [
         "packages/config/src/index.ts"
       ]
-    },
-    "ignoreDeprecations": "6.0"
+    }
   }
 }
