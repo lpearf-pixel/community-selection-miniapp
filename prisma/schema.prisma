@@ -247,7 +247,10 @@ model Refund {
   order_id            String
   out_refund_no       String       @unique
   refund_id           String?      @unique
+  client_refund_id    String?      @unique
   refund_amount_cents Int
+  stock_restored      Boolean      @default(false)
+  processed_at        DateTime?
   reason              String
   status              RefundStatus @default(pending)
   raw_notify          Json?

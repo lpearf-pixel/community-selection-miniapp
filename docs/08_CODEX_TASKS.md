@@ -350,13 +350,13 @@ scripts/check.sh
 
 L6 只实现退款申请、审核、MOCK 退款成功与微信退款回调结构，不进入 L7-L8。后续复现时必须满足：
 
-1. 退款接口注册在 `apps/api/src/routes/refunds.ts`，包括 `POST /api/refunds`、`GET /api/refunds/:id`、`POST /api/refunds/:id/audit`、`POST /api/refunds/mock/success`、`POST /api/refunds/wechat/notify`。
+1. 退款接口注册在 `apps/api/src/routes/refunds.ts`，包括 `GET /api/refunds`、`GET /api/refunds/:id`、`POST /api/refunds/mock`、`POST /api/refunds/wechat/apply`、`POST /api/refunds/wechat/notify`。
 2. 未支付订单不能退款；累计退款金额不得超过订单实付金额；已全额退款订单不得重复申请。
 3. MOCK 退款成功必须幂等：重复处理同一退款单不得重复累加 `Order.refund_amount_cents`。
 4. 部分退款不强制改变履约状态；全额退款后订单状态必须为 `refunded`。
 5. 微信退款回调在 MOCK 模式下必须拒绝；真实模式未完成验签、解密、金额校验前不得修改订单。
 6. L6 不实现微信真实退款、不实现开团服务奖励结算、不实现提现、commission 结算或 withdrawal。
-7. 建议运行 `scripts/verify-l1-l2-l3-l4-l5-l6-local.sh` 覆盖部分退款、重复 MOCK 成功幂等、全额退款状态。
+7. 建议运行 `scripts/verify-l1-l2-l3-l4-l5-l6-local.sh` 覆盖部分退款、同一 `client_refund_id` 幂等、超额退款失败、全额退款状态、库存只恢复一次、退款列表和详情。
 
 ## 阶段 7：一级开团服务奖励
 

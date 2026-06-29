@@ -31,9 +31,10 @@ describe('L4 group-buy and order routes', () => {
     expect(appSource.includes('registerRefundRoutes')).toBe(true);
     expect(refundSource.includes("/api/refunds'")).toBe(true);
     expect(refundSource.includes("/api/refunds/:id'")).toBe(true);
-    expect(refundSource.includes("/api/refunds/:id/audit'")).toBe(true);
-    expect(refundSource.includes("/api/refunds/mock/success'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/mock'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/wechat/apply'")).toBe(true);
     expect(refundSource.includes("/api/refunds/wechat/notify'")).toBe(true);
+    expect(refundSource.includes('createMockRefund')).toBe(true);
   });
 
   it('keeps L4 order safeguards visible in route implementation', () => {

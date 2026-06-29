@@ -136,14 +136,17 @@ export async function expireOverdueGroupBuys() {
           update: {
             refund_amount_cents: order.pay_amount_cents - order.refund_amount_cents,
             reason: '未成团自动进入待退款',
-            status: 'pending'
+            status: 'pending',
+            stock_restored: true
           },
           create: {
             order_id: order.id,
             out_refund_no: `RF${order.order_no}`,
+            client_refund_id: `group-expired-${order.id}`,
             refund_amount_cents: order.pay_amount_cents - order.refund_amount_cents,
             reason: '未成团自动进入待退款',
-            status: 'pending'
+            status: 'pending',
+            stock_restored: true
           }
         });
       }
