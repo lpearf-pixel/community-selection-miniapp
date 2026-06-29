@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { ensureEstimatedCommission } from './commission-service.js';
+import { recordBusinessEvent, recordOrderTimeline } from './logging-service.js';
 
 type PaymentInfo = {
   payment_id?: string;
@@ -24,6 +25,14 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
         : await tx.payment.findFirst({ where: { order_id: order.id }, orderBy: { created_at: 'desc' } });
 
     if (order.pay_status === 'paid') {
+      await recordBusinessEvent(tx, {
+        event_type: 'payment_duplicate_ignored',
+        event_level: 'warning',
+        event_source: 'payment-service',
+        order_id: order.id,
+        payment_id: payment?.id ?? null,
+        payload: { out_trade_no: payment?.out_trade_no ?? paymentInfo.out_trade_no ?? null }
+      });
       const paidPayment = payment
         ? await tx.payment.update({
           where: { id: payment.id },
@@ -90,6 +99,25 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
       });
     }
 
+    await recordBusinessEvent(tx, {
+      event_type: 'payment_mark_order_paid',
+      event_source: 'payment-service',
+      order_id: order.id,
+      group_buy_id: groupBuy.id,
+      payment_id: paidPayment?.id ?? null,
+      before_snapshot: order,
+      after_snapshot: paidOrder,
+      payload: { transaction_id: paidPayment?.transaction_id ?? paymentInfo.transaction_id ?? null, group_status: nextGroupStatus }
+    });
+    await recordOrderTimeline(tx, {
+      order_id: order.id,
+      event_type: 'payment_mark_order_paid',
+      title: '订单已支付',
+      from_status: order.order_status,
+      to_status: paidOrder.order_status,
+      actor_type: 'system',
+      payload: { payment_id: paidPayment?.id ?? null }
+    });
     await ensureEstimatedCommission(order.id, tx);
 
     await tx.auditLog.create({

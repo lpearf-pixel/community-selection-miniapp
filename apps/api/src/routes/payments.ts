@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { markOrderPaid } from '../services/payment-service.js';
+import { recordBusinessEvent } from '../services/logging-service.js';
 
 type MockPaymentBody = {
   order_id?: string;
@@ -74,6 +75,14 @@ async function createOrReusePayment(orderId: string) {
       trade_state: order.pay_status === 'paid' ? 'paid' : 'created'
     }
   });
+  await recordBusinessEvent(prisma, {
+    event_type: 'payment_created',
+    event_source: 'payments-route',
+    order_id: order.id,
+    payment_id: payment.id,
+    after_snapshot: payment,
+    payload: { out_trade_no: payment.out_trade_no, amount_cents: payment.amount_cents }
+  });
   return { order, payment };
 }
 
@@ -92,6 +101,13 @@ export function registerPaymentRoutes(app: FastifyInstance) {
         out_trade_no: payment.out_trade_no,
         transaction_id: payment.transaction_id ?? makeMockTransactionId(payment.out_trade_no),
         raw_notify: { source: 'mock', order_id: body.order_id }
+      });
+      await recordBusinessEvent(prisma, {
+        event_type: 'payment_mock_success',
+        event_source: 'payments-route',
+        order_id: body.order_id,
+        payment_id: (paid.payment ?? payment).id,
+        payload: { source: 'mock' }
       });
       return ok({ payment: paid.payment ?? payment, order: paid.order });
     } catch (error) {
@@ -132,6 +148,12 @@ export function registerPaymentRoutes(app: FastifyInstance) {
   app.post('/api/payments/wechat/notify', async (_request, reply) => {
     if (isMockWechatPay()) {
       reply.code(403);
+      await recordBusinessEvent(prisma, {
+        event_type: 'payment_wechat_notify_rejected',
+        event_level: 'warning',
+        event_source: 'payments-route',
+        payload: { reason: 'mock_mode' }
+      });
       return fail('MOCK 模式拒绝真实微信支付回调');
     }
 

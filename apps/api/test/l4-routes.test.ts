@@ -53,6 +53,21 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
+  it('registers L7.5 business log routes and service', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const logRoutes = readFileSync(new URL('../src/routes/logs.ts', import.meta.url), 'utf8');
+    const loggingService = readFileSync(new URL('../src/services/logging-service.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerLogRoutes')).toBe(true);
+    expect(logRoutes.includes('/api/admin/logs/business-events')).toBe(true);
+    expect(logRoutes.includes('/api/admin/logs/order-timeline')).toBe(true);
+    expect(logRoutes.includes('/api/admin/logs/alerts')).toBe(true);
+    expect(logRoutes.includes('/api/admin/logs/orders/:order_id/ai-context')).toBe(true);
+    expect(loggingService.includes('sanitizePayload')).toBe(true);
+    expect(loggingService.includes('recordBusinessEvent')).toBe(true);
+    expect(loggingService.includes('raiseOpsAlert')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);

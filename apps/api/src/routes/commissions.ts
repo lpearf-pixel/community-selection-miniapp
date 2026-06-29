@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { releaseAvailableCommissions } from '../services/commission-service.js';
+import { recordBusinessEvent } from '../services/logging-service.js';
 
 type LeaderQuery = {
   leader_user_id?: string;
@@ -66,7 +67,18 @@ export function registerCommissionRoutes(app: FastifyInstance) {
       reply.code(400);
       return fail('当前开团服务奖励状态不可冻结');
     }
-    return ok(await prisma.commission.update({ where: { id }, data: { status: 'frozen' } }));
+    const updated = await prisma.commission.update({ where: { id }, data: { status: 'frozen' } });
+    await recordBusinessEvent(prisma, {
+      event_type: 'commission_frozen',
+      event_source: 'commissions-route',
+      order_id: commission.order_id,
+      group_buy_id: commission.group_buy_id,
+      commission_id: commission.id,
+      leader_user_id: commission.leader_user_id,
+      before_snapshot: commission,
+      after_snapshot: updated
+    });
+    return ok(updated);
   });
 
   app.post('/api/admin/commissions/:id/unfreeze', async (request, reply) => {
@@ -81,6 +93,17 @@ export function registerCommissionRoutes(app: FastifyInstance) {
       return fail('当前开团服务奖励状态不可解冻');
     }
     const nextStatus = commission.available_at && commission.available_at <= new Date() ? 'available' : 'pending';
-    return ok(await prisma.commission.update({ where: { id }, data: { status: nextStatus } }));
+    const updated = await prisma.commission.update({ where: { id }, data: { status: nextStatus } });
+    await recordBusinessEvent(prisma, {
+      event_type: 'commission_unfrozen',
+      event_source: 'commissions-route',
+      order_id: commission.order_id,
+      group_buy_id: commission.group_buy_id,
+      commission_id: commission.id,
+      leader_user_id: commission.leader_user_id,
+      before_snapshot: commission,
+      after_snapshot: updated
+    });
+    return ok(updated);
   });
 }

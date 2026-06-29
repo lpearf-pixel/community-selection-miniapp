@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { markCommissionPendingForCompletedOrder } from '../services/commission-service.js';
+import { recordBusinessEvent, recordOrderTimeline } from '../services/logging-service.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -64,7 +65,16 @@ async function createGroupOrder(body: CreateOrderBody) {
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({ where: { client_request_id: body.client_request_id } });
-    if (existing) return existing;
+    if (existing) {
+      await recordBusinessEvent(tx, {
+        event_type: 'order_idempotent_reused',
+        event_source: 'group-buys-route',
+        order_id: existing.id,
+        idempotency_key: body.client_request_id,
+        after_snapshot: existing
+      });
+      return existing;
+    }
 
     const groupBuy = await tx.groupBuy.findUnique({
       where: { id: body.group_buy_id },
@@ -78,9 +88,16 @@ async function createGroupOrder(body: CreateOrderBody) {
       data: { stock: { decrement: quantity } }
     });
     if (stockResult.count !== 1) throw new Error('库存不足');
+    await recordBusinessEvent(tx, {
+      event_type: 'order_stock_decremented',
+      event_source: 'group-buys-route',
+      group_buy_id: groupBuy.id,
+      idempotency_key: body.client_request_id,
+      payload: { product_id: groupBuy.product_id, quantity }
+    });
 
     const amount = groupBuy.price_cents * quantity;
-    return tx.order.create({
+    const order = await tx.order.create({
       data: {
         order_no: makeOrderNo(),
         client_request_id: body.client_request_id,
@@ -98,6 +115,26 @@ async function createGroupOrder(body: CreateOrderBody) {
         receiver_address: body.receiver_address
       }
     });
+    await recordBusinessEvent(tx, {
+      event_type: 'order_created',
+      event_source: 'group-buys-route',
+      order_id: order.id,
+      group_buy_id: groupBuy.id,
+      leader_user_id: groupBuy.leader_user_id,
+      user_id: userId,
+      idempotency_key: body.client_request_id,
+      after_snapshot: order
+    });
+    await recordOrderTimeline(tx, {
+      order_id: order.id,
+      event_type: 'order_created',
+      title: '订单已创建',
+      to_status: order.order_status,
+      actor_type: 'user',
+      actor_user_id: userId,
+      payload: { group_buy_id: groupBuy.id, quantity }
+    });
+    return order;
   });
 }
 
@@ -327,6 +364,22 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
           order_status: body.next_status,
           completed_at: body.next_status === 'completed' ? new Date() : undefined
         }
+      });
+      await recordBusinessEvent(tx, {
+        event_type: body.next_status === 'completed' ? 'order_completed' : 'order_status_changed',
+        event_source: 'group-buys-route',
+        order_id: id,
+        before_snapshot: order,
+        after_snapshot: updatedOrder,
+        payload: { from_status: order.order_status, to_status: body.next_status }
+      });
+      await recordOrderTimeline(tx, {
+        order_id: id,
+        event_type: body.next_status === 'completed' ? 'order_completed' : 'order_status_changed',
+        title: body.next_status === 'completed' ? '订单已完成' : '订单状态已更新',
+        from_status: order.order_status,
+        to_status: body.next_status,
+        payload: { from_status: order.order_status, to_status: body.next_status }
       });
       if (body.next_status === 'completed') await markCommissionPendingForCompletedOrder(id, tx);
       return updatedOrder;

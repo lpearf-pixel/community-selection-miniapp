@@ -317,3 +317,105 @@ model AuditLog {
   created_at    DateTime @default(now())
   actor_user    User?    @relation("AuditActor", fields: [actor_user_id], references: [id])
 }
+
+enum BusinessEventLevel {
+  info
+  warning
+  error
+  critical
+}
+
+enum OrderTimelineActorType {
+  system
+  user
+  admin
+  wechat
+  scheduler
+}
+
+enum OpsAlertLevel {
+  warning
+  error
+  critical
+}
+
+enum OpsAlertStatus {
+  open
+  acknowledged
+  resolved
+  ignored
+}
+
+model BusinessEventLog {
+  id              String             @id @default(cuid())
+  event_type      String
+  event_level     BusinessEventLevel @default(info)
+  event_source    String
+  order_id        String?
+  group_buy_id    String?
+  payment_id      String?
+  refund_id       String?
+  commission_id   String?
+  withdrawal_id   String?
+  leader_user_id  String?
+  user_id         String?
+  trace_id        String?
+  request_id      String?
+  idempotency_key String?
+  before_snapshot Json?
+  after_snapshot  Json?
+  payload         Json?
+  message         String?
+  created_at      DateTime           @default(now())
+
+  @@index([order_id])
+  @@index([event_type])
+  @@index([event_level])
+  @@index([leader_user_id])
+  @@index([created_at])
+}
+
+model OrderTimelineLog {
+  id            String                 @id @default(cuid())
+  order_id      String
+  event_type    String
+  title         String
+  message       String?
+  from_status   String?
+  to_status     String?
+  actor_type    OrderTimelineActorType @default(system)
+  actor_user_id String?
+  payload       Json?
+  created_at    DateTime               @default(now())
+
+  @@index([order_id])
+  @@index([event_type])
+  @@index([created_at])
+}
+
+model OpsAlertLog {
+  id              String         @id @default(cuid())
+  alert_type      String
+  alert_level     OpsAlertLevel  @default(warning)
+  status          OpsAlertStatus @default(open)
+  order_id        String?
+  group_buy_id    String?
+  payment_id      String?
+  refund_id       String?
+  commission_id   String?
+  withdrawal_id   String?
+  leader_user_id  String?
+  title           String
+  message         String
+  payload         Json?
+  resolved_by     String?
+  resolved_at     DateTime?
+  resolution_note String?
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([alert_level])
+  @@index([order_id])
+  @@index([created_at])
+}

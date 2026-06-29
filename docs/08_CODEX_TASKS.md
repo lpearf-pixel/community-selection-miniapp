@@ -490,3 +490,12 @@ L7 开团服务奖励退款联动必须满足：
 2. `fixed` 类型初始预估仍按 `quantity * commission_value`，部分退款后按 `floor((quantity * commission_value) * base_amount_cents / original_pay_amount_cents)` 重算。
 3. 全额退款后 `final_amount_cents = 0` 且状态为 `cancelled`。
 4. 冻结状态发生退款时状态保持 `frozen`，但金额仍按实际成交金额重算，并在 AuditLog 记录 `was_frozen = true`。
+
+### 阶段 7.5 增补：业务日志、订单时间线、异常告警
+
+L7.5 只补充日志和告警能力，不进入 L8 提现：
+
+1. 新增 `BusinessEventLog`、`OrderTimelineLog`、`OpsAlertLog`，用于记录订单、支付、退款、开团服务奖励的核心业务事件。
+2. 日志写入必须走 `sanitizePayload`，手机号、地址和 token/key/cert/private_key/password 等敏感字段不得明文入库。
+3. `commission_available` 必须同时写业务事件和订单时间线；可用后退款必须写 warning 事件；已提现后退款必须创建人工处理告警。
+4. 后台日志接口提供业务事件、订单时间线、告警列表、告警处理/忽略和订单 AI 分析上下文结构，不调用大模型。
