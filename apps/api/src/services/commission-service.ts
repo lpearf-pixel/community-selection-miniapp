@@ -1,6 +1,6 @@
 import type { CommissionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
-import { raiseOpsAlert, recordBusinessEvent, recordOrderTimeline } from './logging-service.js';
+import { safeRaiseOpsAlert, safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
 const settlementDelayDays = 7;
 
@@ -74,7 +74,7 @@ export async function ensureEstimatedCommission(orderId: string, tx?: Prisma.Tra
     }
   });
 
-  await recordBusinessEvent(client, {
+  await safeRecordBusinessEvent(client, {
     event_type: 'commission_estimated',
     event_source: 'commission-service',
     order_id: order.id,
@@ -84,7 +84,7 @@ export async function ensureEstimatedCommission(orderId: string, tx?: Prisma.Tra
     after_snapshot: commission,
     payload: { base_amount_cents: baseAmount, final_amount_cents: commission.final_amount_cents }
   });
-  await recordOrderTimeline(client, {
+  await safeRecordOrderTimeline(client, {
     order_id: order.id,
     event_type: 'commission_estimated',
     title: '开团服务奖励已预估',
@@ -118,7 +118,7 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
   const commission = order.commissions.find((item) => item.leader_user_id === order.leader_user_id);
   if (!commission) return null;
   if (commission.status === 'withdrawn') {
-    await recordBusinessEvent(client, {
+    await safeRecordBusinessEvent(client, {
       event_type: 'commission_refund_after_withdrawn_detected',
       event_level: 'critical',
       event_source: 'commission-service',
@@ -130,7 +130,7 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
       payload: { refund_amount_cents: order.refund_amount_cents },
       message: '已提现开团服务奖励发生退款，需要人工处理'
     });
-    await raiseOpsAlert(client, {
+    await safeRaiseOpsAlert(client, {
       alert_type: 'refund_after_withdrawn',
       alert_level: 'critical',
       order_id: order.id,
@@ -172,7 +172,7 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
     }
   });
 
-  await recordBusinessEvent(client, {
+  await safeRecordBusinessEvent(client, {
     event_type: isFullRefund ? 'commission_cancelled_after_refund' : 'commission_adjusted_after_refund',
     event_level: wasAvailable ? 'warning' : 'info',
     event_source: 'commission-service',
@@ -194,7 +194,7 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
     },
     message: wasAvailable ? '可用开团服务奖励发生退款调整' : null
   });
-  await recordOrderTimeline(client, {
+  await safeRecordOrderTimeline(client, {
     order_id: order.id,
     event_type: isFullRefund ? 'commission_cancelled_after_refund' : 'commission_adjusted_after_refund',
     title: isFullRefund ? '开团服务奖励已取消' : '开团服务奖励已按退款调整',
@@ -236,7 +236,7 @@ export async function markCommissionPendingForCompletedOrder(orderId: string, tx
       available_at: addDays(order.completed_at, settlementDelayDays)
     }
   });
-  await recordBusinessEvent(client, {
+  await safeRecordBusinessEvent(client, {
     event_type: 'commission_pending',
     event_source: 'commission-service',
     order_id: order.id,
@@ -244,7 +244,7 @@ export async function markCommissionPendingForCompletedOrder(orderId: string, tx
     before_snapshot: commission,
     after_snapshot: updated
   });
-  await recordOrderTimeline(client, {
+  await safeRecordOrderTimeline(client, {
     order_id: order.id,
     event_type: 'commission_pending',
     title: '开团服务奖励进入待结算',
@@ -265,7 +265,7 @@ export async function releaseAvailableCommissions(now = new Date()) {
   });
   for (const commission of pending) {
     const updated = { ...commission, status: 'available' };
-    await recordBusinessEvent(prisma, {
+    await safeRecordBusinessEvent(prisma, {
       event_type: 'commission_available',
       event_source: 'commission-service',
       order_id: commission.order_id,
@@ -276,7 +276,7 @@ export async function releaseAvailableCommissions(now = new Date()) {
       after_snapshot: updated,
       payload: { available_at: commission.available_at?.toISOString() ?? null }
     });
-    await recordOrderTimeline(prisma, {
+    await safeRecordOrderTimeline(prisma, {
       order_id: commission.order_id,
       event_type: 'commission_available',
       title: '开团服务奖励已可用',

@@ -6,9 +6,27 @@ type JsonRecord = Record<string, unknown>;
 
 const blockedKeyPattern = /(token|password|private_key|privateKey|secret|cert|certificate|api_v3_key|key)$/i;
 const phonePattern = /1[3-9]\d{9}/g;
+const identityKeyPattern = /^(openid|unionid)$/i;
+const nameKeyPattern = /^(receiver_name|real_name|name)$/i;
+const accountKeyPattern = /(bank|card|account_no|account_number)/i;
+
+function maskIdentity(value: string) {
+  return value.length <= 10 ? `${value.slice(0, 2)}***${value.slice(-2)}` : `${value.slice(0, 6)}***${value.slice(-4)}`;
+}
+
+function maskName(value: string) {
+  return value ? `${value.slice(0, 1)}*` : value;
+}
+
+function maskAccount(value: string) {
+  return value.length <= 4 ? `****${value}` : `****${value.slice(-4)}`;
+}
 
 function maskString(value: string, key?: string) {
   if (blockedKeyPattern.test(key ?? '')) return '[FILTERED]';
+  if (identityKeyPattern.test(key ?? '')) return maskIdentity(value);
+  if (nameKeyPattern.test(key ?? '')) return maskName(value);
+  if (accountKeyPattern.test(key ?? '')) return maskAccount(value);
   return value.replace(phonePattern, (phone) => `${phone.slice(0, 3)}****${phone.slice(7)}`);
 }
 
@@ -24,7 +42,7 @@ export function sanitizePayload<T = unknown>(payload: T): T {
       sanitized[key] = '[FILTERED]';
       continue;
     }
-    if (/phone/i.test(key) && typeof value === 'string') {
+    if ((/phone/i.test(key) || identityKeyPattern.test(key) || nameKeyPattern.test(key) || accountKeyPattern.test(key)) && typeof value === 'string') {
       sanitized[key] = maskString(value, key);
       continue;
     }
@@ -155,4 +173,32 @@ export async function resolveOpsAlert(client: DbClient, input: {
       resolved_at: new Date()
     }
   });
+}
+
+
+export async function safeRecordBusinessEvent(client: DbClient, input: Parameters<typeof recordBusinessEvent>[1]) {
+  try {
+    return await recordBusinessEvent(client, input);
+  } catch (error) {
+    console.error('safeRecordBusinessEvent failed', error);
+    return null;
+  }
+}
+
+export async function safeRecordOrderTimeline(client: DbClient, input: Parameters<typeof recordOrderTimeline>[1]) {
+  try {
+    return await recordOrderTimeline(client, input);
+  } catch (error) {
+    console.error('safeRecordOrderTimeline failed', error);
+    return null;
+  }
+}
+
+export async function safeRaiseOpsAlert(client: DbClient, input: Parameters<typeof raiseOpsAlert>[1]) {
+  try {
+    return await raiseOpsAlert(client, input);
+  } catch (error) {
+    console.error('safeRaiseOpsAlert failed', error);
+    return null;
+  }
 }

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { releaseAvailableCommissions } from '../apps/api/src/services/commission-service.js';
+import { safeRecordBusinessEvent } from '../apps/api/src/services/logging-service.js';
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -105,8 +106,42 @@ async function main() {
   const aiContext = await json(await app.inject({ method: 'GET', url: `/api/admin/logs/orders/${order.id}/ai-context` }));
   assert(aiContext.order.id === order.id && Array.isArray(aiContext.suggested_focus), 'AI context should return structured order context');
 
+
+
+  const sensitiveOpenid = `${prefix}-openid-sensitive-1234567890`;
+  const safeFailure = await safeRecordBusinessEvent({ businessEventLog: { create: async () => { throw new Error('mock logging failure'); } } } as any, {
+    event_type: 'mock_safe_logging_failure',
+    event_source: 'logs-verifier',
+    payload: { openid: sensitiveOpenid }
+  });
+  assert(safeFailure === null, 'safeRecordBusinessEvent should swallow logging errors and return null');
+
+  await safeRecordBusinessEvent(prisma, {
+    event_type: 'sanitize_payload_verification',
+    event_source: 'logs-verifier',
+    order_id: order.id,
+    payload: {
+      openid: sensitiveOpenid,
+      unionid: `${prefix}-unionid-sensitive-1234567890`,
+      receiver_name: '张三丰',
+      real_name: '李四',
+      name: '王五',
+      account_no: '62220000111122223333',
+      card: '4333322211110000',
+      raw_notify: {
+        openid: sensitiveOpenid,
+        receiver_name: '赵六',
+        account_number: '9999888877776666'
+      }
+    }
+  });
+
   const logsText = JSON.stringify(await prisma.businessEventLog.findMany({ where: { order_id: order.id } }));
   assert(!logsText.includes(phone), 'business event logs should not contain full phone');
+  assert(!logsText.includes(sensitiveOpenid), 'business event logs should not contain full openid');
+  assert(!logsText.includes('张三丰') && !logsText.includes('李四') && !logsText.includes('王五') && !logsText.includes('赵六'), 'business event logs should not contain full names');
+  assert(!logsText.includes('62220000111122223333') && !logsText.includes('4333322211110000') && !logsText.includes('9999888877776666'), 'business event logs should not contain full account or card numbers');
+  assert(logsText.includes('3333') && logsText.includes('0000') && logsText.includes('6666'), 'business event logs should keep last 4 account/card digits');
   assert(!/token|private_key|password|certificate|api_v3_key|secret/i.test(logsText), 'business event logs should not contain sensitive key names');
 
   console.log('L1/L2/L3/L4/L5/L6/L7 logs local verification passed.');

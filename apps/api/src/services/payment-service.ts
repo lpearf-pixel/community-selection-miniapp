@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { ensureEstimatedCommission } from './commission-service.js';
-import { recordBusinessEvent, recordOrderTimeline } from './logging-service.js';
+import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
 type PaymentInfo = {
   payment_id?: string;
@@ -25,7 +25,7 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
         : await tx.payment.findFirst({ where: { order_id: order.id }, orderBy: { created_at: 'desc' } });
 
     if (order.pay_status === 'paid') {
-      await recordBusinessEvent(tx, {
+      await safeRecordBusinessEvent(tx, {
         event_type: 'payment_duplicate_ignored',
         event_level: 'warning',
         event_source: 'payment-service',
@@ -99,7 +99,7 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
       });
     }
 
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'payment_mark_order_paid',
       event_source: 'payment-service',
       order_id: order.id,
@@ -109,7 +109,7 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
       after_snapshot: paidOrder,
       payload: { transaction_id: paidPayment?.transaction_id ?? paymentInfo.transaction_id ?? null, group_status: nextGroupStatus }
     });
-    await recordOrderTimeline(tx, {
+    await safeRecordOrderTimeline(tx, {
       order_id: order.id,
       event_type: 'payment_mark_order_paid',
       title: '订单已支付',

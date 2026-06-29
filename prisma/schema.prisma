@@ -346,6 +346,7 @@ enum OpsAlertStatus {
   ignored
 }
 
+/// 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响。
 model BusinessEventLog {
   id              String             @id @default(cuid())
   event_type      String
@@ -375,6 +376,7 @@ model BusinessEventLog {
   @@index([created_at])
 }
 
+/// 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响。
 model OrderTimelineLog {
   id            String                 @id @default(cuid())
   order_id      String
@@ -393,6 +395,7 @@ model OrderTimelineLog {
   @@index([created_at])
 }
 
+/// 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响。
 model OpsAlertLog {
   id              String         @id @default(cuid())
   alert_type      String

@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { syncCommissionAfterRefund } from './commission-service.js';
-import { recordBusinessEvent, recordOrderTimeline } from './logging-service.js';
+import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
 type RefundInput = {
   order_id: string;
@@ -59,7 +59,7 @@ export async function validateRefundRequest(tx: Prisma.TransactionClient, input:
   if (order.refund_amount_cents >= order.pay_amount_cents) throw new Error('订单已全额退款');
   if (!Number.isInteger(input.refund_amount_cents) || input.refund_amount_cents <= 0) throw new Error('退款金额必须大于 0');
   if (input.refund_amount_cents > getRefundableAmount(order)) {
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'refund_amount_exceeded',
       event_level: 'warning',
       event_source: 'refund-service',
@@ -100,7 +100,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
 
   const refundableAmount = getRefundableAmount(refund.order);
   if (refund.refund_amount_cents > refundableAmount) {
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'refund_amount_exceeded',
       event_level: 'warning',
       event_source: 'refund-service',
@@ -125,7 +125,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
         data: { stock: { increment: refund.order.quantity } }
       });
       stockRestored = true;
-      await recordBusinessEvent(tx, {
+      await safeRecordBusinessEvent(tx, {
         event_type: 'refund_stock_restored',
         event_source: 'refund-service',
         order_id: refund.order_id,
@@ -134,7 +134,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
       });
     } else {
       stockRestoreSkippedReason = 'order_already_fulfilled';
-      await recordBusinessEvent(tx, {
+      await safeRecordBusinessEvent(tx, {
         event_type: 'refund_stock_restore_skipped',
         event_level: 'warning',
         event_source: 'refund-service',
@@ -167,7 +167,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     }
   });
 
-  await recordBusinessEvent(tx, {
+  await safeRecordBusinessEvent(tx, {
     event_type: 'refund_success',
     event_source: 'refund-service',
     order_id: refund.order_id,
@@ -176,7 +176,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     after_snapshot: updatedRefund,
     payload: { refund_amount_cents: refund.refund_amount_cents, is_full_refund: isFullRefund }
   });
-  await recordOrderTimeline(tx, {
+  await safeRecordOrderTimeline(tx, {
     order_id: refund.order_id,
     event_type: 'refund_success',
     title: isFullRefund ? '订单已全额退款' : '订单已部分退款',
@@ -214,7 +214,7 @@ export async function createMockRefund(input: RefundInput) {
         try {
           assertIdempotencyInputMatches(existing, input);
         } catch (error) {
-          await recordBusinessEvent(tx, {
+          await safeRecordBusinessEvent(tx, {
             event_type: 'refund_idempotency_conflict',
             event_level: 'error',
             event_source: 'refund-service',
@@ -236,7 +236,7 @@ export async function createMockRefund(input: RefundInput) {
       try {
         assertIdempotencyInputMatches(existingOutRefund, input);
       } catch (error) {
-        await recordBusinessEvent(tx, {
+        await safeRecordBusinessEvent(tx, {
           event_type: 'refund_idempotency_conflict',
           event_level: 'error',
           event_source: 'refund-service',
@@ -250,7 +250,7 @@ export async function createMockRefund(input: RefundInput) {
       return applyRefundSuccess(tx, existingOutRefund.id, { raw_notify: { source: 'mock', out_refund_no: outRefundNo } });
     }
 
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'refund_requested',
       event_source: 'refund-service',
       order_id: order.id,
@@ -275,7 +275,7 @@ export async function createMockRefund(input: RefundInput) {
     });
 
     const success = await applyRefundSuccess(tx, refund.id, { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id ?? null } });
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'refund_mock_success',
       event_source: 'refund-service',
       order_id: order.id,

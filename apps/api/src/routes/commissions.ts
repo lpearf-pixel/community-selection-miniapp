@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { releaseAvailableCommissions } from '../services/commission-service.js';
-import { recordBusinessEvent } from '../services/logging-service.js';
+import { safeRecordBusinessEvent } from '../services/logging-service.js';
 
 type LeaderQuery = {
   leader_user_id?: string;
@@ -68,7 +68,7 @@ export function registerCommissionRoutes(app: FastifyInstance) {
       return fail('当前开团服务奖励状态不可冻结');
     }
     const updated = await prisma.commission.update({ where: { id }, data: { status: 'frozen' } });
-    await recordBusinessEvent(prisma, {
+    await safeRecordBusinessEvent(prisma, {
       event_type: 'commission_frozen',
       event_source: 'commissions-route',
       order_id: commission.order_id,
@@ -94,7 +94,7 @@ export function registerCommissionRoutes(app: FastifyInstance) {
     }
     const nextStatus = commission.available_at && commission.available_at <= new Date() ? 'available' : 'pending';
     const updated = await prisma.commission.update({ where: { id }, data: { status: nextStatus } });
-    await recordBusinessEvent(prisma, {
+    await safeRecordBusinessEvent(prisma, {
       event_type: 'commission_unfrozen',
       event_source: 'commissions-route',
       order_id: commission.order_id,

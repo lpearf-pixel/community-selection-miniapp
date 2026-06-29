@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { markOrderPaid } from '../services/payment-service.js';
-import { recordBusinessEvent } from '../services/logging-service.js';
+import { safeRecordBusinessEvent } from '../services/logging-service.js';
 
 type MockPaymentBody = {
   order_id?: string;
@@ -75,7 +75,7 @@ async function createOrReusePayment(orderId: string) {
       trade_state: order.pay_status === 'paid' ? 'paid' : 'created'
     }
   });
-  await recordBusinessEvent(prisma, {
+  await safeRecordBusinessEvent(prisma, {
     event_type: 'payment_created',
     event_source: 'payments-route',
     order_id: order.id,
@@ -102,7 +102,7 @@ export function registerPaymentRoutes(app: FastifyInstance) {
         transaction_id: payment.transaction_id ?? makeMockTransactionId(payment.out_trade_no),
         raw_notify: { source: 'mock', order_id: body.order_id }
       });
-      await recordBusinessEvent(prisma, {
+      await safeRecordBusinessEvent(prisma, {
         event_type: 'payment_mock_success',
         event_source: 'payments-route',
         order_id: body.order_id,
@@ -148,7 +148,7 @@ export function registerPaymentRoutes(app: FastifyInstance) {
   app.post('/api/payments/wechat/notify', async (_request, reply) => {
     if (isMockWechatPay()) {
       reply.code(403);
-      await recordBusinessEvent(prisma, {
+      await safeRecordBusinessEvent(prisma, {
         event_type: 'payment_wechat_notify_rejected',
         event_level: 'warning',
         event_source: 'payments-route',

@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { markCommissionPendingForCompletedOrder } from '../services/commission-service.js';
-import { recordBusinessEvent, recordOrderTimeline } from '../services/logging-service.js';
+import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../services/logging-service.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -66,7 +66,7 @@ async function createGroupOrder(body: CreateOrderBody) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({ where: { client_request_id: body.client_request_id } });
     if (existing) {
-      await recordBusinessEvent(tx, {
+      await safeRecordBusinessEvent(tx, {
         event_type: 'order_idempotent_reused',
         event_source: 'group-buys-route',
         order_id: existing.id,
@@ -88,7 +88,7 @@ async function createGroupOrder(body: CreateOrderBody) {
       data: { stock: { decrement: quantity } }
     });
     if (stockResult.count !== 1) throw new Error('库存不足');
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'order_stock_decremented',
       event_source: 'group-buys-route',
       group_buy_id: groupBuy.id,
@@ -115,7 +115,7 @@ async function createGroupOrder(body: CreateOrderBody) {
         receiver_address: body.receiver_address
       }
     });
-    await recordBusinessEvent(tx, {
+    await safeRecordBusinessEvent(tx, {
       event_type: 'order_created',
       event_source: 'group-buys-route',
       order_id: order.id,
@@ -125,7 +125,7 @@ async function createGroupOrder(body: CreateOrderBody) {
       idempotency_key: body.client_request_id,
       after_snapshot: order
     });
-    await recordOrderTimeline(tx, {
+    await safeRecordOrderTimeline(tx, {
       order_id: order.id,
       event_type: 'order_created',
       title: '订单已创建',
@@ -365,7 +365,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
           completed_at: body.next_status === 'completed' ? new Date() : undefined
         }
       });
-      await recordBusinessEvent(tx, {
+      await safeRecordBusinessEvent(tx, {
         event_type: body.next_status === 'completed' ? 'order_completed' : 'order_status_changed',
         event_source: 'group-buys-route',
         order_id: id,
@@ -373,7 +373,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
         after_snapshot: updatedOrder,
         payload: { from_status: order.order_status, to_status: body.next_status }
       });
-      await recordOrderTimeline(tx, {
+      await safeRecordOrderTimeline(tx, {
         order_id: id,
         event_type: body.next_status === 'completed' ? 'order_completed' : 'order_status_changed',
         title: body.next_status === 'completed' ? '订单已完成' : '订单状态已更新',
