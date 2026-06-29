@@ -165,7 +165,10 @@ export async function createMockRefund(input: RefundInput) {
     const order = await validateRefundRequest(tx, input);
     const outRefundNo = buildOutRefundNo(order, input.client_refund_id);
     const existingOutRefund = await tx.refund.findUnique({ where: { out_refund_no: outRefundNo } });
-    if (existingOutRefund) return applyRefundSuccess(tx, existingOutRefund.id, { raw_notify: { source: 'mock', out_refund_no: outRefundNo } });
+    if (existingOutRefund) {
+      assertIdempotencyInputMatches(existingOutRefund, input);
+      return applyRefundSuccess(tx, existingOutRefund.id, { raw_notify: { source: 'mock', out_refund_no: outRefundNo } });
+    }
 
     const refund = await tx.refund.create({
       data: {

@@ -65,6 +65,12 @@ async function main() {
   });
   await post('/api/payments/mock', { order_id: order.id });
 
+  await expectFail('/api/refunds/mock', {
+    order_id: order.id,
+    refund_amount_cents: 100,
+    reason: 'L6 本地验收缺少退款幂等键'
+  }, '缺少退款幂等键');
+
   const productBeforePartialRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   const refund = await post('/api/refunds/mock', {
     order_id: order.id,

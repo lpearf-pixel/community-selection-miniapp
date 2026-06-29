@@ -33,6 +33,7 @@ function assertWechatRefundConfig() {
 
 function parseMockRefundBody(body: MockRefundBody) {
   if (!body.order_id || !body.reason) throw new Error('缺少退款必填字段');
+  if (!body.client_refund_id) throw new Error('缺少退款幂等键');
   const refundAmount = Number(body.refund_amount_cents);
   if (!Number.isInteger(refundAmount) || refundAmount <= 0) throw new Error('退款金额必须大于 0');
   return {
