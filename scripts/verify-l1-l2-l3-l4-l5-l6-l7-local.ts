@@ -84,6 +84,23 @@ async function main() {
   commission = await prisma.commission.findUniqueOrThrow({ where: { id: commission.id } });
   assert(commission.final_amount_cents === 300, `Partial refund should recalculate commission to 300, got ${commission.final_amount_cents}`);
 
+
+  await prisma.commission.update({ where: { id: commission.id }, data: { status: 'frozen' } });
+  await post('/api/refunds/mock', {
+    order_id: order.id,
+    refund_amount_cents: 500,
+    reason: 'L7 本地验收冻结状态部分退款',
+    client_refund_id: `${prefix}-frozen-partial-refund`
+  });
+  commission = await prisma.commission.findUniqueOrThrow({ where: { id: commission.id } });
+  assert(commission.status === 'frozen', `Frozen commission should remain frozen, got ${commission.status}`);
+  assert(commission.final_amount_cents === 250, `Frozen partial refund should recalculate commission to 250, got ${commission.final_amount_cents}`);
+  const frozenAudit = await prisma.auditLog.findFirstOrThrow({
+    where: { action: 'commission_adjusted_after_refund', target_id: commission.id },
+    orderBy: { created_at: 'desc' }
+  });
+  assert((frozenAudit.payload as { was_frozen?: boolean }).was_frozen === true, 'Frozen refund audit should record was_frozen = true');
+
   const secondOrder = await post('/api/orders', {
     user_id: user.id,
     group_buy_id: groupBuy.id,
@@ -103,6 +120,60 @@ async function main() {
   const cancelled = await prisma.commission.findUniqueOrThrow({ where: { id: secondCommission.id } });
   assert(cancelled.status === 'cancelled', `Full refund should cancel commission, got ${cancelled.status}`);
   assert(cancelled.final_amount_cents === 0, `Full refund should zero commission, got ${cancelled.final_amount_cents}`);
+
+
+
+  const fixedProduct = await prisma.product.create({
+    data: {
+      name: `${prefix}-fixed-product`,
+      category_id: category.id,
+      price_cents: 2000,
+      cost_price_cents: 1200,
+      stock: 10,
+      unit: '份',
+      is_group_enabled: true,
+      commission_type: 'fixed',
+      commission_value: 100,
+      status: 'active'
+    }
+  });
+  const fixedGroupBuy = await post('/api/group-buys', {
+    product_id: fixedProduct.id,
+    leader_user_id: leader.id,
+    community_id: community.id,
+    min_people: 1,
+    min_quantity: 1,
+    end_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    pickup_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+  });
+  const fixedOrder = await post('/api/orders', {
+    user_id: user.id,
+    group_buy_id: fixedGroupBuy.id,
+    client_request_id: `${prefix}-fixed-order`,
+    quantity: 2,
+    receiver_name: 'L7 用户',
+    receiver_phone: '13800004001'
+  });
+  await post('/api/payments/mock', { order_id: fixedOrder.id });
+  let fixedCommission = await prisma.commission.findFirstOrThrow({ where: { order_id: fixedOrder.id } });
+  assert(fixedCommission.final_amount_cents === 200, `Fixed initial commission should be 200, got ${fixedCommission.final_amount_cents}`);
+  await post('/api/refunds/mock', {
+    order_id: fixedOrder.id,
+    refund_amount_cents: 1000,
+    reason: 'L7 本地验收固定奖励部分退款',
+    client_refund_id: `${prefix}-fixed-partial-refund`
+  });
+  fixedCommission = await prisma.commission.findUniqueOrThrow({ where: { id: fixedCommission.id } });
+  assert(fixedCommission.final_amount_cents === 150, `Fixed partial refund should recalculate commission to 150, got ${fixedCommission.final_amount_cents}`);
+  await post('/api/refunds/mock', {
+    order_id: fixedOrder.id,
+    refund_amount_cents: fixedOrder.pay_amount_cents - 1000,
+    reason: 'L7 本地验收固定奖励全额退款',
+    client_refund_id: `${prefix}-fixed-full-refund`
+  });
+  fixedCommission = await prisma.commission.findUniqueOrThrow({ where: { id: fixedCommission.id } });
+  assert(fixedCommission.status === 'cancelled', `Fixed full refund should cancel commission, got ${fixedCommission.status}`);
+  assert(fixedCommission.final_amount_cents === 0, `Fixed full refund should zero commission, got ${fixedCommission.final_amount_cents}`);
 
   const leaderSummary = await json(await app.inject({ method: 'GET', url: `/api/leaders/me/commissions?leader_user_id=${leader.id}` }));
   assert(Array.isArray(leaderSummary.commissions) && leaderSummary.commissions.length >= 2, 'Leader commission list should include commissions');

@@ -481,3 +481,12 @@ L7 先实现开团服务奖励结算闭环，不进入自动提现打款：
 3. 结算任务只把到期、未冻结、金额大于 0 的 `pending` 奖励改为 `available`。
 4. 部分退款按实际成交金额重算奖励；全额退款取消奖励。
 5. 只允许开团人本人发起团购产生的一级开团服务奖励，不新增多级关系字段，不实现提现自动打款。
+
+### 阶段 7 增补：固定金额奖励退款重算
+
+L7 开团服务奖励退款联动必须满足：
+
+1. `percent` 类型按实际成交金额 `base_amount_cents * commission_value / 100` 重算。
+2. `fixed` 类型初始预估仍按 `quantity * commission_value`，部分退款后按 `floor((quantity * commission_value) * base_amount_cents / original_pay_amount_cents)` 重算。
+3. 全额退款后 `final_amount_cents = 0` 且状态为 `cancelled`。
+4. 冻结状态发生退款时状态保持 `frozen`，但金额仍按实际成交金额重算，并在 AuditLog 记录 `was_frozen = true`。

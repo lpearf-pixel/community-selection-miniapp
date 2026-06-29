@@ -7,7 +7,7 @@ function addDays(date: Date, days: number) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
-function calculateAmount(input: {
+function calculateInitialAmount(input: {
   commission_type: 'none' | 'fixed' | 'percent';
   commission_value: number;
   quantity: number;
@@ -16,6 +16,20 @@ function calculateAmount(input: {
   if (input.commission_type === 'none') return 0;
   if (input.commission_type === 'fixed') return input.quantity * input.commission_value;
   return Math.floor((input.base_amount_cents * input.commission_value) / 100);
+}
+
+function calculateRefundAdjustedAmount(input: {
+  commission_type: 'none' | 'fixed' | 'percent';
+  commission_value: number;
+  quantity: number;
+  base_amount_cents: number;
+  original_pay_amount_cents: number;
+}) {
+  if (input.commission_type === 'none' || input.base_amount_cents <= 0) return 0;
+  if (input.commission_type === 'percent') return Math.floor((input.base_amount_cents * input.commission_value) / 100);
+  if (input.original_pay_amount_cents <= 0) return 0;
+  const initialFixedAmount = input.quantity * input.commission_value;
+  return Math.floor((initialFixedAmount * input.base_amount_cents) / input.original_pay_amount_cents);
 }
 
 function nextStatusAfterAdjust(current: CommissionStatus, finalAmount: number): CommissionStatus {
@@ -35,7 +49,7 @@ export async function ensureEstimatedCommission(orderId: string, tx?: Prisma.Tra
   const product = order.group_buy.product;
   if (product.commission_type === 'none' || product.commission_value <= 0) return null;
   const baseAmount = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
-  const estimatedAmount = calculateAmount({
+  const estimatedAmount = calculateInitialAmount({
     commission_type: product.commission_type,
     commission_value: product.commission_value,
     quantity: order.quantity,
@@ -90,12 +104,17 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
   const isFullRefund = baseAmount <= 0 || order.order_status === 'refunded';
   const recalculated = isFullRefund
     ? 0
-    : calculateAmount({
+    : calculateRefundAdjustedAmount({
       commission_type: commission.commission_type,
       commission_value: commission.commission_value,
       quantity: order.quantity,
-      base_amount_cents: baseAmount
+      base_amount_cents: baseAmount,
+      original_pay_amount_cents: order.pay_amount_cents
     });
+  const previousStatus = commission.status;
+  const previousFinalAmount = commission.final_amount_cents;
+  const wasAvailable = commission.status === 'available';
+  const wasFrozen = commission.status === 'frozen';
   const deductAmount = Math.max(0, commission.estimated_amount_cents - recalculated);
   const status = isFullRefund ? 'cancelled' : nextStatusAfterAdjust(commission.status, recalculated);
 
@@ -116,9 +135,14 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
       target_id: commission.id,
       payload: {
         order_id: order.id,
+        previous_status: previousStatus,
+        previous_final_amount_cents: previousFinalAmount,
+        new_final_amount_cents: recalculated,
+        was_available: wasAvailable,
+        was_frozen: wasFrozen,
+        is_full_refund: isFullRefund,
         refund_amount_cents: order.refund_amount_cents,
         base_amount_cents: baseAmount,
-        final_amount_cents: recalculated,
         status
       }
     }
