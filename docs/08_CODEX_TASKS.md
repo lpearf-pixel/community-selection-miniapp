@@ -285,6 +285,19 @@ scripts/check.sh
 
 ---
 
+
+### 阶段 5 增补：支付 MOCK 与微信支付接口结构
+
+L5 只实现支付 MOCK 与真实微信支付接口结构，不进入 L6-L8。后续复现时必须满足：
+
+1. 支付能力必须拆到 `apps/api/src/routes/payments.ts` 与 `apps/api/src/services/payment-service.ts`，不得再把 `/api/orders/:id/complete` 当支付入口。
+2. 本地闭环接口为 `POST /api/payments/mock`，重复调用同一 `order_id` 必须复用同一 `Payment`，不得重复累计团购人数和数量。
+3. 真实微信 JSAPI 只保留 `POST /api/payments/wechat/jsapi` 结构：MOCK 模式必须提示使用 MOCK 支付；真实模式必须校验微信支付环境变量并返回清晰的预留结构。
+4. `POST /api/payments/wechat/notify` 在 MOCK 模式下必须拒绝；真实模式未完成验签、解密、金额校验前不得修改订单。
+5. `markOrderPaid(orderId, paymentInfo)` 必须在事务中使用 `updateMany({ id, pay_status: 'unpaid' })` 原子更新，并使用 `order.quantity` 刷新成团统计。
+6. L5 不实现真实退款、微信退款、开团服务奖励结算、提现、commission 结算或 withdrawal。
+7. 必须补充并运行 `scripts/verify-l1-l2-l3-l4-l5-local.sh`，覆盖 MOCK 支付闭环、重复支付幂等、成团、错误订单、分拣 CSV 和合规扫描。
+
 ## 阶段 6：退款系统
 
 目标：实现用户退款、后台审核、MOCK 退款成功、未成团自动退款。

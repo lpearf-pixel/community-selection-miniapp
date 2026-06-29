@@ -98,8 +98,8 @@ async function main() {
   const stockAfterDuplicate = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(stockAfterDuplicate.stock === 3, 'Duplicate order must not decrement stock again');
 
-  await post(`/api/orders/${orderA.id}/mock-pay`, {});
-  await post(`/api/orders/${orderA.id}/mock-pay`, {});
+  await post('/api/payments/mock', { order_id: orderA.id });
+  await post('/api/payments/mock', { order_id: orderA.id });
   let paidGroup = await prisma.groupBuy.findUniqueOrThrow({ where: { id: groupBuy.id } });
   assert(paidGroup.current_people === 1, `Mock pay must count people once, got ${paidGroup.current_people}`);
   assert(paidGroup.current_quantity === 2, `Mock pay must count quantity 2, got ${paidGroup.current_quantity}`);
@@ -112,7 +112,7 @@ async function main() {
     receiver_name: '用户 B',
     receiver_phone: '13800001002'
   });
-  await post(`/api/orders/${orderB.id}/mock-pay`, {});
+  await post('/api/payments/mock', { order_id: orderB.id });
   paidGroup = await prisma.groupBuy.findUniqueOrThrow({ where: { id: groupBuy.id } });
   assert(paidGroup.status === 'success', `Group should become success, got ${paidGroup.status}`);
   assert(paidGroup.current_people === 2, `Group people should be 2, got ${paidGroup.current_people}`);
@@ -163,7 +163,7 @@ async function main() {
     receiver_name: '用户 A',
     receiver_phone: '13800001001'
   });
-  await post(`/api/orders/${paidFailOrder.id}/mock-pay`, {});
+  await post('/api/payments/mock', { order_id: paidFailOrder.id });
   const unpaidFailOrder = await post('/api/orders', {
     user_id: userB.id,
     group_buy_id: failGroup.id,

@@ -167,59 +167,6 @@ export async function expireOverdueGroupBuys() {
   }
 }
 
-export async function markOrderPaid(id: string) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const order = await tx.order.findUnique({
-      where: { id },
-      include: { group_buy: true }
-    });
-    if (!order) throw new Error('订单不存在');
-    if (order.pay_status !== 'unpaid') return order;
-
-    const groupBuy = order.group_buy;
-    if (!groupBuy) throw new Error('订单不可支付');
-    if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可支付');
-    if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
-
-    const paidResult = await tx.order.updateMany({
-      where: { id, pay_status: 'unpaid' },
-      data: { pay_status: 'paid', paid_at: new Date() }
-    });
-    if (paidResult.count !== 1) {
-      return tx.order.findUnique({ where: { id }, include: { group_buy: true } });
-    }
-
-    const updatedGroupBuy = await tx.groupBuy.update({
-      where: { id: groupBuy.id },
-      data: {
-        current_people: { increment: 1 },
-        current_quantity: { increment: order.quantity }
-      }
-    });
-    const nextGroupStatus = updatedGroupBuy.current_people >= updatedGroupBuy.min_people || updatedGroupBuy.current_quantity >= updatedGroupBuy.min_quantity ? 'success' : updatedGroupBuy.status;
-
-    if (nextGroupStatus === 'success' && updatedGroupBuy.status !== 'success') {
-      await tx.groupBuy.update({
-        where: { id: groupBuy.id },
-        data: { status: 'success' }
-      });
-    }
-
-    const paidOrder = await tx.order.update({
-      where: { id },
-      data: { order_status: nextGroupStatus === 'success' ? 'grouped' : 'paid' }
-    });
-
-    if (nextGroupStatus === 'success') {
-      await tx.order.updateMany({
-        where: { group_buy_id: groupBuy.id, pay_status: 'paid' },
-        data: { order_status: 'grouped' }
-      });
-    }
-
-    return paidOrder;
-  });
-}
 
 export function registerGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/group-buys', async (request, reply) => {
@@ -378,16 +325,6 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     });
   }
 
-  app.post('/api/orders/:id/mock-pay', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string };
-      return ok(await markOrderPaid(id));
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '订单支付失败');
-    }
-  });
-
   app.post('/api/orders/:id/status', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -402,10 +339,11 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const body = request.body as UpdateOrderStatusBody;
-      if (body.next_status) {
-        return ok(await updateOrderStatus(id, body));
+      if (!body.next_status) {
+        reply.code(400);
+        return fail('支付请使用 /api/payments/mock 或 /api/payments/wechat/jsapi');
       }
-      return ok(await markOrderPaid(id));
+      return ok(await updateOrderStatus(id, body));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '订单完成失败');

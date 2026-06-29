@@ -32,18 +32,12 @@ Page({
           wx.showToast({ title: (res.data && res.data.message) || '下单失败', icon: 'none' });
           return;
         }
+        // TODO L5: 真实微信支付接入后，先调用 /api/payments/wechat/jsapi，再调用 wx.requestPayment。
         wx.request({
-          url: `${apiBaseUrl}/api/pay/wechat/prepay`,
+          url: `${apiBaseUrl}/api/payments/mock`,
           method: 'POST',
           data: { order_id: order.id },
-          success: () => {
-            wx.request({
-              url: `${apiBaseUrl}/api/pay/mock/success`,
-              method: 'POST',
-              data: { order_id: order.id },
-              complete: () => wx.navigateTo({ url: '/pages/orders/index' })
-            });
-          }
+          complete: () => wx.navigateTo({ url: '/pages/orders/index' })
         });
       }
     });
