@@ -66,6 +66,7 @@ enum CommissionStatus {
   frozen
   pending
   available
+  withdrawing
   withdrawn
   deducted
   cancelled
@@ -264,6 +265,7 @@ model Commission {
   leader_user_id         String
   order_id               String
   group_buy_id           String
+  withdrawal_id          String?
   base_amount_cents      Int
   commission_type        CommissionType
   commission_value       Int
@@ -279,6 +281,7 @@ model Commission {
   group_buy              GroupBuy         @relation(fields: [group_buy_id], references: [id])
 
   @@index([leader_user_id])
+  @@index([withdrawal_id])
   @@unique([order_id, leader_user_id])
 }
 

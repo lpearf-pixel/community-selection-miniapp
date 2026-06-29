@@ -35,7 +35,7 @@ function calculateRefundAdjustedAmount(input: {
 
 function nextStatusAfterAdjust(current: CommissionStatus, finalAmount: number): CommissionStatus {
   if (finalAmount <= 0) return 'cancelled';
-  if (current === 'withdrawn' || current === 'frozen') return current;
+  if (current === 'withdrawn' || current === 'withdrawing' || current === 'frozen') return current;
   return current;
 }
 
@@ -117,6 +117,20 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
   if (!order || !order.group_buy || !order.leader_user_id) return null;
   const commission = order.commissions.find((item) => item.leader_user_id === order.leader_user_id);
   if (!commission) return null;
+  if (commission.status === 'withdrawing') {
+    await safeRaiseOpsAlert(client, {
+      alert_type: 'refund_during_withdrawal_review',
+      alert_level: 'warning',
+      order_id: order.id,
+      group_buy_id: order.group_buy.id,
+      commission_id: commission.id,
+      withdrawal_id: commission.withdrawal_id,
+      leader_user_id: commission.leader_user_id,
+      title: '提现申请期间发生退款',
+      message: '开团服务奖励提现申请审核期间订单发生退款，请人工复核',
+      payload: { refund_amount_cents: order.refund_amount_cents }
+    });
+  }
   if (commission.status === 'withdrawn') {
     await safeRecordBusinessEvent(client, {
       event_type: 'commission_refund_after_withdrawn_detected',

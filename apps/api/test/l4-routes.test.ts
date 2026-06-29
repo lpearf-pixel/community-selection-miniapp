@@ -68,6 +68,18 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
+  it('registers L8 withdrawal API routes', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const withdrawalRoutes = readFileSync(new URL('../src/routes/withdrawals.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerWithdrawalRoutes')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/leaders/me/withdrawals')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/admin/withdrawals')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/approve')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/reject')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/mark-paid')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
