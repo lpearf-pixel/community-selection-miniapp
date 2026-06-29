@@ -1,4 +1,4 @@
-import Fastify from './fastify.js';
+import Fastify from 'fastify';
 import { ok } from '@community-selection/shared';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerGroupBuyRoutes } from './routes/group-buys.js';

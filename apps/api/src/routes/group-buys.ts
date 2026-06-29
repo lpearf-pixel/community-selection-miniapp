@@ -1,4 +1,5 @@
-import type { FastifyInstance } from '../fastify.js';
+import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 
@@ -27,7 +28,7 @@ type CreateOrderBody = {
   receiver_address?: string;
 };
 
-type CompleteOrderBody = {
+type UpdateOrderStatusBody = {
   next_status?: 'preparing' | 'ready' | 'picked' | 'delivered' | 'completed';
 };
 
@@ -60,7 +61,7 @@ async function createGroupOrder(body: CreateOrderBody) {
     throw new Error('缺少下单必填字段');
   }
 
-  return prisma.$transaction(async (tx: any) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({ where: { client_request_id: body.client_request_id } });
     if (existing) return existing;
 
@@ -69,7 +70,7 @@ async function createGroupOrder(body: CreateOrderBody) {
       include: { product: true }
     });
     if (!groupBuy) throw new Error('团购不存在');
-    if (groupBuy.status !== 'pending') throw new Error('当前团购不可下单');
+    if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可下单');
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
     const stockResult = await tx.product.updateMany({
       where: { id: groupBuy.product_id, stock: { gte: quantity } },
@@ -87,6 +88,7 @@ async function createGroupOrder(body: CreateOrderBody) {
         leader_user_id: groupBuy.leader_user_id,
         total_amount_cents: amount,
         pay_amount_cents: amount,
+        quantity,
         pickup_type: body.pickup_type ?? 'store',
         pickup_store_id: body.pickup_store_id,
         community_id: body.community_id ?? groupBuy.community_id,
@@ -108,22 +110,35 @@ export async function expireOverdueGroupBuys() {
   });
 
   for (const groupBuy of overdueGroupBuys) {
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.groupBuy.update({
         where: { id: groupBuy.id },
         data: { status: 'failed' }
       });
 
-      const paidOrders = groupBuy.orders.filter((order: any) => order.pay_status === 'paid');
-      const unpaidOrders = groupBuy.orders.filter((order: any) => order.pay_status === 'unpaid');
+      const paidOrders = groupBuy.orders.filter((order) => order.pay_status === 'paid');
+      const unpaidOrders = groupBuy.orders.filter((order) => order.pay_status === 'unpaid');
+      const restoreQuantity = [...paidOrders, ...unpaidOrders].reduce((sum, order) => sum + Math.max(1, order.quantity ?? 1), 0);
+      if (restoreQuantity > 0) {
+        await tx.product.update({
+          where: { id: groupBuy.product_id },
+          data: { stock: { increment: restoreQuantity } }
+        });
+      }
 
       for (const order of paidOrders) {
         await tx.order.update({
           where: { id: order.id },
           data: { order_status: 'refunding', refund_status: 'pending' }
         });
-        await tx.refund.create({
-          data: {
+        await tx.refund.upsert({
+          where: { out_refund_no: `RF${order.order_no}` },
+          update: {
+            refund_amount_cents: order.pay_amount_cents - order.refund_amount_cents,
+            reason: '未成团自动进入待退款',
+            status: 'pending'
+          },
+          create: {
             order_id: order.id,
             out_refund_no: `RF${order.order_no}`,
             refund_amount_cents: order.pay_amount_cents - order.refund_amount_cents,
@@ -269,7 +284,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
       orderBy: { created_at: 'desc' }
     });
     const header = '订单号,商品,社区,收货人,手机号,状态,金额(元)';
-    const rows = orders.map((order: any) => [
+    const rows = orders.map((order) => [
       order.order_no,
       order.group_buy?.product?.name ?? '',
       order.group_buy?.community?.name ?? '',
@@ -295,55 +310,102 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     return ok(order);
   });
 
+  async function mockPayOrder(id: string) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const order = await tx.order.findUnique({
+        where: { id },
+        include: { group_buy: true }
+      });
+      if (!order) throw new Error('订单不存在');
+      if (order.pay_status !== 'unpaid') return order;
+
+      const groupBuy = order.group_buy;
+      if (!groupBuy) throw new Error('订单不可支付');
+      if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可支付');
+      if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
+
+      const paidResult = await tx.order.updateMany({
+        where: { id, pay_status: 'unpaid' },
+        data: { pay_status: 'paid', paid_at: new Date() }
+      });
+      if (paidResult.count !== 1) {
+        return tx.order.findUnique({ where: { id }, include: { group_buy: true } });
+      }
+
+      const updatedGroupBuy = await tx.groupBuy.update({
+        where: { id: groupBuy.id },
+        data: {
+          current_people: { increment: 1 },
+          current_quantity: { increment: order.quantity }
+        }
+      });
+      const nextGroupStatus = updatedGroupBuy.current_people >= updatedGroupBuy.min_people || updatedGroupBuy.current_quantity >= updatedGroupBuy.min_quantity ? 'success' : updatedGroupBuy.status;
+
+      if (nextGroupStatus === 'success' && updatedGroupBuy.status !== 'success') {
+        await tx.groupBuy.update({
+          where: { id: groupBuy.id },
+          data: { status: 'success' }
+        });
+      }
+
+      const paidOrder = await tx.order.update({
+        where: { id },
+        data: { order_status: nextGroupStatus === 'success' ? 'grouped' : 'paid' }
+      });
+
+      if (nextGroupStatus === 'success') {
+        await tx.order.updateMany({
+          where: { group_buy_id: groupBuy.id, pay_status: 'paid' },
+          data: { order_status: 'grouped' }
+        });
+      }
+
+      return paidOrder;
+    });
+  }
+
+  async function updateOrderStatus(id: string, body: UpdateOrderStatusBody) {
+    if (!body.next_status) throw new Error('缺少订单目标状态');
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) throw new Error('订单不存在');
+    if (order.pay_status !== 'paid') throw new Error('未支付订单不可推进履约');
+    return prisma.order.update({
+      where: { id },
+      data: {
+        order_status: body.next_status,
+        completed_at: body.next_status === 'completed' ? new Date() : undefined
+      }
+    });
+  }
+
+  app.post('/api/orders/:id/mock-pay', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      return ok(await mockPayOrder(id));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '订单支付失败');
+    }
+  });
+
+  app.post('/api/orders/:id/status', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      return ok(await updateOrderStatus(id, request.body as UpdateOrderStatusBody));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '订单状态更新失败');
+    }
+  });
+
   app.post('/api/orders/:id/complete', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const body = request.body as CompleteOrderBody;
-      const result = await prisma.$transaction(async (tx: any) => {
-        const order = await tx.order.findUnique({
-          where: { id },
-          include: { group_buy: true }
-        });
-        if (!order) throw new Error('订单不存在');
-
-        if (body.next_status && order.pay_status === 'paid') {
-          return tx.order.update({ where: { id }, data: { order_status: body.next_status, completed_at: body.next_status === 'completed' ? new Date() : undefined } });
-        }
-
-        if (order.pay_status !== 'unpaid') return order;
-        const groupBuy = order.group_buy;
-        if (!groupBuy || groupBuy.status !== 'pending') throw new Error('订单不可完成');
-        const quantity = Math.max(1, Math.floor(order.pay_amount_cents / groupBuy.price_cents));
-        const nextPeople = groupBuy.current_people + 1;
-        const nextQuantity = groupBuy.current_quantity + quantity;
-        const nextGroupStatus = nextPeople >= groupBuy.min_people || nextQuantity >= groupBuy.min_quantity ? 'success' : 'pending';
-
-        await tx.groupBuy.update({
-          where: { id: groupBuy.id },
-          data: {
-            current_people: nextPeople,
-            current_quantity: nextQuantity,
-            status: nextGroupStatus
-          }
-        });
-
-        if (nextGroupStatus === 'success') {
-          await tx.order.updateMany({
-            where: { group_buy_id: groupBuy.id, pay_status: 'paid' },
-            data: { order_status: 'grouped' }
-          });
-        }
-
-        return tx.order.update({
-          where: { id },
-          data: {
-            pay_status: 'paid',
-            order_status: nextGroupStatus === 'success' ? 'grouped' : 'paid',
-            paid_at: new Date()
-          }
-        });
-      });
-      return ok(result);
+      const body = request.body as UpdateOrderStatusBody;
+      if (body.next_status) {
+        return ok(await updateOrderStatus(id, body));
+      }
+      return ok(await mockPayOrder(id));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '订单完成失败');

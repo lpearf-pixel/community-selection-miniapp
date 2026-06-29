@@ -11,6 +11,8 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes("/api/orders'")).toBe(true);
     expect(source.includes("/api/orders/:id'")).toBe(true);
     expect(source.includes("/api/orders/:id/complete'")).toBe(true);
+    expect(source.includes("/api/orders/:id/mock-pay'")).toBe(true);
+    expect(source.includes("/api/orders/:id/status'")).toBe(true);
     expect(source.includes("/api/orders/export/picking.csv'")).toBe(true);
   });
 
@@ -21,5 +23,9 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes('stock: { gte: quantity }')).toBe(true);
     expect(source.includes('stock: { decrement: quantity }')).toBe(true);
     expect(source.includes('group_buy_expired')).toBe(true);
+    expect(source.includes('quantity,')).toBe(true);
+    expect(source.includes('current_quantity: { increment: order.quantity }')).toBe(true);
+    expect(source.includes('refund.upsert')).toBe(true);
+    expect(source.includes('pay_amount_cents / groupBuy.price_cents')).toBe(false);
   });
 });

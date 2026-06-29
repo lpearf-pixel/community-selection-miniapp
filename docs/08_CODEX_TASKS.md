@@ -218,6 +218,20 @@ scripts/check.sh
 
 ---
 
+
+### 阶段 4 增补：核心可靠性与合规边界
+
+后续复现 L4 时必须同时满足以下增补要求，且不得提前进入 L5-L8：
+
+1. `Order` 必须保存 `quantity Int @default(1)`，库存恢复、成团数量统计必须使用 `order.quantity`，不得用金额反推数量。
+2. 下单扣库存必须使用条件更新：`updateMany({ where: { id: product_id, stock: { gte: quantity } }, data: { stock: { decrement: quantity } } })`，且 `count !== 1` 时返回库存不足。
+3. 订单支付 MOCK 必须幂等，`unpaid -> paid` 只能成功一次；推荐拆分 `POST /api/orders/:id/mock-pay` 与 `POST /api/orders/:id/status`，保留旧接口时也必须逻辑清晰。
+4. 团购 `pending` 与 `success` 状态均允许继续参团，直到 `end_time` 或库存不足；`failed/cancelled/closed` 不允许参团。
+5. 过期未成团扫描只处理 `pending` 团：团状态改 `failed`，未支付订单关闭，已支付订单进入待退款，按 `order.quantity` 恢复库存，退款记录必须幂等。
+6. L4 不实现微信支付、真实退款、开团服务奖励结算和提现。
+7. 不得新增或使用多级关系字段，也不得新增不合规的用户可见宣传文案；用户可见文案只允许“开团服务奖励”。
+8. 必须补充并运行 `scripts/verify-l1-l2-l3-l4-local.sh`，覆盖重复下单幂等、支付幂等、成团、库存不足、过期失败、退款待处理和分拣 CSV。
+
 ## 阶段 5：微信支付 MOCK 与真实接口结构
 
 目标：实现微信支付接口结构，开发环境可 MOCK。

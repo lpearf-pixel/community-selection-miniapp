@@ -200,6 +200,7 @@ model Order {
   leader_user_id      String?
   total_amount_cents  Int
   pay_amount_cents    Int
+  quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)
   pay_status          PayStatus    @default(unpaid)
   order_status        OrderStatus  @default(unpaid)
