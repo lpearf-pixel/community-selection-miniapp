@@ -93,15 +93,34 @@ async function main() {
   assert(locked.status === 'available' && locked.withdrawal_id === null, 'Rejected withdrawal should release commission');
 
   await expectFail('/api/leaders/me/withdrawals', { leader_user_id: leader.id, amount_cents: amount + 1 }, '提现金额不能超过可提现余额');
+  const withdrawable = await json(await app.inject({ method: 'GET', url: `/api/leaders/me/withdrawable-commissions?leader_user_id=${leader.id}` }));
+  assert(withdrawable.available_amount_cents === amount, `Withdrawable amount should be ${amount}, got ${withdrawable.available_amount_cents}`);
+
   const secondWithdrawal = await post('/api/leaders/me/withdrawals', { leader_user_id: leader.id, amount_cents: amount });
   const approved = await post(`/api/admin/withdrawals/${secondWithdrawal.id}/approve`, { reason: 'L8 验收通过' });
   assert(approved.status === 'approved', `Withdrawal should be approved, got ${approved.status}`);
-  const withdrawn = await prisma.commission.findUniqueOrThrow({ where: { id: commission.id } });
-  assert(withdrawn.status === 'withdrawn', `Commission should be withdrawn, got ${withdrawn.status}`);
+  let afterApprove = await prisma.commission.findUniqueOrThrow({ where: { id: commission.id } });
+  assert(afterApprove.status === 'withdrawing', `Commission should remain withdrawing after approve, got ${afterApprove.status}`);
 
   await post('/api/refunds/mock', {
     order_id: order.id,
-    refund_amount_cents: 100,
+    refund_amount_cents: 50,
+    reason: 'L8 验收审核通过未处理退款告警',
+    client_refund_id: `${prefix}-refund-during-approved`
+  });
+  const reviewAlert = await prisma.opsAlertLog.findFirstOrThrow({ where: { order_id: order.id, alert_type: 'refund_during_withdrawal_review' } });
+  assert(reviewAlert.status === 'open', 'Refund during approved withdrawal should create review alert');
+  const noWithdrawnAlertCount = await prisma.opsAlertLog.count({ where: { order_id: order.id, alert_type: 'refund_after_withdrawn' } });
+  assert(noWithdrawnAlertCount === 0, 'Approved but not paid withdrawal should not create refund_after_withdrawn alert');
+
+  const paid = await post(`/api/admin/withdrawals/${secondWithdrawal.id}/mark-paid`, { reason: 'L8 验收人工标记已处理' });
+  assert(paid.status === 'paid', `Withdrawal should be paid after mark-paid, got ${paid.status}`);
+  const withdrawn = await prisma.commission.findUniqueOrThrow({ where: { id: commission.id } });
+  assert(withdrawn.status === 'withdrawn', `Commission should be withdrawn after mark-paid, got ${withdrawn.status}`);
+
+  await post('/api/refunds/mock', {
+    order_id: order.id,
+    refund_amount_cents: 50,
     reason: 'L8 验收提现后退款告警',
     client_refund_id: `${prefix}-refund-after-withdrawn`
   });

@@ -73,6 +73,7 @@ describe('L4 group-buy and order routes', () => {
     const withdrawalRoutes = readFileSync(new URL('../src/routes/withdrawals.ts', import.meta.url), 'utf8');
     expect(appSource.includes('registerWithdrawalRoutes')).toBe(true);
     expect(withdrawalRoutes.includes('/api/leaders/me/withdrawals')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/leaders/me/withdrawable-commissions')).toBe(true);
     expect(withdrawalRoutes.includes('/api/admin/withdrawals')).toBe(true);
     expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/approve')).toBe(true);
     expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/reject')).toBe(true);

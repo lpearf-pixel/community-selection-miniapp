@@ -511,3 +511,13 @@ L8 第一版只实现人工审核流，不接真实打款、企业付款或微�
 3. 后台拒绝后提现状态为 `rejected`，对应奖励回到 `available`；后台审核通过后提现状态为 `approved`，对应奖励变为 `withdrawn`。
 4. 审核通过后可人工标记 `paid`，仅记录状态，不触发真实打款。
 5. 提现申请期间或提现后发生退款必须创建 OpsAlert，方便人工复核或冲正。
+
+### 阶段 8 增补：提现状态机收口
+
+L8 提现状态机必须保持：
+
+1. 创建提现申请后 `Withdrawal.status = pending`，关联开团服务奖励保持 `Commission.status = withdrawing` 并保留 `withdrawal_id`。
+2. 审核通过只把 `Withdrawal.status` 改为 `approved`，开团服务奖励仍保持 `withdrawing`。
+3. 只有后台人工标记已处理后，`Withdrawal.status = paid`，关联开团服务奖励才变为 `withdrawn`。
+4. 审核通过但未标记已处理期间发生退款，只创建人工复核告警，不创建已提现后退款的 critical 告警。
+5. `GET /api/leaders/me/withdrawable-commissions` 只返回 `available` 且 `withdrawal_id = null` 的开团服务奖励。

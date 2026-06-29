@@ -63,6 +63,22 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
     }
   });
 
+
+  app.get('/api/leaders/me/withdrawable-commissions', async (request, reply) => {
+    try {
+      const leaderUserId = await resolveLeaderId(request.query as LeaderQuery);
+      const commissions = await prisma.commission.findMany({
+        where: { leader_user_id: leaderUserId, status: 'available', withdrawal_id: null, final_amount_cents: { gt: 0 } },
+        orderBy: { created_at: 'asc' }
+      });
+      const availableAmount = commissions.reduce((sum, item) => sum + item.final_amount_cents, 0);
+      return ok({ available_amount_cents: availableAmount, commissions });
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '查询可提现开团服务奖励失败');
+    }
+  });
+
   app.post('/api/leaders/me/withdrawals', async (request, reply) => {
     try {
       const body = request.body as WithdrawBody;
@@ -147,7 +163,6 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         if (withdrawal.status !== 'pending') throw new Error('当前提现申请不可审核通过');
         const commissions = await tx.commission.findMany({ where: { withdrawal_id: id } });
         const updated = await tx.withdrawal.update({ where: { id }, data: { status: 'approved', admin_remark: body.reason ?? '人工审核通过' } });
-        await tx.commission.updateMany({ where: { withdrawal_id: id }, data: { status: 'withdrawn' } });
         await logWithdrawalEvent(tx, {
           event_type: 'withdrawal_approved',
           withdrawal: updated,
@@ -175,6 +190,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         if (withdrawal.status !== 'approved') throw new Error('仅审核通过的提现申请可标记已处理');
         const commissions = await tx.commission.findMany({ where: { withdrawal_id: id } });
         const updated = await tx.withdrawal.update({ where: { id }, data: { status: 'paid', admin_remark: body.reason ?? withdrawal.admin_remark } });
+        await tx.commission.updateMany({ where: { withdrawal_id: id }, data: { status: 'withdrawn' } });
         await logWithdrawalEvent(tx, {
           event_type: 'withdrawal_mark_paid',
           withdrawal: updated,
