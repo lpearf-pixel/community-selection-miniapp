@@ -26,7 +26,26 @@ Page({
         receiver_name: this.data.receiver_name || '测试用户',
         receiver_phone: this.data.receiver_phone || '13800000001'
       },
-      success: () => wx.navigateTo({ url: '/pages/orders/index' })
+      success: (res) => {
+        const order = res.data && res.data.data;
+        if (!res.data || !res.data.success || !order) {
+          wx.showToast({ title: (res.data && res.data.message) || '下单失败', icon: 'none' });
+          return;
+        }
+        wx.request({
+          url: `${apiBaseUrl}/api/pay/wechat/prepay`,
+          method: 'POST',
+          data: { order_id: order.id },
+          success: () => {
+            wx.request({
+              url: `${apiBaseUrl}/api/pay/mock/success`,
+              method: 'POST',
+              data: { order_id: order.id },
+              complete: () => wx.navigateTo({ url: '/pages/orders/index' })
+            });
+          }
+        });
+      }
     });
   }
 });

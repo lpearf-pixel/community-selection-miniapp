@@ -16,6 +16,17 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes("/api/orders/export/picking.csv'")).toBe(true);
   });
 
+  it('registers L5 mock payment API routes', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const paymentSource = readFileSync(new URL('../src/routes/payments.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerPaymentRoutes')).toBe(true);
+    expect(paymentSource.includes("/api/auth/wx-login'")).toBe(true);
+    expect(paymentSource.includes("/api/pay/wechat/prepay'")).toBe(true);
+    expect(paymentSource.includes("/api/pay/wechat/notify'")).toBe(true);
+    expect(paymentSource.includes("/api/pay/orders/:id/status'")).toBe(true);
+    expect(paymentSource.includes("/api/pay/mock/success'")).toBe(true);
+  });
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
@@ -27,5 +38,12 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes('current_quantity: { increment: order.quantity }')).toBe(true);
     expect(source.includes('refund.upsert')).toBe(true);
     expect(source.includes('pay_amount_cents / groupBuy.price_cents')).toBe(false);
+  });
+
+  it('keeps L5 payment idempotency safeguards visible', () => {
+    const paymentSource = readFileSync(new URL('../src/routes/payments.ts', import.meta.url), 'utf8');
+    expect(paymentSource.includes('payment.upsert')).toBe(true);
+    expect(paymentSource.includes('markOrderPaid')).toBe(true);
+    expect(paymentSource.includes('MOCK_WECHAT_PAY')).toBe(true);
   });
 });
