@@ -24,6 +24,18 @@ describe('L4 group-buy and order routes', () => {
     expect(paymentSource.includes("/api/payments/wechat/notify'")).toBe(true);
   });
 
+
+  it('registers L6 refund API routes', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const refundSource = readFileSync(new URL('../src/routes/refunds.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerRefundRoutes')).toBe(true);
+    expect(refundSource.includes("/api/refunds'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/:id'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/:id/audit'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/mock/success'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/wechat/notify'")).toBe(true);
+  });
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
