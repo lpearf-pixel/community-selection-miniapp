@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { buildOutRefundNo, createMockRefund } from '../services/refund-service.js';
+import { buildOutRefundNo, createMockRefund, validateRefundRequest } from '../services/refund-service.js';
 
 type MockRefundBody = {
   order_id?: string;
@@ -96,10 +96,9 @@ export function registerRefundRoutes(app: FastifyInstance) {
     }
 
     try {
-      assertWechatRefundConfig();
       const input = parseMockRefundBody(body);
-      const order = await prisma.order.findUnique({ where: { id: input.order_id } });
-      if (!order) throw new Error('订单不存在');
+      const order = await prisma.$transaction((tx) => validateRefundRequest(tx, input));
+      assertWechatRefundConfig();
       return ok({
         implemented: false,
         message: '真实微信退款请求结构已预留，待接入微信退款 API/签名工具',

@@ -461,3 +461,13 @@ pnpm build
 5. 还存在什么问题
 6. 下一阶段建议
 ```
+
+### 阶段 6 增补：退款幂等与库存恢复策略优化
+
+L6 退款系统后续复现时还必须满足：
+
+1. `client_refund_id` 命中已有退款时，必须同时校验 `order_id` 与 `refund_amount_cents`，参数不一致返回“退款幂等键已被使用，且请求参数不一致”。
+2. L6 第一版只做金额退款：部分退款不恢复库存；全额退款仅在订单仍处于 `paid/grouped/preparing/ready/refunding` 时自动恢复库存。
+3. `picked/delivered/completed` 等已履约订单全额退款不自动恢复库存，审计日志记录 `stock_restore_skipped_reason: order_already_fulfilled`。
+4. 微信退款回调成功处理必须校验 `out_refund_no`，并在 `refund_id` 首次出现时写入；已有 `refund_id` 冲突时必须失败。
+5. `/api/refunds/wechat/apply` 虽然不发起真实微信退款，也必须复用可退款校验，先拦截未支付、不可退、超额退款等请求。

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
+import { markRefundSuccess } from '../apps/api/src/services/refund-service.js';
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -64,6 +65,7 @@ async function main() {
   });
   await post('/api/payments/mock', { order_id: order.id });
 
+  const productBeforePartialRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   const refund = await post('/api/refunds/mock', {
     order_id: order.id,
     refund_amount_cents: 1000,
@@ -78,15 +80,25 @@ async function main() {
     reason: 'L6 本地验收部分退款',
     client_refund_id: `${prefix}-partial-refund`
   });
+  await expectFail('/api/refunds/mock', {
+    order_id: order.id,
+    refund_amount_cents: 1200,
+    reason: 'L6 本地验收幂等参数不一致',
+    client_refund_id: `${prefix}-partial-refund`
+  }, '退款幂等键已被使用，且请求参数不一致');
+
   let refundCount = await prisma.refund.count({ where: { order_id: order.id } });
   assert(refundCount === 1, `Repeated client_refund_id should keep one refund, got ${refundCount}`);
+
+  const productAfterPartialRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+  assert(productAfterPartialRefund.stock === productBeforePartialRefund.stock, 'Partial refund should not restore stock');
 
   const partialOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   assert(partialOrder.refund_amount_cents === 1000, `Partial refund amount should be 1000, got ${partialOrder.refund_amount_cents}`);
   assert(partialOrder.order_status !== 'refunded', 'Partial refund should not force full refunded order status');
 
   const productBeforeFullRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
-  await post('/api/refunds/mock', {
+  const fullRefund = await post('/api/refunds/mock', {
     order_id: order.id,
     refund_amount_cents: partialOrder.pay_amount_cents - partialOrder.refund_amount_cents,
     reason: 'L6 本地验收剩余退款',
@@ -105,6 +117,65 @@ async function main() {
   assert(fullOrder.order_status === 'refunded', `Full refund should set order refunded, got ${fullOrder.order_status}`);
   const productAfterFullRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(productAfterFullRefund.stock === productBeforeFullRefund.stock + order.quantity, 'Full refund should restore stock once by order quantity');
+
+  await markRefundSuccess(fullRefund.id, { refund_id: `${prefix}-wx-refund`, out_refund_no: fullRefund.out_refund_no });
+  const refundWithWechatId = await prisma.refund.findUniqueOrThrow({ where: { id: fullRefund.id } });
+  assert(refundWithWechatId.refund_id === `${prefix}-wx-refund`, 'markRefundSuccess should write refund_id');
+  let refundIdConflict = false;
+  try {
+    await markRefundSuccess(fullRefund.id, { refund_id: `${prefix}-wx-refund-conflict`, out_refund_no: fullRefund.out_refund_no });
+  } catch (error) {
+    refundIdConflict = error instanceof Error && error.message.includes('refund_id');
+  }
+  assert(refundIdConflict, 'Different refund_id on same refund should fail');
+
+
+
+  const pickedOrder = await post('/api/orders', {
+    user_id: user.id,
+    group_buy_id: groupBuy.id,
+    client_request_id: `${prefix}-picked-order`,
+    quantity: 1,
+    receiver_name: 'L6 用户',
+    receiver_phone: '13800003001'
+  });
+  await post('/api/payments/mock', { order_id: pickedOrder.id });
+  await prisma.order.update({ where: { id: pickedOrder.id }, data: { order_status: 'picked' } });
+  const productBeforePickedRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+  await post('/api/refunds/mock', {
+    order_id: pickedOrder.id,
+    refund_amount_cents: pickedOrder.pay_amount_cents,
+    reason: 'L6 本地验收已履约全额退款',
+    client_refund_id: `${prefix}-picked-full-refund`
+  });
+  const productAfterPickedRefund = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+  assert(productAfterPickedRefund.stock === productBeforePickedRefund.stock, 'Picked full refund should not auto restore stock');
+
+  const applyOrder = await post('/api/orders', {
+    user_id: user.id,
+    group_buy_id: groupBuy.id,
+    client_request_id: `${prefix}-wechat-apply-order`,
+    quantity: 1,
+    receiver_name: 'L6 用户',
+    receiver_phone: '13800003001'
+  });
+  await post('/api/payments/mock', { order_id: applyOrder.id });
+  process.env.MOCK_WECHAT_PAY = 'false';
+  process.env.WECHAT_PAY_MODE = 'wechat';
+  process.env.WECHAT_APP_ID = 'wx-test';
+  process.env.WECHAT_MCH_ID = 'mch-test';
+  process.env.WECHAT_MCH_SERIAL_NO = 'serial-test';
+  process.env.WECHAT_API_V3_KEY = 'api-v3-key-test';
+  process.env.WECHAT_PRIVATE_KEY_PATH = 'certs/test.pem';
+  process.env.WECHAT_REFUND_NOTIFY_URL = 'https://example.com/refund-notify';
+  await expectFail('/api/refunds/wechat/apply', {
+    order_id: applyOrder.id,
+    refund_amount_cents: applyOrder.pay_amount_cents + 1,
+    reason: '微信退款预校验超额',
+    client_refund_id: `${prefix}-wechat-over-refund`
+  }, '退款金额超过订单实付金额');
+  process.env.MOCK_WECHAT_PAY = 'true';
+  process.env.WECHAT_PAY_MODE = 'mock';
 
   const refundsList = await json(await app.inject({ method: 'GET', url: '/api/refunds' }));
   assert(Array.isArray(refundsList) && refundsList.length >= 2, 'Refund list should be available');
