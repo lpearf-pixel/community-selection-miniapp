@@ -28,6 +28,8 @@ type CreateOrderBody = {
   receiver_name?: string;
   receiver_phone?: string;
   receiver_address?: string;
+  credit_amount_cents?: number;
+  credit_source_id?: string;
 };
 
 type UpdateOrderStatusBody = {
@@ -45,6 +47,11 @@ function makeOrderNo(): string {
 
 function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
+  const entries = await tx.consumerCreditLedger.findMany({ where: { user_id: userId } });
+  return entries.reduce((sum, entry) => sum + (entry.direction === 'in' ? entry.amount_cents : -entry.amount_cents), 0);
 }
 
 async function findUserIdByOpenid(openid: string, fallbackNickname: string): Promise<string> {
@@ -97,6 +104,20 @@ async function createGroupOrder(body: CreateOrderBody) {
     });
 
     const amount = groupBuy.price_cents * quantity;
+    const creditAmount = Number(body.credit_amount_cents ?? 0);
+    if (!Number.isInteger(creditAmount) || creditAmount < 0) throw new Error('消费额度抵扣金额不合法');
+    if (creditAmount > amount) throw new Error('消费额度抵扣金额不能超过订单金额');
+    if (creditAmount > 0 && !body.credit_source_id) throw new Error('缺少消费额度来源');
+
+    let creditBalanceAfter: number | null = null;
+    if (creditAmount > 0) {
+      const conversion = await tx.rewardConversion.findUnique({ where: { id: body.credit_source_id } });
+      if (!conversion || conversion.status !== 'success' || conversion.conversion_type !== 'credit' || conversion.leader_user_id !== userId) throw new Error('消费额度来源不可用');
+      const currentCreditBalance = await getCreditBalance(tx, userId);
+      if (currentCreditBalance < creditAmount) throw new Error('消费额度余额不足');
+      creditBalanceAfter = currentCreditBalance - creditAmount;
+    }
+
     const order = await tx.order.create({
       data: {
         order_no: makeOrderNo(),
@@ -105,8 +126,11 @@ async function createGroupOrder(body: CreateOrderBody) {
         group_buy_id: groupBuy.id,
         leader_user_id: groupBuy.leader_user_id,
         total_amount_cents: amount,
-        pay_amount_cents: amount,
+        pay_amount_cents: amount - creditAmount,
         quantity,
+        credit_amount_cents: creditAmount,
+        credit_source_type: creditAmount > 0 ? 'reward_conversion' : undefined,
+        credit_source_id: creditAmount > 0 ? body.credit_source_id : undefined,
         pickup_type: body.pickup_type ?? 'store',
         pickup_store_id: body.pickup_store_id,
         community_id: body.community_id ?? groupBuy.community_id,
@@ -115,6 +139,38 @@ async function createGroupOrder(body: CreateOrderBody) {
         receiver_address: body.receiver_address
       }
     });
+    if (creditAmount > 0) {
+      await tx.consumerCreditLedger.create({
+        data: {
+          user_id: userId,
+          source_type: 'order_payment',
+          source_id: order.id,
+          direction: 'out',
+          amount_cents: creditAmount,
+          balance_after_cents: creditBalanceAfter ?? 0,
+          usable_scope: 'platform_order',
+          remark: '订单使用平台消费额度抵扣',
+          payload: { credit_source_type: 'reward_conversion', credit_source_id: body.credit_source_id }
+        }
+      });
+      await safeRecordBusinessEvent(tx, {
+        event_type: 'reward_credit_used',
+        event_source: 'group-buys-route',
+        order_id: order.id,
+        group_buy_id: groupBuy.id,
+        user_id: userId,
+        payload: { amount_cents: creditAmount, credit_source_type: 'reward_conversion', credit_source_id: body.credit_source_id }
+      });
+      await safeRecordOrderTimeline(tx, {
+        order_id: order.id,
+        event_type: 'reward_credit_used',
+        title: '订单使用开团服务奖励转消费额度抵扣',
+        actor_type: 'user',
+        actor_user_id: userId,
+        payload: { amount_cents: creditAmount, credit_source_id: body.credit_source_id }
+      });
+    }
+
     await safeRecordBusinessEvent(tx, {
       event_type: 'order_created',
       event_source: 'group-buys-route',

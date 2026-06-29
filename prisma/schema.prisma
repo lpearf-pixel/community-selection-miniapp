@@ -67,6 +67,7 @@ enum CommissionStatus {
   pending
   available
   withdrawing
+  converted
   withdrawn
   deducted
   cancelled
@@ -203,6 +204,9 @@ model Order {
   pay_amount_cents    Int
   quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)
+  credit_amount_cents Int          @default(0)
+  credit_source_type   String?
+  credit_source_id     String?
   pay_status          PayStatus    @default(unpaid)
   order_status        OrderStatus  @default(unpaid)
   refund_status       RefundStatus @default(none)
@@ -424,4 +428,79 @@ model OpsAlertLog {
   @@index([alert_level])
   @@index([order_id])
   @@index([created_at])
+}
+
+
+model TaxRecord {
+  id           String   @id @default(cuid())
+  leader_user_id String?
+  source_type  String
+  source_id    String
+  tax_mode     String
+  tax_status   String   @default("pending_review")
+  amount_cents Int
+  payload      Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([source_type, source_id])
+  @@index([leader_user_id])
+  @@index([tax_status])
+}
+
+model RewardConversion {
+  id                String   @id @default(cuid())
+  leader_user_id    String
+  commission_id     String
+  client_request_id String?  @unique
+  amount_cents      Int
+  conversion_type   String
+  status            String   @default("success")
+  tax_status        String   @default("pending_review")
+  tax_record_id     String?
+  created_at        DateTime @default(now())
+
+  @@index([leader_user_id])
+  @@index([commission_id])
+  @@index([tax_status])
+}
+
+model RewardLedger {
+  id                  String   @id @default(cuid())
+  leader_user_id      String
+  commission_id       String?
+  withdrawal_id       String?
+  conversion_id       String?
+  entry_type          String
+  direction           String
+  amount_cents        Int
+  balance_after_cents Int
+  tax_status          String   @default("pending_review")
+  tax_record_id       String?
+  order_id            String?
+  remark              String?
+  payload             Json?
+  created_at          DateTime @default(now())
+
+  @@index([leader_user_id])
+  @@index([commission_id])
+  @@index([order_id])
+}
+
+model ConsumerCreditLedger {
+  id                  String   @id @default(cuid())
+  user_id             String
+  source_type         String
+  source_id           String
+  direction           String
+  amount_cents        Int
+  balance_after_cents Int
+  expires_at          DateTime?
+  usable_scope        String?
+  remark              String?
+  payload             Json?
+  created_at          DateTime @default(now())
+
+  @@index([user_id])
+  @@index([source_type, source_id])
 }

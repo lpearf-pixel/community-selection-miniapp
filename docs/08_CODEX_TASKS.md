@@ -521,3 +521,12 @@ L8 提现状态机必须保持：
 3. 只有后台人工标记已处理后，`Withdrawal.status = paid`，关联开团服务奖励才变为 `withdrawn`。
 4. 审核通过但未标记已处理期间发生退款，只创建人工复核告警，不创建已提现后退款的 critical 告警。
 5. `GET /api/leaders/me/withdrawable-commissions` 只返回 `available` 且 `withdrawal_id = null` 的开团服务奖励。
+
+## L8 增补：开团服务奖励转平台消费额度预留
+
+- 新增 `RewardLedger`、`ConsumerCreditLedger`、`RewardConversion`、`TaxRecord`，记录开团服务奖励转平台消费额度、消费额度余额变动以及税务状态待复核。
+- 新增 `POST /api/leaders/me/rewards/convert-credit`，第一版只支持整笔、可用且未被提现申请锁定的开团服务奖励转平台消费额度。
+- 转换后 `Commission.status = converted`，不再进入可提现列表；消费额度仅可用于平台订单抵扣，不提供再次提现能力。
+- 订单可记录 `credit_amount_cents`、`credit_source_type`、`credit_source_id`；使用奖励转换消费额度下单后，退款时退回消费额度，不退回为可提现开团服务奖励。
+- AI context 增加消费额度来源、转换记录与 `tax_status`，方便后台核查消费额度来源及税务状态。
+- 文案必须保持合规：仅使用“开团服务奖励”，不宣传税务优惠，不新增多级关系字段。

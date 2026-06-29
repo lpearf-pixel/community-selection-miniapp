@@ -28,14 +28,15 @@ async function expectFail(url: string, payload: unknown, expectedMessage: string
   assert(body.message.includes(expectedMessage), `Expected ${expectedMessage}, got ${body.message}`);
 }
 
-async function createAvailableCommission() {
-  const category = await prisma.category.create({ data: { name: `${prefix}-category`, sort_order: 1400, status: 'active' } });
-  const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'L8 本地验收社区', status: 'active' } });
-  const leader = await prisma.user.create({ data: { openid: `${prefix}-leader`, nickname: 'L8 验收开团人', role: 'leader', status: 'active' } });
-  const user = await prisma.user.create({ data: { openid: `${prefix}-user`, nickname: 'L8 用户', role: 'customer', status: 'active' } });
+async function createAvailableCommission(scope = 'withdraw') {
+  const name = `${prefix}-${scope}`;
+  const category = await prisma.category.create({ data: { name: `${name}-category`, sort_order: 1400, status: 'active' } });
+  const community = await prisma.community.create({ data: { name: `${name}-community`, address: 'L8 本地验收社区', status: 'active' } });
+  const leader = await prisma.user.create({ data: { openid: `${name}-leader`, nickname: 'L8 验收开团人', role: 'leader', status: 'active' } });
+  const user = await prisma.user.create({ data: { openid: `${name}-user`, nickname: 'L8 用户', role: 'customer', status: 'active' } });
   const product = await prisma.product.create({
     data: {
-      name: `${prefix}-product`,
+      name: `${name}-product`,
       category_id: category.id,
       price_cents: 2000,
       cost_price_cents: 1200,
@@ -59,7 +60,7 @@ async function createAvailableCommission() {
   const order = await post('/api/orders', {
     user_id: user.id,
     group_buy_id: groupBuy.id,
-    client_request_id: `${prefix}-order`,
+    client_request_id: `${name}-order`,
     quantity: 2,
     receiver_name: 'L8 用户',
     receiver_phone: '13800006001'
@@ -75,7 +76,74 @@ async function createAvailableCommission() {
 }
 
 async function main() {
-  const { leader, order, commission } = await createAvailableCommission();
+  const { leader: convertLeader, commission: convertCommission } = await createAvailableCommission('convert');
+  const convertAmount = convertCommission.final_amount_cents;
+  const conversionResult = await post('/api/leaders/me/rewards/convert-credit', {
+    leader_user_id: convertLeader.id,
+    commission_ids: [convertCommission.id],
+    amount_cents: convertAmount,
+    client_request_id: `${prefix}-convert-credit`
+  });
+  assert(conversionResult.conversion.status === 'success', 'Reward conversion should succeed');
+  const convertedCommission = await prisma.commission.findUniqueOrThrow({ where: { id: convertCommission.id } });
+  assert(convertedCommission.status === 'converted', `Commission should be converted, got ${convertedCommission.status}`);
+  const conversionTax = await prisma.taxRecord.findUniqueOrThrow({ where: { id: conversionResult.tax_record.id } });
+  assert(conversionTax.tax_status === 'pending_review', 'Tax status should stay pending_review');
+  const creditIn = await prisma.consumerCreditLedger.findFirstOrThrow({ where: { user_id: convertLeader.id, source_type: 'reward_conversion', source_id: conversionResult.conversion.id } });
+  assert(creditIn.balance_after_cents === convertAmount, 'Consumer credit balance should increase');
+
+  const creditCategory = await prisma.category.create({ data: { name: `${prefix}-credit-category`, sort_order: 1410, status: 'active' } });
+  const creditCommunity = await prisma.community.create({ data: { name: `${prefix}-credit-community`, address: 'L8 消费额度社区', status: 'active' } });
+  const creditProduct = await prisma.product.create({
+    data: {
+      name: `${prefix}-credit-product`,
+      category_id: creditCategory.id,
+      price_cents: convertAmount + 100,
+      cost_price_cents: 50,
+      stock: 5,
+      unit: '份',
+      is_group_enabled: true,
+      commission_type: 'none',
+      commission_value: 0,
+      status: 'active'
+    }
+  });
+  const creditGroupBuy = await post('/api/group-buys', {
+    product_id: creditProduct.id,
+    leader_user_id: convertLeader.id,
+    community_id: creditCommunity.id,
+    min_people: 1,
+    min_quantity: 1,
+    end_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    pickup_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+  });
+  const creditOrder = await post('/api/orders', {
+    user_id: convertLeader.id,
+    group_buy_id: creditGroupBuy.id,
+    client_request_id: `${prefix}-credit-order`,
+    quantity: 1,
+    receiver_name: 'L8 用户',
+    receiver_phone: '13800006002',
+    credit_amount_cents: convertAmount,
+    credit_source_id: conversionResult.conversion.id
+  });
+  assert(creditOrder.credit_amount_cents === convertAmount, 'Order should record credit amount');
+  assert(creditOrder.credit_source_type === 'reward_conversion', 'Order should record credit source type');
+  await post('/api/payments/mock', { order_id: creditOrder.id });
+  await post('/api/refunds/mock', {
+    order_id: creditOrder.id,
+    refund_amount_cents: creditOrder.pay_amount_cents,
+    reason: 'L8 消费额度订单退款',
+    client_refund_id: `${prefix}-credit-order-refund`
+  });
+  const creditBack = await prisma.consumerCreditLedger.findFirstOrThrow({ where: { user_id: convertLeader.id, source_type: 'order_refund', source_id: creditOrder.id } });
+  assert(creditBack.amount_cents === convertAmount, 'Credit refund should return credit amount');
+  const creditAiContext = await json(await app.inject({ method: 'GET', url: `/api/admin/logs/orders/${creditOrder.id}/ai-context` }));
+  assert(creditAiContext.credit_usage.from_reward_conversion === true, 'AI context should recognize reward conversion credit');
+  assert(creditAiContext.credit_usage.tax_status === 'pending_review', 'AI context should expose tax status');
+  assert(creditAiContext.suggested_focus.includes('核查该消费额度来源及税务状态'), 'AI context should suggest credit source review');
+
+  const { leader, order, commission } = await createAvailableCommission('withdraw');
   const amount = commission.final_amount_cents;
 
   const withdrawal = await post('/api/leaders/me/withdrawals', { leader_user_id: leader.id, amount_cents: amount });

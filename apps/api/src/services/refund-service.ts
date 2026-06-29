@@ -72,6 +72,11 @@ export async function validateRefundRequest(tx: Prisma.TransactionClient, input:
   return order;
 }
 
+async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
+  const entries = await tx.consumerCreditLedger.findMany({ where: { user_id: userId } });
+  return entries.reduce((sum, entry) => sum + (entry.direction === 'in' ? entry.amount_cents : -entry.amount_cents), 0);
+}
+
 async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string, notifyInfo: NotifyInfo = {}) {
   const refund = await tx.refund.findUnique({
     where: { id: refundId },
@@ -166,6 +171,42 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
       order_status: isFullRefund ? 'refunded' : refund.order.order_status
     }
   });
+
+  if (isFullRefund && refund.order.credit_amount_cents > 0 && refund.order.credit_source_type === 'reward_conversion') {
+    const existingCreditReturn = await tx.consumerCreditLedger.findFirst({
+      where: { user_id: refund.order.user_id, source_type: 'order_refund', source_id: refund.order.id }
+    });
+    if (!existingCreditReturn) {
+      const creditBalance = await getCreditBalance(tx, refund.order.user_id);
+      await tx.consumerCreditLedger.create({
+        data: {
+          user_id: refund.order.user_id,
+          source_type: 'order_refund',
+          source_id: refund.order.id,
+          direction: 'in',
+          amount_cents: refund.order.credit_amount_cents,
+          balance_after_cents: creditBalance + refund.order.credit_amount_cents,
+          usable_scope: 'platform_order',
+          remark: '订单退款退回消费额度',
+          payload: { original_credit_source_type: refund.order.credit_source_type, original_credit_source_id: refund.order.credit_source_id }
+        }
+      });
+      await safeRecordBusinessEvent(tx, {
+        event_type: 'reward_credit_refunded',
+        event_source: 'refund-service',
+        order_id: refund.order_id,
+        refund_id: refund.id,
+        user_id: refund.order.user_id,
+        payload: { amount_cents: refund.order.credit_amount_cents, credit_source_id: refund.order.credit_source_id }
+      });
+      await safeRecordOrderTimeline(tx, {
+        order_id: refund.order_id,
+        event_type: 'reward_credit_refunded',
+        title: '订单退款退回消费额度',
+        payload: { amount_cents: refund.order.credit_amount_cents, credit_source_id: refund.order.credit_source_id }
+      });
+    }
+  }
 
   await safeRecordBusinessEvent(tx, {
     event_type: 'refund_success',

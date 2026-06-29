@@ -7,6 +7,7 @@ import { registerRefundRoutes } from './routes/refunds.js';
 import { registerCommissionRoutes } from './routes/commissions.js';
 import { registerLogRoutes } from './routes/logs.js';
 import { registerWithdrawalRoutes } from './routes/withdrawals.js';
+import { registerRewardRoutes } from './routes/rewards.js';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -19,6 +20,7 @@ export function buildApp() {
   registerCommissionRoutes(app);
   registerLogRoutes(app);
   registerWithdrawalRoutes(app);
+  registerRewardRoutes(app);
 
   return app;
 }

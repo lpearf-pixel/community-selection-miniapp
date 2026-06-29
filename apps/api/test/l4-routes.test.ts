@@ -81,6 +81,19 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
+  it('registers L8 reward credit conversion reserve route', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const rewardRoutes = readFileSync(new URL('../src/routes/rewards.ts', import.meta.url), 'utf8');
+    const logRoutes = readFileSync(new URL('../src/routes/logs.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerRewardRoutes')).toBe(true);
+    expect(rewardRoutes.includes('/api/leaders/me/rewards/convert-credit')).toBe(true);
+    expect(rewardRoutes.includes('tax_status')).toBe(true);
+    expect(rewardRoutes.includes('reward_convert_credit_success')).toBe(true);
+    expect(logRoutes.includes('credit_usage')).toBe(true);
+    expect(logRoutes.includes('核查该消费额度来源及税务状态')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
