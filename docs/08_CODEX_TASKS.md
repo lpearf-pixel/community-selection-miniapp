@@ -471,3 +471,13 @@ L6 退款系统后续复现时还必须满足：
 3. `picked/delivered/completed` 等已履约订单全额退款不自动恢复库存，审计日志记录 `stock_restore_skipped_reason: order_already_fulfilled`。
 4. 微信退款回调成功处理必须校验 `out_refund_no`，并在 `refund_id` 首次出现时写入；已有 `refund_id` 冲突时必须失败。
 5. `/api/refunds/wechat/apply` 虽然不发起真实微信退款，也必须复用可退款校验，先拦截未支付、不可退、超额退款等请求。
+
+### 阶段 7 增补：开团服务奖励结算第一版
+
+L7 先实现开团服务奖励结算闭环，不进入自动提现打款：
+
+1. 支付成功后按商品 `commission_type` / `commission_value` 为开团人生成唯一预计奖励，重复支付不重复生成。
+2. 订单完成后奖励进入 `pending`，`available_at = completed_at + 7 天`。
+3. 结算任务只把到期、未冻结、金额大于 0 的 `pending` 奖励改为 `available`。
+4. 部分退款按实际成交金额重算奖励；全额退款取消奖励。
+5. 只允许开团人本人发起团购产生的一级开团服务奖励，不新增多级关系字段，不实现提现自动打款。

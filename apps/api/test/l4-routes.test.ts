@@ -37,6 +37,22 @@ describe('L4 group-buy and order routes', () => {
     expect(refundSource.includes('createMockRefund')).toBe(true);
   });
 
+  it('registers L7 commission API routes and service hooks', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const commissionRoutes = readFileSync(new URL('../src/routes/commissions.ts', import.meta.url), 'utf8');
+    const paymentService = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
+    const refundService = readFileSync(new URL('../src/services/refund-service.ts', import.meta.url), 'utf8');
+    const groupBuySource = readFileSync(new URL('../src/routes/group-buys.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerCommissionRoutes')).toBe(true);
+    expect(commissionRoutes.includes("/api/leaders/me/commissions'")).toBe(true);
+    expect(commissionRoutes.includes("/api/admin/commissions'")).toBe(true);
+    expect(commissionRoutes.includes("/api/admin/commissions/settle'")).toBe(true);
+    expect(paymentService.includes('ensureEstimatedCommission')).toBe(true);
+    expect(refundService.includes('syncCommissionAfterRefund')).toBe(true);
+    expect(groupBuySource.includes('markCommissionPendingForCompletedOrder')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);

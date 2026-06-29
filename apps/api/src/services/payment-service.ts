@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
+import { ensureEstimatedCommission } from './commission-service.js';
 
 type PaymentInfo = {
   payment_id?: string;
@@ -88,6 +89,8 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
         data: { order_status: 'grouped' }
       });
     }
+
+    await ensureEstimatedCommission(order.id, tx);
 
     await tx.auditLog.create({
       data: {

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
+import { markCommissionPendingForCompletedOrder } from '../services/commission-service.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -319,12 +320,16 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) throw new Error('订单不存在');
     if (order.pay_status !== 'paid') throw new Error('未支付订单不可推进履约');
-    return prisma.order.update({
-      where: { id },
-      data: {
-        order_status: body.next_status,
-        completed_at: body.next_status === 'completed' ? new Date() : undefined
-      }
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const updatedOrder = await tx.order.update({
+        where: { id },
+        data: {
+          order_status: body.next_status,
+          completed_at: body.next_status === 'completed' ? new Date() : undefined
+        }
+      });
+      if (body.next_status === 'completed') await markCommissionPendingForCompletedOrder(id, tx);
+      return updatedOrder;
     });
   }
 

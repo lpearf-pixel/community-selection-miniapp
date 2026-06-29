@@ -4,6 +4,7 @@ import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerGroupBuyRoutes } from './routes/group-buys.js';
 import { registerPaymentRoutes } from './routes/payments.js';
 import { registerRefundRoutes } from './routes/refunds.js';
+import { registerCommissionRoutes } from './routes/commissions.js';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -13,6 +14,7 @@ export function buildApp() {
   registerGroupBuyRoutes(app);
   registerPaymentRoutes(app);
   registerRefundRoutes(app);
+  registerCommissionRoutes(app);
 
   return app;
 }

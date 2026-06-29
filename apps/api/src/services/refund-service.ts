@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
+import { syncCommissionAfterRefund } from './commission-service.js';
 
 type RefundInput = {
   order_id: string;
@@ -129,6 +130,8 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
       order_status: isFullRefund ? 'refunded' : refund.order.order_status
     }
   });
+
+  await syncCommissionAfterRefund(refund.order_id, tx);
 
   await tx.auditLog.create({
     data: {
