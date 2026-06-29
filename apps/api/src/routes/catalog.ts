@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from '../fastify.js';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 

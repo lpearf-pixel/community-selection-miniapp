@@ -1,10 +1,11 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from '../fastify.js';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
   leader_user_id?: string;
+  leader_openid?: string;
   community_id?: string;
   min_people?: number;
   min_quantity?: number;
@@ -14,6 +15,7 @@ type CreateGroupBuyBody = {
 
 type CreateOrderBody = {
   user_id?: string;
+  user_openid?: string;
   group_buy_id?: string;
   client_request_id?: string;
   quantity?: number;
@@ -42,13 +44,23 @@ function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
+async function findUserIdByOpenid(openid: string, fallbackNickname: string): Promise<string> {
+  const user = await prisma.user.upsert({
+    where: { openid },
+    update: { status: 'active' },
+    create: { openid, nickname: fallbackNickname, role: 'customer', status: 'active' }
+  });
+  return user.id;
+}
+
 async function createGroupOrder(body: CreateOrderBody) {
   const quantity = positiveInt(body.quantity, 1);
-  if (!body.user_id || !body.group_buy_id || !body.client_request_id || !body.receiver_name || !body.receiver_phone) {
+  const userId = body.user_id ?? (body.user_openid ? await findUserIdByOpenid(body.user_openid, body.receiver_name ?? '社区用户') : undefined);
+  if (!userId || !body.group_buy_id || !body.client_request_id || !body.receiver_name || !body.receiver_phone) {
     throw new Error('缺少下单必填字段');
   }
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     const existing = await tx.order.findUnique({ where: { client_request_id: body.client_request_id } });
     if (existing) return existing;
 
@@ -59,19 +71,18 @@ async function createGroupOrder(body: CreateOrderBody) {
     if (!groupBuy) throw new Error('团购不存在');
     if (groupBuy.status !== 'pending') throw new Error('当前团购不可下单');
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
-    if (groupBuy.product.stock < quantity) throw new Error('库存不足');
-
-    await tx.product.update({
-      where: { id: groupBuy.product_id },
+    const stockResult = await tx.product.updateMany({
+      where: { id: groupBuy.product_id, stock: { gte: quantity } },
       data: { stock: { decrement: quantity } }
     });
+    if (stockResult.count !== 1) throw new Error('库存不足');
 
     const amount = groupBuy.price_cents * quantity;
     return tx.order.create({
       data: {
         order_no: makeOrderNo(),
         client_request_id: body.client_request_id,
-        user_id: body.user_id,
+        user_id: userId,
         group_buy_id: groupBuy.id,
         leader_user_id: groupBuy.leader_user_id,
         total_amount_cents: amount,
@@ -97,14 +108,14 @@ export async function expireOverdueGroupBuys() {
   });
 
   for (const groupBuy of overdueGroupBuys) {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.groupBuy.update({
         where: { id: groupBuy.id },
         data: { status: 'failed' }
       });
 
-      const paidOrders = groupBuy.orders.filter((order) => order.pay_status === 'paid');
-      const unpaidOrders = groupBuy.orders.filter((order) => order.pay_status === 'unpaid');
+      const paidOrders = groupBuy.orders.filter((order: any) => order.pay_status === 'paid');
+      const unpaidOrders = groupBuy.orders.filter((order: any) => order.pay_status === 'unpaid');
 
       for (const order of paidOrders) {
         await tx.order.update({
@@ -144,14 +155,17 @@ export async function expireOverdueGroupBuys() {
 export function registerGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/group-buys', async (request, reply) => {
     const body = request.body as CreateGroupBuyBody;
-    if (!body.product_id || !body.leader_user_id || !body.community_id) {
+    if (!body.product_id || (!body.leader_user_id && !body.leader_openid) || !body.community_id) {
       reply.code(400);
       return fail('缺少开团必填字段');
     }
 
+    const leaderPromise = body.leader_user_id
+      ? prisma.user.findUnique({ where: { id: body.leader_user_id } })
+      : prisma.user.findUnique({ where: { openid: body.leader_openid ?? '' } });
     const [product, leader, community] = await Promise.all([
       prisma.product.findUnique({ where: { id: body.product_id } }),
-      prisma.user.findUnique({ where: { id: body.leader_user_id } }),
+      leaderPromise,
       prisma.community.findUnique({ where: { id: body.community_id } })
     ]);
 
@@ -169,6 +183,17 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     }
 
     const now = new Date();
+    const endTime = body.end_time ? new Date(body.end_time) : addHours(now, 24);
+    const pickupTime = body.pickup_time ? new Date(body.pickup_time) : addHours(now, 48);
+    if (Number.isNaN(endTime.getTime()) || endTime <= now) {
+      reply.code(400);
+      return fail('截止时间必须晚于当前时间');
+    }
+    if (Number.isNaN(pickupTime.getTime()) || pickupTime <= endTime) {
+      reply.code(400);
+      return fail('自提时间必须晚于截止时间');
+    }
+
     const groupBuy = await prisma.groupBuy.create({
       data: {
         product_id: product.id,
@@ -178,8 +203,8 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
         min_quantity: positiveInt(body.min_quantity, 2),
         price_cents: product.price_cents,
         start_time: now,
-        end_time: body.end_time ? new Date(body.end_time) : addHours(now, 24),
-        pickup_time: body.pickup_time ? new Date(body.pickup_time) : addHours(now, 48)
+        end_time: endTime,
+        pickup_time: pickupTime
       },
       include: { product: true, community: true, leader_user: true }
     });
@@ -244,7 +269,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
       orderBy: { created_at: 'desc' }
     });
     const header = '订单号,商品,社区,收货人,手机号,状态,金额(元)';
-    const rows = orders.map((order) => [
+    const rows = orders.map((order: any) => [
       order.order_no,
       order.group_buy?.product?.name ?? '',
       order.group_buy?.community?.name ?? '',
@@ -274,7 +299,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const body = request.body as CompleteOrderBody;
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx: any) => {
         const order = await tx.order.findUnique({
           where: { id },
           include: { group_buy: true }

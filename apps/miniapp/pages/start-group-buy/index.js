@@ -1,6 +1,77 @@
+const { apiBaseUrl } = require('../../config');
+
+function toFutureIso(hours) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
 Page({
-  data: {},
+  data: {
+    products: [],
+    communities: [],
+    productIndex: 0,
+    communityIndex: 0,
+    min_people: 2,
+    min_quantity: 2,
+    end_time: toFutureIso(24),
+    pickup_time: toFutureIso(48),
+    loading: false
+  },
+  onLoad() {
+    this.loadOptions();
+  },
+  loadOptions() {
+    wx.request({
+      url: `${apiBaseUrl}/api/products?page_size=100`,
+      success: (res) => {
+        const items = ((res.data && res.data.data && res.data.data.items) || []).filter((item) => item.is_group_enabled);
+        this.setData({ products: items });
+      }
+    });
+    wx.request({
+      url: `${apiBaseUrl}/api/communities`,
+      success: (res) => this.setData({ communities: (res.data && res.data.data) || [] })
+    });
+  },
+  onProductChange(event) {
+    this.setData({ productIndex: Number(event.detail.value) });
+  },
+  onCommunityChange(event) {
+    this.setData({ communityIndex: Number(event.detail.value) });
+  },
+  onMinPeopleInput(event) {
+    this.setData({ min_people: Number(event.detail.value) || 2 });
+  },
+  onMinQuantityInput(event) {
+    this.setData({ min_quantity: Number(event.detail.value) || 2 });
+  },
   submit() {
-    wx.showToast({ title: '发起开团接口已在 L4 接入', icon: 'none' });
+    const product = this.data.products[this.data.productIndex];
+    const community = this.data.communities[this.data.communityIndex];
+    if (!product || !community) {
+      wx.showToast({ title: '请先选择商品和社区', icon: 'none' });
+      return;
+    }
+    this.setData({ loading: true });
+    wx.request({
+      url: `${apiBaseUrl}/api/group-buys`,
+      method: 'POST',
+      data: {
+        product_id: product.id,
+        community_id: community.id,
+        leader_openid: 'leader-openid',
+        min_people: this.data.min_people,
+        min_quantity: this.data.min_quantity,
+        end_time: this.data.end_time,
+        pickup_time: this.data.pickup_time
+      },
+      success: (res) => {
+        if (res.data && res.data.success) {
+          wx.navigateTo({ url: `/pages/group-buy-detail/index?id=${res.data.data.id}` });
+        } else {
+          wx.showToast({ title: (res.data && res.data.message) || '发起失败', icon: 'none' });
+        }
+      },
+      complete: () => this.setData({ loading: false })
+    });
   }
 });

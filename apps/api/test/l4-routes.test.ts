@@ -16,6 +16,9 @@ describe('L4 group-buy and order routes', () => {
 
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
+    expect(source.includes('user_openid')).toBe(true);
+    expect(source.includes('leader_openid')).toBe(true);
+    expect(source.includes('stock: { gte: quantity }')).toBe(true);
     expect(source.includes('stock: { decrement: quantity }')).toBe(true);
     expect(source.includes('group_buy_expired')).toBe(true);
   });
