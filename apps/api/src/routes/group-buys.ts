@@ -69,15 +69,7 @@ function csvLine(values: unknown[]) {
 }
 
 
-type AdminMeta = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
-
-function adminMetaFromRequest(request: { adminUser?: { id: string }; ip?: string; headers: Record<string, unknown> }): AdminMeta {
-  return {
-    admin_user_id: request.adminUser?.id ?? null,
-    ip_address: request.ip ?? null,
-    user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null
-  };
-}
+type AdminMeta = { admin_user_id: string; ip_address?: string | null; user_agent?: string | null };
 
 function parseCloneTimes(body: CloneGroupBuyBody) {
   const endTime = body.end_time ? new Date(body.end_time) : null;
@@ -87,7 +79,7 @@ function parseCloneTimes(body: CloneGroupBuyBody) {
   return { endTime, pickupTime };
 }
 
-async function cloneGroupBuyById(id: string, body: CloneGroupBuyBody, adminMeta: AdminMeta) {
+async function cloneGroupBuyById(id: string, body: CloneGroupBuyBody, adminMeta?: AdminMeta) {
   const { endTime, pickupTime } = parseCloneTimes(body);
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const source = await tx.groupBuy.findUnique({ where: { id } });
@@ -113,17 +105,19 @@ async function cloneGroupBuyById(id: string, body: CloneGroupBuyBody, adminMeta:
       leader_user_id: source.leader_user_id,
       payload: { source_group_buy_id: source.id }
     });
-    await tx.adminAuditLog.create({
-      data: {
-        admin_user_id: adminMeta.admin_user_id ?? null,
-        action: 'group_buy_cloned',
-        target_type: 'GroupBuy',
-        target_id: created.id,
-        ip_address: adminMeta.ip_address ?? null,
-        user_agent: adminMeta.user_agent ?? null,
-        payload: { source_group_buy_id: source.id }
-      }
-    });
+    if (adminMeta) {
+      await tx.adminAuditLog.create({
+        data: {
+          admin_user_id: adminMeta.admin_user_id,
+          action: 'group_buy_cloned',
+          target_type: 'GroupBuy',
+          target_id: created.id,
+          ip_address: adminMeta.ip_address ?? null,
+          user_agent: adminMeta.user_agent ?? null,
+          payload: { source_group_buy_id: source.id }
+        }
+      });
+    }
     return created;
   });
 }
@@ -470,7 +464,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/group-buys/:id/clone', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, adminMetaFromRequest(request));
+      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody);
       return ok(cloned);
     } catch (error) {
       reply.code(400);
@@ -485,7 +479,11 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     }
     try {
       const { id } = request.params as { id: string };
-      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, { ...adminMetaFromRequest(request), admin_user_id: request.adminUser.id });
+      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, {
+        admin_user_id: request.adminUser.id,
+        ip_address: request.ip,
+        user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null
+      });
       return ok(cloned);
     } catch (error) {
       reply.code(400);
