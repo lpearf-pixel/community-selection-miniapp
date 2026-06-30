@@ -68,8 +68,107 @@ function csvLine(values: unknown[]) {
   return values.map((value) => `"${String(value ?? '').replaceAll('\"', '\"\"')}"`).join(',');
 }
 
+
+type AdminMeta = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
+
+function adminMetaFromRequest(request: { adminUser?: { id: string }; ip?: string; headers: Record<string, unknown> }): AdminMeta {
+  return {
+    admin_user_id: request.adminUser?.id ?? null,
+    ip_address: request.ip ?? null,
+    user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null
+  };
+}
+
+function parseCloneTimes(body: CloneGroupBuyBody) {
+  const endTime = body.end_time ? new Date(body.end_time) : null;
+  const pickupTime = body.pickup_time ? new Date(body.pickup_time) : null;
+  if (!endTime || Number.isNaN(endTime.getTime()) || endTime.getTime() <= Date.now()) throw new Error('团购截止时间必须晚于当前时间');
+  if (!pickupTime || Number.isNaN(pickupTime.getTime()) || pickupTime.getTime() <= endTime.getTime()) throw new Error('自提时间必须晚于团购截止时间');
+  return { endTime, pickupTime };
+}
+
+async function cloneGroupBuyById(id: string, body: CloneGroupBuyBody, adminMeta: AdminMeta) {
+  const { endTime, pickupTime } = parseCloneTimes(body);
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const source = await tx.groupBuy.findUnique({ where: { id } });
+    if (!source) throw new Error('原团购不存在');
+    const created = await tx.groupBuy.create({
+      data: {
+        product_id: source.product_id,
+        leader_user_id: source.leader_user_id,
+        community_id: source.community_id,
+        min_people: source.min_people,
+        min_quantity: source.min_quantity,
+        price_cents: body.price_cents ?? source.price_cents,
+        start_time: new Date(),
+        end_time: endTime,
+        pickup_time: pickupTime,
+        status: 'pending'
+      }
+    });
+    await safeRecordBusinessEvent(tx, {
+      event_type: 'group_buy_cloned',
+      event_source: 'group-buys-route',
+      group_buy_id: created.id,
+      leader_user_id: source.leader_user_id,
+      payload: { source_group_buy_id: source.id }
+    });
+    await tx.adminAuditLog.create({
+      data: {
+        admin_user_id: adminMeta.admin_user_id ?? null,
+        action: 'group_buy_cloned',
+        target_type: 'GroupBuy',
+        target_id: created.id,
+        ip_address: adminMeta.ip_address ?? null,
+        user_agent: adminMeta.user_agent ?? null,
+        payload: { source_group_buy_id: source.id }
+      }
+    });
+    return created;
+  });
+}
+
+async function buildPickingCsv(query: PickingCsvQuery) {
+  const range = dayRange(query.date);
+  const orders = await prisma.order.findMany({
+    where: {
+      ...validPaidOrderWhere(),
+      ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
+      ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
+    },
+    include: { group_buy: { include: { product: true, community: true } }, pickup_store: true },
+    orderBy: { created_at: 'desc' }
+  });
+  if (query.format === 'summary') {
+    const summary = new Map<string, { community_name: string; product_name: string; total_quantity: number; order_count: number }>();
+    for (const order of orders) {
+      const communityName = order.group_buy?.community?.name ?? '';
+      const productName = order.group_buy?.product?.name ?? '';
+      const key = `${communityName}::${productName}`;
+      const item = summary.get(key) ?? { community_name: communityName, product_name: productName, total_quantity: 0, order_count: 0 };
+      item.total_quantity += order.quantity;
+      item.order_count += 1;
+      summary.set(key, item);
+    }
+    return ['community_name,product_name,total_quantity,order_count', ...[...summary.values()].map((item) => csvLine([item.community_name, item.product_name, item.total_quantity, item.order_count]))].join('\n');
+  }
+  const header = 'order_no,community_name,product_name,quantity,receiver_name,receiver_phone_masked,pickup_store_name,order_status,remark';
+  const rows = orders.map((order) => csvLine([
+    order.order_no,
+    order.group_buy?.community?.name ?? '',
+    order.group_buy?.product?.name ?? '',
+    order.quantity,
+    order.receiver_name,
+    maskPhone(order.receiver_phone),
+    order.pickup_store?.name ?? '',
+    order.order_status,
+    ''
+  ]));
+  return [header, ...rows].join('\n');
+}
+
 function validPaidOrderWhere() {
-  return { order_status: { in: ['paid', 'grouped', 'preparing', 'ready', 'picked', 'completed'] as const } };
+  return { order_status: { in: ['paid', 'grouped', 'preparing', 'ready', 'picked', 'delivered', 'completed'] as const } };
 }
 
 async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
@@ -371,52 +470,22 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/group-buys/:id/clone', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const body = request.body as CloneGroupBuyBody;
-      const endTime = body.end_time ? new Date(body.end_time) : null;
-      const pickupTime = body.pickup_time ? new Date(body.pickup_time) : null;
-      if (!endTime || Number.isNaN(endTime.getTime()) || endTime.getTime() <= Date.now()) throw new Error('团购截止时间必须晚于当前时间');
-      if (!pickupTime || Number.isNaN(pickupTime.getTime()) || pickupTime.getTime() <= endTime.getTime()) throw new Error('自提时间必须晚于团购截止时间');
-      const cloned = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const source = await tx.groupBuy.findUnique({ where: { id } });
-        if (!source) throw new Error('原团购不存在');
-        const created = await tx.groupBuy.create({
-          data: {
-            product_id: source.product_id,
-            leader_user_id: source.leader_user_id,
-            community_id: source.community_id,
-            min_people: source.min_people,
-            min_quantity: source.min_quantity,
-            price_cents: body.price_cents ?? source.price_cents,
-            start_time: new Date(),
-            end_time: endTime,
-            pickup_time: pickupTime,
-            status: 'pending'
-          }
-        });
-        await safeRecordBusinessEvent(tx, {
-          event_type: 'group_buy_cloned',
-          event_source: 'group-buys-route',
-          group_buy_id: created.id,
-          leader_user_id: source.leader_user_id,
-          payload: { source_group_buy_id: source.id }
-        });
-        await tx.adminAuditLog.create({
-          data: {
-            admin_user_id: request.adminUser?.id ?? null,
-            action: 'group_buy_cloned',
-            target_type: 'GroupBuy',
-            target_id: created.id,
-            ip_address: request.ip,
-            user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
-            payload: { source_group_buy_id: source.id }
-          }
-        });
-        return created;
-      });
+      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, adminMetaFromRequest(request));
       return ok(cloned);
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '一键再开团失败');
+    }
+  });
+
+  app.post('/api/admin/group-buys/:id/clone', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, adminMetaFromRequest(request));
+      return ok(cloned);
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '后台一键再开团失败');
     }
   });
 
@@ -489,47 +558,21 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
 
   app.get('/api/orders/export/picking.csv', async (request, reply) => {
     try {
-      const query = request.query as PickingCsvQuery;
-      const range = dayRange(query.date);
-      const orders = await prisma.order.findMany({
-        where: {
-          ...validPaidOrderWhere(),
-          ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
-          ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
-        },
-        include: { group_buy: { include: { product: true, community: true } }, pickup_store: true },
-        orderBy: { created_at: 'desc' }
-      });
       reply.header('Content-Type', 'text/csv; charset=utf-8');
-      if (query.format === 'summary') {
-        const summary = new Map<string, { community_name: string; product_name: string; total_quantity: number; order_count: number }>();
-        for (const order of orders) {
-          const communityName = order.group_buy?.community?.name ?? '';
-          const productName = order.group_buy?.product?.name ?? '';
-          const key = `${communityName}::${productName}`;
-          const item = summary.get(key) ?? { community_name: communityName, product_name: productName, total_quantity: 0, order_count: 0 };
-          item.total_quantity += order.quantity;
-          item.order_count += 1;
-          summary.set(key, item);
-        }
-        return ['community_name,product_name,total_quantity,order_count', ...[...summary.values()].map((item) => csvLine([item.community_name, item.product_name, item.total_quantity, item.order_count]))].join('\n');
-      }
-      const header = 'order_no,community_name,product_name,quantity,receiver_name,receiver_phone_masked,pickup_store_name,order_status,remark';
-      const rows = orders.map((order) => csvLine([
-        order.order_no,
-        order.group_buy?.community?.name ?? '',
-        order.group_buy?.product?.name ?? '',
-        order.quantity,
-        order.receiver_name,
-        maskPhone(order.receiver_phone),
-        order.pickup_store?.name ?? '',
-        order.order_status,
-        ''
-      ]));
-      return [header, ...rows].join('\n');
+      return await buildPickingCsv(request.query as PickingCsvQuery);
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '导出分拣单失败');
+    }
+  });
+
+  app.get('/api/admin/orders/export/picking.csv', async (request, reply) => {
+    try {
+      reply.header('Content-Type', 'text/csv; charset=utf-8');
+      return await buildPickingCsv(request.query as PickingCsvQuery);
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '后台导出分拣单失败');
     }
   });
 

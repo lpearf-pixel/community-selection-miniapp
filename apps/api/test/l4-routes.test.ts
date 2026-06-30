@@ -127,6 +127,8 @@ describe('L4 group-buy and order routes', () => {
     expect(fulfillmentRoutes.includes('pickup_verified')).toBe(true);
     expect(fulfillmentRoutes.includes('delivery_verified')).toBe(true);
     expect(groupBuySource.includes('/api/group-buys/:id/clone')).toBe(true);
+    expect(groupBuySource.includes('/api/admin/group-buys/:id/clone')).toBe(true);
+    expect(groupBuySource.includes('/api/admin/orders/export/picking.csv')).toBe(true);
     expect(groupBuySource.includes('/api/leaders/me/dashboard')).toBe(true);
     expect(groupBuySource.includes('receiver_phone_masked')).toBe(true);
   });

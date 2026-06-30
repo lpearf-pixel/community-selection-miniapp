@@ -257,7 +257,7 @@ export function App() {
 
 
   function exportPicking(format: 'summary' | 'detail') {
-    window.location.href = `${apiBaseUrl}/api/orders/export/picking.csv?format=${format}`;
+    window.location.href = `${apiBaseUrl}/api/admin/orders/export/picking.csv?format=${format}`;
   }
 
   async function pickupVerify(order: Order) {
@@ -281,7 +281,7 @@ export function App() {
   async function cloneGroupBuy(groupBuy: GroupBuy) {
     const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const pickupTime = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-    await fetchJson(`/api/group-buys/${groupBuy.id}/clone`, {
+    await fetchJson(`/api/admin/group-buys/${groupBuy.id}/clone`, {
       method: 'POST',
       body: JSON.stringify({ end_time: endTime, pickup_time: pickupTime })
     });
