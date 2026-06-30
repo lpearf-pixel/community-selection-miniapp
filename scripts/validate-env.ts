@@ -14,7 +14,9 @@ for (const key of requiredBase) {
 }
 
 if (!['mock', 'wechat'].includes(payMode)) problems.push('WECHAT_PAY_MODE must be mock or wechat');
-if (nodeEnv === 'production' && !process.env.ADMIN_AUTH_ENABLED) problems.push('Production should set ADMIN_AUTH_ENABLED explicitly');
+if (nodeEnv === 'production' && process.env.ADMIN_AUTH_ENABLED !== 'true') problems.push('Production requires ADMIN_AUTH_ENABLED=true');
+if (nodeEnv === 'production' && process.env.ADMIN_TOKEN === 'dev-admin-token') problems.push('Production ADMIN_TOKEN must not use dev-admin-token');
+if (nodeEnv === 'production' && (process.env.ADMIN_TOKEN?.length ?? 0) < 24) problems.push('Production ADMIN_TOKEN should be at least 24 characters');
 
 if (!mockWechatPay) {
   for (const key of requiredWechat) {
