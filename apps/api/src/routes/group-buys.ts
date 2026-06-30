@@ -479,9 +479,13 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/admin/group-buys/:id/clone', async (request, reply) => {
+    if (!request.adminUser?.id) {
+      reply.code(401);
+      return fail('后台登录已失效');
+    }
     try {
       const { id } = request.params as { id: string };
-      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, adminMetaFromRequest(request));
+      const cloned = await cloneGroupBuyById(id, request.body as CloneGroupBuyBody, { ...adminMetaFromRequest(request), admin_user_id: request.adminUser.id });
       return ok(cloned);
     } catch (error) {
       reply.code(400);
@@ -567,6 +571,10 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/admin/orders/export/picking.csv', async (request, reply) => {
+    if (!request.adminUser?.id) {
+      reply.code(401);
+      return fail('后台登录已失效');
+    }
     try {
       reply.header('Content-Type', 'text/csv; charset=utf-8');
       return await buildPickingCsv(request.query as PickingCsvQuery);
