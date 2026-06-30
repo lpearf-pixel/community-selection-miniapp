@@ -5,7 +5,9 @@ L11 第一版实现账号密码 + TOTP 的后台登录体系，保留 `ADMIN_AUT
 ## 第一层：密码 + TOTP
 
 - 管理员密码只保存 bcrypt hash，不保存明文。
-- TOTP secret 使用服务端密钥加密保存，设置阶段只展示一次。
+- TOTP secret 使用 `ADMIN_TOTP_ENCRYPTION_KEY` 加密保存，设置阶段只展示一次。
+- 生产环境必须单独配置强随机 `ADMIN_TOTP_ENCRYPTION_KEY`，不要复用 `ADMIN_TOKEN`。
+- 已启用 TOTP 后不能直接覆盖 secret；重置需要先关闭或走恢复流程。
 - recovery codes 只展示一次，数据库仅保存 hash，使用后立即作废。
 - session token 仅保存 hash，浏览器侧使用 httpOnly Cookie，预留 SameSite 与 Secure。
 - 连续失败登录会触发短时间拒绝。

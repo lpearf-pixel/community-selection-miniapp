@@ -20,6 +20,12 @@ if (nodeEnv === 'production' && process.env.ADMIN_AUTH_ENABLED !== 'true') probl
 if (nodeEnv === 'production' && authMode !== 'session') problems.push('Production should use ADMIN_AUTH_MODE=session, token mode is only for short-term compatibility');
 if (nodeEnv === 'production' && process.env.ADMIN_TOKEN === 'dev-admin-token') problems.push('Production ADMIN_TOKEN must not use dev-admin-token');
 if (nodeEnv === 'production' && (process.env.ADMIN_TOKEN?.length ?? 0) < 24) problems.push('Production ADMIN_TOKEN should be at least 24 characters');
+if (nodeEnv === 'production' && authMode === 'session') {
+  const totpKey = process.env.ADMIN_TOTP_ENCRYPTION_KEY ?? '';
+  if (!totpKey) problems.push('Production session auth requires ADMIN_TOTP_ENCRYPTION_KEY');
+  if (totpKey && totpKey.length < 32) problems.push('Production ADMIN_TOTP_ENCRYPTION_KEY should be at least 32 characters');
+  if (totpKey === 'local-admin-totp-development-key') problems.push('Production ADMIN_TOTP_ENCRYPTION_KEY must not use the local development fallback');
+}
 
 if (!mockWechatPay) {
   for (const key of requiredWechat) {

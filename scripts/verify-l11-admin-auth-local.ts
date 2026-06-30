@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { prisma } from '../apps/api/src/db.js';
 import { buildApp } from '../apps/api/src/app.js';
 import { decryptTotpSecret, generateTotpCode, hashPassword, verifyPassword } from '../apps/api/src/services/admin-auth-service.js';
@@ -8,6 +9,29 @@ function assert(condition: unknown, message: string): asserts condition {
 
 type ApiResponse<T> = { success: boolean; data: T; message?: string };
 
+function assertProductionTotpKeyValidation() {
+  const result = spawnSync('pnpm', ['exec', 'tsx', 'scripts/validate-env.ts'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:15432/community_selection?schema=public',
+      PORT: process.env.PORT ?? '13080',
+      ADMIN_AUTH_ENABLED: 'true',
+      ADMIN_AUTH_MODE: 'session',
+      ADMIN_TOKEN: 'strong-admin-token-for-l11-check',
+      ADMIN_TOTP_ENCRYPTION_KEY: '',
+      WECHAT_PAY_MODE: 'mock',
+      MOCK_WECHAT_PAY: 'true',
+      AUTO_PAYOUT_ENABLED: 'false',
+      AUTO_TAX_FILING_ENABLED: 'false'
+    }
+  });
+  assert(result.status !== 0, 'production/session env check should fail without ADMIN_TOTP_ENCRYPTION_KEY');
+  assert(`${result.stdout}${result.stderr}`.includes('ADMIN_TOTP_ENCRYPTION_KEY'), 'env check should mention ADMIN_TOTP_ENCRYPTION_KEY');
+}
+
 process.env.ADMIN_AUTH_MODE = 'session';
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_TOKEN = 'test-admin-token';
@@ -16,6 +40,7 @@ process.env.ADMIN_TOTP_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef';
 const app = buildApp();
 
 async function main() {
+  assertProductionTotpKeyValidation();
   const username = `admin_${Date.now()}`;
   const password = 'StrongPassword-123';
   const passwordHash = await hashPassword(password);
@@ -51,6 +76,10 @@ async function main() {
   const enableBody = enable.json() as ApiResponse<{ recovery_codes_once: string[] }>;
   const recoveryCode = enableBody.data.recovery_codes_once[0];
   assert(recoveryCode, 'enable should return recovery codes once');
+  const setupAfterEnable = await app.inject({ method: 'POST', url: '/api/admin/auth/totp/setup', headers: { cookie } });
+  assert(setupAfterEnable.statusCode === 400, `totp setup after enable should fail, got ${setupAfterEnable.statusCode}`);
+  const setupAfterEnableBody = setupAfterEnable.json() as ApiResponse<null>;
+  assert(setupAfterEnableBody.success === false && setupAfterEnableBody.message?.includes('二次验证已启用'), 'setup after enable should return clear message');
 
   const noTotpLogin = await app.inject({ method: 'POST', url: '/api/admin/auth/login', payload: { username, password } });
   assert(noTotpLogin.statusCode === 401, `TOTP enabled login without code should fail, got ${noTotpLogin.statusCode}`);

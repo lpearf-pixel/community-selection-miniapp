@@ -157,6 +157,10 @@ export function registerAdminAuthRoutes(app: FastifyInstance) {
       reply.code(401);
       return fail('后台登录已失效');
     }
+    if (adminUser.totp_enabled) {
+      reply.code(400);
+      return fail('二次验证已启用，重置需要先关闭或走恢复流程');
+    }
     const secret = generateTotpSecret();
     await prisma.adminUser.update({ where: { id: adminUser.id }, data: { totp_secret_encrypted: encryptTotpSecret(secret), totp_enabled: false } });
     return ok({ otpauth_url: buildOtpAuthUrl(adminUser.username, secret), setup_secret_once: secret });
