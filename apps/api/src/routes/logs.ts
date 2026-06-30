@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { resolveOpsAlert, sanitizePayload } from '../services/logging-service.js';
@@ -104,7 +105,12 @@ export function registerLogRoutes(app: FastifyInstance) {
       reply.code(400);
       return fail('缺少处理信息');
     }
-    return ok(await resolveOpsAlert(prisma, { id, status: 'resolved', resolved_by: body.resolved_by, resolution_note: body.resolution_note }));
+    const resolved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const alert = await resolveOpsAlert(tx, { id, status: 'resolved', resolved_by: body.resolved_by, resolution_note: body.resolution_note });
+      await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'ops_alert_resolved', target_type: 'OpsAlertLog', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload: { resolved_by: body.resolved_by } } });
+      return alert;
+    });
+    return ok(resolved);
   });
 
   app.post('/api/admin/logs/alerts/:id/ignore', async (request, reply) => {
@@ -114,7 +120,12 @@ export function registerLogRoutes(app: FastifyInstance) {
       reply.code(400);
       return fail('缺少处理信息');
     }
-    return ok(await resolveOpsAlert(prisma, { id, status: 'ignored', resolved_by: body.resolved_by, resolution_note: body.resolution_note }));
+    const ignored = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const alert = await resolveOpsAlert(tx, { id, status: 'ignored', resolved_by: body.resolved_by, resolution_note: body.resolution_note });
+      await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'ops_alert_ignored', target_type: 'OpsAlertLog', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload: { resolved_by: body.resolved_by } } });
+      return alert;
+    });
+    return ok(ignored);
   });
 
   app.get('/api/admin/logs/orders/:order_id/ai-context', async (request, reply) => {

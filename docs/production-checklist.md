@@ -55,3 +55,11 @@ pnpm verify:all
 - 税务只做人工复核记录，不自动报税。
 - 退款异常、提现后退款、提现审核期间退款均进入人工复核。
 - 用户可见文案继续统一使用“开团服务奖励”。
+
+## L11 后台登录上线检查
+
+- 生产建议设置 `ADMIN_AUTH_MODE=session`，简单令牌模式仅作为短期兼容入口。
+- 至少创建一个状态为 active 的 `AdminUser`，密码必须为 bcrypt hash。
+- 管理员必须启用 TOTP，并离线保存一次性 recovery codes。
+- `ADMIN_TOTP_ENCRYPTION_KEY` 必须为强随机值，不能与开发环境共用。
+- 后台敏感操作上线前需抽查 `AdminAuditLog` 是否记录操作人、来源 IP、对象和动作。

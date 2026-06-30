@@ -4,6 +4,7 @@ const env = process.env.NODE_ENV as EnvMode | undefined;
 const nodeEnv = env ?? 'development';
 const payMode = process.env.WECHAT_PAY_MODE ?? 'mock';
 const mockWechatPay = process.env.MOCK_WECHAT_PAY !== 'false' && payMode !== 'wechat';
+const authMode = process.env.ADMIN_AUTH_MODE ?? (nodeEnv === 'production' ? 'session' : 'token');
 const requiredBase = ['DATABASE_URL', 'PORT', 'ADMIN_TOKEN'];
 const requiredWechat = ['WECHAT_APP_ID', 'WECHAT_MCH_ID', 'WECHAT_MCH_SERIAL_NO', 'WECHAT_API_V3_KEY', 'WECHAT_PRIVATE_KEY_PATH', 'WECHAT_PAY_NOTIFY_URL'];
 const forbiddenRealPayout = ['WECHAT_TRANSFER_ENABLED', 'WECHAT_MERCHANT_TRANSFER_ENABLED', 'AUTO_PAYOUT_ENABLED'];
@@ -14,7 +15,9 @@ for (const key of requiredBase) {
 }
 
 if (!['mock', 'wechat'].includes(payMode)) problems.push('WECHAT_PAY_MODE must be mock or wechat');
+if (!['token', 'session'].includes(authMode)) problems.push('ADMIN_AUTH_MODE must be token or session');
 if (nodeEnv === 'production' && process.env.ADMIN_AUTH_ENABLED !== 'true') problems.push('Production requires ADMIN_AUTH_ENABLED=true');
+if (nodeEnv === 'production' && authMode !== 'session') problems.push('Production should use ADMIN_AUTH_MODE=session, token mode is only for short-term compatibility');
 if (nodeEnv === 'production' && process.env.ADMIN_TOKEN === 'dev-admin-token') problems.push('Production ADMIN_TOKEN must not use dev-admin-token');
 if (nodeEnv === 'production' && (process.env.ADMIN_TOKEN?.length ?? 0) < 24) problems.push('Production ADMIN_TOKEN should be at least 24 characters');
 

@@ -96,6 +96,26 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
+  it('registers L11 admin session auth routes and persistence models', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const authRoutes = readFileSync(new URL('../src/routes/admin-auth.ts', import.meta.url), 'utf8');
+    const authService = readFileSync(new URL('../src/services/admin-auth-service.ts', import.meta.url), 'utf8');
+    const schema = readFileSync(new URL('../../../prisma/schema.prisma', import.meta.url), 'utf8');
+    expect(appSource.includes('registerAdminAuthRoutes')).toBe(true);
+    expect(appSource.includes('ADMIN_AUTH_MODE')).toBe(true);
+    expect(authRoutes.includes('/api/admin/auth/login')).toBe(true);
+    expect(authRoutes.includes('/api/admin/auth/totp/setup')).toBe(true);
+    expect(authRoutes.includes('/api/admin/auth/totp/enable')).toBe(true);
+    expect(authRoutes.includes('/api/admin/auth/totp/disable')).toBe(true);
+    expect(authService.includes('bcrypt.hash')).toBe(true);
+    expect(authService.includes('aes-256-gcm')).toBe(true);
+    expect(authService.includes('session_token_hash')).toBe(true);
+    expect(schema.includes('model AdminUser')).toBe(true);
+    expect(schema.includes('model AdminSession')).toBe(true);
+    expect(schema.includes('model AdminAuditLog')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);

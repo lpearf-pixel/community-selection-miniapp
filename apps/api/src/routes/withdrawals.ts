@@ -92,6 +92,21 @@ async function logWithdrawalEvent(tx: Prisma.TransactionClient, input: {
   }
 }
 
+
+async function writeAdminAuditLog(tx: Prisma.TransactionClient, request: { adminUser?: { id: string }; ip?: string; headers: Record<string, unknown> }, input: { action: string; target_id: string; payload?: unknown }) {
+  await tx.adminAuditLog.create({
+    data: {
+      admin_user_id: request.adminUser?.id ?? null,
+      action: input.action,
+      target_type: 'Withdrawal',
+      target_id: input.target_id,
+      ip_address: request.ip ?? null,
+      user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+      payload: input.payload === undefined ? Prisma.JsonNull : input.payload as Prisma.InputJsonValue
+    }
+  });
+}
+
 export function registerWithdrawalRoutes(app: FastifyInstance) {
   app.get('/api/leaders/me/withdrawals', async (request, reply) => {
     try {
@@ -206,6 +221,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         const commissions = await tx.commission.findMany({ where: { withdrawal_id: id } });
         const updated = await tx.withdrawal.update({ where: { id }, data: { status: 'rejected', admin_remark: body.reason ?? '人工拒绝' } });
         await tx.commission.updateMany({ where: { withdrawal_id: id }, data: { status: 'available', withdrawal_id: null } });
+        await writeAdminAuditLog(tx, request, { action: 'withdrawal_rejected', target_id: id, payload: { reason: body.reason ?? null } });
         await logWithdrawalEvent(tx, {
           event_type: 'withdrawal_rejected',
           withdrawal: updated,
@@ -290,6 +306,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
             }
           }
         });
+        await writeAdminAuditLog(tx, request, { action: 'withdrawal_tax_reviewed', target_id: id, payload: { tax_mode: taxMode, tax_status: taxStatus, tax_amount_cents: taxAmount } });
         await safeRecordBusinessEvent(tx, {
           event_type: 'withdrawal_tax_reviewed',
           event_source: 'withdrawals-route',
@@ -318,6 +335,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         if (withdrawal.status !== 'pending') throw new Error('当前提现申请不可审核通过');
         const commissions = await tx.commission.findMany({ where: { withdrawal_id: id } });
         const updated = await tx.withdrawal.update({ where: { id }, data: { status: 'approved', admin_remark: body.reason ?? '人工审核通过' } });
+        await writeAdminAuditLog(tx, request, { action: 'withdrawal_approved', target_id: id, payload: { reason: body.reason ?? null } });
         await logWithdrawalEvent(tx, {
           event_type: 'withdrawal_approved',
           withdrawal: updated,
@@ -349,6 +367,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         const commissions = await tx.commission.findMany({ where: { withdrawal_id: id } });
         const updated = await tx.withdrawal.update({ where: { id }, data: { status: 'paid', admin_remark: body.reason ?? withdrawal.admin_remark } });
         await tx.commission.updateMany({ where: { withdrawal_id: id }, data: { status: 'withdrawn' } });
+        await writeAdminAuditLog(tx, request, { action: 'withdrawal_mark_paid', target_id: id, payload: { tax_status: updated.tax_status, payable_amount_cents: updated.payable_amount_cents } });
         await logWithdrawalEvent(tx, {
           event_type: 'withdrawal_mark_paid',
           withdrawal: updated,

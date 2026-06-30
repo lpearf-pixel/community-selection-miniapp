@@ -513,3 +513,63 @@ model ConsumerCreditLedger {
   @@index([user_id])
   @@index([source_type, source_id])
 }
+
+model AdminUser {
+  id                    String              @id @default(cuid())
+  username              String              @unique
+  password_hash         String
+  role                  String              @default("admin")
+  status                String              @default("active")
+  totp_enabled          Boolean             @default(false)
+  totp_secret_encrypted String?
+  passkey_enabled       Boolean             @default(false)
+  mtls_subject          String?
+  last_login_at         DateTime?
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+  sessions              AdminSession[]
+  recovery_codes        AdminRecoveryCode[]
+  audit_logs            AdminAuditLog[]
+}
+
+model AdminSession {
+  id                 String    @id @default(cuid())
+  admin_user_id      String
+  session_token_hash String    @unique
+  expires_at         DateTime
+  ip_address         String?
+  user_agent         String?
+  created_at         DateTime  @default(now())
+  admin_user         AdminUser @relation(fields: [admin_user_id], references: [id])
+
+  @@index([admin_user_id])
+  @@index([expires_at])
+}
+
+model AdminRecoveryCode {
+  id            String    @id @default(cuid())
+  admin_user_id String
+  code_hash     String
+  used_at       DateTime?
+  created_at    DateTime  @default(now())
+  admin_user    AdminUser @relation(fields: [admin_user_id], references: [id])
+
+  @@index([admin_user_id])
+}
+
+model AdminAuditLog {
+  id            String     @id @default(cuid())
+  admin_user_id String?
+  action        String
+  target_type   String?
+  target_id     String?
+  ip_address    String?
+  user_agent    String?
+  payload       Json?
+  created_at    DateTime   @default(now())
+  admin_user    AdminUser? @relation(fields: [admin_user_id], references: [id])
+
+  @@index([admin_user_id])
+  @@index([action])
+  @@index([created_at])
+}

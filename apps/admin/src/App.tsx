@@ -4,7 +4,7 @@ import { formatYuan } from '@community-selection/shared';
 
 type CommissionType = 'none' | 'fixed' | 'percent';
 type ProductStatus = 'draft' | 'active' | 'inactive';
-type ViewKey = 'products' | 'groupBuys' | 'orders' | 'withdrawals' | 'alerts' | 'taxRecords';
+type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'withdrawals' | 'alerts' | 'taxRecords';
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 
@@ -111,6 +111,7 @@ const emptyProduct: Product = {
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${url}`, {
+    credentials: 'include',
     headers: options?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...options
   });
@@ -120,7 +121,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export function App() {
-  const [view, setView] = useState<ViewKey>('products');
+  const [view, setView] = useState<ViewKey>('login');
+  const [adminSession, setAdminSession] = useState<{ username: string; role: string } | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [groupBuys, setGroupBuys] = useState<GroupBuy[]>([]);
@@ -154,12 +156,39 @@ export function App() {
       .catch((error: Error) => setMessage(error.message));
   }
 
-  useEffect(refresh, []);
+  useEffect(() => {
+    void fetchJson<{ username: string; role: string }>('/api/admin/auth/me')
+      .then((admin) => {
+        setAdminSession(admin);
+        setView('products');
+        refresh();
+      })
+      .catch(() => setView('login'));
+  }, []);
 
   const categoryOptions = useMemo(
     () => categories.map((category) => ({ label: category.name, value: category.id })),
     [categories]
   );
+
+
+  async function loginAdmin(values: { username: string; password: string; totp_code?: string }) {
+    const result = await fetchJson<{ admin_user: { username: string; role: string } }>('/api/admin/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(values)
+    });
+    setAdminSession(result.admin_user);
+    setView('products');
+    setMessage('后台登录成功');
+    refresh();
+  }
+
+  async function logoutAdmin() {
+    await fetchJson('/api/admin/auth/logout', { method: 'POST' });
+    setAdminSession(null);
+    setView('login');
+    setMessage('已退出后台登录');
+  }
 
   function startCreate() {
     setEditingProduct(emptyProduct);
@@ -222,6 +251,23 @@ export function App() {
   return (
     <Layout style={{ minHeight: '100vh', padding: 24 }}>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {view === 'login' ? (
+          <Card title="后台登录" style={{ maxWidth: 480 }}>
+            <Form layout="vertical" onFinish={loginAdmin}>
+              <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+                <Input autoComplete="username" />
+              </Form.Item>
+              <Form.Item name="password" label="密码" rules={[{ required: true }]}>
+                <Input.Password autoComplete="current-password" />
+              </Form.Item>
+              <Form.Item name="totp_code" label="二次验证码">
+                <Input placeholder="已启用二次验证时填写" />
+              </Form.Item>
+              <Button type="primary" htmlType="submit">登录</Button>
+            </Form>
+            {message ? <Typography.Text type="secondary">{message}</Typography.Text> : null}
+          </Card>
+        ) : (
         <Card>
           <Typography.Title level={2}>社区甄选管理后台</Typography.Title>
           <Typography.Paragraph>
@@ -235,9 +281,12 @@ export function App() {
             <Button onClick={() => setView('alerts')}>告警中心</Button>
             <Button onClick={() => setView('taxRecords')}>税务记录</Button>
             <Button onClick={refresh}>刷新</Button>
+            <Button onClick={logoutAdmin}>退出登录</Button>
           </Space>
+          {adminSession ? <Typography.Text type="secondary">当前管理员：{adminSession.username}</Typography.Text> : null}
           {message ? <Typography.Text type="secondary">{message}</Typography.Text> : null}
         </Card>
+        )}
 
         {view === 'products' ? (
           <>
