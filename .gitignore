@@ -51,3 +51,7 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+# Payment certificates
+certs/
+*.pem
+*.key

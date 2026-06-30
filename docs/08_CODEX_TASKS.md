@@ -218,6 +218,20 @@ scripts/check.sh
 
 ---
 
+
+### 阶段 4 增补：核心可靠性与合规边界
+
+后续复现 L4 时必须同时满足以下增补要求，且不得提前进入 L5-L8：
+
+1. `Order` 必须保存 `quantity Int @default(1)`，库存恢复、成团数量统计必须使用 `order.quantity`，不得用金额反推数量。
+2. 下单扣库存必须使用条件更新：`updateMany({ where: { id: product_id, stock: { gte: quantity } }, data: { stock: { decrement: quantity } } })`，且 `count !== 1` 时返回库存不足。
+3. 订单支付 MOCK 必须幂等，`unpaid -> paid` 只能成功一次；推荐拆分 `POST /api/orders/:id/mock-pay` 与 `POST /api/orders/:id/status`，保留旧接口时也必须逻辑清晰。
+4. 团购 `pending` 与 `success` 状态均允许继续参团，直到 `end_time` 或库存不足；`failed/cancelled/closed` 不允许参团。
+5. 过期未成团扫描只处理 `pending` 团：团状态改 `failed`，未支付订单关闭，已支付订单进入待退款，按 `order.quantity` 恢复库存，退款记录必须幂等。
+6. L4 不实现微信支付、真实退款、开团服务奖励结算和提现。
+7. 不得新增或使用多级关系字段，也不得新增不合规的用户可见宣传文案；用户可见文案只允许“开团服务奖励”。
+8. 必须补充并运行 `scripts/verify-l1-l2-l3-l4-local.sh`，覆盖重复下单幂等、支付幂等、成团、库存不足、过期失败、退款待处理和分拣 CSV。
+
 ## 阶段 5：微信支付 MOCK 与真实接口结构
 
 目标：实现微信支付接口结构，开发环境可 MOCK。
@@ -271,6 +285,19 @@ scripts/check.sh
 
 ---
 
+
+### 阶段 5 增补：支付 MOCK 与微信支付接口结构
+
+L5 只实现支付 MOCK 与真实微信支付接口结构，不进入 L6-L8。后续复现时必须满足：
+
+1. 支付能力必须拆到 `apps/api/src/routes/payments.ts` 与 `apps/api/src/services/payment-service.ts`，不得再把 `/api/orders/:id/complete` 当支付入口。
+2. 本地闭环接口为 `POST /api/payments/mock`，重复调用同一 `order_id` 必须复用同一 `Payment`，不得重复累计团购人数和数量。
+3. 真实微信 JSAPI 只保留 `POST /api/payments/wechat/jsapi` 结构：MOCK 模式必须提示使用 MOCK 支付；真实模式必须校验微信支付环境变量并返回清晰的预留结构。
+4. `POST /api/payments/wechat/notify` 在 MOCK 模式下必须拒绝；真实模式未完成验签、解密、金额校验前不得修改订单。
+5. `markOrderPaid(orderId, paymentInfo)` 必须在事务中使用 `updateMany({ id, pay_status: 'unpaid' })` 原子更新，并使用 `order.quantity` 刷新成团统计。
+6. L5 不实现真实退款、微信退款、开团服务奖励结算、提现、commission 结算或 withdrawal。
+7. 必须补充并运行 `scripts/verify-l1-l2-l3-l4-l5-local.sh`，覆盖 MOCK 支付闭环、重复支付幂等、成团、错误订单、分拣 CSV 和合规扫描。
+
 ## 阶段 6：退款系统
 
 目标：实现用户退款、后台审核、MOCK 退款成功、未成团自动退款。
@@ -317,6 +344,19 @@ scripts/check.sh
 ```
 
 ---
+
+
+### 阶段 6 增补：退款 MOCK 与微信退款接口边界
+
+L6 只实现退款申请、审核、MOCK 退款成功与微信退款回调结构，不进入 L7-L8。后续复现时必须满足：
+
+1. 退款接口注册在 `apps/api/src/routes/refunds.ts`，包括 `GET /api/refunds`、`GET /api/refunds/:id`、`POST /api/refunds/mock`、`POST /api/refunds/wechat/apply`、`POST /api/refunds/wechat/notify`。
+2. 未支付订单不能退款；累计退款金额不得超过订单实付金额；已全额退款订单不得重复申请。
+3. MOCK 退款成功必须幂等：重复处理同一退款单不得重复累加 `Order.refund_amount_cents`。
+4. 部分退款不强制改变履约状态；全额退款后订单状态必须为 `refunded`。
+5. 微信退款回调在 MOCK 模式下必须拒绝；真实模式未完成验签、解密、金额校验前不得修改订单。
+6. L6 不实现微信真实退款、不实现开团服务奖励结算、不实现提现、commission 结算或 withdrawal。
+7. 建议运行 `scripts/verify-l1-l2-l3-l4-l5-l6-local.sh` 覆盖部分退款、同一 `client_refund_id` 幂等、超额退款失败、全额退款状态、库存只恢复一次、退款列表和详情。
 
 ## 阶段 7：一级开团服务奖励
 
@@ -421,3 +461,80 @@ pnpm build
 5. 还存在什么问题
 6. 下一阶段建议
 ```
+
+### 阶段 6 增补：退款幂等与库存恢复策略优化
+
+L6 退款系统后续复现时还必须满足：
+
+1. `client_refund_id` 命中已有退款时，必须同时校验 `order_id` 与 `refund_amount_cents`，参数不一致返回“退款幂等键已被使用，且请求参数不一致”。
+2. L6 第一版只做金额退款：部分退款不恢复库存；全额退款仅在订单仍处于 `paid/grouped/preparing/ready/refunding` 时自动恢复库存。
+3. `picked/delivered/completed` 等已履约订单全额退款不自动恢复库存，审计日志记录 `stock_restore_skipped_reason: order_already_fulfilled`。
+4. 微信退款回调成功处理必须校验 `out_refund_no`，并在 `refund_id` 首次出现时写入；已有 `refund_id` 冲突时必须失败。
+5. `/api/refunds/wechat/apply` 虽然不发起真实微信退款，也必须复用可退款校验，先拦截未支付、不可退、超额退款等请求。
+
+### 阶段 7 增补：开团服务奖励结算第一版
+
+L7 先实现开团服务奖励结算闭环，不进入自动提现打款：
+
+1. 支付成功后按商品 `commission_type` / `commission_value` 为开团人生成唯一预计奖励，重复支付不重复生成。
+2. 订单完成后奖励进入 `pending`，`available_at = completed_at + 7 天`。
+3. 结算任务只把到期、未冻结、金额大于 0 的 `pending` 奖励改为 `available`。
+4. 部分退款按实际成交金额重算奖励；全额退款取消奖励。
+5. 只允许开团人本人发起团购产生的一级开团服务奖励，不新增多级关系字段，不实现提现自动打款。
+
+### 阶段 7 增补：固定金额奖励退款重算
+
+L7 开团服务奖励退款联动必须满足：
+
+1. `percent` 类型按实际成交金额 `base_amount_cents * commission_value / 100` 重算。
+2. `fixed` 类型初始预估仍按 `quantity * commission_value`，部分退款后按 `floor((quantity * commission_value) * base_amount_cents / original_pay_amount_cents)` 重算。
+3. 全额退款后 `final_amount_cents = 0` 且状态为 `cancelled`。
+4. 冻结状态发生退款时状态保持 `frozen`，但金额仍按实际成交金额重算，并在 AuditLog 记录 `was_frozen = true`。
+
+### 阶段 7.5 增补：业务日志、订单时间线、异常告警
+
+L7.5 只补充日志和告警能力，不进入 L8 提现：
+
+1. 新增 `BusinessEventLog`、`OrderTimelineLog`、`OpsAlertLog`，用于记录订单、支付、退款、开团服务奖励的核心业务事件。
+2. 日志写入必须走 `sanitizePayload`，手机号、地址和 token/key/cert/private_key/password 等敏感字段不得明文入库。
+3. `commission_available` 必须同时写业务事件和订单时间线；可用后退款必须写 warning 事件；已提现后退款必须创建人工处理告警。
+4. 后台日志接口提供业务事件、订单时间线、告警列表、告警处理/忽略和订单 AI 分析上下文结构，不调用大模型。
+
+5. 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响；日志写入应优先使用 safe 版本，避免影响主交易。
+
+### 阶段 8：提现申请与后台人工审核
+
+L8 第一版只实现人工审核流，不接真实打款、企业付款或微信商家转账：
+
+1. 只有 `available` 的开团服务奖励可申请提现，申请时重新计算余额，并锁定对应奖励为 `withdrawing`。
+2. 已锁定到提现申请的奖励不可重复申请；提现金额不能超过可提现余额，第一版按整笔奖励提现。
+3. 后台拒绝后提现状态为 `rejected`，对应奖励回到 `available`；后台审核通过后提现状态为 `approved`，对应奖励变为 `withdrawn`。
+4. 审核通过后可人工标记 `paid`，仅记录状态，不触发真实打款。
+5. 提现申请期间或提现后发生退款必须创建 OpsAlert，方便人工复核或冲正。
+
+### 阶段 8 增补：提现状态机收口
+
+L8 提现状态机必须保持：
+
+1. 创建提现申请后 `Withdrawal.status = pending`，关联开团服务奖励保持 `Commission.status = withdrawing` 并保留 `withdrawal_id`。
+2. 审核通过只把 `Withdrawal.status` 改为 `approved`，开团服务奖励仍保持 `withdrawing`。
+3. 只有后台人工标记已处理后，`Withdrawal.status = paid`，关联开团服务奖励才变为 `withdrawn`。
+4. 审核通过但未标记已处理期间发生退款，只创建人工复核告警，不创建已提现后退款的 critical 告警。
+5. `GET /api/leaders/me/withdrawable-commissions` 只返回 `available` 且 `withdrawal_id = null` 的开团服务奖励。
+
+## L8 增补：开团服务奖励转平台消费额度预留
+
+- 新增 `RewardLedger`、`ConsumerCreditLedger`、`RewardConversion`、`TaxRecord`，记录开团服务奖励转平台消费额度、消费额度余额变动以及税务状态待复核。
+- 新增 `POST /api/leaders/me/rewards/convert-credit`，第一版只支持整笔、可用且未被提现申请锁定的开团服务奖励转平台消费额度。
+- 转换后 `Commission.status = converted`，不再进入可提现列表；消费额度仅可用于平台订单抵扣，不提供再次提现能力。
+- 订单可记录 `credit_amount_cents`、`credit_source_type`、`credit_source_id`；使用奖励转换消费额度下单后，退款时退回消费额度，不退回为可提现开团服务奖励。
+- AI context 增加消费额度来源、转换记录与 `tax_status`，方便后台核查消费额度来源及税务状态。
+- 文案必须保持合规：仅使用“开团服务奖励”，不宣传税务优惠，不新增多级关系字段。
+
+### 阶段 8 增补：提现税务复核与消费额度退款规则
+
+- `Withdrawal` 预留税务复核字段：税前金额、税务金额、可处理金额、税务状态、发票状态与财务备注；第一版只保存人工复核结果，不自动计算真实税费。
+- 新增 `POST /api/admin/withdrawals/:id/tax-review`，仅允许 `pending` / `approved` 提现申请复核；复核后写入或更新 `TaxRecord(source_type = withdrawal)`。
+- `POST /api/admin/withdrawals/:id/mark-paid` 必须在税务状态非 `pending` 后才能执行；若需要发票，则发票状态必须为 `verified`。
+- 新增 `GET /api/admin/tax-records`，用于按开团人、来源类型、来源 ID、税务状态和时间范围查询 TaxRecord。
+- 消费额度退款规则：L8 第一版仅在订单全额退款时退回平台消费额度；部分退款不自动退回消费额度，只写 warning 业务日志。退回的消费额度仍只进入 `ConsumerCreditLedger`，不恢复为可提现开团服务奖励。

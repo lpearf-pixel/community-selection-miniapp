@@ -66,6 +66,8 @@ enum CommissionStatus {
   frozen
   pending
   available
+  withdrawing
+  converted
   withdrawn
   deducted
   cancelled
@@ -200,7 +202,11 @@ model Order {
   leader_user_id      String?
   total_amount_cents  Int
   pay_amount_cents    Int
+  quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)
+  credit_amount_cents Int          @default(0)
+  credit_source_type   String?
+  credit_source_id     String?
   pay_status          PayStatus    @default(unpaid)
   order_status        OrderStatus  @default(unpaid)
   refund_status       RefundStatus @default(none)
@@ -246,7 +252,10 @@ model Refund {
   order_id            String
   out_refund_no       String       @unique
   refund_id           String?      @unique
+  client_refund_id    String?      @unique
   refund_amount_cents Int
+  stock_restored      Boolean      @default(false)
+  processed_at        DateTime?
   reason              String
   status              RefundStatus @default(pending)
   raw_notify          Json?
@@ -260,6 +269,7 @@ model Commission {
   leader_user_id         String
   order_id               String
   group_buy_id           String
+  withdrawal_id          String?
   base_amount_cents      Int
   commission_type        CommissionType
   commission_value       Int
@@ -275,6 +285,7 @@ model Commission {
   group_buy              GroupBuy         @relation(fields: [group_buy_id], references: [id])
 
   @@index([leader_user_id])
+  @@index([withdrawal_id])
   @@unique([order_id, leader_user_id])
 }
 
@@ -293,14 +304,23 @@ model LeaderApplication {
 }
 
 model Withdrawal {
-  id             String           @id @default(cuid())
-  leader_user_id String
-  amount_cents   Int
-  status         WithdrawalStatus @default(pending)
-  admin_remark   String?
-  created_at     DateTime         @default(now())
-  updated_at     DateTime         @updatedAt
-  leader_user    User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])
+  id                   String           @id @default(cuid())
+  leader_user_id       String
+  amount_cents         Int
+  status               WithdrawalStatus @default(pending)
+  tax_mode             String           @default("pending_review")
+  tax_status           String           @default("pending")
+  taxable_amount_cents Int              @default(0)
+  tax_amount_cents     Int              @default(0)
+  payable_amount_cents Int              @default(0)
+  tax_rate_basis       String?
+  invoice_required     Boolean          @default(false)
+  invoice_status       String           @default("not_required")
+  tax_remark           String?
+  admin_remark         String?
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+  leader_user          User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])
 }
 
 model AuditLog {
@@ -312,4 +332,244 @@ model AuditLog {
   payload       Json?
   created_at    DateTime @default(now())
   actor_user    User?    @relation("AuditActor", fields: [actor_user_id], references: [id])
+}
+
+enum BusinessEventLevel {
+  info
+  warning
+  error
+  critical
+}
+
+enum OrderTimelineActorType {
+  system
+  user
+  admin
+  wechat
+  scheduler
+}
+
+enum OpsAlertLevel {
+  warning
+  error
+  critical
+}
+
+enum OpsAlertStatus {
+  open
+  acknowledged
+  resolved
+  ignored
+}
+
+/// 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响。
+model BusinessEventLog {
+  id              String             @id @default(cuid())
+  event_type      String
+  event_level     BusinessEventLevel @default(info)
+  event_source    String
+  order_id        String?
+  group_buy_id    String?
+  payment_id      String?
+  refund_id       String?
+  commission_id   String?
+  withdrawal_id   String?
+  leader_user_id  String?
+  user_id         String?
+  trace_id        String?
+  request_id      String?
+  idempotency_key String?
+  before_snapshot Json?
+  after_snapshot  Json?
+  payload         Json?
+  message         String?
+  created_at      DateTime           @default(now())
+
+  @@index([order_id])
+  @@index([event_type])
+  @@index([event_level])
+  @@index([leader_user_id])
+  @@index([created_at])
+}
+
+/// 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响。
+model OrderTimelineLog {
+  id            String                 @id @default(cuid())
+  order_id      String
+  event_type    String
+  title         String
+  message       String?
+  from_status   String?
+  to_status     String?
+  actor_type    OrderTimelineActorType @default(system)
+  actor_user_id String?
+  payload       Json?
+  created_at    DateTime               @default(now())
+
+  @@index([order_id])
+  @@index([event_type])
+  @@index([created_at])
+}
+
+/// 日志表使用弱关联字段，不加 FK，避免历史日志因主业务数据变更受影响。
+model OpsAlertLog {
+  id              String         @id @default(cuid())
+  alert_type      String
+  alert_level     OpsAlertLevel  @default(warning)
+  status          OpsAlertStatus @default(open)
+  order_id        String?
+  group_buy_id    String?
+  payment_id      String?
+  refund_id       String?
+  commission_id   String?
+  withdrawal_id   String?
+  leader_user_id  String?
+  title           String
+  message         String
+  payload         Json?
+  resolved_by     String?
+  resolved_at     DateTime?
+  resolution_note String?
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([alert_level])
+  @@index([order_id])
+  @@index([created_at])
+}
+
+
+model TaxRecord {
+  id           String   @id @default(cuid())
+  leader_user_id String?
+  source_type  String
+  source_id    String
+  tax_mode     String
+  tax_status   String   @default("pending_review")
+  amount_cents Int
+  payload      Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([source_type, source_id])
+  @@index([leader_user_id])
+  @@index([tax_status])
+}
+
+model RewardConversion {
+  id                String   @id @default(cuid())
+  leader_user_id    String
+  commission_id     String
+  client_request_id String?  @unique
+  amount_cents      Int
+  conversion_type   String
+  status            String   @default("success")
+  tax_status        String   @default("pending_review")
+  tax_record_id     String?
+  created_at        DateTime @default(now())
+
+  @@index([leader_user_id])
+  @@index([commission_id])
+  @@index([tax_status])
+}
+
+model RewardLedger {
+  id                  String   @id @default(cuid())
+  leader_user_id      String
+  commission_id       String?
+  withdrawal_id       String?
+  conversion_id       String?
+  entry_type          String
+  direction           String
+  amount_cents        Int
+  balance_after_cents Int
+  tax_status          String   @default("pending_review")
+  tax_record_id       String?
+  order_id            String?
+  remark              String?
+  payload             Json?
+  created_at          DateTime @default(now())
+
+  @@index([leader_user_id])
+  @@index([commission_id])
+  @@index([order_id])
+}
+
+model ConsumerCreditLedger {
+  id                  String   @id @default(cuid())
+  user_id             String
+  source_type         String
+  source_id           String
+  direction           String
+  amount_cents        Int
+  balance_after_cents Int
+  expires_at          DateTime?
+  usable_scope        String?
+  remark              String?
+  payload             Json?
+  created_at          DateTime @default(now())
+
+  @@index([user_id])
+  @@index([source_type, source_id])
+}
+
+model AdminUser {
+  id                    String              @id @default(cuid())
+  username              String              @unique
+  password_hash         String
+  role                  String              @default("admin")
+  status                String              @default("active")
+  totp_enabled          Boolean             @default(false)
+  totp_secret_encrypted String?
+  passkey_enabled       Boolean             @default(false)
+  mtls_subject          String?
+  last_login_at         DateTime?
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+  sessions              AdminSession[]
+  recovery_codes        AdminRecoveryCode[]
+  audit_logs            AdminAuditLog[]
+}
+
+model AdminSession {
+  id                 String    @id @default(cuid())
+  admin_user_id      String
+  session_token_hash String    @unique
+  expires_at         DateTime
+  ip_address         String?
+  user_agent         String?
+  created_at         DateTime  @default(now())
+  admin_user         AdminUser @relation(fields: [admin_user_id], references: [id])
+
+  @@index([admin_user_id])
+  @@index([expires_at])
+}
+
+model AdminRecoveryCode {
+  id            String    @id @default(cuid())
+  admin_user_id String
+  code_hash     String
+  used_at       DateTime?
+  created_at    DateTime  @default(now())
+  admin_user    AdminUser @relation(fields: [admin_user_id], references: [id])
+
+  @@index([admin_user_id])
+}
+
+model AdminAuditLog {
+  id            String     @id @default(cuid())
+  admin_user_id String?
+  action        String
+  target_type   String?
+  target_id     String?
+  ip_address    String?
+  user_agent    String?
+  payload       Json?
+  created_at    DateTime   @default(now())
+  admin_user    AdminUser? @relation(fields: [admin_user_id], references: [id])
+
+  @@index([admin_user_id])
+  @@index([action])
+  @@index([created_at])
 }

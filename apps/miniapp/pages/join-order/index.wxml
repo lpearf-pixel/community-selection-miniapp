@@ -1,6 +1,7 @@
 <view class="page">
   <view class="title">参团下单</view>
-  <input placeholder="收货人" value="{{receiver_name}}" />
-  <input placeholder="手机号" value="{{receiver_phone}}" />
+  <input placeholder="收货人" value="{{receiver_name}}" bindinput="onNameInput" />
+  <input placeholder="手机号" value="{{receiver_phone}}" bindinput="onPhoneInput" />
+  <input type="number" placeholder="数量" value="{{quantity}}" bindinput="onQuantityInput" />
   <button type="primary" bindtap="submit">提交订单</button>
 </view>

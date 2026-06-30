@@ -1,0 +1,10 @@
+ALTER TABLE "Withdrawal" ADD COLUMN "tax_mode" TEXT NOT NULL DEFAULT 'pending_review';
+ALTER TABLE "Withdrawal" ADD COLUMN "tax_status" TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE "Withdrawal" ADD COLUMN "taxable_amount_cents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Withdrawal" ADD COLUMN "tax_amount_cents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Withdrawal" ADD COLUMN "payable_amount_cents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Withdrawal" ADD COLUMN "tax_rate_basis" TEXT;
+ALTER TABLE "Withdrawal" ADD COLUMN "invoice_required" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Withdrawal" ADD COLUMN "invoice_status" TEXT NOT NULL DEFAULT 'not_required';
+ALTER TABLE "Withdrawal" ADD COLUMN "tax_remark" TEXT;
+UPDATE "Withdrawal" SET "taxable_amount_cents" = "amount_cents", "payable_amount_cents" = "amount_cents" WHERE "taxable_amount_cents" = 0 AND "payable_amount_cents" = 0;

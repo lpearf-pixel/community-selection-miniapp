@@ -1,5 +1,22 @@
 <view class="page">
   <view class="title">发起开团</view>
-  <view class="hint">选择支持开团的商品、社区和截止时间后即可发起。</view>
-  <button type="primary" bindtap="submit">提交开团</button>
+  <view class="hint">选择支持开团的商品和社区，设置最低成团人数/数量后发起。</view>
+
+  <view class="label">团购商品</view>
+  <picker mode="selector" range="{{products}}" range-key="name" value="{{productIndex}}" bindchange="onProductChange">
+    <view class="picker">{{products[productIndex].name || '请选择支持开团的商品'}}</view>
+  </picker>
+
+  <view class="label">社区</view>
+  <picker mode="selector" range="{{communities}}" range-key="name" value="{{communityIndex}}" bindchange="onCommunityChange">
+    <view class="picker">{{communities[communityIndex].name || '请选择社区'}}</view>
+  </picker>
+
+  <view class="label">最低成团人数</view>
+  <input type="number" value="{{min_people}}" bindinput="onMinPeopleInput" />
+
+  <view class="label">最低成团数量</view>
+  <input type="number" value="{{min_quantity}}" bindinput="onMinQuantityInput" />
+
+  <button type="primary" loading="{{loading}}" bindtap="submit">提交开团</button>
 </view>
