@@ -78,6 +78,8 @@ describe('L4 group-buy and order routes', () => {
     expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/approve')).toBe(true);
     expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/reject')).toBe(true);
     expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/mark-paid')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/admin/withdrawals/:id/tax-review')).toBe(true);
+    expect(withdrawalRoutes.includes('/api/admin/tax-records')).toBe(true);
   });
 
 

@@ -150,6 +150,22 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     }
   } else if (!isFullRefund) {
     stockRestoreSkippedReason = 'partial_refund_amount_only';
+    // 消费额度退款规则：L8 第一版仅在订单全额退款时退回全部平台消费额度；部分退款不自动退回消费额度。
+    if (refund.order.credit_amount_cents > 0) {
+      await safeRecordBusinessEvent(tx, {
+        event_type: 'reward_credit_partial_refund_skipped',
+        event_level: 'warning',
+        event_source: 'refund-service',
+        order_id: refund.order_id,
+        refund_id: refund.id,
+        user_id: refund.order.user_id,
+        payload: {
+          rule: 'full_refund_only',
+          credit_amount_cents: refund.order.credit_amount_cents,
+          refund_amount_cents: refund.refund_amount_cents
+        }
+      });
+    }
   }
 
   const updatedRefund = await tx.refund.update({

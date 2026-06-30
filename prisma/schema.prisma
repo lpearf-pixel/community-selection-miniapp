@@ -304,14 +304,23 @@ model LeaderApplication {
 }
 
 model Withdrawal {
-  id             String           @id @default(cuid())
-  leader_user_id String
-  amount_cents   Int
-  status         WithdrawalStatus @default(pending)
-  admin_remark   String?
-  created_at     DateTime         @default(now())
-  updated_at     DateTime         @updatedAt
-  leader_user    User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])
+  id                   String           @id @default(cuid())
+  leader_user_id       String
+  amount_cents         Int
+  status               WithdrawalStatus @default(pending)
+  tax_mode             String           @default("pending_review")
+  tax_status           String           @default("pending")
+  taxable_amount_cents Int              @default(0)
+  tax_amount_cents     Int              @default(0)
+  payable_amount_cents Int              @default(0)
+  tax_rate_basis       String?
+  invoice_required     Boolean          @default(false)
+  invoice_status       String           @default("not_required")
+  tax_remark           String?
+  admin_remark         String?
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+  leader_user          User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])
 }
 
 model AuditLog {

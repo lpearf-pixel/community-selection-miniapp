@@ -530,3 +530,11 @@ L8 提现状态机必须保持：
 - 订单可记录 `credit_amount_cents`、`credit_source_type`、`credit_source_id`；使用奖励转换消费额度下单后，退款时退回消费额度，不退回为可提现开团服务奖励。
 - AI context 增加消费额度来源、转换记录与 `tax_status`，方便后台核查消费额度来源及税务状态。
 - 文案必须保持合规：仅使用“开团服务奖励”，不宣传税务优惠，不新增多级关系字段。
+
+### 阶段 8 增补：提现税务复核与消费额度退款规则
+
+- `Withdrawal` 预留税务复核字段：税前金额、税务金额、可处理金额、税务状态、发票状态与财务备注；第一版只保存人工复核结果，不自动计算真实税费。
+- 新增 `POST /api/admin/withdrawals/:id/tax-review`，仅允许 `pending` / `approved` 提现申请复核；复核后写入或更新 `TaxRecord(source_type = withdrawal)`。
+- `POST /api/admin/withdrawals/:id/mark-paid` 必须在税务状态非 `pending` 后才能执行；若需要发票，则发票状态必须为 `verified`。
+- 新增 `GET /api/admin/tax-records`，用于按开团人、来源类型、来源 ID、税务状态和时间范围查询 TaxRecord。
+- 消费额度退款规则：L8 第一版仅在订单全额退款时退回平台消费额度；部分退款不自动退回消费额度，只写 warning 业务日志。退回的消费额度仍只进入 `ConsumerCreditLedger`，不恢复为可提现开团服务奖励。
