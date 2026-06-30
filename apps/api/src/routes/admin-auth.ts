@@ -24,7 +24,7 @@ import {
 
 type LoginBody = { username?: string; password?: string; totp_code?: string; recovery_code?: string };
 type TotpEnableBody = { totp_code?: string };
-type TotpDisableBody = { password?: string; totp_code?: string };
+type TotpDisableBody = { password?: string; totp_code?: string; recovery_code?: string };
 
 function requestMeta(request: { ip?: string; headers: Record<string, unknown> }) {
   return {
@@ -53,6 +53,28 @@ async function writeAdminAuditLog(tx: Prisma.TransactionClient, input: {
       payload: input.payload === undefined ? Prisma.JsonNull : input.payload as Prisma.InputJsonValue
     }
   });
+}
+
+async function writeAdminAuditLogSafely(input: {
+  admin_user_id?: string | null;
+  action: string;
+  ip_address?: string;
+  user_agent?: string;
+  payload?: unknown;
+}) {
+  try {
+    await prisma.adminAuditLog.create({
+      data: {
+        admin_user_id: input.admin_user_id ?? null,
+        action: input.action,
+        ip_address: input.ip_address ?? null,
+        user_agent: input.user_agent ?? null,
+        payload: input.payload === undefined ? Prisma.JsonNull : input.payload as Prisma.InputJsonValue
+      }
+    });
+  } catch (error) {
+    console.error('admin audit log write failed', error);
+  }
 }
 
 export async function requireAdminSession(request: { headers: Record<string, unknown> }) {
@@ -91,13 +113,14 @@ export function registerAdminAuthRoutes(app: FastifyInstance) {
           if (!totpOk && !recoveryOk) throw new Error('需要二次验证码或恢复码');
         }
         const session = await createAdminSession(tx, adminUser, meta);
-        await writeAdminAuditLog(tx, { admin_user_id: adminUser.id, action: 'admin_login', ip_address: meta.ip, user_agent: meta.userAgent });
+        await writeAdminAuditLog(tx, { admin_user_id: adminUser.id, action: 'admin_login_success', ip_address: meta.ip, user_agent: meta.userAgent });
         return session;
       });
       clearLoginFailures(username, meta.ip);
       reply.header('Set-Cookie', sessionCookie(result.token));
       return ok({ token: result.token, admin_user: { id: adminUser.id, username: adminUser.username, role: adminUser.role, totp_enabled: adminUser.totp_enabled } });
     } catch (error) {
+      await writeAdminAuditLogSafely({ action: 'admin_login_failed', ip_address: meta.ip, user_agent: meta.userAgent, payload: { username } });
       reply.code(401);
       return fail(error instanceof Error ? error.message : '登录失败');
     }
@@ -109,7 +132,11 @@ export function registerAdminAuthRoutes(app: FastifyInstance) {
       typeof request.headers.authorization === 'string' ? request.headers.authorization : undefined
     );
     if (token) {
-      await prisma.adminSession.deleteMany({ where: { session_token_hash: hashSessionToken(token) } });
+      const session = await prisma.adminSession.findUnique({ where: { session_token_hash: hashSessionToken(token) } });
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        await tx.adminSession.deleteMany({ where: { session_token_hash: hashSessionToken(token) } });
+        await writeAdminAuditLog(tx, { admin_user_id: session?.admin_user_id ?? null, action: 'admin_logout', ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : undefined });
+      });
     }
     reply.header('Set-Cookie', clearSessionCookie());
     return ok({ logged_out: true });
@@ -167,8 +194,10 @@ export function registerAdminAuthRoutes(app: FastifyInstance) {
     const body = request.body as TotpDisableBody;
     try {
       if (!body.password || !(await verifyPassword(body.password, adminUser.password_hash))) throw new Error('当前密码错误');
-      if (!adminUser.totp_secret_encrypted || !verifyTotpCode(decryptTotpSecret(adminUser.totp_secret_encrypted), body.totp_code)) throw new Error('二次验证码错误');
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const totpOk = !!adminUser.totp_secret_encrypted && verifyTotpCode(decryptTotpSecret(adminUser.totp_secret_encrypted), body.totp_code);
+        const recoveryOk = await consumeRecoveryCode(tx, adminUser.id, body.recovery_code);
+        if (!totpOk && !recoveryOk) throw new Error('二次验证码或恢复码错误');
         await tx.adminUser.update({ where: { id: adminUser.id }, data: { totp_enabled: false, totp_secret_encrypted: null } });
         await tx.adminRecoveryCode.deleteMany({ where: { admin_user_id: adminUser.id } });
         await writeAdminAuditLog(tx, { admin_user_id: adminUser.id, action: 'admin_totp_disabled', target_type: 'AdminUser', target_id: adminUser.id });

@@ -408,7 +408,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     return ok(order);
   });
 
-  async function updateOrderStatus(id: string, body: UpdateOrderStatusBody) {
+  async function updateOrderStatus(id: string, body: UpdateOrderStatusBody, adminMeta?: { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null }) {
     if (!body.next_status) throw new Error('缺少订单目标状态');
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) throw new Error('订单不存在');
@@ -429,6 +429,17 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
         after_snapshot: updatedOrder,
         payload: { from_status: order.order_status, to_status: body.next_status }
       });
+      await tx.adminAuditLog.create({
+        data: {
+          admin_user_id: adminMeta?.admin_user_id ?? null,
+          action: body.next_status === 'completed' ? 'order_completed' : 'order_status_changed',
+          target_type: 'Order',
+          target_id: id,
+          ip_address: adminMeta?.ip_address ?? null,
+          user_agent: adminMeta?.user_agent ?? null,
+          payload: { from_status: order.order_status, to_status: body.next_status }
+        }
+      });
       await safeRecordOrderTimeline(tx, {
         order_id: id,
         event_type: body.next_status === 'completed' ? 'order_completed' : 'order_status_changed',
@@ -445,7 +456,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/orders/:id/status', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      return ok(await updateOrderStatus(id, request.body as UpdateOrderStatusBody));
+      return ok(await updateOrderStatus(id, request.body as UpdateOrderStatusBody, { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '订单状态更新失败');
@@ -460,7 +471,7 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
         reply.code(400);
         return fail('支付请使用 /api/payments/mock 或 /api/payments/wechat/jsapi');
       }
-      return ok(await updateOrderStatus(id, body));
+      return ok(await updateOrderStatus(id, body, { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '订单完成失败');

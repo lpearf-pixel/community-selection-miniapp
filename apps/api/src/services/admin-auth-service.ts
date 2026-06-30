@@ -158,6 +158,22 @@ export async function createAdminSession(tx: Prisma.TransactionClient, adminUser
   return { token, session };
 }
 
+
+export async function verifySession(tx: Prisma.TransactionClient, token?: string) {
+  if (!token) return null;
+  const session = await tx.adminSession.findUnique({
+    where: { session_token_hash: hashSessionToken(token) },
+    include: { admin_user: true }
+  });
+  if (!session || session.expires_at <= new Date() || session.admin_user.status !== 'active') return null;
+  return session;
+}
+
+export function setupTotp(username: string) {
+  const secret = generateTotpSecret();
+  return { secret, encrypted_secret: encryptTotpSecret(secret), otpauth_url: buildOtpAuthUrl(username, secret) };
+}
+
 export function sessionCookie(token: string, maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000)) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   return `admin_session=${token}; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=${maxAgeSeconds}`;
