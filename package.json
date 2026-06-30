@@ -16,7 +16,9 @@
     "migrations:check": "tsx scripts/check-migrations.ts",
     "compliance:scan": "tsx scripts/compliance-scan.ts",
     "verify:all": "bash scripts/verify-all-local.sh",
-    "seed:check": "tsx scripts/check-seed-data.ts"
+    "seed:check": "tsx scripts/check-seed-data.ts",
+    "db:backup": "bash scripts/pg-backup.sh",
+    "db:restore": "bash scripts/pg-restore.sh"
   },
   "devDependencies": {
     "prisma": "^6.2.1",
