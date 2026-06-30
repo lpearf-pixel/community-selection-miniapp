@@ -211,7 +211,7 @@ export function App() {
   }
 
   async function markOrder(order: Order, nextStatus: string) {
-    await fetchJson<Order>(`/api/orders/${order.id}/complete`, {
+    await fetchJson<Order>(`/api/orders/${order.id}/status`, {
       method: 'POST',
       body: JSON.stringify({ next_status: nextStatus })
     });
