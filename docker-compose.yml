@@ -14,5 +14,41 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  api:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/community_selection?schema=public
+      PORT: 13080
+      WECHAT_PAY_MODE: mock
+      MOCK_WECHAT_PAY: "true"
+      ADMIN_AUTH_ENABLED: "false"
+      AUTO_PAYOUT_ENABLED: "false"
+      AUTO_TAX_FILING_ENABLED: "false"
+    ports:
+      - "13080:13080"
+    volumes:
+      - .:/app
+    command: sh -lc "corepack enable && pnpm install && pnpm db:generate && pnpm db:migrate && pnpm db:seed && pnpm --filter @community-selection/api dev"
+
+  admin:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      - api
+    environment:
+      VITE_API_BASE_URL: http://localhost:13080
+    ports:
+      - "13081:13081"
+    volumes:
+      - .:/app
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @community-selection/admin dev -- --host 0.0.0.0 --port 13081"
+
 volumes:
   postgres-data:

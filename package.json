@@ -11,7 +11,12 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio --schema prisma/schema.prisma"
+    "db:studio": "prisma studio --schema prisma/schema.prisma",
+    "env:check": "tsx scripts/validate-env.ts",
+    "migrations:check": "tsx scripts/check-migrations.ts",
+    "compliance:scan": "tsx scripts/compliance-scan.ts",
+    "verify:all": "bash scripts/verify-all-local.sh",
+    "seed:check": "tsx scripts/check-seed-data.ts"
   },
   "devDependencies": {
     "prisma": "^6.2.1",
