@@ -4,7 +4,7 @@ import { formatYuan } from '@community-selection/shared';
 
 type CommissionType = 'none' | 'fixed' | 'percent';
 type ProductStatus = 'draft' | 'active' | 'inactive';
-type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'withdrawals' | 'alerts' | 'taxRecords';
+type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'fulfillment' | 'withdrawals' | 'alerts' | 'taxRecords';
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 
@@ -87,6 +87,18 @@ type TaxRecord = {
   amount_cents: number;
 };
 
+
+type FulfillmentOverview = {
+  today_group_buys: number;
+  pending_prepare_orders: number;
+  ready_pickup_orders: number;
+  picked_orders: number;
+  completed_orders: number;
+  abnormal_orders: number;
+  by_community: Array<{ community_id: string; community_name: string; order_count: number; quantity: number; amount_cents: number }>;
+  by_product: Array<{ product_id: string; product_name: string; quantity: number; order_count: number }>;
+};
+
 type AiContext = {
   order: Order;
   timeline: Array<{ id: string; event_type: string; title: string; created_at: string }>;
@@ -127,6 +139,7 @@ export function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [groupBuys, setGroupBuys] = useState<GroupBuy[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [fulfillmentOverview, setFulfillmentOverview] = useState<FulfillmentOverview | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
@@ -140,15 +153,17 @@ export function App() {
       fetchJson<{ items: Product[] }>('/api/products'),
       fetchJson<GroupBuy[]>('/api/group-buys'),
       fetchJson<Order[]>('/api/orders'),
+      fetchJson<FulfillmentOverview>('/api/admin/fulfillment/overview'),
       fetchJson<Withdrawal[]>('/api/admin/withdrawals'),
       fetchJson<OpsAlert[]>('/api/admin/logs/alerts'),
       fetchJson<TaxRecord[]>('/api/admin/tax-records')
     ])
-      .then(([categoryData, productData, groupBuyData, orderData, withdrawalData, alertData, taxRecordData]) => {
+      .then(([categoryData, productData, groupBuyData, orderData, fulfillmentData, withdrawalData, alertData, taxRecordData]) => {
         setCategories(categoryData);
         setProducts(productData.items);
         setGroupBuys(groupBuyData);
         setOrders(orderData);
+        setFulfillmentOverview(fulfillmentData);
         setWithdrawals(withdrawalData);
         setAlerts(alertData);
         setTaxRecords(taxRecordData);
@@ -239,6 +254,31 @@ export function App() {
     refresh();
   }
 
+
+  function exportPicking(format: 'summary' | 'detail') {
+    window.location.href = `${apiBaseUrl}/api/orders/export/picking.csv?format=${format}`;
+  }
+
+  async function pickupVerify(order: Order) {
+    await fetchJson(`/api/admin/orders/${order.id}/pickup-verify`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_remark: '后台核销自提' })
+    });
+    setMessage(`订单 ${order.order_no} 已核销自提`);
+    refresh();
+  }
+
+  async function cloneGroupBuy(groupBuy: GroupBuy) {
+    const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const pickupTime = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    await fetchJson(`/api/group-buys/${groupBuy.id}/clone`, {
+      method: 'POST',
+      body: JSON.stringify({ end_time: endTime, pickup_time: pickupTime })
+    });
+    setMessage('已一键再开团');
+    refresh();
+  }
+
   async function markOrder(order: Order, nextStatus: string) {
     await fetchJson<Order>(`/api/orders/${order.id}/status`, {
       method: 'POST',
@@ -277,6 +317,7 @@ export function App() {
             <Button onClick={() => setView('products')}>商品管理</Button>
             <Button onClick={() => setView('groupBuys')}>团购管理</Button>
             <Button onClick={() => setView('orders')}>订单管理</Button>
+            <Button onClick={() => setView('fulfillment')}>履约看板</Button>
             <Button onClick={() => setView('withdrawals')}>提现管理</Button>
             <Button onClick={() => setView('alerts')}>告警中心</Button>
             <Button onClick={() => setView('taxRecords')}>税务记录</Button>
@@ -373,14 +414,25 @@ export function App() {
                 { title: '人数', render: (_: unknown, groupBuy: GroupBuy) => `${groupBuy.current_people}/${groupBuy.min_people}` },
                 { title: '数量', render: (_: unknown, groupBuy: GroupBuy) => `${groupBuy.current_quantity}/${groupBuy.min_quantity}` },
                 { title: '状态', dataIndex: 'status' },
-                { title: '截止时间', render: (_: unknown, groupBuy: GroupBuy) => new Date(groupBuy.end_time).toLocaleString() }
+                { title: '截止时间', render: (_: unknown, groupBuy: GroupBuy) => new Date(groupBuy.end_time).toLocaleString() },
+                { title: '操作', render: (_: unknown, groupBuy: GroupBuy) => <Button onClick={() => cloneGroupBuy(groupBuy)}>一键再开团</Button> }
               ]}
             />
           </Card>
         ) : null}
 
+        {view === 'fulfillment' && fulfillmentOverview ? (
+          <Card title="履约看板">
+            <Typography.Paragraph>今日团购：{fulfillmentOverview.today_group_buys}；待备货：{fulfillmentOverview.pending_prepare_orders}；待自提：{fulfillmentOverview.ready_pickup_orders}；已自提：{fulfillmentOverview.picked_orders}；已完成：{fulfillmentOverview.completed_orders}；异常：{fulfillmentOverview.abnormal_orders}</Typography.Paragraph>
+            <Typography.Title level={4}>按社区</Typography.Title>
+            <Table rowKey="community_id" dataSource={fulfillmentOverview.by_community} pagination={false} columns={[{ title: '社区', dataIndex: 'community_name' }, { title: '订单数', dataIndex: 'order_count' }, { title: '数量', dataIndex: 'quantity' }, { title: '金额', render: (_: unknown, item: { amount_cents: number }) => `¥${formatYuan(item.amount_cents)}` }]} />
+            <Typography.Title level={4}>按商品</Typography.Title>
+            <Table rowKey="product_id" dataSource={fulfillmentOverview.by_product} pagination={false} columns={[{ title: '商品', dataIndex: 'product_name' }, { title: '数量', dataIndex: 'quantity' }, { title: '订单数', dataIndex: 'order_count' }]} />
+          </Card>
+        ) : null}
+
         {view === 'orders' ? (
-          <Card title="订单列表" extra={<Button onClick={() => { window.location.href = `${apiBaseUrl}/api/orders/export/picking.csv`; }}>导出分拣单 CSV</Button>}>
+          <Card title="订单列表" extra={<Space><Button onClick={() => exportPicking('detail')}>导出明细分拣单 CSV</Button><Button onClick={() => exportPicking('summary')}>导出汇总分拣单 CSV</Button></Space>}>
             <Table
               rowKey="id"
               dataSource={orders}
@@ -399,6 +451,7 @@ export function App() {
                       <Button onClick={() => loadOrderContext(order)}>详情</Button>
                       <Button onClick={() => markOrder(order, 'preparing')}>备货中</Button>
                       <Button onClick={() => markOrder(order, 'ready')}>待自提</Button>
+                      <Button onClick={() => pickupVerify(order)}>核销自提</Button>
                       <Button onClick={() => markOrder(order, 'picked')}>已自提</Button>
                       <Button onClick={() => markOrder(order, 'completed')}>完成</Button>
                     </Space>

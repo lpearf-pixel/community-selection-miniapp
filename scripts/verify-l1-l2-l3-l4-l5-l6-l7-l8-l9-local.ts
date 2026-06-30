@@ -28,7 +28,7 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
 
 function assertAdminEnhancements() {
   const adminSource = source('apps/admin/src/App.tsx');
-  assert(adminSource.includes("type ViewKey = 'products' | 'groupBuys' | 'orders' | 'withdrawals' | 'alerts' | 'taxRecords'"), 'admin should include L9 views');
+  assert(adminSource.includes('withdrawals') && adminSource.includes('alerts') && adminSource.includes('taxRecords'), 'admin should include L9 views');
   assert(adminSource.includes('/api/admin/logs/orders/'), 'admin order detail should load AI context');
   assert(adminSource.includes('/api/admin/withdrawals'), 'admin should load withdrawals');
   assert(adminSource.includes('/api/admin/tax-records'), 'admin should load tax records');

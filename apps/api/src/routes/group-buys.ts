@@ -36,6 +36,9 @@ type UpdateOrderStatusBody = {
   next_status?: 'preparing' | 'ready' | 'picked' | 'delivered' | 'completed';
 };
 
+type CloneGroupBuyBody = { end_time?: string; pickup_time?: string; price_cents?: number };
+type PickingCsvQuery = { date?: string; community_id?: string; group_buy_id?: string; format?: 'summary' | 'detail' };
+
 function positiveInt(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -47,6 +50,26 @@ function makeOrderNo(): string {
 
 function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function dayRange(dateText?: string) {
+  const base = dateText ? new Date(`${dateText}T00:00:00.000Z`) : undefined;
+  if (dateText && (!base || Number.isNaN(base.getTime()))) throw new Error('日期格式不合法');
+  if (!base) return undefined;
+  const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 0, 0, 0, 0));
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
+function maskPhone(phone: string) {
+  return phone.length >= 7 ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : '****';
+}
+
+function csvLine(values: unknown[]) {
+  return values.map((value) => `"${String(value ?? '').replaceAll('\"', '\"\"')}"`).join(',');
+}
+
+function validPaidOrderWhere() {
+  return { order_status: { in: ['paid', 'grouped', 'preparing', 'ready', 'picked', 'completed'] as const } };
 }
 
 async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
@@ -345,6 +368,58 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     return ok(groupBuy);
   });
 
+  app.post('/api/group-buys/:id/clone', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const body = request.body as CloneGroupBuyBody;
+      const endTime = body.end_time ? new Date(body.end_time) : null;
+      const pickupTime = body.pickup_time ? new Date(body.pickup_time) : null;
+      if (!endTime || Number.isNaN(endTime.getTime()) || endTime.getTime() <= Date.now()) throw new Error('团购截止时间必须晚于当前时间');
+      if (!pickupTime || Number.isNaN(pickupTime.getTime()) || pickupTime.getTime() <= endTime.getTime()) throw new Error('自提时间必须晚于团购截止时间');
+      const cloned = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const source = await tx.groupBuy.findUnique({ where: { id } });
+        if (!source) throw new Error('原团购不存在');
+        const created = await tx.groupBuy.create({
+          data: {
+            product_id: source.product_id,
+            leader_user_id: source.leader_user_id,
+            community_id: source.community_id,
+            min_people: source.min_people,
+            min_quantity: source.min_quantity,
+            price_cents: body.price_cents ?? source.price_cents,
+            start_time: new Date(),
+            end_time: endTime,
+            pickup_time: pickupTime,
+            status: 'pending'
+          }
+        });
+        await safeRecordBusinessEvent(tx, {
+          event_type: 'group_buy_cloned',
+          event_source: 'group-buys-route',
+          group_buy_id: created.id,
+          leader_user_id: source.leader_user_id,
+          payload: { source_group_buy_id: source.id }
+        });
+        await tx.adminAuditLog.create({
+          data: {
+            admin_user_id: request.adminUser?.id ?? null,
+            action: 'group_buy_cloned',
+            target_type: 'GroupBuy',
+            target_id: created.id,
+            ip_address: request.ip,
+            user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+            payload: { source_group_buy_id: source.id }
+          }
+        });
+        return created;
+      });
+      return ok(cloned);
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '一键再开团失败');
+    }
+  });
+
   app.post('/api/group-buys/:id/join', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -354,6 +429,43 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '参团失败');
+    }
+  });
+
+  app.get('/api/leaders/me/dashboard', async (request, reply) => {
+    try {
+      const query = request.query as { leader_user_id?: string; openid?: string };
+      const leader = query.leader_user_id
+        ? await prisma.user.findUnique({ where: { id: query.leader_user_id } })
+        : await prisma.user.findUnique({ where: { openid: query.openid ?? '' } });
+      if (!leader || leader.role !== 'leader') throw new Error('开团人不存在');
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+      const [activeGroupBuys, orders, commissions, conversions] = await Promise.all([
+        prisma.groupBuy.count({ where: { leader_user_id: leader.id, status: { in: ['pending', 'success', 'preparing', 'ready'] } } }),
+        prisma.order.findMany({ where: { leader_user_id: leader.id, order_status: { in: ['paid', 'grouped', 'preparing', 'ready', 'picked', 'completed'] } } }),
+        prisma.commission.findMany({ where: { leader_user_id: leader.id } }),
+        prisma.rewardConversion.findMany({ where: { leader_user_id: leader.id, status: 'success' } })
+      ]);
+      const effectiveAmount = (order: { pay_amount_cents: number; refund_amount_cents: number }) => Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
+      const todayOrders = orders.filter((order) => order.created_at >= todayStart && order.created_at < todayEnd);
+      const sumCommission = (status: string) => commissions.filter((item) => item.status === status).reduce((sum, item) => sum + item.final_amount_cents, 0);
+      return ok({
+        active_group_buys: activeGroupBuys,
+        today_orders: todayOrders.length,
+        today_amount_cents: todayOrders.reduce((sum, order) => sum + effectiveAmount(order), 0),
+        total_orders: orders.length,
+        total_amount_cents: orders.reduce((sum, order) => sum + effectiveAmount(order), 0),
+        pending_commission_cents: sumCommission('pending'),
+        available_commission_cents: sumCommission('available'),
+        withdrawing_commission_cents: sumCommission('withdrawing'),
+        withdrawn_commission_cents: sumCommission('withdrawn'),
+        converted_credit_cents: conversions.reduce((sum, item) => sum + item.amount_cents, 0)
+      });
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '查询开团人看板失败');
     }
   });
 
@@ -375,24 +487,50 @@ export function registerGroupBuyRoutes(app: FastifyInstance) {
     return ok(orders);
   });
 
-  app.get('/api/orders/export/picking.csv', async (_request, reply) => {
-    const orders = await prisma.order.findMany({
-      where: { order_status: { in: ['paid', 'grouped', 'preparing', 'ready'] } },
-      include: { group_buy: { include: { product: true, community: true } }, pickup_store: true },
-      orderBy: { created_at: 'desc' }
-    });
-    const header = '订单号,商品,社区,收货人,手机号,状态,金额(元)';
-    const rows = orders.map((order) => [
-      order.order_no,
-      order.group_buy?.product?.name ?? '',
-      order.group_buy?.community?.name ?? '',
-      order.receiver_name,
-      order.receiver_phone,
-      order.order_status,
-      (order.pay_amount_cents / 100).toFixed(2)
-    ].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','));
-    reply.header('Content-Type', 'text/csv; charset=utf-8');
-    return [header, ...rows].join('\n');
+  app.get('/api/orders/export/picking.csv', async (request, reply) => {
+    try {
+      const query = request.query as PickingCsvQuery;
+      const range = dayRange(query.date);
+      const orders = await prisma.order.findMany({
+        where: {
+          ...validPaidOrderWhere(),
+          ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
+          ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
+        },
+        include: { group_buy: { include: { product: true, community: true } }, pickup_store: true },
+        orderBy: { created_at: 'desc' }
+      });
+      reply.header('Content-Type', 'text/csv; charset=utf-8');
+      if (query.format === 'summary') {
+        const summary = new Map<string, { community_name: string; product_name: string; total_quantity: number; order_count: number }>();
+        for (const order of orders) {
+          const communityName = order.group_buy?.community?.name ?? '';
+          const productName = order.group_buy?.product?.name ?? '';
+          const key = `${communityName}::${productName}`;
+          const item = summary.get(key) ?? { community_name: communityName, product_name: productName, total_quantity: 0, order_count: 0 };
+          item.total_quantity += order.quantity;
+          item.order_count += 1;
+          summary.set(key, item);
+        }
+        return ['community_name,product_name,total_quantity,order_count', ...[...summary.values()].map((item) => csvLine([item.community_name, item.product_name, item.total_quantity, item.order_count]))].join('\n');
+      }
+      const header = 'order_no,community_name,product_name,quantity,receiver_name,receiver_phone_masked,pickup_store_name,order_status,remark';
+      const rows = orders.map((order) => csvLine([
+        order.order_no,
+        order.group_buy?.community?.name ?? '',
+        order.group_buy?.product?.name ?? '',
+        order.quantity,
+        order.receiver_name,
+        maskPhone(order.receiver_phone),
+        order.pickup_store?.name ?? '',
+        order.order_status,
+        ''
+      ]));
+      return [header, ...rows].join('\n');
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '导出分拣单失败');
+    }
   });
 
   app.get('/api/orders/:id', async (request, reply) => {

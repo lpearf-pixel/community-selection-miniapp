@@ -8,6 +8,7 @@ import { registerCommissionRoutes } from './routes/commissions.js';
 import { registerLogRoutes } from './routes/logs.js';
 import { registerWithdrawalRoutes } from './routes/withdrawals.js';
 import { registerRewardRoutes } from './routes/rewards.js';
+import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerAdminAuthRoutes, requireAdminSession } from './routes/admin-auth.js';
 
 export function buildApp() {
@@ -43,6 +44,7 @@ export function buildApp() {
   registerRefundRoutes(app);
   registerCommissionRoutes(app);
   registerLogRoutes(app);
+  registerFulfillmentRoutes(app);
   registerWithdrawalRoutes(app);
   registerRewardRoutes(app);
 

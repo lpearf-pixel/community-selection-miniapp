@@ -116,6 +116,20 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
+  it('registers L12 fulfillment and operations routes', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const fulfillmentRoutes = readFileSync(new URL('../src/routes/fulfillment.ts', import.meta.url), 'utf8');
+    const groupBuySource = readFileSync(new URL('../src/routes/group-buys.ts', import.meta.url), 'utf8');
+    expect(appSource.includes('registerFulfillmentRoutes')).toBe(true);
+    expect(fulfillmentRoutes.includes('/api/admin/fulfillment/overview')).toBe(true);
+    expect(fulfillmentRoutes.includes('/api/admin/orders/:id/pickup-verify')).toBe(true);
+    expect(fulfillmentRoutes.includes('pickup_verified')).toBe(true);
+    expect(groupBuySource.includes('/api/group-buys/:id/clone')).toBe(true);
+    expect(groupBuySource.includes('/api/leaders/me/dashboard')).toBe(true);
+    expect(groupBuySource.includes('receiver_phone_masked')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
