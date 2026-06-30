@@ -7,9 +7,8 @@ import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../services/lo
 type OverviewQuery = { date?: string };
 
 type PickupVerifyBody = { admin_remark?: string };
-type DeliveryVerifyBody = { admin_remark?: string; delivered_by?: string };
 
-const effectiveOrderStatuses = ['paid', 'grouped', 'preparing', 'ready', 'picked', 'delivered', 'completed'] as const;
+const effectiveOrderStatuses = ['paid', 'grouped', 'preparing', 'ready', 'picked', 'completed'] as const;
 
 function dayRange(dateText?: string) {
   const base = dateText ? new Date(`${dateText}T00:00:00.000Z`) : new Date();
@@ -63,7 +62,6 @@ export function registerFulfillmentRoutes(app: FastifyInstance) {
         pending_prepare_orders: orders.filter((order) => order.order_status === 'paid' || order.order_status === 'grouped').length,
         ready_pickup_orders: orders.filter((order) => order.order_status === 'ready').length,
         picked_orders: orders.filter((order) => order.order_status === 'picked').length,
-        delivered_orders: orders.filter((order) => order.order_status === 'delivered').length,
         completed_orders: orders.filter((order) => order.order_status === 'completed').length,
         abnormal_orders: orders.filter((order) => order.refund_status !== 'none').length,
         by_community: [...byCommunity.values()],
@@ -120,39 +118,6 @@ export function registerFulfillmentRoutes(app: FastifyInstance) {
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '自提核销失败');
-    }
-  });
-
-
-  app.post('/api/admin/orders/:id/delivery-verify', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string };
-      const body = request.body as DeliveryVerifyBody;
-      const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const existing = await tx.order.findUnique({ where: { id } });
-        if (!existing) throw new Error('订单不存在');
-        if (existing.order_status === 'delivered') return existing;
-        if (existing.order_status !== 'ready') throw new Error('当前订单不可核销配送');
-        const updated = await tx.order.update({ where: { id }, data: { order_status: 'delivered' } });
-        const payload = { admin_remark: body.admin_remark ?? null, delivered_by: body.delivered_by ?? null };
-        await safeRecordOrderTimeline(tx, {
-          order_id: id,
-          event_type: 'delivery_verified',
-          title: '配送已核销',
-          from_status: existing.order_status,
-          to_status: 'delivered',
-          actor_type: 'admin',
-          actor_user_id: request.adminUser?.id ?? null,
-          payload
-        });
-        await safeRecordBusinessEvent(tx, { event_type: 'delivery_verified', event_source: 'fulfillment-route', order_id: id, before_snapshot: existing, after_snapshot: updated, payload });
-        await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'order_delivery_verified', target_type: 'Order', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload } });
-        return updated;
-      });
-      return ok(order);
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '配送核销失败');
     }
   });
 

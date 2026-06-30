@@ -168,7 +168,7 @@ async function buildPickingCsv(query: PickingCsvQuery) {
 }
 
 function validPaidOrderWhere() {
-  return { order_status: { in: ['paid', 'grouped', 'preparing', 'ready', 'picked', 'delivered', 'completed'] as const } };
+  return { order_status: { in: ['paid', 'grouped', 'preparing', 'ready', 'picked', 'completed'] as const } };
 }
 
 async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {

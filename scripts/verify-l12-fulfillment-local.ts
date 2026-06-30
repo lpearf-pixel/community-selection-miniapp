@@ -56,7 +56,6 @@ async function main() {
   const overview = await json(await adminGet('/api/admin/fulfillment/overview', adminCookie));
   assert(overview.by_community.some((item: any) => item.community_id === community.id && item.quantity >= 2), 'overview should include community quantity');
   assert(overview.by_product.some((item: any) => item.product_id === product.id && item.quantity >= 2), 'overview should include product quantity');
-  assert('delivered_orders' in overview, 'overview should include delivered order count');
 
   const unauthorizedCsv = await app.inject({ method: 'GET', url: '/api/admin/orders/export/picking.csv?format=detail' });
   assert(unauthorizedCsv.statusCode === 401, 'admin picking csv should require a session cookie');
@@ -72,26 +71,18 @@ async function main() {
   assert(picked.order_status === 'picked', 'ready order should become picked');
   const pickedAgain = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { admin_remark: '重复核销' }, adminCookie);
   assert(pickedAgain.order_status === 'picked', 'picked order should be idempotent');
-  const deliveryOrder = await prisma.order.create({ data: { order_no: `${prefix}-delivery`, user_id: user.id, leader_user_id: leader.id, group_buy_id: groupBuy.id, total_amount_cents: 1200, pay_amount_cents: 1200, quantity: 1, receiver_name: '王五', receiver_phone: '13712345678', order_status: 'ready', pay_status: 'paid' } });
-  const delivered = await adminPost(`/api/admin/orders/${deliveryOrder.id}/delivery-verify`, { admin_remark: '已送达', delivered_by: '配送员A' }, adminCookie);
-  assert(delivered.order_status === 'delivered', 'ready delivery order should become delivered');
-  const deliveredAgain = await adminPost(`/api/admin/orders/${deliveryOrder.id}/delivery-verify`, { admin_remark: '重复配送核销' }, adminCookie);
-  assert(deliveredAgain.order_status === 'delivered', 'delivered order should be idempotent');
+
 
   const closedOrder = await prisma.order.create({ data: { order_no: `${prefix}-closed`, user_id: user.id, leader_user_id: leader.id, group_buy_id: groupBuy.id, total_amount_cents: 100, pay_amount_cents: 100, quantity: 1, receiver_name: '李四', receiver_phone: '13912345678', order_status: 'closed', pay_status: 'closed' } });
   const closedVerify = await app.inject({ method: 'POST', url: `/api/admin/orders/${closedOrder.id}/pickup-verify`, payload: { admin_remark: '不可核销' }, headers: { cookie: adminCookie } });
   assert(closedVerify.statusCode === 400, 'closed order should not pickup-verify');
 
-  const [timeline, businessEvent, auditLog, deliveryTimeline, deliveryBusinessEvent, deliveryAuditLog] = await Promise.all([
+  const [timeline, businessEvent, auditLog] = await Promise.all([
     prisma.orderTimelineLog.findFirst({ where: { order_id: order.id, event_type: 'pickup_verified' } }),
     prisma.businessEventLog.findFirst({ where: { order_id: order.id, event_type: 'pickup_verified' } }),
-    prisma.adminAuditLog.findFirst({ where: { target_id: order.id, action: 'order_pickup_verified' } }),
-    prisma.orderTimelineLog.findFirst({ where: { order_id: deliveryOrder.id, event_type: 'delivery_verified' } }),
-    prisma.businessEventLog.findFirst({ where: { order_id: deliveryOrder.id, event_type: 'delivery_verified' } }),
-    prisma.adminAuditLog.findFirst({ where: { target_id: deliveryOrder.id, action: 'order_delivery_verified' } })
+    prisma.adminAuditLog.findFirst({ where: { target_id: order.id, action: 'order_pickup_verified' } })
   ]);
   assert(timeline && businessEvent && auditLog, 'pickup verify should write timeline, business event and admin audit');
-  assert(deliveryTimeline && deliveryBusinessEvent && deliveryAuditLog, 'delivery verify should write timeline, business event and admin audit');
 
   const dashboard = await json(await app.inject({ method: 'GET', url: `/api/leaders/me/dashboard?leader_user_id=${leader.id}` }));
   assert(dashboard.total_orders >= 1 && dashboard.total_amount_cents >= 0, 'leader dashboard should aggregate orders and amount');

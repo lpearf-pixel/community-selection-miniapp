@@ -93,7 +93,6 @@ type FulfillmentOverview = {
   pending_prepare_orders: number;
   ready_pickup_orders: number;
   picked_orders: number;
-  delivered_orders: number;
   completed_orders: number;
   abnormal_orders: number;
   by_community: Array<{ community_id: string; community_name: string; order_count: number; quantity: number; amount_cents: number }>;
@@ -269,14 +268,6 @@ export function App() {
     refresh();
   }
 
-  async function deliveryVerify(order: Order) {
-    await fetchJson(`/api/admin/orders/${order.id}/delivery-verify`, {
-      method: 'POST',
-      body: JSON.stringify({ admin_remark: '后台核销配送', delivered_by: '后台运营' })
-    });
-    setMessage(`订单 ${order.order_no} 已核销配送`);
-    refresh();
-  }
 
   async function cloneGroupBuy(groupBuy: GroupBuy) {
     const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -433,7 +424,7 @@ export function App() {
 
         {view === 'fulfillment' && fulfillmentOverview ? (
           <Card title="履约看板">
-            <Typography.Paragraph>今日团购：{fulfillmentOverview.today_group_buys}；待备货：{fulfillmentOverview.pending_prepare_orders}；待自提：{fulfillmentOverview.ready_pickup_orders}；已自提：{fulfillmentOverview.picked_orders}；已配送：{fulfillmentOverview.delivered_orders}；已完成：{fulfillmentOverview.completed_orders}；异常：{fulfillmentOverview.abnormal_orders}</Typography.Paragraph>
+            <Typography.Paragraph>今日团购：{fulfillmentOverview.today_group_buys}；待备货：{fulfillmentOverview.pending_prepare_orders}；待自提：{fulfillmentOverview.ready_pickup_orders}；已自提：{fulfillmentOverview.picked_orders}；已完成：{fulfillmentOverview.completed_orders}；异常：{fulfillmentOverview.abnormal_orders}</Typography.Paragraph>
             <Typography.Title level={4}>按社区</Typography.Title>
             <Table rowKey="community_id" dataSource={fulfillmentOverview.by_community} pagination={false} columns={[{ title: '社区', dataIndex: 'community_name' }, { title: '订单数', dataIndex: 'order_count' }, { title: '数量', dataIndex: 'quantity' }, { title: '金额', render: (_: unknown, item: { amount_cents: number }) => `¥${formatYuan(item.amount_cents)}` }]} />
             <Typography.Title level={4}>按商品</Typography.Title>
@@ -462,9 +453,7 @@ export function App() {
                       <Button onClick={() => markOrder(order, 'preparing')}>备货中</Button>
                       <Button onClick={() => markOrder(order, 'ready')}>待自提</Button>
                       <Button onClick={() => pickupVerify(order)}>核销自提</Button>
-                      <Button onClick={() => deliveryVerify(order)}>核销配送</Button>
                       <Button onClick={() => markOrder(order, 'picked')}>已自提</Button>
-                      <Button onClick={() => markOrder(order, 'delivered')}>已配送</Button>
                       <Button onClick={() => markOrder(order, 'completed')}>完成</Button>
                     </Space>
                   )
