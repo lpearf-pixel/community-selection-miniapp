@@ -10,6 +10,7 @@ import { registerWithdrawalRoutes } from './routes/withdrawals.js';
 import { registerRewardRoutes } from './routes/rewards.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerInventoryRoutes } from './routes/inventory.js';
+import { registerSupplierRoutes } from './routes/suppliers.js';
 import { registerAdminAuthRoutes, requireAdminSession } from './routes/admin-auth.js';
 
 export function buildApp() {
@@ -49,6 +50,7 @@ export function buildApp() {
   registerWithdrawalRoutes(app);
   registerRewardRoutes(app);
   registerInventoryRoutes(app);
+  registerSupplierRoutes(app);
 
   return app;
 }

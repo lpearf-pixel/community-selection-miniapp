@@ -4,7 +4,7 @@ import { formatYuan } from '@community-selection/shared';
 
 type CommissionType = 'none' | 'fixed' | 'percent';
 type ProductStatus = 'draft' | 'active' | 'inactive';
-type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'fulfillment' | 'inventory' | 'purchasePlans' | 'withdrawals' | 'alerts' | 'taxRecords';
+type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'fulfillment' | 'inventory' | 'purchasePlans' | 'suppliers' | 'batches' | 'expiryAlerts' | 'stockChecks' | 'withdrawals' | 'alerts' | 'taxRecords';
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 
@@ -151,6 +151,78 @@ type PurchasePlan = {
 };
 
 
+type Supplier = {
+  id: string;
+  name: string;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  status: string;
+  remark?: string | null;
+};
+
+type ProductBatch = {
+  id: string;
+  batch_no: string;
+  product_id: string;
+  product_name_snapshot: string;
+  supplier_name_snapshot?: string | null;
+  stock_unit: string;
+  initial_quantity: number;
+  remaining_quantity: number;
+  arrival_date: string;
+  expire_at?: string | null;
+  shelf_life_days?: number | null;
+  status: string;
+  days_to_expire?: number | null;
+  status_hint?: string;
+};
+
+type BatchStockLedger = {
+  id: string;
+  source_type: string;
+  direction: string;
+  quantity: number;
+  batch_quantity_before: number;
+  batch_quantity_after: number;
+  product_stock_before?: number | null;
+  product_stock_after?: number | null;
+  remark?: string | null;
+};
+
+type ExpiryAlert = {
+  batch_id: string;
+  batch_no: string;
+  product_id: string;
+  product_name: string;
+  supplier_name?: string | null;
+  remaining_quantity: number;
+  stock_unit: string;
+  expire_at?: string | null;
+  days_to_expire?: number | null;
+  status_hint: string;
+};
+
+type StockCheckItem = {
+  id: string;
+  product_id: string;
+  batch_id?: string | null;
+  book_quantity: number;
+  actual_quantity: number;
+  diff_quantity: number;
+  stock_unit: string;
+  reason?: string | null;
+};
+
+type StockCheck = {
+  id: string;
+  check_no: string;
+  status: string;
+  remark?: string | null;
+  created_at: string;
+  confirmed_at?: string | null;
+  items: StockCheckItem[];
+};
+
 type FulfillmentOverview = {
   today_group_buys: number;
   pending_prepare_orders: number;
@@ -210,6 +282,11 @@ export function App() {
   const [inventoryOverview, setInventoryOverview] = useState<InventoryOverview | null>(null);
   const [stockLedgers, setStockLedgers] = useState<StockLedger[]>([]);
   const [purchasePlans, setPurchasePlans] = useState<PurchasePlan[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [batches, setBatches] = useState<ProductBatch[]>([]);
+  const [batchLedgers, setBatchLedgers] = useState<BatchStockLedger[]>([]);
+  const [expiryAlerts, setExpiryAlerts] = useState<ExpiryAlert[]>([]);
+  const [stockChecks, setStockChecks] = useState<StockCheck[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
@@ -226,11 +303,15 @@ export function App() {
       fetchJson<FulfillmentOverview>('/api/admin/fulfillment/overview'),
       fetchJson<InventoryOverview>('/api/admin/inventory/overview'),
       fetchJson<PurchasePlan[]>('/api/admin/purchase-plans'),
+      fetchJson<Supplier[]>('/api/admin/suppliers'),
+      fetchJson<ProductBatch[]>('/api/admin/inventory/batches'),
+      fetchJson<{ items: ExpiryAlert[] }>('/api/admin/inventory/expiry-alerts?days=7'),
+      fetchJson<StockCheck[]>('/api/admin/stock-checks'),
       fetchJson<Withdrawal[]>('/api/admin/withdrawals'),
       fetchJson<OpsAlert[]>('/api/admin/logs/alerts'),
       fetchJson<TaxRecord[]>('/api/admin/tax-records')
     ])
-      .then(([categoryData, productData, groupBuyData, orderData, fulfillmentData, inventoryData, purchasePlanData, withdrawalData, alertData, taxRecordData]) => {
+      .then(([categoryData, productData, groupBuyData, orderData, fulfillmentData, inventoryData, purchasePlanData, supplierData, batchData, expiryData, stockCheckData, withdrawalData, alertData, taxRecordData]) => {
         setCategories(categoryData);
         setProducts(productData.items);
         setGroupBuys(groupBuyData);
@@ -238,6 +319,10 @@ export function App() {
         setFulfillmentOverview(fulfillmentData);
         setInventoryOverview(inventoryData);
         setPurchasePlans(purchasePlanData);
+        setSuppliers(supplierData);
+        setBatches(batchData);
+        setExpiryAlerts(expiryData.items);
+        setStockChecks(stockCheckData);
         setWithdrawals(withdrawalData);
         setAlerts(alertData);
         setTaxRecords(taxRecordData);
@@ -419,6 +504,60 @@ export function App() {
     refresh();
   }
 
+  async function createSupplier() {
+    const name = window.prompt('请输入供应商名称');
+    if (!name) return;
+    const contactName = window.prompt('请输入联系人', '') ?? '';
+    const contactPhone = window.prompt('请输入联系电话', '') ?? '';
+    const remark = window.prompt('请输入备注', '') ?? '';
+    await fetchJson('/api/admin/suppliers', { method: 'POST', body: JSON.stringify({ name, contact_name: contactName, contact_phone: contactPhone, remark }) });
+    setMessage('供应商已创建');
+    refresh();
+  }
+
+  async function disableSupplier(supplier: Supplier) {
+    await fetchJson(`/api/admin/suppliers/${supplier.id}/disable`, { method: 'POST' });
+    setMessage('供应商已禁用');
+    refresh();
+  }
+
+  async function loadBatchLedger(batch: ProductBatch) {
+    const ledgers = await fetchJson<BatchStockLedger[]>(`/api/admin/inventory/batches/${batch.id}/ledger`);
+    setBatchLedgers(ledgers);
+    setMessage(`已加载批次 ${batch.batch_no} 流水`);
+  }
+
+  async function recordBatchLoss(batch: ProductBatch) {
+    const quantityText = window.prompt(`请输入损耗数量（${batch.stock_unit}）`, '1');
+    if (!quantityText) return;
+    const lossType = window.prompt('请输入损耗类型：damaged / expired / weight_loss / bad_fruit / manual_loss / other', 'bad_fruit');
+    if (!lossType) return;
+    const reason = window.prompt('请输入损耗原因', '坏果损耗');
+    if (!reason) return;
+    await fetchJson(`/api/admin/inventory/batches/${batch.id}/loss`, { method: 'POST', body: JSON.stringify({ quantity: Number(quantityText), loss_type: lossType, reason, responsible_type: 'supplier' }) });
+    setMessage('损耗已记录');
+    refresh();
+  }
+
+  async function createStockCheck() {
+    const defaultBatchId = batches[0]?.id ?? '';
+    const batchId = window.prompt('请输入批次 ID（留空则按商品总库存盘点）', defaultBatchId) ?? '';
+    const productId = batchId ? undefined : window.prompt('请输入商品 ID', inventoryOverview?.items[0]?.product_id ?? '') ?? '';
+    if (!batchId && !productId) return;
+    const actualText = window.prompt('请输入实际库存数量（基础库存单位）', '0');
+    if (actualText === null) return;
+    const reason = window.prompt('请输入盘点原因', '后台盘点') ?? '';
+    await fetchJson('/api/admin/stock-checks', { method: 'POST', body: JSON.stringify({ remark: '后台创建盘点', items: [{ batch_id: batchId || undefined, product_id: productId || undefined, actual_quantity: Number(actualText), reason }] }) });
+    setMessage('盘点单已创建');
+    refresh();
+  }
+
+  async function confirmStockCheck(check: StockCheck) {
+    await fetchJson(`/api/admin/stock-checks/${check.id}/confirm`, { method: 'POST' });
+    setMessage('盘点单已确认');
+    refresh();
+  }
+
   async function cloneGroupBuy(groupBuy: GroupBuy) {
     const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const pickupTime = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
@@ -471,6 +610,10 @@ export function App() {
             <Button onClick={() => setView('fulfillment')}>履约看板</Button>
             <Button onClick={() => setView('inventory')}>库存管理</Button>
             <Button onClick={() => setView('purchasePlans')}>采购计划</Button>
+            <Button onClick={() => setView('suppliers')}>供应商管理</Button>
+            <Button onClick={() => setView('batches')}>批次库存</Button>
+            <Button onClick={() => setView('expiryAlerts')}>临期提醒</Button>
+            <Button onClick={() => setView('stockChecks')}>库存盘点</Button>
             <Button onClick={() => setView('withdrawals')}>提现管理</Button>
             <Button onClick={() => setView('alerts')}>告警中心</Button>
             <Button onClick={() => setView('taxRecords')}>税务记录</Button>
@@ -685,6 +828,79 @@ export function App() {
             <Table rowKey="id" dataSource={selectedOrderContext.business_events} pagination={false} columns={[{ title: '事件', dataIndex: 'event_type' }, { title: '级别', dataIndex: 'event_level' }, { title: '说明', dataIndex: 'message' }]} />
             <Typography.Title level={4}>OpsAlertLog</Typography.Title>
             <Table rowKey="id" dataSource={selectedOrderContext.alerts} pagination={false} columns={[{ title: '类型', dataIndex: 'alert_type' }, { title: '级别', dataIndex: 'alert_level' }, { title: '状态', dataIndex: 'status' }, { title: '标题', dataIndex: 'title' }]} />
+          </Card>
+        ) : null}
+
+        {view === 'suppliers' ? (
+          <Card title="供应商管理" extra={<Button onClick={createSupplier}>新增供应商</Button>}>
+            <Table
+              rowKey="id"
+              dataSource={suppliers}
+              columns={[
+                { title: '供应商', dataIndex: 'name' },
+                { title: '联系人', dataIndex: 'contact_name' },
+                { title: '电话', dataIndex: 'contact_phone' },
+                { title: '状态', dataIndex: 'status' },
+                { title: '备注', dataIndex: 'remark' },
+                { title: '操作', render: (_: unknown, supplier: Supplier) => <Button onClick={() => disableSupplier(supplier)}>禁用</Button> }
+              ]}
+            />
+          </Card>
+        ) : null}
+
+        {view === 'batches' ? (
+          <Card title="批次库存">
+            <Table
+              rowKey="id"
+              dataSource={batches}
+              columns={[
+                { title: '批次号', dataIndex: 'batch_no' },
+                { title: '商品', dataIndex: 'product_name_snapshot' },
+                { title: '供应商', dataIndex: 'supplier_name_snapshot' },
+                { title: '剩余数量', render: (_: unknown, batch: ProductBatch) => `${batch.remaining_quantity} ${batch.stock_unit}` },
+                { title: '到货日期', render: (_: unknown, batch: ProductBatch) => new Date(batch.arrival_date).toLocaleDateString() },
+                { title: '过期日期', render: (_: unknown, batch: ProductBatch) => batch.expire_at ? new Date(batch.expire_at).toLocaleDateString() : '-' },
+                { title: '状态', render: (_: unknown, batch: ProductBatch) => batch.status_hint ?? batch.status },
+                { title: '操作', render: (_: unknown, batch: ProductBatch) => <Space><Button onClick={() => recordBatchLoss(batch)}>记录损耗</Button><Button onClick={() => loadBatchLedger(batch)}>查看批次流水</Button></Space> }
+              ]}
+            />
+            {batchLedgers.length ? (
+              <Table rowKey="id" dataSource={batchLedgers} pagination={{ pageSize: 5 }} columns={[{ title: '类型', dataIndex: 'source_type' }, { title: '方向', dataIndex: 'direction' }, { title: '数量', dataIndex: 'quantity' }, { title: '批次调整前', dataIndex: 'batch_quantity_before' }, { title: '批次调整后', dataIndex: 'batch_quantity_after' }, { title: '备注', dataIndex: 'remark' }]} />
+            ) : null}
+          </Card>
+        ) : null}
+
+        {view === 'expiryAlerts' ? (
+          <Card title="临期提醒（7 天）">
+            <Table
+              rowKey="batch_id"
+              dataSource={expiryAlerts}
+              columns={[
+                { title: '批次号', dataIndex: 'batch_no' },
+                { title: '商品', dataIndex: 'product_name' },
+                { title: '供应商', dataIndex: 'supplier_name' },
+                { title: '剩余数量', render: (_: unknown, item: ExpiryAlert) => `${item.remaining_quantity} ${item.stock_unit}` },
+                { title: '过期日期', render: (_: unknown, item: ExpiryAlert) => item.expire_at ? new Date(item.expire_at).toLocaleDateString() : '-' },
+                { title: '剩余天数', dataIndex: 'days_to_expire' },
+                { title: '提示', dataIndex: 'status_hint' }
+              ]}
+            />
+          </Card>
+        ) : null}
+
+        {view === 'stockChecks' ? (
+          <Card title="库存盘点" extra={<Button onClick={createStockCheck}>新增盘点</Button>}>
+            <Table
+              rowKey="id"
+              dataSource={stockChecks}
+              columns={[
+                { title: '盘点单号', dataIndex: 'check_no' },
+                { title: '状态', dataIndex: 'status' },
+                { title: '备注', dataIndex: 'remark' },
+                { title: '明细', render: (_: unknown, check: StockCheck) => check.items.map((item) => `${item.batch_id ?? item.product_id}: ${item.book_quantity} -> ${item.actual_quantity} (${item.diff_quantity}) ${item.stock_unit}`).join('；') },
+                { title: '操作', render: (_: unknown, check: StockCheck) => <Button onClick={() => confirmStockCheck(check)}>确认</Button> }
+              ]}
+            />
           </Card>
         ) : null}
 

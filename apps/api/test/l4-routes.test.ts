@@ -135,8 +135,10 @@ describe('L4 group-buy and order routes', () => {
   it('registers L13 inventory and purchase routes and models', () => {
     const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
     const inventoryRoutes = readFileSync(new URL('../src/routes/inventory.ts', import.meta.url), 'utf8');
+    const supplierRoutes = readFileSync(new URL('../src/routes/suppliers.ts', import.meta.url), 'utf8');
     const schema = readFileSync(new URL('../../../prisma/schema.prisma', import.meta.url), 'utf8');
     expect(appSource.includes('registerInventoryRoutes')).toBe(true);
+    expect(appSource.includes('registerSupplierRoutes')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/overview')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/ledger')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/products/:id/adjust')).toBe(true);
@@ -150,6 +152,20 @@ describe('L4 group-buy and order routes', () => {
     expect(schema.includes('model PurchasePlanItem')).toBe(true);
     expect(schema.includes('stock_deduct_quantity')).toBe(true);
     expect(schema.includes('purchase_unit')).toBe(true);
+    expect(schema.includes('model Supplier')).toBe(true);
+    expect(schema.includes('model ProductBatch')).toBe(true);
+    expect(schema.includes('model BatchStockLedger')).toBe(true);
+    expect(schema.includes('model InventoryLoss')).toBe(true);
+    expect(schema.includes('model StockCheck')).toBe(true);
+    expect(supplierRoutes.includes('/api/admin/suppliers')).toBe(true);
+    expect(supplierRoutes.includes('supplier_created')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/inventory/batches')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/inventory/expiry-alerts')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/inventory/batches/:id/loss')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/stock-checks/:id/confirm')).toBe(true);
+    expect(inventoryRoutes.includes('purchase_batch_created')).toBe(true);
+    expect(inventoryRoutes.includes('inventory_loss_recorded')).toBe(true);
+    expect(inventoryRoutes.includes('stock_check_confirmed')).toBe(true);
   });
 
 
