@@ -99,7 +99,7 @@ async function main() {
 
   const paidResult = await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
   assert(paidResult.order.pay_status === 'paid', 'mock payment should mark order paid');
-  assert(['paid', 'preparing', 'ready', 'picked', 'completed'].includes(paidResult.order.order_status), `paid order status should be valid, got ${paidResult.order.order_status}`);
+  assert(['paid', 'grouped'].includes(paidResult.order.order_status), `mock payment should move order to paid or grouped before fulfillment, got ${paidResult.order.order_status}`);
 
   for (const nextStatus of ['preparing', 'ready', 'picked', 'completed']) {
     const updated = await json(await app.inject({ method: 'POST', url: `/api/orders/${order.id}/status`, payload: { next_status: nextStatus } }));
