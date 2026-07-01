@@ -7,7 +7,7 @@ type AdjustBody = { adjust_quantity?: number; reason?: string };
 type CreatePurchasePlanBody = {
   target_date?: string;
   supplier_name?: string;
-  items?: Array<{ product_id?: string; planned_quantity?: number; cost_price_cents?: number; remark?: string }>;
+  items?: Array<{ product_id?: string; planned_quantity?: number; cost_price_cents?: number; purchase_quantity?: number; purchase_unit?: string; stock_in_quantity?: number; remark?: string }>;
   remark?: string;
 };
 type ReceivePurchasePlanBody = { items?: Array<{ item_id?: string; received_quantity?: number }>; remark?: string };
@@ -51,6 +51,12 @@ export function registerInventoryRoutes(app: FastifyInstance) {
         product_name: product.name,
         stock: product.stock,
         unit: product.unit,
+        stock_unit: product.stock_unit,
+        sale_unit: product.sale_unit,
+        sale_spec_name: product.sale_spec_name,
+        stock_deduct_quantity: product.stock_deduct_quantity,
+        display_stock: `${product.stock} ${product.stock_unit}`,
+        display_sale_spec: product.sale_spec_name ? `${product.sale_spec_name} / ${product.sale_unit}` : product.sale_unit,
         status: product.status,
         low_stock_threshold: lowStockThreshold,
         suggest_purchase_quantity: Math.max(0, targetStock - product.stock)
@@ -110,14 +116,14 @@ export function registerInventoryRoutes(app: FastifyInstance) {
             operator_type: 'admin',
             operator_id: adminUserId,
             remark: body.reason,
-            payload: { adjust_quantity: adjustQuantity }
+            payload: { adjust_quantity: adjustQuantity, stock_unit: current.stock_unit, sale_unit: current.sale_unit, sale_spec_name: current.sale_spec_name, stock_deduct_quantity: current.stock_deduct_quantity }
           }
         });
         await writeAdminAuditLog(tx, request, {
           action: 'inventory_manual_adjusted',
           target_type: 'Product',
           target_id: id,
-          payload: { adjust_quantity: adjustQuantity, stock_before: current.stock, stock_after: nextStock, reason: body.reason }
+          payload: { adjust_quantity: adjustQuantity, stock_before: current.stock, stock_after: nextStock, reason: body.reason, stock_unit: current.stock_unit, sale_unit: current.sale_unit, sale_spec_name: current.sale_spec_name, stock_deduct_quantity: current.stock_deduct_quantity }
         });
         return updated;
       });
@@ -141,17 +147,24 @@ export function registerInventoryRoutes(app: FastifyInstance) {
         const productMap = new Map(products.map((product) => [product.id, product]));
         const items = (body.items ?? []).map((item) => {
           if (!item.product_id || !productMap.has(item.product_id)) throw new Error('采购商品不存在');
-          const plannedQuantity = Number(item.planned_quantity);
+          const stockInQuantity = item.stock_in_quantity === undefined ? undefined : Number(item.stock_in_quantity);
+          const plannedQuantity = stockInQuantity ?? Number(item.planned_quantity);
+          const purchaseQuantity = item.purchase_quantity === undefined ? null : Number(item.purchase_quantity);
           const costPriceCents = Number(item.cost_price_cents ?? 0);
-          if (!Number.isInteger(plannedQuantity) || plannedQuantity <= 0) throw new Error('计划采购数量必须大于 0');
+          if (!Number.isInteger(plannedQuantity) || plannedQuantity <= 0) throw new Error('计划入库库存数量必须大于 0');
+          if (purchaseQuantity !== null && (!Number.isInteger(purchaseQuantity) || purchaseQuantity <= 0)) throw new Error('采购数量必须大于 0');
           if (!Number.isInteger(costPriceCents) || costPriceCents < 0) throw new Error('采购成本金额不合法');
           const product = productMap.get(item.product_id)!;
+          const subtotalBaseQuantity = purchaseQuantity ?? plannedQuantity;
           return {
             product_id: product.id,
             product_name_snapshot: product.name,
             planned_quantity: plannedQuantity,
+            purchase_quantity: purchaseQuantity,
+            purchase_unit: item.purchase_unit?.trim() || null,
+            stock_in_quantity: stockInQuantity ?? plannedQuantity,
             cost_price_cents: costPriceCents,
-            subtotal_cents: plannedQuantity * costPriceCents,
+            subtotal_cents: subtotalBaseQuantity * costPriceCents,
             remark: item.remark ?? null
           };
         });
@@ -275,7 +288,7 @@ export function registerInventoryRoutes(app: FastifyInstance) {
               operator_type: 'admin',
               operator_id: adminUserId,
               remark: body.remark ?? null,
-              payload: { purchase_plan_id: current.id, purchase_plan_item_id: item.id }
+              payload: { purchase_plan_id: current.id, purchase_plan_item_id: item.id, stock_unit: product.stock_unit, purchase_unit: item.purchase_unit, purchase_quantity: item.purchase_quantity, stock_in_quantity: item.stock_in_quantity ?? item.planned_quantity }
             }
           });
         }

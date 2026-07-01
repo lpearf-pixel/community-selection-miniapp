@@ -132,6 +132,10 @@ model Product {
   cost_price_cents     Int
   stock                Int             @default(0)
   unit                 String
+  stock_unit           String          @default("piece")
+  sale_unit            String          @default("份")
+  sale_spec_name       String?
+  stock_deduct_quantity Int            @default(1)
   is_group_enabled     Boolean         @default(false)
   commission_type      CommissionType  @default(none)
   commission_value     Int             @default(0)
@@ -565,6 +569,9 @@ model PurchasePlanItem {
   product_name_snapshot String
   planned_quantity      Int
   received_quantity     Int          @default(0)
+  purchase_unit         String?
+  purchase_quantity     Int?
+  stock_in_quantity     Int?
   cost_price_cents      Int
   subtotal_cents        Int
   remark                String?

@@ -87,7 +87,7 @@ async function findUserIdByOpenid(openid: string, fallbackNickname: string): Pro
 }
 
 async function createGroupOrder(body: CreateOrderBody) {
-  const quantity = positiveInt(body.quantity, 1);
+  const saleQuantity = positiveInt(body.quantity, 1);
   const userId = body.user_id ?? (body.user_openid ? await findUserIdByOpenid(body.user_openid, body.receiver_name ?? '社区用户') : undefined);
   if (!userId || !body.group_buy_id || !body.client_request_id || !body.receiver_name || !body.receiver_phone) {
     throw new Error('缺少下单必填字段');
@@ -119,9 +119,11 @@ async function createGroupOrder(body: CreateOrderBody) {
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
     const productStock = await tx.product.findUnique({ where: { id: groupBuy.product_id } });
     if (!productStock) throw new Error('商品不存在');
-    if (productStock.stock < quantity) throw new Error('库存不足');
+    const stockDeductQuantity = Math.max(1, groupBuy.product.stock_deduct_quantity ?? 1);
+    const stockQuantity = saleQuantity * stockDeductQuantity;
+    if (productStock.stock < stockQuantity) throw new Error('库存不足');
     const stockBefore = productStock.stock;
-    const stockAfter = stockBefore - quantity;
+    const stockAfter = stockBefore - stockQuantity;
     await tx.product.update({
       where: { id: groupBuy.product_id },
       data: { stock: stockAfter }
@@ -131,10 +133,10 @@ async function createGroupOrder(body: CreateOrderBody) {
       event_source: 'group-buys-route',
       group_buy_id: groupBuy.id,
       idempotency_key: clientRequestId,
-      payload: { product_id: groupBuy.product_id, quantity }
+      payload: { product_id: groupBuy.product_id, sale_quantity: saleQuantity, stock_quantity: stockQuantity }
     });
 
-    const amount = groupBuy.price_cents * quantity;
+    const amount = groupBuy.price_cents * saleQuantity;
     const creditAmount = Number(body.credit_amount_cents ?? 0);
     if (!Number.isInteger(creditAmount) || creditAmount < 0) throw new Error('消费额度抵扣金额不合法');
     if (creditAmount > amount) throw new Error('消费额度抵扣金额不能超过订单金额');
@@ -158,7 +160,7 @@ async function createGroupOrder(body: CreateOrderBody) {
         leader_user_id: groupBuy.leader_user_id,
         total_amount_cents: amount,
         pay_amount_cents: amount - creditAmount,
-        quantity,
+        quantity: saleQuantity,
         credit_amount_cents: creditAmount,
         credit_source_type: creditAmount > 0 ? 'reward_conversion' : undefined,
         credit_source_id: creditAmount > 0 ? body.credit_source_id : undefined,
@@ -176,13 +178,13 @@ async function createGroupOrder(body: CreateOrderBody) {
         source_type: 'order_lock',
         source_id: order.id,
         direction: 'out',
-        quantity: order.quantity,
+        quantity: stockQuantity,
         stock_before: stockBefore,
         stock_after: stockAfter,
         operator_type: 'user',
         operator_id: userId,
         remark: '订单锁定库存',
-        payload: { group_buy_id: groupBuy.id, client_request_id: clientRequestId }
+        payload: { group_buy_id: groupBuy.id, client_request_id: clientRequestId, sale_quantity: saleQuantity, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock_unit: groupBuy.product.stock_unit, stock_deduct_quantity: stockDeductQuantity }
       }
     });
     if (creditAmount > 0) {
@@ -258,11 +260,12 @@ export async function expireOverdueGroupBuys() {
 
       const paidOrders = groupBuy.orders.filter((order) => order.pay_status === 'paid');
       const unpaidOrders = groupBuy.orders.filter((order) => order.pay_status === 'unpaid');
-      const restoreQuantity = [...paidOrders, ...unpaidOrders].reduce((sum, order) => sum + Math.max(1, order.quantity ?? 1), 0);
-      if (restoreQuantity > 0) {
+      const restoreSaleQuantity = [...paidOrders, ...unpaidOrders].reduce((sum, order) => sum + Math.max(1, order.quantity ?? 1), 0);
+      const restoreStockQuantity = restoreSaleQuantity * Math.max(1, groupBuy.product.stock_deduct_quantity ?? 1);
+      if (restoreStockQuantity > 0) {
         await tx.product.update({
           where: { id: groupBuy.product_id },
-          data: { stock: { increment: restoreQuantity } }
+          data: { stock: { increment: restoreStockQuantity } }
         });
         await tx.stockLedger.create({
           data: {
@@ -270,12 +273,12 @@ export async function expireOverdueGroupBuys() {
             source_type: 'group_buy_failed_restore',
             source_id: groupBuy.id,
             direction: 'in',
-            quantity: restoreQuantity,
+            quantity: restoreStockQuantity,
             stock_before: groupBuy.product.stock,
-            stock_after: groupBuy.product.stock + restoreQuantity,
+            stock_after: groupBuy.product.stock + restoreStockQuantity,
             operator_type: 'system',
             remark: '未成团恢复库存',
-            payload: { group_buy_id: groupBuy.id, paid_order_count: paidOrders.length, unpaid_order_count: unpaidOrders.length }
+            payload: { group_buy_id: groupBuy.id, paid_order_count: paidOrders.length, unpaid_order_count: unpaidOrders.length, sale_quantity: restoreSaleQuantity, stock_unit: groupBuy.product.stock_unit, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock_deduct_quantity: groupBuy.product.stock_deduct_quantity }
           }
         });
       }

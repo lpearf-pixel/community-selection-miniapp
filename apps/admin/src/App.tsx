@@ -22,6 +22,10 @@ type Product = {
   cost_price_cents: number;
   stock: number;
   unit: string;
+  stock_unit: string;
+  sale_unit: string;
+  sale_spec_name?: string | null;
+  stock_deduct_quantity: number;
   is_group_enabled: boolean;
   commission_type: CommissionType;
   commission_value: number;
@@ -93,6 +97,12 @@ type InventoryItem = {
   product_name: string;
   stock: number;
   unit: string;
+  stock_unit: string;
+  sale_unit: string;
+  sale_spec_name?: string | null;
+  stock_deduct_quantity: number;
+  display_stock: string;
+  display_sale_spec: string;
   status: string;
   low_stock_threshold: number;
   suggest_purchase_quantity: number;
@@ -122,6 +132,9 @@ type PurchasePlanItem = {
   product_name_snapshot: string;
   planned_quantity: number;
   received_quantity: number;
+  purchase_unit?: string | null;
+  purchase_quantity?: number | null;
+  stock_in_quantity?: number | null;
   cost_price_cents: number;
   subtotal_cents: number;
 };
@@ -165,6 +178,10 @@ const emptyProduct: Product = {
   cost_price_cents: 0,
   stock: 0,
   unit: '份',
+  stock_unit: 'piece',
+  sale_unit: '份',
+  sale_spec_name: null,
+  stock_deduct_quantity: 1,
   is_group_enabled: false,
   commission_type: 'none',
   commission_value: 0,
@@ -332,7 +349,7 @@ export function App() {
   }
 
   async function adjustInventory(item: InventoryItem) {
-    const adjustText = window.prompt(`请输入 ${item.product_name} 调整数量（可为负数）`, '1');
+    const adjustText = window.prompt(`请输入 ${item.product_name} 调整数量（基础库存单位：${item.stock_unit}，可为负数）`, '1');
     if (!adjustText) return;
     const reason = window.prompt('请输入库存调整原因', '后台人工调整');
     if (!reason) return;
@@ -350,14 +367,28 @@ export function App() {
       setMessage('暂无商品可创建采购计划');
       return;
     }
-    const quantity = Math.max(1, target.suggest_purchase_quantity || 1);
+    const purchaseQuantityText = window.prompt('请输入采购数量（例如 3 箱中的 3）', '1');
+    if (!purchaseQuantityText) return;
+    const purchaseUnit = window.prompt('请输入采购单位（例如 箱 / 袋 / 件）', '箱');
+    if (!purchaseUnit) return;
+    const stockInQuantityText = window.prompt(`请输入折算后的入库库存数量（基础库存单位：${target.stock_unit}）`, String(Math.max(1, target.suggest_purchase_quantity || target.stock_deduct_quantity || 1)));
+    if (!stockInQuantityText) return;
+    const costPriceText = window.prompt('请输入每个采购单位成本（分）', '0');
+    if (costPriceText === null) return;
     await fetchJson('/api/admin/purchase-plans', {
       method: 'POST',
       body: JSON.stringify({
         target_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         supplier_name: '默认供应商',
-        remark: '后台创建采购计划',
-        items: [{ product_id: target.product_id, planned_quantity: quantity, cost_price_cents: 0, remark: '按建议采购量创建' }]
+        remark: '后台创建采购计划：采购数量与入库库存数量分开记录',
+        items: [{
+          product_id: target.product_id,
+          purchase_quantity: Number(purchaseQuantityText),
+          purchase_unit: purchaseUnit,
+          stock_in_quantity: Number(stockInQuantityText),
+          cost_price_cents: Number(costPriceText),
+          remark: `采购 ${purchaseQuantityText}${purchaseUnit}，入库 ${stockInQuantityText}${target.stock_unit}`
+        }]
       })
     });
     setMessage('采购计划已创建');
@@ -461,8 +492,10 @@ export function App() {
                   { title: '商品名称', dataIndex: 'name' },
                   { title: '分类', render: (_: unknown, product: Product) => product.category?.name ?? '-' },
                   { title: '售价', render: (_: unknown, product: Product) => `¥${formatYuan(product.price_cents)}` },
-                  { title: '库存', dataIndex: 'stock' },
-                  { title: '单位', dataIndex: 'unit' },
+                  { title: '库存', render: (_: unknown, product: Product) => `${product.stock} ${product.stock_unit ?? product.unit}` },
+                  { title: '销售规格', render: (_: unknown, product: Product) => product.sale_spec_name ?? '-' },
+                  { title: '销售单位', render: (_: unknown, product: Product) => product.sale_unit ?? product.unit },
+                  { title: '每份扣减', render: (_: unknown, product: Product) => `${product.stock_deduct_quantity ?? 1} ${product.stock_unit ?? product.unit}` },
                   { title: '支持开团', render: (_: unknown, product: Product) => (product.is_group_enabled ? '是' : '否') },
                   {
                     title: '开团服务奖励',
@@ -498,8 +531,20 @@ export function App() {
                 <Form.Item label="售价（元）">
                   <InputNumber value={editingProduct.price_cents / 100} min={0} onChange={(value: number) => setEditingProduct({ ...editingProduct, price_cents: Math.round((value ?? 0) * 100) })} />
                 </Form.Item>
-                <Form.Item label="库存">
+                <Form.Item label="库存（基础库存单位数量）">
                   <InputNumber value={editingProduct.stock} min={0} onChange={(value: number) => setEditingProduct({ ...editingProduct, stock: value ?? 0 })} />
+                </Form.Item>
+                <Form.Item label="库存基础单位">
+                  <Input value={editingProduct.stock_unit} onChange={(event: { target: { value: string } }) => setEditingProduct({ ...editingProduct, stock_unit: event.target.value })} />
+                </Form.Item>
+                <Form.Item label="销售单位">
+                  <Input value={editingProduct.sale_unit} onChange={(event: { target: { value: string } }) => setEditingProduct({ ...editingProduct, sale_unit: event.target.value })} />
+                </Form.Item>
+                <Form.Item label="销售规格">
+                  <Input value={editingProduct.sale_spec_name ?? ''} onChange={(event: { target: { value: string } }) => setEditingProduct({ ...editingProduct, sale_spec_name: event.target.value })} />
+                </Form.Item>
+                <Form.Item label="每销售单位扣减库存基础单位数量">
+                  <InputNumber value={editingProduct.stock_deduct_quantity} min={1} onChange={(value: number) => setEditingProduct({ ...editingProduct, stock_deduct_quantity: value ?? 1 })} />
                 </Form.Item>
                 <Form.Item label="支持开团">
                   <Switch checked={editingProduct.is_group_enabled} onChange={(checked: boolean) => setEditingProduct({ ...editingProduct, is_group_enabled: checked })} />
@@ -561,10 +606,13 @@ export function App() {
               dataSource={inventoryOverview.items}
               columns={[
                 { title: '商品名', dataIndex: 'product_name' },
-                { title: '当前库存', dataIndex: 'stock' },
-                { title: '单位', dataIndex: 'unit' },
+                { title: '当前库存', render: (_: unknown, item: InventoryItem) => item.display_stock },
+                { title: '销售规格', render: (_: unknown, item: InventoryItem) => item.sale_spec_name ?? '-' },
+                { title: '销售单位', dataIndex: 'sale_unit' },
+                { title: '每份扣减', render: (_: unknown, item: InventoryItem) => `${item.stock_deduct_quantity} ${item.stock_unit}` },
                 { title: '状态', dataIndex: 'status' },
-                { title: '建议采购量', dataIndex: 'suggest_purchase_quantity' },
+                { title: '低库存阈值', render: (_: unknown, item: InventoryItem) => `${item.low_stock_threshold} ${item.stock_unit}` },
+                { title: '建议采购量', render: (_: unknown, item: InventoryItem) => `${item.suggest_purchase_quantity} ${item.stock_unit}` },
                 { title: '操作', render: (_: unknown, item: InventoryItem) => <Space><Button onClick={() => loadStockLedger(item)}>查看流水</Button><Button onClick={() => adjustInventory(item)}>库存调整</Button><Button onClick={() => createPurchasePlan(item)}>创建采购计划</Button></Space> }
               ]}
             />
@@ -586,7 +634,7 @@ export function App() {
                 { title: '状态', dataIndex: 'status' },
                 { title: '总数量', dataIndex: 'total_quantity' },
                 { title: '总金额', render: (_: unknown, plan: PurchasePlan) => `¥${formatYuan(plan.total_amount_cents)}` },
-                { title: '明细', render: (_: unknown, plan: PurchasePlan) => plan.items.map((item) => `${item.product_name_snapshot} ${item.received_quantity}/${item.planned_quantity}`).join('；') },
+                { title: '明细', render: (_: unknown, plan: PurchasePlan) => plan.items.map((item) => `${item.product_name_snapshot} 采购${item.purchase_quantity ?? '-'}${item.purchase_unit ?? ''} / 入库${item.received_quantity}/${item.planned_quantity}`).join('；') },
                 { title: '操作', render: (_: unknown, plan: PurchasePlan) => <Space><Button onClick={() => confirmPurchasePlan(plan)}>确认</Button><Button onClick={() => cancelPurchasePlan(plan)}>取消</Button><Button onClick={() => receivePurchasePlan(plan)}>入库</Button></Space> }
               ]}
             />

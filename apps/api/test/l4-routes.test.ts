@@ -148,6 +148,8 @@ describe('L4 group-buy and order routes', () => {
     expect(schema.includes('model StockLedger')).toBe(true);
     expect(schema.includes('model PurchasePlan')).toBe(true);
     expect(schema.includes('model PurchasePlanItem')).toBe(true);
+    expect(schema.includes('stock_deduct_quantity')).toBe(true);
+    expect(schema.includes('purchase_unit')).toBe(true);
   });
 
 
@@ -155,10 +157,11 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
     expect(source.includes('leader_openid')).toBe(true);
-    expect(source.includes('productStock.stock < quantity')).toBe(true);
+    expect(source.includes('productStock.stock < stockQuantity')).toBe(true);
     expect(source.includes('data: { stock: stockAfter }')).toBe(true);
     expect(source.includes('group_buy_expired')).toBe(true);
-    expect(source.includes('quantity,')).toBe(true);
+    expect(source.includes('quantity: saleQuantity')).toBe(true);
+    expect(source.includes('stock_quantity: stockQuantity')).toBe(true);
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
     expect(serviceSource.includes('current_quantity: { increment: order.quantity }')).toBe(true);
     expect(source.includes('refund.upsert')).toBe(true);
