@@ -418,7 +418,7 @@ export function App() {
                 <Input autoComplete="username" />
               </Form.Item>
               <Form.Item name="password" label="密码" rules={[{ required: true }]}>
-                <Input.Password autoComplete="current-password" />
+                <Input type="password" autoComplete="current-password" />
               </Form.Item>
               <Form.Item name="totp_code" label="二次验证码">
                 <Input placeholder="已启用二次验证时填写" />

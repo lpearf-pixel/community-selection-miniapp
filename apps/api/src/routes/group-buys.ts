@@ -92,37 +92,45 @@ async function createGroupOrder(body: CreateOrderBody) {
   if (!userId || !body.group_buy_id || !body.client_request_id || !body.receiver_name || !body.receiver_phone) {
     throw new Error('缺少下单必填字段');
   }
+  const groupBuyId = body.group_buy_id;
+  const clientRequestId = body.client_request_id;
+  const receiverName = body.receiver_name;
+  const receiverPhone = body.receiver_phone;
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const existing = await tx.order.findUnique({ where: { client_request_id: body.client_request_id } });
+    const existing = await tx.order.findUnique({ where: { client_request_id: clientRequestId } });
     if (existing) {
       await safeRecordBusinessEvent(tx, {
         event_type: 'order_idempotent_reused',
         event_source: 'group-buys-route',
         order_id: existing.id,
-        idempotency_key: body.client_request_id,
+        idempotency_key: clientRequestId,
         after_snapshot: existing
       });
       return existing;
     }
 
     const groupBuy = await tx.groupBuy.findUnique({
-      where: { id: body.group_buy_id },
+      where: { id: groupBuyId },
       include: { product: true }
     });
     if (!groupBuy) throw new Error('团购不存在');
     if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可下单');
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
-    const stockResult = await tx.product.updateMany({
-      where: { id: groupBuy.product_id, stock: { gte: quantity } },
-      data: { stock: { decrement: quantity } }
+    const productStock = await tx.product.findUnique({ where: { id: groupBuy.product_id } });
+    if (!productStock) throw new Error('商品不存在');
+    if (productStock.stock < quantity) throw new Error('库存不足');
+    const stockBefore = productStock.stock;
+    const stockAfter = stockBefore - quantity;
+    await tx.product.update({
+      where: { id: groupBuy.product_id },
+      data: { stock: stockAfter }
     });
-    if (stockResult.count !== 1) throw new Error('库存不足');
     await safeRecordBusinessEvent(tx, {
       event_type: 'order_stock_decremented',
       event_source: 'group-buys-route',
       group_buy_id: groupBuy.id,
-      idempotency_key: body.client_request_id,
+      idempotency_key: clientRequestId,
       payload: { product_id: groupBuy.product_id, quantity }
     });
 
@@ -144,7 +152,7 @@ async function createGroupOrder(body: CreateOrderBody) {
     const order = await tx.order.create({
       data: {
         order_no: makeOrderNo(),
-        client_request_id: body.client_request_id,
+        client_request_id: clientRequestId,
         user_id: userId,
         group_buy_id: groupBuy.id,
         leader_user_id: groupBuy.leader_user_id,
@@ -157,8 +165,8 @@ async function createGroupOrder(body: CreateOrderBody) {
         pickup_type: body.pickup_type ?? 'store',
         pickup_store_id: body.pickup_store_id,
         community_id: body.community_id ?? groupBuy.community_id,
-        receiver_name: body.receiver_name,
-        receiver_phone: body.receiver_phone,
+        receiver_name: receiverName,
+        receiver_phone: receiverPhone,
         receiver_address: body.receiver_address
       }
     });
@@ -169,12 +177,12 @@ async function createGroupOrder(body: CreateOrderBody) {
         source_id: order.id,
         direction: 'out',
         quantity: order.quantity,
-        stock_before: groupBuy.product.stock,
-        stock_after: groupBuy.product.stock - order.quantity,
-        operator_type: 'system',
+        stock_before: stockBefore,
+        stock_after: stockAfter,
+        operator_type: 'user',
         operator_id: userId,
         remark: '订单锁定库存',
-        payload: { order_id: order.id, client_request_id: body.client_request_id, group_buy_id: groupBuy.id }
+        payload: { group_buy_id: groupBuy.id, client_request_id: clientRequestId }
       }
     });
     if (creditAmount > 0) {
@@ -216,7 +224,7 @@ async function createGroupOrder(body: CreateOrderBody) {
       group_buy_id: groupBuy.id,
       leader_user_id: groupBuy.leader_user_id,
       user_id: userId,
-      idempotency_key: body.client_request_id,
+      idempotency_key: clientRequestId,
       after_snapshot: order
     });
     await safeRecordOrderTimeline(tx, {
