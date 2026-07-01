@@ -25,6 +25,7 @@ pnpm exec tsx scripts/compliance-scan.ts
 pnpm exec tsx scripts/verify-l10-security-local.ts
 pnpm exec tsx scripts/verify-l11-admin-auth-local.ts
 pnpm exec tsx scripts/verify-l12-fulfillment-local.ts
+pnpm exec tsx scripts/verify-l13-inventory-purchase-local.ts
 scripts/verify-l1-l2-l3-local.sh
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-local.sh
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-logs-local.sh

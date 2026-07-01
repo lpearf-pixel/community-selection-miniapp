@@ -4,7 +4,7 @@ import { formatYuan } from '@community-selection/shared';
 
 type CommissionType = 'none' | 'fixed' | 'percent';
 type ProductStatus = 'draft' | 'active' | 'inactive';
-type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'fulfillment' | 'withdrawals' | 'alerts' | 'taxRecords';
+type ViewKey = 'login' | 'products' | 'groupBuys' | 'orders' | 'fulfillment' | 'inventory' | 'purchasePlans' | 'withdrawals' | 'alerts' | 'taxRecords';
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 
@@ -88,6 +88,56 @@ type TaxRecord = {
 };
 
 
+type InventoryItem = {
+  product_id: string;
+  product_name: string;
+  stock: number;
+  unit: string;
+  status: string;
+  low_stock_threshold: number;
+  suggest_purchase_quantity: number;
+};
+
+type InventoryOverview = {
+  low_stock_count: number;
+  out_of_stock_count: number;
+  total_sku_count: number;
+  items: InventoryItem[];
+};
+
+type StockLedger = {
+  id: string;
+  source_type: string;
+  direction: string;
+  quantity: number;
+  stock_before: number;
+  stock_after: number;
+  remark?: string | null;
+  created_at: string;
+};
+
+type PurchasePlanItem = {
+  id: string;
+  product_id: string;
+  product_name_snapshot: string;
+  planned_quantity: number;
+  received_quantity: number;
+  cost_price_cents: number;
+  subtotal_cents: number;
+};
+
+type PurchasePlan = {
+  id: string;
+  plan_no: string;
+  status: string;
+  target_date: string;
+  supplier_name?: string | null;
+  total_quantity: number;
+  total_amount_cents: number;
+  items: PurchasePlanItem[];
+};
+
+
 type FulfillmentOverview = {
   today_group_buys: number;
   pending_prepare_orders: number;
@@ -140,6 +190,9 @@ export function App() {
   const [groupBuys, setGroupBuys] = useState<GroupBuy[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [fulfillmentOverview, setFulfillmentOverview] = useState<FulfillmentOverview | null>(null);
+  const [inventoryOverview, setInventoryOverview] = useState<InventoryOverview | null>(null);
+  const [stockLedgers, setStockLedgers] = useState<StockLedger[]>([]);
+  const [purchasePlans, setPurchasePlans] = useState<PurchasePlan[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
@@ -154,16 +207,20 @@ export function App() {
       fetchJson<GroupBuy[]>('/api/group-buys'),
       fetchJson<Order[]>('/api/orders'),
       fetchJson<FulfillmentOverview>('/api/admin/fulfillment/overview'),
+      fetchJson<InventoryOverview>('/api/admin/inventory/overview'),
+      fetchJson<PurchasePlan[]>('/api/admin/purchase-plans'),
       fetchJson<Withdrawal[]>('/api/admin/withdrawals'),
       fetchJson<OpsAlert[]>('/api/admin/logs/alerts'),
       fetchJson<TaxRecord[]>('/api/admin/tax-records')
     ])
-      .then(([categoryData, productData, groupBuyData, orderData, fulfillmentData, withdrawalData, alertData, taxRecordData]) => {
+      .then(([categoryData, productData, groupBuyData, orderData, fulfillmentData, inventoryData, purchasePlanData, withdrawalData, alertData, taxRecordData]) => {
         setCategories(categoryData);
         setProducts(productData.items);
         setGroupBuys(groupBuyData);
         setOrders(orderData);
         setFulfillmentOverview(fulfillmentData);
+        setInventoryOverview(inventoryData);
+        setPurchasePlans(purchasePlanData);
         setWithdrawals(withdrawalData);
         setAlerts(alertData);
         setTaxRecords(taxRecordData);
@@ -268,6 +325,68 @@ export function App() {
     refresh();
   }
 
+  async function loadStockLedger(item: InventoryItem) {
+    const ledgers = await fetchJson<StockLedger[]>(`/api/admin/inventory/ledger?product_id=${item.product_id}`);
+    setStockLedgers(ledgers);
+    setMessage(`已加载 ${item.product_name} 库存流水`);
+  }
+
+  async function adjustInventory(item: InventoryItem) {
+    const adjustText = window.prompt(`请输入 ${item.product_name} 调整数量（可为负数）`, '1');
+    if (!adjustText) return;
+    const reason = window.prompt('请输入库存调整原因', '后台人工调整');
+    if (!reason) return;
+    await fetchJson(`/api/admin/inventory/products/${item.product_id}/adjust`, {
+      method: 'POST',
+      body: JSON.stringify({ adjust_quantity: Number(adjustText), reason })
+    });
+    setMessage('库存调整已保存');
+    refresh();
+  }
+
+  async function createPurchasePlan(item?: InventoryItem) {
+    const target = item ?? inventoryOverview?.items[0];
+    if (!target) {
+      setMessage('暂无商品可创建采购计划');
+      return;
+    }
+    const quantity = Math.max(1, target.suggest_purchase_quantity || 1);
+    await fetchJson('/api/admin/purchase-plans', {
+      method: 'POST',
+      body: JSON.stringify({
+        target_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        supplier_name: '默认供应商',
+        remark: '后台创建采购计划',
+        items: [{ product_id: target.product_id, planned_quantity: quantity, cost_price_cents: 0, remark: '按建议采购量创建' }]
+      })
+    });
+    setMessage('采购计划已创建');
+    refresh();
+  }
+
+  async function confirmPurchasePlan(plan: PurchasePlan) {
+    await fetchJson(`/api/admin/purchase-plans/${plan.id}/confirm`, { method: 'POST' });
+    setMessage('采购计划已确认');
+    refresh();
+  }
+
+  async function cancelPurchasePlan(plan: PurchasePlan) {
+    await fetchJson(`/api/admin/purchase-plans/${plan.id}/cancel`, { method: 'POST' });
+    setMessage('采购计划已取消');
+    refresh();
+  }
+
+  async function receivePurchasePlan(plan: PurchasePlan) {
+    await fetchJson(`/api/admin/purchase-plans/${plan.id}/receive`, {
+      method: 'POST',
+      body: JSON.stringify({
+        remark: '后台采购入库',
+        items: plan.items.map((item) => ({ item_id: item.id, received_quantity: Math.max(0, item.planned_quantity - item.received_quantity) }))
+      })
+    });
+    setMessage('采购入库已完成');
+    refresh();
+  }
 
   async function cloneGroupBuy(groupBuy: GroupBuy) {
     const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -319,6 +438,8 @@ export function App() {
             <Button onClick={() => setView('groupBuys')}>团购管理</Button>
             <Button onClick={() => setView('orders')}>订单管理</Button>
             <Button onClick={() => setView('fulfillment')}>履约看板</Button>
+            <Button onClick={() => setView('inventory')}>库存管理</Button>
+            <Button onClick={() => setView('purchasePlans')}>采购计划</Button>
             <Button onClick={() => setView('withdrawals')}>提现管理</Button>
             <Button onClick={() => setView('alerts')}>告警中心</Button>
             <Button onClick={() => setView('taxRecords')}>税务记录</Button>
@@ -429,6 +550,46 @@ export function App() {
             <Table rowKey="community_id" dataSource={fulfillmentOverview.by_community} pagination={false} columns={[{ title: '社区', dataIndex: 'community_name' }, { title: '订单数', dataIndex: 'order_count' }, { title: '数量', dataIndex: 'quantity' }, { title: '金额', render: (_: unknown, item: { amount_cents: number }) => `¥${formatYuan(item.amount_cents)}` }]} />
             <Typography.Title level={4}>按商品</Typography.Title>
             <Table rowKey="product_id" dataSource={fulfillmentOverview.by_product} pagination={false} columns={[{ title: '商品', dataIndex: 'product_name' }, { title: '数量', dataIndex: 'quantity' }, { title: '订单数', dataIndex: 'order_count' }]} />
+          </Card>
+        ) : null}
+
+        {view === 'inventory' && inventoryOverview ? (
+          <Card title="库存管理" extra={<Button onClick={() => createPurchasePlan()}>按首个商品创建采购计划</Button>}>
+            <Typography.Paragraph>SKU：{inventoryOverview.total_sku_count}；低库存：{inventoryOverview.low_stock_count}；缺货：{inventoryOverview.out_of_stock_count}</Typography.Paragraph>
+            <Table
+              rowKey="product_id"
+              dataSource={inventoryOverview.items}
+              columns={[
+                { title: '商品名', dataIndex: 'product_name' },
+                { title: '当前库存', dataIndex: 'stock' },
+                { title: '单位', dataIndex: 'unit' },
+                { title: '状态', dataIndex: 'status' },
+                { title: '建议采购量', dataIndex: 'suggest_purchase_quantity' },
+                { title: '操作', render: (_: unknown, item: InventoryItem) => <Space><Button onClick={() => loadStockLedger(item)}>查看流水</Button><Button onClick={() => adjustInventory(item)}>库存调整</Button><Button onClick={() => createPurchasePlan(item)}>创建采购计划</Button></Space> }
+              ]}
+            />
+            {stockLedgers.length ? (
+              <Table rowKey="id" dataSource={stockLedgers} pagination={{ pageSize: 5 }} columns={[{ title: '类型', dataIndex: 'source_type' }, { title: '方向', dataIndex: 'direction' }, { title: '数量', dataIndex: 'quantity' }, { title: '调整前', dataIndex: 'stock_before' }, { title: '调整后', dataIndex: 'stock_after' }, { title: '备注', dataIndex: 'remark' }]} />
+            ) : null}
+          </Card>
+        ) : null}
+
+        {view === 'purchasePlans' ? (
+          <Card title="采购计划" extra={<Button onClick={() => createPurchasePlan()}>新增采购计划</Button>}>
+            <Table
+              rowKey="id"
+              dataSource={purchasePlans}
+              columns={[
+                { title: '计划编号', dataIndex: 'plan_no' },
+                { title: '目标日期', render: (_: unknown, plan: PurchasePlan) => new Date(plan.target_date).toLocaleDateString() },
+                { title: '供应商', dataIndex: 'supplier_name' },
+                { title: '状态', dataIndex: 'status' },
+                { title: '总数量', dataIndex: 'total_quantity' },
+                { title: '总金额', render: (_: unknown, plan: PurchasePlan) => `¥${formatYuan(plan.total_amount_cents)}` },
+                { title: '明细', render: (_: unknown, plan: PurchasePlan) => plan.items.map((item) => `${item.product_name_snapshot} ${item.received_quantity}/${item.planned_quantity}`).join('；') },
+                { title: '操作', render: (_: unknown, plan: PurchasePlan) => <Space><Button onClick={() => confirmPurchasePlan(plan)}>确认</Button><Button onClick={() => cancelPurchasePlan(plan)}>取消</Button><Button onClick={() => receivePurchasePlan(plan)}>入库</Button></Space> }
+              ]}
+            />
           </Card>
         ) : null}
 

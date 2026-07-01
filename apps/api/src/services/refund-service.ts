@@ -125,9 +125,25 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
   // L6 第一版只做金额退款：部分退款不恢复库存；只有全额退款才按订单状态判断是否可自动恢复库存。
   if (isFullRefund && !stockRestored && refund.order.group_buy) {
     if (autoRestoreStockStatuses.includes(refund.order.order_status)) {
+      const product = await tx.product.findUnique({ where: { id: refund.order.group_buy.product_id } });
+      if (!product) throw new Error('退款恢复库存商品不存在');
       await tx.product.update({
         where: { id: refund.order.group_buy.product_id },
         data: { stock: { increment: refund.order.quantity } }
+      });
+      await tx.stockLedger.create({
+        data: {
+          product_id: refund.order.group_buy.product_id,
+          source_type: 'refund_restore',
+          source_id: refund.id,
+          direction: 'in',
+          quantity: refund.order.quantity,
+          stock_before: product.stock,
+          stock_after: product.stock + refund.order.quantity,
+          operator_type: 'system',
+          remark: '退款恢复库存',
+          payload: { order_id: refund.order_id, refund_id: refund.id }
+        }
       });
       stockRestored = true;
       await safeRecordBusinessEvent(tx, {

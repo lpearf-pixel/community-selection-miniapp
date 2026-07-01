@@ -132,6 +132,25 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
+  it('registers L13 inventory and purchase routes and models', () => {
+    const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const inventoryRoutes = readFileSync(new URL('../src/routes/inventory.ts', import.meta.url), 'utf8');
+    const schema = readFileSync(new URL('../../../prisma/schema.prisma', import.meta.url), 'utf8');
+    expect(appSource.includes('registerInventoryRoutes')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/inventory/overview')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/inventory/ledger')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/inventory/products/:id/adjust')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/purchase-plans')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/purchase-plans/:id/confirm')).toBe(true);
+    expect(inventoryRoutes.includes('/api/admin/purchase-plans/:id/receive')).toBe(true);
+    expect(inventoryRoutes.includes('inventory_manual_adjusted')).toBe(true);
+    expect(inventoryRoutes.includes('purchase_plan_received')).toBe(true);
+    expect(schema.includes('model StockLedger')).toBe(true);
+    expect(schema.includes('model PurchasePlan')).toBe(true);
+    expect(schema.includes('model PurchasePlanItem')).toBe(true);
+  });
+
+
   it('keeps L4 order safeguards visible in route implementation', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);

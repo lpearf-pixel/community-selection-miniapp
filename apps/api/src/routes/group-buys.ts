@@ -162,6 +162,21 @@ async function createGroupOrder(body: CreateOrderBody) {
         receiver_address: body.receiver_address
       }
     });
+    await tx.stockLedger.create({
+      data: {
+        product_id: groupBuy.product_id,
+        source_type: 'order_lock',
+        source_id: order.id,
+        direction: 'out',
+        quantity: order.quantity,
+        stock_before: groupBuy.product.stock,
+        stock_after: groupBuy.product.stock - order.quantity,
+        operator_type: 'system',
+        operator_id: userId,
+        remark: '订单锁定库存',
+        payload: { order_id: order.id, client_request_id: body.client_request_id, group_buy_id: groupBuy.id }
+      }
+    });
     if (creditAmount > 0) {
       await tx.consumerCreditLedger.create({
         data: {
@@ -223,7 +238,7 @@ export async function expireOverdueGroupBuys() {
       status: 'pending',
       end_time: { lt: new Date() }
     },
-    include: { orders: true }
+    include: { orders: true, product: true }
   });
 
   for (const groupBuy of overdueGroupBuys) {
@@ -240,6 +255,20 @@ export async function expireOverdueGroupBuys() {
         await tx.product.update({
           where: { id: groupBuy.product_id },
           data: { stock: { increment: restoreQuantity } }
+        });
+        await tx.stockLedger.create({
+          data: {
+            product_id: groupBuy.product_id,
+            source_type: 'group_buy_failed_restore',
+            source_id: groupBuy.id,
+            direction: 'in',
+            quantity: restoreQuantity,
+            stock_before: groupBuy.product.stock,
+            stock_after: groupBuy.product.stock + restoreQuantity,
+            operator_type: 'system',
+            remark: '未成团恢复库存',
+            payload: { group_buy_id: groupBuy.id, paid_order_count: paidOrders.length, unpaid_order_count: unpaidOrders.length }
+          }
         });
       }
 
