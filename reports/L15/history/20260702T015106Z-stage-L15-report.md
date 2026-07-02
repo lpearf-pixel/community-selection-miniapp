@@ -1,0 +1,79 @@
+# 阶段验收报告：L15
+
+## 1. 阶段结论
+
+- 阶段：L15
+- 分支：codex/add-l12-fulfillment-operations
+- 生成时间：2026-07-02T01:51:06.097Z
+- 当前 commit：3e830e0e3c50f822859e4cbf5002d88f859efc1b
+- 本阶段目标：L15 阶段目标，需结合阶段说明人工确认
+- Codex 自评结论：
+  - partial
+
+## 2. 本阶段变更范围
+
+| 类型 | 文件 | 说明 |
+|---|---|---|
+| Docs | docs/dev/reporting.md | 文档或 review 说明 |
+| Script | scripts/publish-stage-report.ts | 验收、检查或工具脚本 |
+| Script | scripts/verify-report-publish-local.ts | 验收、检查或工具脚本 |
+
+## 3. API 变化
+
+无
+
+## 4. 数据库变化
+
+无
+
+## 5. 核心业务验收点
+
+- [ ] L15 阶段核心功能覆盖（需人工 review）
+- [x] L15 阶段验收脚本覆盖
+- [ ] API / DB / 后台影响范围已确认（需人工 review）
+
+## 6. 验收脚本
+
+| 脚本 | 是否存在 | 是否已加入 verify-all | 说明 |
+|---|---|---|---|
+| scripts/verify-report-publish-local.ts | yes | yes | 相关验收脚本 |
+
+## 7. 本地命令执行结果
+
+| 命令 | 结果 |
+|---|---|
+| pnpm typecheck | not found |
+| pnpm lint | not found |
+| pnpm test | not found |
+| pnpm build | not found |
+| pnpm compliance:scan | not found |
+| pnpm verify:all | failed |
+
+## 8. 合规边界检查
+
+- [ ] 没有新增多级分销（需人工 review）
+- [ ] 没有新增团队收益（需人工 review）
+- [ ] 没有新增代理收益（需人工 review）
+- [ ] 没有新增 parent_leader_id / upline_id / downline / team_id / level（需人工 review）
+- [ ] 开团服务奖励仍只来自开团人自己的真实有效团购订单（需人工 review）
+- [ ] 用户可见文案仍为“开团服务奖励”（需人工 review）
+- [ ] 没有接真实打款（需人工 review）
+- [ ] 没有自动报税（需人工 review）
+- [ ] 没有新增优惠券/会员/营销玩法，除非当前阶段明确要求（需人工 review）
+
+## 9. 风险点
+
+- 高风险：暂无自动发现，需人工 review
+- 中风险：暂无自动发现，需人工 review
+- 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
+
+## 10. 未完成项
+
+暂无自动发现，需人工 review
+
+## 11. Codex 给人工 reviewer 的说明
+
+- 本阶段做了什么：根据 L15 的最近一次提交 diff 生成验收报告，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与 HEAD~1..HEAD 文件清单。
+- 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
+- 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
