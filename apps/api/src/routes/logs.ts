@@ -105,9 +105,11 @@ export function registerLogRoutes(app: FastifyInstance) {
       reply.code(400);
       return fail('缺少处理信息');
     }
+    const resolvedBy = body.resolved_by;
+    const resolutionNote = body.resolution_note;
     const resolved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const alert = await resolveOpsAlert(tx, { id, status: 'resolved', resolved_by: body.resolved_by, resolution_note: body.resolution_note });
-      await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'ops_alert_resolved', target_type: 'OpsAlertLog', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload: { resolved_by: body.resolved_by } } });
+      const alert = await resolveOpsAlert(tx, { id, status: 'resolved', resolved_by: resolvedBy, resolution_note: resolutionNote });
+      await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'ops_alert_resolved', target_type: 'OpsAlertLog', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload: { resolved_by: resolvedBy } } });
       return alert;
     });
     return ok(resolved);
@@ -120,9 +122,11 @@ export function registerLogRoutes(app: FastifyInstance) {
       reply.code(400);
       return fail('缺少处理信息');
     }
+    const resolvedBy = body.resolved_by;
+    const resolutionNote = body.resolution_note;
     const ignored = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const alert = await resolveOpsAlert(tx, { id, status: 'ignored', resolved_by: body.resolved_by, resolution_note: body.resolution_note });
-      await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'ops_alert_ignored', target_type: 'OpsAlertLog', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload: { resolved_by: body.resolved_by } } });
+      const alert = await resolveOpsAlert(tx, { id, status: 'ignored', resolved_by: resolvedBy, resolution_note: resolutionNote });
+      await tx.adminAuditLog.create({ data: { admin_user_id: request.adminUser?.id ?? null, action: 'ops_alert_ignored', target_type: 'OpsAlertLog', target_id: id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null, payload: { resolved_by: resolvedBy } } });
       return alert;
     });
     return ok(ignored);

@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { OrderStatus, PickupType, type Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 import { lockStockForOrder } from '../inventory/inventory-service.js';
 import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } from '../audit/audit-service.js';
@@ -31,6 +31,25 @@ function makeOrderNo() {
   return `O${Date.now()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
 }
 
+const allowedFulfillmentStatuses = new Set<OrderStatus>([
+  OrderStatus.preparing,
+  OrderStatus.ready,
+  OrderStatus.picked,
+  OrderStatus.delivered,
+  OrderStatus.completed
+]);
+
+function normalizePickupType(value: unknown): PickupType {
+  if (value === PickupType.delivery) return PickupType.delivery;
+  return PickupType.store;
+}
+
+function normalizeNextStatus(value: unknown): OrderStatus {
+  if (!value || typeof value !== 'string') throw new Error('缺少订单目标状态');
+  if (!allowedFulfillmentStatuses.has(value as OrderStatus)) throw new Error('订单目标状态不合法');
+  return value as OrderStatus;
+}
+
 async function findUserIdByOpenid(openid: string, fallbackNickname: string): Promise<string> {
   const user = await prisma.user.upsert({
     where: { openid },
@@ -53,6 +72,7 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
   const clientRequestId = input.client_request_id;
   const receiverName = input.receiver_name;
   const receiverPhone = input.receiver_phone;
+  const pickupType = normalizePickupType(input.pickup_type);
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({ where: { client_request_id: clientRequestId } });
@@ -94,7 +114,7 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
         credit_amount_cents: creditAmount,
         credit_source_type: creditAmount > 0 ? 'reward_conversion' : undefined,
         credit_source_id: creditAmount > 0 ? input.credit_source_id : undefined,
-        pickup_type: input.pickup_type ?? 'store',
+        pickup_type: pickupType,
         pickup_store_id: input.pickup_store_id,
         community_id: input.community_id ?? groupBuy.community_id,
         receiver_name: receiverName,
@@ -118,16 +138,17 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
 }
 
 export async function updateOrderStatus(input: { order_id: string; next_status?: string; admin_meta?: AdminMeta }) {
-  if (!input.next_status) throw new Error('缺少订单目标状态');
+  const nextStatus = normalizeNextStatus(input.next_status);
   const order = await prisma.order.findUnique({ where: { id: input.order_id } });
   if (!order) throw new Error('订单不存在');
   if (order.pay_status !== 'paid') throw new Error('未支付订单不可推进履约');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const updatedOrder = await tx.order.update({ where: { id: input.order_id }, data: { order_status: input.next_status, completed_at: input.next_status === 'completed' ? new Date() : undefined } });
-    await safeRecordBusinessEvent(tx, { event_type: input.next_status === 'completed' ? 'order_completed' : 'order_status_changed', event_source: 'order-service', order_id: input.order_id, before_snapshot: order, after_snapshot: updatedOrder, payload: { from_status: order.order_status, to_status: input.next_status } });
-    await recordAdminAudit(tx, { admin_user_id: input.admin_meta?.admin_user_id ?? null, action: input.next_status === 'completed' ? 'order_completed' : 'order_status_changed', target_type: 'Order', target_id: input.order_id, ip_address: input.admin_meta?.ip_address ?? null, user_agent: input.admin_meta?.user_agent ?? null, payload: { from_status: order.order_status, to_status: input.next_status } });
-    await safeRecordOrderTimeline(tx, { order_id: input.order_id, event_type: input.next_status === 'completed' ? 'order_completed' : 'order_status_changed', title: input.next_status === 'completed' ? '订单已完成' : '订单状态已更新', from_status: order.order_status, to_status: input.next_status, payload: { from_status: order.order_status, to_status: input.next_status } });
-    if (input.next_status === 'completed') await markCommissionPendingForCompletedOrder(input.order_id, tx);
+    const isCompleted = nextStatus === OrderStatus.completed;
+    const updatedOrder = await tx.order.update({ where: { id: input.order_id }, data: { order_status: nextStatus, completed_at: isCompleted ? new Date() : undefined } });
+    await safeRecordBusinessEvent(tx, { event_type: isCompleted ? 'order_completed' : 'order_status_changed', event_source: 'order-service', order_id: input.order_id, before_snapshot: order, after_snapshot: updatedOrder, payload: { from_status: order.order_status, to_status: nextStatus } });
+    await recordAdminAudit(tx, { admin_user_id: input.admin_meta?.admin_user_id ?? null, action: isCompleted ? 'order_completed' : 'order_status_changed', target_type: 'Order', target_id: input.order_id, ip_address: input.admin_meta?.ip_address ?? null, user_agent: input.admin_meta?.user_agent ?? null, payload: { from_status: order.order_status, to_status: nextStatus } });
+    await safeRecordOrderTimeline(tx, { order_id: input.order_id, event_type: isCompleted ? 'order_completed' : 'order_status_changed', title: isCompleted ? '订单已完成' : '订单状态已更新', from_status: order.order_status, to_status: nextStatus, payload: { from_status: order.order_status, to_status: nextStatus } });
+    if (isCompleted) await markCommissionPendingForCompletedOrder(input.order_id, tx);
     return updatedOrder;
   });
 }

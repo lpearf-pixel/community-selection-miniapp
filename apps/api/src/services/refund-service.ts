@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { syncCommissionAfterRefund } from './commission-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
@@ -19,6 +19,11 @@ type NotifyInfo = {
 const refundableOrderStatuses = ['paid', 'grouped', 'preparing', 'ready', 'picked', 'delivered', 'completed', 'refunding'];
 const autoRestoreStockStatuses = ['paid', 'grouped', 'preparing', 'ready', 'refunding'];
 const stockRestorePolicy = 'full_refund_auto_restore_before_fulfillment';
+
+function jsonOrPrismaNull(value: Prisma.InputJsonValue | Prisma.JsonValue | null | undefined) {
+  if (value === undefined || value === null) return Prisma.JsonNull;
+  return value as Prisma.InputJsonValue;
+}
 
 export function getRefundableAmount(order: { pay_amount_cents: number; refund_amount_cents: number }) {
   return order.pay_amount_cents - order.refund_amount_cents;
@@ -95,7 +100,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
         where: { id: refund.id },
         data: {
           refund_id: notifyInfo.refund_id,
-          raw_notify: notifyInfo.raw_notify ?? refund.raw_notify
+          raw_notify: jsonOrPrismaNull(notifyInfo.raw_notify ?? refund.raw_notify)
         }
       });
     }
@@ -193,7 +198,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
       refund_id: notifyInfo.refund_id ?? refund.refund_id,
       stock_restored: stockRestored,
       processed_at: new Date(),
-      raw_notify: notifyInfo.raw_notify ?? refund.raw_notify
+      raw_notify: jsonOrPrismaNull(notifyInfo.raw_notify ?? refund.raw_notify)
     }
   });
 

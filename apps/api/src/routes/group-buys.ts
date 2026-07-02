@@ -439,7 +439,8 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
 
 export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/admin/group-buys/:id/clone', async (request, reply) => {
-    if (!request.adminUser?.id) {
+    const adminUserId = request.adminUser?.id;
+    if (!adminUserId) {
       reply.code(401);
       return fail('后台登录已失效');
     }
@@ -475,7 +476,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
           payload: { source_group_buy_id: source.id }
         });
         await recordAdminAudit(tx, {
-          admin_user_id: request.adminUser.id,
+          admin_user_id: adminUserId,
           action: 'group_buy_cloned',
           target_type: 'GroupBuy',
           target_id: created.id,

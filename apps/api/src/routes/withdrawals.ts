@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../services/logging-service.js';

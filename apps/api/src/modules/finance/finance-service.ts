@@ -1,5 +1,5 @@
 export {
-  adjustCommissionForRefund,
+  syncCommissionAfterRefund,
   ensureEstimatedCommission,
   markCommissionPendingForCompletedOrder,
   releaseAvailableCommissions

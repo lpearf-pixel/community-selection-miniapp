@@ -1,6 +1,6 @@
 export {
   createAdminSession,
   hashPassword,
-  verifyAdminPassword,
+  verifyPassword,
   verifyTotpCode
 } from '../../services/admin-auth-service.js';

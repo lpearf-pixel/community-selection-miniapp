@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { ProductStatus } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 
@@ -20,7 +21,11 @@ export function registerCatalogRoutes(app: FastifyInstance) {
     const query = request.query as { category_id?: string; status?: string; page?: string; page_size?: string };
     const page = toInt(query.page, 1);
     const pageSize = Math.min(toInt(query.page_size, 20), 100);
-    const status = query.status === 'draft' || query.status === 'inactive' ? query.status : 'active';
+    const status: ProductStatus = query.status === ProductStatus.draft
+      ? ProductStatus.draft
+      : query.status === ProductStatus.inactive
+        ? ProductStatus.inactive
+        : ProductStatus.active;
     const where = {
       status,
       ...(query.category_id ? { category_id: query.category_id } : {})
