@@ -689,7 +689,7 @@ model InventoryLoss {
   product            Product       @relation(fields: [product_id], references: [id])
   batch              ProductBatch? @relation(fields: [batch_id], references: [id])
   supplier           Supplier?     @relation(fields: [supplier_id], references: [id])
-  operator_admin     AdminUser?    @relation(fields: [operator_admin_id], references: [id])
+  operator_admin     AdminUser?    @relation("InventoryLossOperatorAdmin", fields: [operator_admin_id], references: [id])
 
   @@index([product_id])
   @@index([batch_id])
@@ -706,7 +706,7 @@ model StockCheck {
   remark             String?
   created_at         DateTime         @default(now())
   confirmed_at       DateTime?
-  operator_admin     AdminUser?       @relation(fields: [operator_admin_id], references: [id])
+  operator_admin     AdminUser?       @relation("StockCheckOperatorAdmin", fields: [operator_admin_id], references: [id])
   items              StockCheckItem[]
 
   @@index([status])
@@ -750,6 +750,8 @@ model AdminUser {
   recovery_codes        AdminRecoveryCode[]
   audit_logs            AdminAuditLog[]
   purchase_plans        PurchasePlan[]
+  inventory_losses_operated InventoryLoss[] @relation("InventoryLossOperatorAdmin")
+  stock_checks_operated     StockCheck[]    @relation("StockCheckOperatorAdmin")
 }
 
 model AdminSession {
