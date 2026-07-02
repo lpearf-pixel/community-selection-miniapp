@@ -1,9 +1,9 @@
 {
   "stage": "L15",
   "source_branch": "codex/add-l12-fulfillment-operations",
-  "source_commit": "25299ebe423cf0567b5c175845671069a40e5fac",
+  "source_commit": "3585b480925c06289acb4e23b18371d7f41f8fd8",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-02T06:40:57.581Z",
+  "generated_at": "2026-07-02T06:55:08.852Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
