@@ -22,6 +22,7 @@ pnpm build
 pnpm exec tsx scripts/validate-env.ts
 pnpm exec tsx scripts/check-migrations.ts
 pnpm exec tsx scripts/compliance-scan.ts
+pnpm exec tsx scripts/verify-report-publish-local.ts
 pnpm exec tsx scripts/verify-l10-security-local.ts
 pnpm exec tsx scripts/verify-l11-admin-auth-local.ts
 pnpm exec tsx scripts/verify-l12-fulfillment-local.ts
