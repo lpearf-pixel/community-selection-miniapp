@@ -6,11 +6,13 @@ import { registerInventoryRoutes } from '../inventory.js';
 import { registerSupplierRoutes } from '../suppliers.js';
 import { registerCommissionRoutes } from '../commissions.js';
 import { registerWithdrawalRoutes } from '../withdrawals.js';
+import { registerAdminGroupBuyRoutes } from '../group-buys.js';
 
 export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminAuthRoutes(app);
   registerLogRoutes(app);
   registerFulfillmentRoutes(app);
+  registerAdminGroupBuyRoutes(app);
   registerInventoryRoutes(app);
   registerSupplierRoutes(app);
   registerCommissionRoutes(app);

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
@@ -25,11 +26,42 @@ async function post(url: string, payload: unknown) {
   return json(await app.inject({ method: 'POST', url, payload }));
 }
 
+
+function assertStaticBoundaries() {
+  const publicIndex = readFileSync('apps/api/src/routes/public/index.ts', 'utf8');
+  assert(publicIndex.includes('registerPublicGroupBuyRoutes'), 'public routes should register public group-buy routes');
+  assert(!publicIndex.includes('registerGroupBuyRoutes'), 'public routes must not register combined group-buy routes');
+  assert(!publicIndex.includes('registerAdminGroupBuyRoutes'), 'public routes must not register admin group-buy routes');
+
+  const adminIndex = readFileSync('apps/api/src/routes/admin/index.ts', 'utf8');
+  assert(adminIndex.includes('registerAdminGroupBuyRoutes'), 'admin routes should register admin group-buy routes');
+
+  const orderService = readFileSync('apps/api/src/modules/order/order-service.ts', 'utf8');
+  assert(orderService.includes('export async function createGroupOrder'), 'order service should export createGroupOrder');
+  assert(orderService.includes('export async function updateOrderStatus'), 'order service should export updateOrderStatus');
+  assert(!orderService.includes('TODO boundary'), 'order service should not be TODO-only');
+
+  const purchaseService = readFileSync('apps/api/src/modules/purchase/purchase-service.ts', 'utf8');
+  assert(purchaseService.includes('export async function createPurchasePlan'), 'purchase service should export createPurchasePlan');
+  assert(purchaseService.includes('export async function receivePurchasePlan'), 'purchase service should export receivePurchasePlan');
+
+  const supplierService = readFileSync('apps/api/src/modules/supplier/supplier-service.ts', 'utf8');
+  assert(supplierService.includes('export async function createSupplier'), 'supplier service should export createSupplier');
+  assert(supplierService.includes('export async function disableSupplier'), 'supplier service should export disableSupplier');
+
+  const inventoryRoutes = readFileSync('apps/api/src/routes/inventory.ts', 'utf8');
+  assert(inventoryRoutes.includes('adjustStockByAdmin'), 'inventory adjust route should call inventory service');
+  assert(inventoryRoutes.includes('recordBatchLoss'), 'batch loss route should call inventory service');
+  assert(inventoryRoutes.includes('confirmStockCheck'), 'stock check confirm route should call inventory service');
+  assert(!inventoryRoutes.includes("source_type: 'manual_adjust'"), 'manual_adjust ledger logic should live outside inventory route');
+}
+
 async function adminPost(url: string, payload: unknown, cookie: string) {
   return json(await app.inject({ method: 'POST', url, payload, headers: { cookie } }));
 }
 
 async function main() {
+  assertStaticBoundaries();
   const adminPassword = `${prefix}-AdminPass123!`;
   const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'operator', status: 'active' } });
   const login = await app.inject({ method: 'POST', url: '/api/admin/auth/login', payload: { username: adminUser.username, password: adminPassword } });
