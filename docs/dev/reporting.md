@@ -80,4 +80,6 @@ reports/L15/latest-verify-output.txt
 - 发布脚本使用 git worktree 操作 `stage-reports`，不会直接切换当前开发工作区。
 - 默认不 push；需要上传远端时显式添加 `--push`。
 - 默认只检查当前分支是否落后远端，不自动 pull；需要自动快进当前分支时显式添加 `--pull-source`。
+- `--pull-source` 只用于发布前尝试快进当前分支。如果它实际拉取了新 commit，脚本会中止，并要求重新运行 verify:all。
+- 为了保证报告和验收日志对应同一个 commit，更推荐先手动 git pull，再运行 verify。
 - 发布前建议先保存完整 verify 输出，便于 reviewer 对照报告结论。

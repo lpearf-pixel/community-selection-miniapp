@@ -73,7 +73,7 @@ function remoteRefExists(ref: string) {
   return Boolean(runGit(['rev-parse', '--verify', ref], { allowFailure: true }));
 }
 
-function ensureSourceBranchSync(input: { pullSource: boolean; skipCheck: boolean }) {
+function ensureSourceBranchSync(input: { pullSource: boolean; skipCheck: boolean; stage: string }) {
   const currentBranch = runGit(['rev-parse', '--abbrev-ref', 'HEAD']);
   if (currentBranch === 'HEAD') throw new Error('当前处于 detached HEAD，不能发布阶段报告。请切回开发分支。');
   if (input.skipCheck) return currentBranch;
@@ -94,7 +94,20 @@ ${gitPullFfOnlyText} origin ${currentBranch}
 然后重新执行 report publish。`);
     }
     ensureCleanWorkspaceForPublishing();
+    const beforePullCommit = runGit(['rev-parse', 'HEAD']);
     runGit(['pull', '--ff-only', 'origin', currentBranch], { stdio: 'inherit' });
+    const afterPullCommit = runGit(['rev-parse', 'HEAD']);
+    if (beforePullCommit !== afterPullCommit) {
+      throw new Error(`当前分支已通过 --pull-source 更新到新 commit：
+${beforePullCommit} -> ${afterPullCommit}
+
+已有 reports/latest-verify-output.txt 可能对应旧 commit。
+请重新运行 verify：
+
+mkdir -p reports
+pnpm verify:all 2>&1 | tee reports/latest-verify-output.txt
+pnpm report:publish -- --stage=${input.stage} --push`);
+    }
   }
   if (counts.ahead > 0) {
     console.warn(`当前分支领先 ${remoteRef} ${counts.ahead} 个 commit，报告 source_commit 可能尚未推送远端。`);
@@ -181,7 +194,7 @@ function main() {
   const skipSourceSyncCheck = hasFlag(skipSourceSyncCheckFlagName);
 
   ensureCleanWorkspaceForPublishing();
-  const sourceBranch = ensureSourceBranchSync({ pullSource, skipCheck: skipSourceSyncCheck });
+  const sourceBranch = ensureSourceBranchSync({ pullSource, skipCheck: skipSourceSyncCheck, stage });
   const reportsDir = join(repoRoot, 'reports');
   mkdirSync(reportsDir, { recursive: true });
   const verifyOutputFile = join(reportsDir, 'latest-verify-output.txt');
