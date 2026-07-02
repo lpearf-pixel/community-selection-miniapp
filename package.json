@@ -18,7 +18,8 @@
     "verify:all": "bash scripts/verify-all-local.sh",
     "seed:check": "tsx scripts/check-seed-data.ts",
     "db:backup": "bash scripts/pg-backup.sh",
-    "db:restore": "bash scripts/pg-restore.sh"
+    "db:restore": "bash scripts/pg-restore.sh",
+    "report:stage": "tsx scripts/generate-stage-report.ts"
   },
   "devDependencies": {
     "prisma": "^6.2.1",
