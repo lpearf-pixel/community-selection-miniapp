@@ -1,17 +1,8 @@
 import Fastify from 'fastify';
 import { fail, ok } from '@community-selection/shared';
-import { registerCatalogRoutes } from './routes/catalog.js';
-import { registerGroupBuyRoutes } from './routes/group-buys.js';
-import { registerPaymentRoutes } from './routes/payments.js';
-import { registerRefundRoutes } from './routes/refunds.js';
-import { registerCommissionRoutes } from './routes/commissions.js';
-import { registerLogRoutes } from './routes/logs.js';
-import { registerWithdrawalRoutes } from './routes/withdrawals.js';
-import { registerRewardRoutes } from './routes/rewards.js';
-import { registerFulfillmentRoutes } from './routes/fulfillment.js';
-import { registerInventoryRoutes } from './routes/inventory.js';
-import { registerSupplierRoutes } from './routes/suppliers.js';
-import { registerAdminAuthRoutes, requireAdminSession } from './routes/admin-auth.js';
+import { registerPublicRoutes } from './routes/public/index.js';
+import { registerAdminRoutes } from './routes/admin/index.js';
+import { requireAdminSession } from './routes/admin-auth.js';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -39,18 +30,8 @@ export function buildApp() {
   });
 
   app.get('/health', async () => ok({ status: 'ok' }));
-  registerAdminAuthRoutes(app);
-  registerCatalogRoutes(app);
-  registerGroupBuyRoutes(app);
-  registerPaymentRoutes(app);
-  registerRefundRoutes(app);
-  registerCommissionRoutes(app);
-  registerLogRoutes(app);
-  registerFulfillmentRoutes(app);
-  registerWithdrawalRoutes(app);
-  registerRewardRoutes(app);
-  registerInventoryRoutes(app);
-  registerSupplierRoutes(app);
+  registerPublicRoutes(app);
+  registerAdminRoutes(app);
 
   return app;
 }

@@ -134,11 +134,16 @@ describe('L4 group-buy and order routes', () => {
 
   it('registers L13 inventory and purchase routes and models', () => {
     const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+    const adminRouteIndex = readFileSync(new URL('../src/routes/admin/index.ts', import.meta.url), 'utf8');
+    const publicRouteIndex = readFileSync(new URL('../src/routes/public/index.ts', import.meta.url), 'utf8');
     const inventoryRoutes = readFileSync(new URL('../src/routes/inventory.ts', import.meta.url), 'utf8');
     const supplierRoutes = readFileSync(new URL('../src/routes/suppliers.ts', import.meta.url), 'utf8');
     const schema = readFileSync(new URL('../../../prisma/schema.prisma', import.meta.url), 'utf8');
-    expect(appSource.includes('registerInventoryRoutes')).toBe(true);
-    expect(appSource.includes('registerSupplierRoutes')).toBe(true);
+    expect(appSource.includes('registerPublicRoutes')).toBe(true);
+    expect(appSource.includes('registerAdminRoutes')).toBe(true);
+    expect(adminRouteIndex.includes('registerInventoryRoutes')).toBe(true);
+    expect(adminRouteIndex.includes('registerSupplierRoutes')).toBe(true);
+    expect(publicRouteIndex.includes('registerGroupBuyRoutes')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/overview')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/ledger')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/products/:id/adjust')).toBe(true);
@@ -173,11 +178,12 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes('client_request_id')).toBe(true);
     expect(source.includes('user_openid')).toBe(true);
     expect(source.includes('leader_openid')).toBe(true);
-    expect(source.includes('productStock.stock < stockQuantity')).toBe(true);
-    expect(source.includes('data: { stock: stockAfter }')).toBe(true);
+    const inventoryServiceSource = readFileSync(new URL('../src/modules/inventory/inventory-service.ts', import.meta.url), 'utf8');
+    expect(inventoryServiceSource.includes('product.stock < stockQuantity')).toBe(true);
+    expect(inventoryServiceSource.includes('data: { stock: stockAfter }')).toBe(true);
     expect(source.includes('group_buy_expired')).toBe(true);
     expect(source.includes('quantity: saleQuantity')).toBe(true);
-    expect(source.includes('stock_quantity: stockQuantity')).toBe(true);
+    expect(inventoryServiceSource.includes('stock_quantity') || source.includes('stock_quantity: stockLock.stock_quantity')).toBe(true);
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
     expect(serviceSource.includes('current_quantity: { increment: order.quantity }')).toBe(true);
     expect(source.includes('refund.upsert')).toBe(true);

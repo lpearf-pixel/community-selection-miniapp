@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
+import { lockStockForOrder } from '../modules/inventory/inventory-service.js';
 import { markCommissionPendingForCompletedOrder } from '../services/commission-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../services/logging-service.js';
 
@@ -117,25 +118,6 @@ async function createGroupOrder(body: CreateOrderBody) {
     if (!groupBuy) throw new Error('团购不存在');
     if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可下单');
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
-    const productStock = await tx.product.findUnique({ where: { id: groupBuy.product_id } });
-    if (!productStock) throw new Error('商品不存在');
-    const stockDeductQuantity = Math.max(1, groupBuy.product.stock_deduct_quantity ?? 1);
-    const stockQuantity = saleQuantity * stockDeductQuantity;
-    if (productStock.stock < stockQuantity) throw new Error('库存不足');
-    const stockBefore = productStock.stock;
-    const stockAfter = stockBefore - stockQuantity;
-    await tx.product.update({
-      where: { id: groupBuy.product_id },
-      data: { stock: stockAfter }
-    });
-    await safeRecordBusinessEvent(tx, {
-      event_type: 'order_stock_decremented',
-      event_source: 'group-buys-route',
-      group_buy_id: groupBuy.id,
-      idempotency_key: clientRequestId,
-      payload: { product_id: groupBuy.product_id, sale_quantity: saleQuantity, stock_quantity: stockQuantity }
-    });
-
     const amount = groupBuy.price_cents * saleQuantity;
     const creditAmount = Number(body.credit_amount_cents ?? 0);
     if (!Number.isInteger(creditAmount) || creditAmount < 0) throw new Error('消费额度抵扣金额不合法');
@@ -172,20 +154,20 @@ async function createGroupOrder(body: CreateOrderBody) {
         receiver_address: body.receiver_address
       }
     });
-    await tx.stockLedger.create({
-      data: {
-        product_id: groupBuy.product_id,
-        source_type: 'order_lock',
-        source_id: order.id,
-        direction: 'out',
-        quantity: stockQuantity,
-        stock_before: stockBefore,
-        stock_after: stockAfter,
-        operator_type: 'user',
-        operator_id: userId,
-        remark: '订单锁定库存',
-        payload: { group_buy_id: groupBuy.id, client_request_id: clientRequestId, sale_quantity: saleQuantity, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock_unit: groupBuy.product.stock_unit, stock_deduct_quantity: stockDeductQuantity }
-      }
+    const stockLock = await lockStockForOrder(tx, {
+      product_id: groupBuy.product_id,
+      sale_quantity: saleQuantity,
+      user_id: userId,
+      order_id: order.id,
+      group_buy_id: groupBuy.id,
+      client_request_id: clientRequestId
+    });
+    await safeRecordBusinessEvent(tx, {
+      event_type: 'order_stock_decremented',
+      event_source: 'group-buys-route',
+      group_buy_id: groupBuy.id,
+      idempotency_key: clientRequestId,
+      payload: { product_id: groupBuy.product_id, sale_quantity: saleQuantity, stock_quantity: stockLock.stock_quantity }
     });
     if (creditAmount > 0) {
       await tx.consumerCreditLedger.create({
