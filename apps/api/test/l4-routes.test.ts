@@ -47,7 +47,8 @@ describe('L4 group-buy and order routes', () => {
     const commissionRoutes = readFileSync(new URL('../src/routes/commissions.ts', import.meta.url), 'utf8');
     const paymentService = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
     const refundService = readFileSync(new URL('../src/services/refund-service.ts', import.meta.url), 'utf8');
-    const groupBuySource = readFileSync(new URL('../src/routes/group-buys.ts', import.meta.url), 'utf8');
+    const commissionService = readFileSync(new URL('../src/services/commission-service.ts', import.meta.url), 'utf8');
+    const orderService = readFileSync(new URL('../src/modules/order/order-service.ts', import.meta.url), 'utf8');
     expect(appSource.includes('registerAdminRoutes')).toBe(true);
     expect(adminRouteIndex.includes('registerCommissionRoutes')).toBe(true);
     expect(commissionRoutes.includes("/api/leaders/me/commissions'")).toBe(true);
@@ -55,7 +56,9 @@ describe('L4 group-buy and order routes', () => {
     expect(commissionRoutes.includes("/api/admin/commissions/settle'")).toBe(true);
     expect(paymentService.includes('ensureEstimatedCommission')).toBe(true);
     expect(refundService.includes('syncCommissionAfterRefund')).toBe(true);
-    expect(groupBuySource.includes('markCommissionPendingForCompletedOrder')).toBe(true);
+    expect(commissionService.includes('markCommissionPendingForCompletedOrder')).toBe(true);
+    expect(orderService.includes('markCommissionPendingForCompletedOrder')).toBe(true);
+    expect(orderService.includes('order_completed')).toBe(true);
   });
 
 
@@ -134,12 +137,17 @@ describe('L4 group-buy and order routes', () => {
     const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
     const adminRouteIndex = readFileSync(new URL('../src/routes/admin/index.ts', import.meta.url), 'utf8');
     const fulfillmentRoutes = readFileSync(new URL('../src/routes/fulfillment.ts', import.meta.url), 'utf8');
+    const orderService = readFileSync(new URL('../src/modules/order/order-service.ts', import.meta.url), 'utf8');
     const groupBuySource = readFileSync(new URL('../src/routes/group-buys.ts', import.meta.url), 'utf8');
     expect(appSource.includes('registerAdminRoutes')).toBe(true);
     expect(adminRouteIndex.includes('registerFulfillmentRoutes')).toBe(true);
     expect(fulfillmentRoutes.includes('/api/admin/fulfillment/overview')).toBe(true);
     expect(fulfillmentRoutes.includes('/api/admin/orders/:id/pickup-verify')).toBe(true);
-    expect(fulfillmentRoutes.includes('pickup_verified')).toBe(true);
+    expect(fulfillmentRoutes.includes('pickupVerify')).toBe(true);
+    expect(orderService.includes('pickupVerify')).toBe(true);
+    expect(orderService.includes("order_status: 'picked'")).toBe(true);
+    expect(orderService.includes('recordAdminAudit')).toBe(true);
+    expect(orderService.includes('safeRecordBusinessEvent')).toBe(true);
     expect(groupBuySource.includes('/api/group-buys/:id/clone')).toBe(true);
     expect(groupBuySource.includes('/api/admin/group-buys/:id/clone')).toBe(true);
     expect(groupBuySource.includes('/api/admin/orders/export/picking.csv')).toBe(true);
