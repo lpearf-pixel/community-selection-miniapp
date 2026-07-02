@@ -12,6 +12,9 @@ importers:
         specifier: ^2.4.3
         version: 2.4.3
     devDependencies:
+      '@prisma/engines':
+        specifier: 6.19.3
+        version: 6.19.3
       '@prisma/client':
         specifier: 6.19.3
         version: 6.19.3
@@ -80,6 +83,9 @@ packages:
   '@prisma/client@6.19.3':
     resolution: {}
 
+  '@prisma/engines@6.19.3':
+    resolution: {}
+
   '@types/bcryptjs@2.4.6':
     resolution: {integrity: sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ==}
     deprecated: This is a stub types definition. bcryptjs provides its own type definitions, so you do not need this installed.
@@ -122,6 +128,8 @@ packages:
 snapshots:
 
   '@prisma/client@6.19.3': {}
+
+  '@prisma/engines@6.19.3': {}
 
   '@types/bcryptjs@2.4.6':
     dependencies:
