@@ -1,0 +1,33 @@
+
+> community-selection-miniapp@0.1.0 verify:all /Users/kandysmith/dev/chatgpt/community-selection-miniapp/community-selection-miniapp
+> bash scripts/verify-all-local.sh
+
+
+> community-selection-miniapp@0.1.0 db:generate /Users/kandysmith/dev/chatgpt/community-selection-miniapp/community-selection-miniapp
+> prisma generate --schema prisma/schema.prisma
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Error: Prisma schema validation - (get-dmmf wasm)
+Error code: P1012
+[1;91merror[0m: [1mError validating field `operator_admin` in model `InventoryLoss`: The relation field `operator_admin` on model `InventoryLoss` is missing an opposite relation field on the model `AdminUser`. Either run `prisma format` or add it manually.[0m
+  [1;94m-->[0m  [4mprisma/schema.prisma:692[0m
+[1;94m   | [0m
+[1;94m691 | [0m  supplier           Supplier?     @relation(fields: [supplier_id], references: [id])
+[1;94m692 | [0m  [1;91moperator_admin     AdminUser?    @relation(fields: [operator_admin_id], references: [id])[0m
+[1;94m693 | [0m
+[1;94m   | [0m
+[1;91merror[0m: [1mError validating field `operator_admin` in model `StockCheck`: The relation field `operator_admin` on model `StockCheck` is missing an opposite relation field on the model `AdminUser`. Either run `prisma format` or add it manually.[0m
+  [1;94m-->[0m  [4mprisma/schema.prisma:709[0m
+[1;94m   | [0m
+[1;94m708 | [0m  confirmed_at       DateTime?
+[1;94m709 | [0m  [1;91moperator_admin     AdminUser?       @relation(fields: [operator_admin_id], references: [id])[0m
+[1;94m710 | [0m  items              StockCheckItem[]
+[1;94m   | [0m
+
+Validation Error Count: 2
+[Context: getDmmf]
+
+Prisma CLI Version : 6.19.3
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
