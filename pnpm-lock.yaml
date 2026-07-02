@@ -1,0 +1,147 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
+    devDependencies:
+      '@prisma/client':
+        specifier: ^6.2.1
+        version: 6.2.1
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.10.5
+      prisma:
+        specifier: ^6.2.1
+        version: 6.2.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.19.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.8
+
+  apps/admin:
+    dependencies:
+      '@community-selection/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      antd:
+        specifier: ^5.23.0
+        version: 5.23.0
+      react:
+        specifier: ^19.0.0
+        version: 19.0.0
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.0.0(react@19.0.0)
+      vite:
+        specifier: ^6.0.7
+        version: 6.0.7
+
+  apps/api:
+    dependencies:
+      '@community-selection/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@community-selection/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
+      fastify:
+        specifier: ^5.2.1
+        version: 5.2.1
+    devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
+
+  packages/config: {}
+
+  packages/shared: {}
+
+packages:
+
+  '@prisma/client@6.2.1':
+    resolution: {}
+
+  '@types/bcryptjs@2.4.6':
+    resolution: {integrity: sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ==}
+    deprecated: This is a stub types definition. bcryptjs provides its own type definitions, so you do not need this installed.
+
+  '@types/node@22.10.5':
+    resolution: {}
+
+  antd@5.23.0:
+    resolution: {}
+
+  bcryptjs@2.4.3:
+    resolution: {integrity: sha512-V/Hy/X9Vt7f3BbPJEi8BdVFMByHi+jNXrYkW3huaybV/kQ0KJg0Y6PkEMbn+zeT+i+SiKZ/HMqJGIIt4LZDqNQ==}
+
+  fastify@5.2.1:
+    resolution: {}
+
+  prisma@6.2.1:
+    resolution: {}
+
+  react-dom@19.0.0:
+    resolution: {}
+    peerDependencies:
+      react: ^19.0.0
+
+  react@19.0.0:
+    resolution: {}
+
+  tsx@4.19.2:
+    resolution: {}
+
+  typescript@5.7.3:
+    resolution: {}
+
+  vite@6.0.7:
+    resolution: {}
+
+  vitest@2.1.8:
+    resolution: {}
+
+snapshots:
+
+  '@prisma/client@6.2.1': {}
+
+  '@types/bcryptjs@2.4.6': {}
+
+  '@types/node@22.10.5': {}
+
+  antd@5.23.0: {}
+
+  bcryptjs@2.4.3: {}
+
+  fastify@5.2.1: {}
+
+  prisma@6.2.1: {}
+
+  react-dom@19.0.0(react@19.0.0):
+    dependencies:
+      react: 19.0.0
+
+  react@19.0.0: {}
+
+  tsx@4.19.2: {}
+
+  typescript@5.7.3: {}
+
+  vite@6.0.7: {}
+
+  vitest@2.1.8: {}
