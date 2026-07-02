@@ -204,7 +204,9 @@ describe('L4 group-buy and order routes', () => {
     expect(source.includes('group_buy_expired')).toBe(true);
     const orderServiceSource = readFileSync(new URL('../src/modules/order/order-service.ts', import.meta.url), 'utf8');
     expect(orderServiceSource.includes('const saleQuantity')).toBe(true);
-    expect(orderServiceSource.includes('quantity: saleQuantity')).toBe(true);
+    expect(orderServiceSource.includes('positiveInt(input.quantity')).toBe(true);
+    expect(orderServiceSource.includes('sale_quantity')).toBe(true);
+    expect(orderServiceSource.includes('saleQuantity')).toBe(true);
     expect(inventoryServiceSource.includes('stockDeductQuantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_deduct_quantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_quantity') || orderServiceSource.includes('stock_quantity: stockLock.stock_quantity')).toBe(true);
