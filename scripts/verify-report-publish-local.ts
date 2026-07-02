@@ -22,12 +22,19 @@ assert(packageJson.scripts?.['report:stage'] === 'tsx scripts/generate-stage-rep
 assert(packageJson.scripts?.['report:publish'] === 'tsx scripts/publish-stage-report.ts', 'package.json should expose report:publish');
 
 const publishSource = read(publishPath);
-for (const required of ['stage-reports', 'worktree', 'latest.md', 'latest-verify-output.txt', 'metadata.json', '--push', '--no-push']) {
+for (const required of ['stage-reports', 'worktree', 'latest.md', 'latest-verify-output.txt', 'metadata.json', '--push', '--no-push', 'git fetch origin', 'git pull --ff-only', 'rev-list --left-right --count', '--pull-source', '--skip-source-sync-check', 'origin/stage-reports']) {
   assert(publishSource.includes(required), `publish script should include ${required}`);
 }
 assert(!publishSource.includes('git checkout stage-reports'), 'publish script must not directly checkout the report branch in the current worktree');
 assert(!publishSource.includes('git switch stage-reports'), 'publish script must not directly switch the current worktree');
+assert(!publishSource.includes('push --force'), 'publish script must not force push');
+assert(!publishSource.includes('push -f'), 'publish script must not force push');
 assert(publishSource.includes('--orphan'), 'publish script may initialize the report branch through an orphan worktree');
+
+const reportingDocs = read(docsPath);
+for (const required of ['git fetch origin', 'git pull --ff-only', 'pnpm verify:all', 'pnpm report:publish', '--pull-source']) {
+  assert(reportingDocs.includes(required), `reporting docs should include ${required}`);
+}
 
 const verifyAll = read(verifyAllPath);
 assert(verifyAll.includes('pnpm exec tsx scripts/verify-report-publish-local.ts'), 'verify-all should include report publish verifier');

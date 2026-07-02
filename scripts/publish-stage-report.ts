@@ -7,6 +7,14 @@ const defaultBranch = 'stage-reports';
 const pushFlagName = 'push';
 const noPushFlagName = 'no-push';
 const noPushCliFlag = '--no-push';
+const pullSourceFlagName = 'pull-source';
+const skipSourceSyncCheckFlagName = 'skip-source-sync-check';
+const pullSourceCliFlag = '--pull-source';
+const skipSourceSyncCheckCliFlag = '--skip-source-sync-check';
+const gitFetchOriginText = 'git fetch origin';
+const gitPullFfOnlyText = 'git pull --ff-only';
+const revListAheadBehindText = 'rev-list --left-right --count';
+const originStageReportsRef = 'origin/stage-reports';
 const worktreePath = join(repoRoot, '.tmp/stage-reports-worktree');
 
 type RunOptions = { cwd?: string; allowFailure?: boolean; stdio?: 'pipe' | 'inherit' };
@@ -56,19 +64,68 @@ function timestampUtc() {
   return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
 
+function parseAheadBehind(output: string) {
+  const [aheadText, behindText] = output.trim().split(/\s+/);
+  return { ahead: Number(aheadText ?? 0), behind: Number(behindText ?? 0) };
+}
+
+function remoteRefExists(ref: string) {
+  return Boolean(runGit(['rev-parse', '--verify', ref], { allowFailure: true }));
+}
+
+function ensureSourceBranchSync(input: { pullSource: boolean; skipCheck: boolean }) {
+  const currentBranch = runGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (currentBranch === 'HEAD') throw new Error('当前处于 detached HEAD，不能发布阶段报告。请切回开发分支。');
+  if (input.skipCheck) return currentBranch;
+
+  runGit(['fetch', 'origin']);
+  const remoteRef = `origin/${currentBranch}`;
+  if (!remoteRefExists(remoteRef)) {
+    console.warn(`未找到 ${remoteRef}，跳过 source sync 检查。可手动执行 ${gitFetchOriginText} 后确认远端分支。`);
+    return currentBranch;
+  }
+
+  const counts = parseAheadBehind(runGit(['rev-list', '--left-right', '--count', `HEAD...${remoteRef}`]));
+  if (counts.behind > 0) {
+    if (!input.pullSource) {
+      throw new Error(`当前分支落后 ${remoteRef} ${counts.behind} 个 commit。
+请先运行：
+${gitPullFfOnlyText} origin ${currentBranch}
+然后重新执行 report publish。`);
+    }
+    ensureCleanWorkspaceForPublishing();
+    runGit(['pull', '--ff-only', 'origin', currentBranch], { stdio: 'inherit' });
+  }
+  if (counts.ahead > 0) {
+    console.warn(`当前分支领先 ${remoteRef} ${counts.ahead} 个 commit，报告 source_commit 可能尚未推送远端。`);
+  }
+  return currentBranch;
+}
+
+function fetchReportBranch(branch: string) {
+  runGit(['fetch', 'origin', `${branch}:refs/remotes/origin/${branch}`], { allowFailure: true });
+  return remoteRefExists(`origin/${branch}`);
+}
+
 function ensureReportBranch(branch: string) {
   runGit(['worktree', 'remove', relative(repoRoot, worktreePath), '--force'], { allowFailure: true });
   rmSync(worktreePath, { recursive: true, force: true });
+  const remoteExists = fetchReportBranch(branch);
   const localExists = Boolean(runGit(['rev-parse', '--verify', branch], { allowFailure: true }));
-  if (localExists) {
-    runGit(['worktree', 'add', relative(repoRoot, worktreePath), branch]);
-    return;
+
+  if (remoteExists && !localExists) {
+    runGit(['branch', branch, `origin/${branch}`]);
   }
 
-  runGit(['fetch', 'origin', `${branch}:${branch}`], { allowFailure: true });
-  const fetchedExists = Boolean(runGit(['rev-parse', '--verify', branch], { allowFailure: true }));
-  if (fetchedExists) {
+  if (remoteExists || localExists) {
     runGit(['worktree', 'add', relative(repoRoot, worktreePath), branch]);
+    if (remoteExists) {
+      try {
+        runGit(['pull', '--ff-only', 'origin', branch], { cwd: worktreePath, stdio: 'inherit' });
+      } catch (error) {
+        throw new Error(`${branch} 本地分支无法快进到 origin/${branch}，请手动处理冲突。${error instanceof Error ? ` ${error.message}` : ''}`);
+      }
+    }
     return;
   }
 
@@ -79,6 +136,7 @@ function ensureReportBranch(branch: string) {
   runGit(['add', 'README.md'], { cwd: worktreePath });
   runGit(['commit', '-m', 'chore: initialize stage reports branch'], { cwd: worktreePath });
 }
+
 
 function copyReportFiles(input: { stage: string; branch: string; sourceBranch: string; sourceCommit: string; timestamp: string; reportFile: string; verifyOutputFile: string }) {
   const stageDir = join(worktreePath, 'reports', input.stage);
@@ -104,13 +162,26 @@ function copyReportFiles(input: { stage: string; branch: string; sourceBranch: s
   writeFileSync(join(stageDir, 'metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
+
+function ensureReportBranchSafeToPush(branch: string) {
+  const remoteExists = fetchReportBranch(branch);
+  if (!remoteExists) return;
+  const counts = parseAheadBehind(runGit(['rev-list', '--left-right', '--count', `HEAD...origin/${branch}`], { cwd: worktreePath }));
+  if (counts.behind > 0) {
+    throw new Error(`${branch} 分支在提交报告后又落后远端，禁止 push。请重新执行 publish。`);
+  }
+}
+
 function main() {
   const stage = argValue('stage');
   if (!stage) throw new Error('缺少必填参数 --stage=Lxx');
   const branch = argValue('branch') ?? defaultBranch;
   const push = hasFlag(pushFlagName) && !hasFlag(noPushFlagName);
+  const pullSource = hasFlag(pullSourceFlagName);
+  const skipSourceSyncCheck = hasFlag(skipSourceSyncCheckFlagName);
 
   ensureCleanWorkspaceForPublishing();
+  const sourceBranch = ensureSourceBranchSync({ pullSource, skipCheck: skipSourceSyncCheck });
   const reportsDir = join(repoRoot, 'reports');
   mkdirSync(reportsDir, { recursive: true });
   const verifyOutputFile = join(reportsDir, 'latest-verify-output.txt');
@@ -123,7 +194,6 @@ function main() {
   const reportFile = join(reportsDir, `stage-${stage}-report.md`);
   if (!existsSync(reportFile)) throw new Error(`阶段报告不存在：${reportFile}`);
 
-  const sourceBranch = runGit(['rev-parse', '--abbrev-ref', 'HEAD']);
   const sourceCommit = runGit(['rev-parse', 'HEAD']);
   const shortCommit = sourceCommit.slice(0, 8);
   const stamp = timestampUtc();
@@ -141,9 +211,10 @@ function main() {
   }
 
   if (push) {
+    ensureReportBranchSafeToPush(branch);
     runGit(['push', 'origin', branch], { cwd: worktreePath, stdio: 'inherit' });
   } else {
-    console.log(`如需上传远端，请运行：\n\ngit push origin ${branch}\n\n默认采用 ${noPushCliFlag}，不会上传远端。\n\n或者下次使用：\n\npnpm report:publish -- --stage=${stage} --push`);
+    console.log(`如需上传远端，请运行：\n\ngit push origin ${branch}\n\n默认采用 ${noPushCliFlag}，不会上传远端。可用 ${pullSourceCliFlag} 自动快进当前分支，或用 ${skipSourceSyncCheckCliFlag} 跳过 source sync 检查。\n\n或者下次使用：\n\npnpm report:publish -- --stage=${stage} --push`);
   }
 
   runGit(['worktree', 'remove', relative(repoRoot, worktreePath), '--force'], { allowFailure: true });
