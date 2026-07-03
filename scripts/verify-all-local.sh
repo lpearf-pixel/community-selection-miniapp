@@ -29,6 +29,7 @@ pnpm exec tsx scripts/verify-l12-fulfillment-local.ts
 pnpm exec tsx scripts/verify-l13-inventory-purchase-local.ts
 pnpm exec tsx scripts/verify-l14-batch-supplier-loss-local.ts
 pnpm exec tsx scripts/verify-l14-5-modular-boundary-local.ts
+pnpm exec tsx scripts/verify-l15-after-sale-local.ts
 scripts/verify-l1-l2-l3-local.sh
 pnpm exec tsx scripts/verify-l4-admin-basic-local.ts
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-local.sh

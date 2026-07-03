@@ -109,6 +109,7 @@ model User {
   leader_applications LeaderApplication[]
   withdrawals         Withdrawal[]        @relation("WithdrawalLeader")
   audit_logs          AuditLog[]          @relation("AuditActor")
+  after_sale_cases    AfterSaleCase[]
 }
 
 model Category {
@@ -150,6 +151,7 @@ model Product {
   batch_stock_ledgers  BatchStockLedger[]
   inventory_losses     InventoryLoss[]
   stock_check_items    StockCheckItem[]
+  after_sale_cases     AfterSaleCase[]
 }
 
 model Community {
@@ -198,6 +200,7 @@ model GroupBuy {
   community        Community      @relation(fields: [community_id], references: [id])
   orders           Order[]
   commissions      Commission[]
+  after_sale_cases AfterSaleCase[]
 
   @@index([product_id])
   @@index([leader_user_id])
@@ -238,6 +241,7 @@ model Order {
   payments            Payment[]
   refunds             Refund[]
   commissions         Commission[]
+  after_sale_cases    AfterSaleCase[]
 
   @@index([user_id])
   @@index([group_buy_id])
@@ -733,6 +737,65 @@ model StockCheckItem {
   @@index([batch_id])
 }
 
+model AfterSaleCase {
+  id                     String         @id @default(cuid())
+  order_id               String
+  user_id                String?
+  group_buy_id           String?
+  product_id             String?
+  type                   String
+  status                 String         @default("submitted")
+  resolution_type        String?
+  reason                 String
+  description            String?
+  requested_refund_cents Int?
+  approved_refund_cents  Int?
+  evidence_image_urls    Json?
+  responsibility         String?
+  customer_note          String?
+  admin_note             String?
+  refund_id              String?
+  inventory_loss_id      String?
+  reviewed_by_admin_id   String?
+  resolved_by_admin_id   String?
+  reviewed_at            DateTime?
+  resolved_at            DateTime?
+  cancelled_at           DateTime?
+  created_at             DateTime       @default(now())
+  updated_at             DateTime       @updatedAt
+  order                  Order          @relation(fields: [order_id], references: [id])
+  user                   User?          @relation(fields: [user_id], references: [id])
+  group_buy              GroupBuy?      @relation(fields: [group_buy_id], references: [id])
+  product                Product?       @relation(fields: [product_id], references: [id])
+  reviewed_by_admin      AdminUser?     @relation("AfterSaleReviewedByAdmin", fields: [reviewed_by_admin_id], references: [id])
+  resolved_by_admin      AdminUser?     @relation("AfterSaleResolvedByAdmin", fields: [resolved_by_admin_id], references: [id])
+  logs                   AfterSaleLog[]
+
+  @@index([order_id])
+  @@index([user_id])
+  @@index([group_buy_id])
+  @@index([product_id])
+  @@index([status])
+  @@index([type])
+  @@index([created_at])
+}
+
+model AfterSaleLog {
+  id                  String        @id @default(cuid())
+  after_sale_case_id  String
+  action              String
+  actor_type          String
+  actor_id            String?
+  note                String?
+  payload             Json?
+  created_at          DateTime      @default(now())
+  after_sale_case     AfterSaleCase @relation(fields: [after_sale_case_id], references: [id])
+
+  @@index([after_sale_case_id])
+  @@index([action])
+  @@index([created_at])
+}
+
 model AdminUser {
   id                    String              @id @default(cuid())
   username              String              @unique
@@ -752,6 +815,8 @@ model AdminUser {
   purchase_plans        PurchasePlan[]
   inventory_losses_operated InventoryLoss[] @relation("InventoryLossOperatorAdmin")
   stock_checks_operated     StockCheck[]    @relation("StockCheckOperatorAdmin")
+  after_sales_reviewed      AfterSaleCase[] @relation("AfterSaleReviewedByAdmin")
+  after_sales_resolved      AfterSaleCase[] @relation("AfterSaleResolvedByAdmin")
 }
 
 model AdminSession {

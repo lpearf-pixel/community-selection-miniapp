@@ -7,6 +7,7 @@ import { registerSupplierRoutes } from '../suppliers.js';
 import { registerCommissionRoutes } from '../commissions.js';
 import { registerWithdrawalRoutes } from '../withdrawals.js';
 import { registerAdminGroupBuyRoutes } from '../group-buys.js';
+import { registerAdminAfterSaleRoutes } from '../after-sales.js';
 
 export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminAuthRoutes(app);
@@ -17,4 +18,5 @@ export function registerAdminRoutes(app: FastifyInstance) {
   registerSupplierRoutes(app);
   registerCommissionRoutes(app);
   registerWithdrawalRoutes(app);
+  registerAdminAfterSaleRoutes(app);
 }
