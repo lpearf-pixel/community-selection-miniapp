@@ -11,10 +11,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "antd": "^5.23.0",
-    "vite": "^6.0.7",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@community-selection/shared": "workspace:*"
+    "@community-selection/shared": "workspace:*",
+    "antd": "^5.29.3",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "vite": "^6.4.3"
   }
 }

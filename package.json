@@ -24,13 +24,13 @@
     "report:publish": "tsx scripts/publish-stage-report.ts"
   },
   "devDependencies": {
-    "prisma": "6.19.3",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.8",
     "@prisma/client": "6.19.3",
-    "@types/node": "^22.10.5",
-    "@prisma/engines": "6.19.3"
+    "@prisma/engines": "6.19.3",
+    "@types/node": "^22.20.0",
+    "prisma": "6.19.3",
+    "tsx": "^4.22.5",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3"
