@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../services/logging-service.js';
+import { pickupVerify } from '../modules/order/order-service.js';
 
 type OverviewQuery = { date?: string };
 
@@ -77,47 +76,17 @@ export function registerFulfillmentRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const body = request.body as PickupVerifyBody;
-      const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const existing = await tx.order.findUnique({ where: { id } });
-        if (!existing) throw new Error('订单不存在');
-        if (existing.order_status === 'picked') return existing;
-        if (existing.order_status !== 'ready') throw new Error('当前订单不可核销自提');
-        const updated = await tx.order.update({ where: { id }, data: { order_status: 'picked' } });
-        await safeRecordOrderTimeline(tx, {
-          order_id: id,
-          event_type: 'pickup_verified',
-          title: '自提已核销',
-          from_status: existing.order_status,
-          to_status: 'picked',
-          actor_type: 'admin',
-          actor_user_id: request.adminUser?.id ?? null,
-          payload: { admin_remark: body.admin_remark ?? null }
-        });
-        await safeRecordBusinessEvent(tx, {
-          event_type: 'pickup_verified',
-          event_source: 'fulfillment-route',
-          order_id: id,
-          before_snapshot: existing,
-          after_snapshot: updated,
-          payload: { admin_remark: body.admin_remark ?? null }
-        });
-        await tx.adminAuditLog.create({
-          data: {
-            admin_user_id: request.adminUser?.id ?? null,
-            action: 'order_pickup_verified',
-            target_type: 'Order',
-            target_id: id,
-            ip_address: request.ip,
-            user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
-            payload: { admin_remark: body.admin_remark ?? null }
-          }
-        });
-        return updated;
-      });
-      return ok(order);
+      return ok(await pickupVerify({
+        order_id: id,
+        admin_user_id: request.adminUser?.id ?? null,
+        ip_address: request.ip,
+        user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
+        admin_remark: body.admin_remark ?? null
+      }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '自提核销失败');
     }
   });
+
 }

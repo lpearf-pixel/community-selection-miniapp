@@ -2,6 +2,7 @@
   "name": "community-selection-miniapp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --parallel --filter @community-selection/api --filter @community-selection/admin dev",
     "build": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/api build && pnpm --filter @community-selection/admin build",
@@ -18,15 +19,18 @@
     "verify:all": "bash scripts/verify-all-local.sh",
     "seed:check": "tsx scripts/check-seed-data.ts",
     "db:backup": "bash scripts/pg-backup.sh",
-    "db:restore": "bash scripts/pg-restore.sh"
+    "db:restore": "bash scripts/pg-restore.sh",
+    "report:stage": "tsx scripts/generate-stage-report.ts",
+    "report:publish": "tsx scripts/publish-stage-report.ts"
   },
   "devDependencies": {
-    "prisma": "^6.2.1",
+    "prisma": "6.19.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
-    "@prisma/client": "^6.2.1",
-    "@types/node": "^22.10.5"
+    "@prisma/client": "6.19.3",
+    "@types/node": "^22.10.5",
+    "@prisma/engines": "6.19.3"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3"

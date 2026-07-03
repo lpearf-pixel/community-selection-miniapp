@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../services/logging-service.js';
@@ -50,15 +50,42 @@ function resolveTaxStatus(body: TaxReviewBody) {
   return body.invoice_status === 'verified' ? 'completed' : 'pending_invoice';
 }
 
+function uniqueOrderIds(orderIds: Array<string | null | undefined> = []) {
+  return Array.from(new Set(orderIds.filter((orderId): orderId is string => Boolean(orderId))));
+}
+
 async function logWithdrawalEvent(tx: Prisma.TransactionClient, input: {
   event_type: string;
   withdrawal: { id: string; leader_user_id: string; amount_cents: number; status: string };
   commissionIds?: string[];
   orderIds?: string[];
+  admin_user_id?: string | null;
+  extraPayload?: Record<string, unknown>;
   before?: unknown;
   after?: unknown;
   message?: string;
 }) {
+  const orderIds = uniqueOrderIds(input.orderIds);
+  const payload = {
+    withdrawal_id: input.withdrawal.id,
+    amount_cents: input.withdrawal.amount_cents,
+    commission_ids: input.commissionIds ?? [],
+    order_ids: orderIds,
+    action: input.event_type,
+    status: input.withdrawal.status,
+    admin_user_id: input.admin_user_id ?? null,
+    ...(input.extraPayload ?? {}),
+    ...(input.event_type === 'withdrawal_mark_paid' && 'tax_amount_cents' in input.withdrawal
+      ? {
+        gross_amount_cents: input.withdrawal.amount_cents,
+        tax_amount_cents: (input.withdrawal as { tax_amount_cents?: number }).tax_amount_cents ?? 0,
+        payable_amount_cents: (input.withdrawal as { payable_amount_cents?: number }).payable_amount_cents ?? input.withdrawal.amount_cents,
+        tax_mode: (input.withdrawal as { tax_mode?: string }).tax_mode,
+        tax_status: (input.withdrawal as { tax_status?: string }).tax_status,
+        invoice_status: (input.withdrawal as { invoice_status?: string }).invoice_status
+      }
+      : {})
+  };
   await safeRecordBusinessEvent(tx, {
     event_type: input.event_type,
     event_source: 'withdrawals-route',
@@ -66,23 +93,21 @@ async function logWithdrawalEvent(tx: Prisma.TransactionClient, input: {
     leader_user_id: input.withdrawal.leader_user_id,
     before_snapshot: input.before,
     after_snapshot: input.after ?? input.withdrawal,
-    payload: {
-      amount_cents: input.withdrawal.amount_cents,
-      commission_ids: input.commissionIds ?? [],
-      ...(input.event_type === 'withdrawal_mark_paid' && 'tax_amount_cents' in input.withdrawal
-        ? {
-          gross_amount_cents: input.withdrawal.amount_cents,
-          tax_amount_cents: (input.withdrawal as { tax_amount_cents?: number }).tax_amount_cents ?? 0,
-          payable_amount_cents: (input.withdrawal as { payable_amount_cents?: number }).payable_amount_cents ?? input.withdrawal.amount_cents,
-          tax_mode: (input.withdrawal as { tax_mode?: string }).tax_mode,
-          tax_status: (input.withdrawal as { tax_status?: string }).tax_status,
-          invoice_status: (input.withdrawal as { invoice_status?: string }).invoice_status
-        }
-        : {})
-    },
+    payload,
     message: input.message ?? null
   });
-  for (const orderId of input.orderIds ?? []) {
+  for (const orderId of orderIds) {
+    await safeRecordBusinessEvent(tx, {
+      event_type: input.event_type,
+      event_source: 'withdrawals-route',
+      order_id: orderId,
+      withdrawal_id: input.withdrawal.id,
+      leader_user_id: input.withdrawal.leader_user_id,
+      before_snapshot: input.before,
+      after_snapshot: input.after ?? input.withdrawal,
+      payload,
+      message: input.message ?? null
+    });
     await safeRecordOrderTimeline(tx, {
       order_id: orderId,
       event_type: input.event_type,
@@ -228,7 +253,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
           commissionIds: commissions.map((item) => item.id),
           orderIds: commissions.map((item) => item.order_id),
           before: withdrawal,
-          after: updated
+          after: updated,
+          admin_user_id: request.adminUser?.id ?? null
         });
         return updated;
       });
@@ -306,15 +332,25 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
             }
           }
         });
+        const commissions = await tx.commission.findMany({ where: { withdrawal_id: id } });
         await writeAdminAuditLog(tx, request, { action: 'withdrawal_tax_reviewed', target_id: id, payload: { tax_mode: taxMode, tax_status: taxStatus, tax_amount_cents: taxAmount } });
-        await safeRecordBusinessEvent(tx, {
+        await logWithdrawalEvent(tx, {
           event_type: 'withdrawal_tax_reviewed',
-          event_source: 'withdrawals-route',
-          withdrawal_id: withdrawal.id,
-          leader_user_id: withdrawal.leader_user_id,
-          before_snapshot: withdrawal,
-          after_snapshot: updated,
-          payload: { tax_record_id: taxRecord.id, tax_mode: taxMode, tax_status: taxStatus, tax_amount_cents: taxAmount, payable_amount_cents: withdrawal.amount_cents - taxAmount, invoice_required: invoiceRequired, invoice_status: invoiceStatus }
+          withdrawal: updated,
+          commissionIds: commissions.map((item) => item.id),
+          orderIds: commissions.map((item) => item.order_id),
+          before: withdrawal,
+          after: updated,
+          admin_user_id: request.adminUser?.id ?? null,
+          extraPayload: {
+            tax_record_id: taxRecord.id,
+            tax_mode: taxMode,
+            tax_status: taxStatus,
+            tax_amount_cents: taxAmount,
+            payable_amount_cents: withdrawal.amount_cents - taxAmount,
+            invoice_required: invoiceRequired,
+            invoice_status: invoiceStatus
+          }
         });
         return { withdrawal: updated, tax_record: taxRecord };
       });
@@ -342,7 +378,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
           commissionIds: commissions.map((item) => item.id),
           orderIds: commissions.map((item) => item.order_id),
           before: withdrawal,
-          after: updated
+          after: updated,
+          admin_user_id: request.adminUser?.id ?? null
         });
         return updated;
       });
@@ -374,7 +411,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
           commissionIds: commissions.map((item) => item.id),
           orderIds: commissions.map((item) => item.order_id),
           before: withdrawal,
-          after: updated
+          after: updated,
+          admin_user_id: request.adminUser?.id ?? null
         });
         return updated;
       });
