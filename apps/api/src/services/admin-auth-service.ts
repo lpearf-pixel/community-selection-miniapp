@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcryptjs';
 import type { Prisma, AdminUser } from '@prisma/client';
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
