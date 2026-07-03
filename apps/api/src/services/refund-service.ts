@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { syncCommissionAfterRefund } from './commission-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
@@ -19,6 +19,11 @@ type NotifyInfo = {
 const refundableOrderStatuses = ['paid', 'grouped', 'preparing', 'ready', 'picked', 'delivered', 'completed', 'refunding'];
 const autoRestoreStockStatuses = ['paid', 'grouped', 'preparing', 'ready', 'refunding'];
 const stockRestorePolicy = 'full_refund_auto_restore_before_fulfillment';
+
+function jsonOrPrismaNull(value: Prisma.InputJsonValue | Prisma.JsonValue | null | undefined) {
+  if (value === undefined || value === null) return Prisma.JsonNull;
+  return value as Prisma.InputJsonValue;
+}
 
 export function getRefundableAmount(order: { pay_amount_cents: number; refund_amount_cents: number }) {
   return order.pay_amount_cents - order.refund_amount_cents;
@@ -95,7 +100,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
         where: { id: refund.id },
         data: {
           refund_id: notifyInfo.refund_id,
-          raw_notify: notifyInfo.raw_notify ?? refund.raw_notify
+          raw_notify: jsonOrPrismaNull(notifyInfo.raw_notify ?? refund.raw_notify)
         }
       });
     }
@@ -125,9 +130,27 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
   // L6 第一版只做金额退款：部分退款不恢复库存；只有全额退款才按订单状态判断是否可自动恢复库存。
   if (isFullRefund && !stockRestored && refund.order.group_buy) {
     if (autoRestoreStockStatuses.includes(refund.order.order_status)) {
+      const product = await tx.product.findUnique({ where: { id: refund.order.group_buy.product_id } });
+      if (!product) throw new Error('退款恢复库存商品不存在');
+      const stockDeductQuantity = Math.max(1, product.stock_deduct_quantity ?? 1);
+      const restoreStockQuantity = refund.order.quantity * stockDeductQuantity;
       await tx.product.update({
         where: { id: refund.order.group_buy.product_id },
-        data: { stock: { increment: refund.order.quantity } }
+        data: { stock: { increment: restoreStockQuantity } }
+      });
+      await tx.stockLedger.create({
+        data: {
+          product_id: refund.order.group_buy.product_id,
+          source_type: 'refund_restore',
+          source_id: refund.id,
+          direction: 'in',
+          quantity: restoreStockQuantity,
+          stock_before: product.stock,
+          stock_after: product.stock + restoreStockQuantity,
+          operator_type: 'system',
+          remark: '退款恢复库存',
+          payload: { order_id: refund.order_id, refund_id: refund.id, sale_quantity: refund.order.quantity, sale_unit: product.sale_unit, sale_spec_name: product.sale_spec_name, stock_unit: product.stock_unit, stock_deduct_quantity: stockDeductQuantity }
+        }
       });
       stockRestored = true;
       await safeRecordBusinessEvent(tx, {
@@ -135,7 +158,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
         event_source: 'refund-service',
         order_id: refund.order_id,
         refund_id: refund.id,
-        payload: { quantity: refund.order.quantity, product_id: refund.order.group_buy.product_id }
+        payload: { sale_quantity: refund.order.quantity, stock_quantity: restoreStockQuantity, product_id: refund.order.group_buy.product_id }
       });
     } else {
       stockRestoreSkippedReason = 'order_already_fulfilled';
@@ -175,7 +198,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
       refund_id: notifyInfo.refund_id ?? refund.refund_id,
       stock_restored: stockRestored,
       processed_at: new Date(),
-      raw_notify: notifyInfo.raw_notify ?? refund.raw_notify
+      raw_notify: jsonOrPrismaNull(notifyInfo.raw_notify ?? refund.raw_notify)
     }
   });
 

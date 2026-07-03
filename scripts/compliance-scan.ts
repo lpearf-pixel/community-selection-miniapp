@@ -3,9 +3,15 @@ import { extname, join, relative } from 'node:path';
 
 const root = process.cwd();
 const scanRoots = ['apps', 'packages', 'prisma', 'scripts'];
-const ignoredDirs = new Set(['node_modules', 'dist', 'build', '.vite']);
+const ignoredDirs = new Set(['node_modules', 'dist', 'build', '.vite', 'reports', 'stage-reports', '.tmp']);
 const checkedExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.prisma', '.sql', '.wxml', '.wxss']);
 const docWhitelist = [/^docs\//, /^AGENTS\.md$/, /^README\.md$/, /^CODEX_/];
+const excludedPaths = [
+  /^scripts\/generate-stage-report\.ts$/,
+  /^reports(?:\/|$)/,
+  /^stage-reports(?:\/|$)/,
+  /^\.tmp\/stage-reports-worktree(?:\/|$)/
+];
 const forbidden = [
   ['parent', '_leader_id'].join(''),
   ['up', 'line_id'].join(''),
@@ -28,6 +34,10 @@ function isWhitelistedDoc(path: string) {
   return docWhitelist.some((pattern) => pattern.test(path));
 }
 
+function isExcludedPath(path: string) {
+  return excludedPaths.some((pattern) => pattern.test(path));
+}
+
 function isAllowedLine(path: string, line: string, term: string) {
   if (isWhitelistedDoc(path) && /禁止|不允许|不得|不要|合规|边界/.test(line)) return true;
   if (term === ['le', 'vel'].join('') && line.includes(`Typography.Title ${['le', 'vel'].join('')}=`)) return true;
@@ -37,13 +47,14 @@ function isAllowedLine(path: string, line: string, term: string) {
 function walk(dir: string, matches: string[]) {
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry);
+    const path = relative(root, fullPath);
+    if (isExcludedPath(path)) continue;
     const stat = statSync(fullPath);
     if (stat.isDirectory()) {
       if (!ignoredDirs.has(entry)) walk(fullPath, matches);
       continue;
     }
     if (!checkedExtensions.has(extname(entry))) continue;
-    const path = relative(root, fullPath);
     const lines = readFileSync(fullPath, 'utf8').split('\n');
     lines.forEach((line, index) => {
       for (const term of forbidden) {

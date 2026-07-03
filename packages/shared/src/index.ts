@@ -12,14 +12,14 @@ export type ApiErrorResponse = {
 
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
-export function ok<T>(data: T, message = ''): ApiSuccessResponse<T> {
+export const ok = <T>(data: T, message = ''): ApiSuccessResponse<T> => {
   return { success: true, data, message };
-}
+};
 
-export function fail(message: string): ApiErrorResponse {
+export const fail = (message: string): ApiErrorResponse => {
   return { success: false, data: null, message };
-}
+};
 
-export function formatYuan(cents: number): string {
+export const formatYuan = (cents: number): string => {
   return (cents / 100).toFixed(2);
-}
+};

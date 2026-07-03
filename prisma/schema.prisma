@@ -109,6 +109,7 @@ model User {
   leader_applications LeaderApplication[]
   withdrawals         Withdrawal[]        @relation("WithdrawalLeader")
   audit_logs          AuditLog[]          @relation("AuditActor")
+  after_sale_cases    AfterSaleCase[]
 }
 
 model Category {
@@ -132,6 +133,10 @@ model Product {
   cost_price_cents     Int
   stock                Int             @default(0)
   unit                 String
+  stock_unit           String          @default("piece")
+  sale_unit            String          @default("份")
+  sale_spec_name       String?
+  stock_deduct_quantity Int            @default(1)
   is_group_enabled     Boolean         @default(false)
   commission_type      CommissionType  @default(none)
   commission_value     Int             @default(0)
@@ -140,6 +145,13 @@ model Product {
   updated_at           DateTime        @updatedAt
   category             Category        @relation(fields: [category_id], references: [id])
   group_buys           GroupBuy[]
+  stock_ledgers        StockLedger[]
+  purchase_plan_items  PurchasePlanItem[]
+  product_batches      ProductBatch[]
+  batch_stock_ledgers  BatchStockLedger[]
+  inventory_losses     InventoryLoss[]
+  stock_check_items    StockCheckItem[]
+  after_sale_cases     AfterSaleCase[]
 }
 
 model Community {
@@ -188,6 +200,7 @@ model GroupBuy {
   community        Community      @relation(fields: [community_id], references: [id])
   orders           Order[]
   commissions      Commission[]
+  after_sale_cases AfterSaleCase[]
 
   @@index([product_id])
   @@index([leader_user_id])
@@ -228,6 +241,7 @@ model Order {
   payments            Payment[]
   refunds             Refund[]
   commissions         Commission[]
+  after_sale_cases    AfterSaleCase[]
 
   @@index([user_id])
   @@index([group_buy_id])
@@ -514,6 +528,274 @@ model ConsumerCreditLedger {
   @@index([source_type, source_id])
 }
 
+
+model StockLedger {
+  id              String   @id @default(cuid())
+  product_id      String
+  source_type     String
+  source_id       String?
+  direction       String
+  quantity        Int
+  stock_before    Int
+  stock_after     Int
+  operator_type   String?
+  operator_id     String?
+  remark          String?
+  payload         Json?
+  created_at      DateTime @default(now())
+  product         Product  @relation(fields: [product_id], references: [id])
+
+  @@index([product_id])
+  @@index([source_type, source_id])
+  @@index([created_at])
+}
+
+model PurchasePlan {
+  id                   String             @id @default(cuid())
+  plan_no              String             @unique
+  status               String             @default("draft")
+  target_date          DateTime
+  supplier_name        String?
+  total_quantity       Int                @default(0)
+  total_amount_cents   Int                @default(0)
+  created_by_admin_id  String?
+  remark               String?
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
+  created_by_admin     AdminUser?         @relation(fields: [created_by_admin_id], references: [id])
+  items                PurchasePlanItem[]
+  product_batches      ProductBatch[]
+
+  @@index([status])
+  @@index([target_date])
+  @@index([created_by_admin_id])
+}
+
+model PurchasePlanItem {
+  id                    String       @id @default(cuid())
+  purchase_plan_id      String
+  product_id            String
+  product_name_snapshot String
+  planned_quantity      Int
+  received_quantity     Int          @default(0)
+  purchase_unit         String?
+  purchase_quantity     Int?
+  stock_in_quantity     Int?
+  cost_price_cents      Int
+  subtotal_cents        Int
+  remark                String?
+  created_at            DateTime     @default(now())
+  purchase_plan         PurchasePlan @relation(fields: [purchase_plan_id], references: [id])
+  product               Product      @relation(fields: [product_id], references: [id])
+  product_batches      ProductBatch[]
+
+  @@index([purchase_plan_id])
+  @@index([product_id])
+}
+
+model Supplier {
+  id                 String          @id @default(cuid())
+  name               String          @unique
+  contact_name       String?
+  contact_phone      String?
+  address            String?
+  license_no         String?
+  certification_info Json?
+  status             String          @default("active")
+  remark             String?
+  created_at         DateTime        @default(now())
+  updated_at         DateTime        @updatedAt
+  product_batches    ProductBatch[]
+  inventory_losses   InventoryLoss[]
+
+  @@index([status])
+  @@index([created_at])
+}
+
+model ProductBatch {
+  id                     String             @id @default(cuid())
+  batch_no               String             @unique
+  product_id             String
+  supplier_id            String?
+  purchase_plan_id       String?
+  purchase_plan_item_id  String?
+  product_name_snapshot  String
+  supplier_name_snapshot String?
+  stock_unit             String
+  initial_quantity       Int
+  remaining_quantity     Int
+  cost_price_cents       Int?
+  production_date        DateTime?
+  arrival_date           DateTime
+  shelf_life_days        Int?
+  expire_at              DateTime?
+  status                 String             @default("active")
+  remark                 String?
+  payload                Json?
+  created_at             DateTime           @default(now())
+  updated_at             DateTime           @updatedAt
+  product                Product            @relation(fields: [product_id], references: [id])
+  supplier               Supplier?          @relation(fields: [supplier_id], references: [id])
+  purchase_plan          PurchasePlan?      @relation(fields: [purchase_plan_id], references: [id])
+  purchase_plan_item     PurchasePlanItem?  @relation(fields: [purchase_plan_item_id], references: [id])
+  batch_stock_ledgers    BatchStockLedger[]
+  inventory_losses       InventoryLoss[]
+  stock_check_items      StockCheckItem[]
+
+  @@index([product_id])
+  @@index([supplier_id])
+  @@index([purchase_plan_id])
+  @@index([expire_at])
+  @@index([status])
+  @@index([created_at])
+}
+
+model BatchStockLedger {
+  id                    String       @id @default(cuid())
+  batch_id              String
+  product_id            String
+  source_type           String
+  source_id             String?
+  direction             String
+  quantity              Int
+  batch_quantity_before Int
+  batch_quantity_after  Int
+  product_stock_before  Int?
+  product_stock_after   Int?
+  operator_type         String?
+  operator_id           String?
+  remark                String?
+  payload               Json?
+  created_at            DateTime     @default(now())
+  batch                 ProductBatch @relation(fields: [batch_id], references: [id])
+  product               Product      @relation(fields: [product_id], references: [id])
+
+  @@index([batch_id])
+  @@index([product_id])
+  @@index([source_type, source_id])
+  @@index([created_at])
+}
+
+model InventoryLoss {
+  id                 String        @id @default(cuid())
+  product_id         String
+  batch_id           String?
+  loss_type          String
+  quantity           Int
+  stock_unit         String
+  reason             String
+  responsible_type   String?
+  supplier_id        String?
+  operator_admin_id  String?
+  status             String        @default("confirmed")
+  payload            Json?
+  created_at         DateTime      @default(now())
+  product            Product       @relation(fields: [product_id], references: [id])
+  batch              ProductBatch? @relation(fields: [batch_id], references: [id])
+  supplier           Supplier?     @relation(fields: [supplier_id], references: [id])
+  operator_admin     AdminUser?    @relation("InventoryLossOperatorAdmin", fields: [operator_admin_id], references: [id])
+
+  @@index([product_id])
+  @@index([batch_id])
+  @@index([supplier_id])
+  @@index([loss_type])
+  @@index([created_at])
+}
+
+model StockCheck {
+  id                 String           @id @default(cuid())
+  check_no           String           @unique
+  status             String           @default("draft")
+  operator_admin_id  String?
+  remark             String?
+  created_at         DateTime         @default(now())
+  confirmed_at       DateTime?
+  operator_admin     AdminUser?       @relation("StockCheckOperatorAdmin", fields: [operator_admin_id], references: [id])
+  items              StockCheckItem[]
+
+  @@index([status])
+  @@index([created_at])
+}
+
+model StockCheckItem {
+  id             String        @id @default(cuid())
+  stock_check_id String
+  product_id     String
+  batch_id       String?
+  book_quantity  Int
+  actual_quantity Int
+  diff_quantity  Int
+  stock_unit     String
+  reason         String?
+  created_at     DateTime      @default(now())
+  stock_check    StockCheck    @relation(fields: [stock_check_id], references: [id])
+  product        Product       @relation(fields: [product_id], references: [id])
+  batch          ProductBatch? @relation(fields: [batch_id], references: [id])
+
+  @@index([stock_check_id])
+  @@index([product_id])
+  @@index([batch_id])
+}
+
+model AfterSaleCase {
+  id                     String         @id @default(cuid())
+  order_id               String
+  user_id                String?
+  group_buy_id           String?
+  product_id             String?
+  type                   String
+  status                 String         @default("submitted")
+  resolution_type        String?
+  reason                 String
+  description            String?
+  requested_refund_cents Int?
+  approved_refund_cents  Int?
+  evidence_image_urls    Json?
+  responsibility         String?
+  customer_note          String?
+  admin_note             String?
+  refund_id              String?
+  inventory_loss_id      String?
+  reviewed_by_admin_id   String?
+  resolved_by_admin_id   String?
+  reviewed_at            DateTime?
+  resolved_at            DateTime?
+  cancelled_at           DateTime?
+  created_at             DateTime       @default(now())
+  updated_at             DateTime       @updatedAt
+  order                  Order          @relation(fields: [order_id], references: [id])
+  user                   User?          @relation(fields: [user_id], references: [id])
+  group_buy              GroupBuy?      @relation(fields: [group_buy_id], references: [id])
+  product                Product?       @relation(fields: [product_id], references: [id])
+  reviewed_by_admin      AdminUser?     @relation("AfterSaleReviewedByAdmin", fields: [reviewed_by_admin_id], references: [id])
+  resolved_by_admin      AdminUser?     @relation("AfterSaleResolvedByAdmin", fields: [resolved_by_admin_id], references: [id])
+  logs                   AfterSaleLog[]
+
+  @@index([order_id])
+  @@index([user_id])
+  @@index([group_buy_id])
+  @@index([product_id])
+  @@index([status])
+  @@index([type])
+  @@index([created_at])
+}
+
+model AfterSaleLog {
+  id                  String        @id @default(cuid())
+  after_sale_case_id  String
+  action              String
+  actor_type          String
+  actor_id            String?
+  note                String?
+  payload             Json?
+  created_at          DateTime      @default(now())
+  after_sale_case     AfterSaleCase @relation(fields: [after_sale_case_id], references: [id])
+
+  @@index([after_sale_case_id])
+  @@index([action])
+  @@index([created_at])
+}
+
 model AdminUser {
   id                    String              @id @default(cuid())
   username              String              @unique
@@ -530,6 +812,11 @@ model AdminUser {
   sessions              AdminSession[]
   recovery_codes        AdminRecoveryCode[]
   audit_logs            AdminAuditLog[]
+  purchase_plans        PurchasePlan[]
+  inventory_losses_operated InventoryLoss[] @relation("InventoryLossOperatorAdmin")
+  stock_checks_operated     StockCheck[]    @relation("StockCheckOperatorAdmin")
+  after_sales_reviewed      AfterSaleCase[] @relation("AfterSaleReviewedByAdmin")
+  after_sales_resolved      AfterSaleCase[] @relation("AfterSaleResolvedByAdmin")
 }
 
 model AdminSession {
