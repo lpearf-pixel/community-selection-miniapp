@@ -8,7 +8,7 @@
     "build": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/api build && pnpm --filter @community-selection/admin build",
     "lint": "node scripts/lint-placeholder.js",
     "typecheck": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm -r test",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",

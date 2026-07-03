@@ -176,7 +176,7 @@ export async function cancelAfterSaleCase(id: string, actor: Actor = { actor_typ
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const current = await tx.afterSaleCase.findUnique({ where: { id } });
     if (!current) throw new Error('售后工单不存在');
-    if (!cancellableStatuses.includes(current.status)) throw new Error('当前售后状态不可取消');
+    if (!cancellableStatuses.some((status) => status === current.status)) throw new Error('当前售后状态不可取消');
     const updated = await tx.afterSaleCase.update({ where: { id }, data: { status: 'cancelled', cancelled_at: new Date() } });
     await recordAfterSaleLog(tx, updated, 'after_sale_cancelled', actor, '用户取消售后');
     return updated;
