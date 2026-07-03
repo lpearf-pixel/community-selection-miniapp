@@ -2,6 +2,7 @@
   "name": "community-selection-miniapp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --parallel --filter @community-selection/api --filter @community-selection/admin dev",
     "build": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/api build && pnpm --filter @community-selection/admin build",
