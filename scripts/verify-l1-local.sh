@@ -24,7 +24,7 @@ What it checks:
   1. Local Node/pnpm availability.
   2. Registry reachability with curl and pnpm view.
   3. L1 boundary static checks: no L2 db scripts, no local absolute paths, no npm tokens.
-  4. Optional --full: run pnpm install, db:generate, typecheck, lint, test, build.
+  4. Optional --full: run pnpm install --frozen-lockfile, db:generate, typecheck, lint, test, build.
 USAGE
 }
 
@@ -135,7 +135,7 @@ RESULT
 fi
 
 section "Full L1 pipeline"
-pnpm install --registry="$SELECTED_REGISTRY"
+pnpm install --frozen-lockfile --registry="$SELECTED_REGISTRY"
 pnpm db:generate
 pnpm typecheck
 pnpm lint

@@ -137,7 +137,7 @@ else
   docker compose up -d postgres
 fi
 
-pnpm install
+pnpm install --frozen-lockfile
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
