@@ -73,9 +73,6 @@ importers:
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
-      fast-check:
-        specifier: ^4.3.0
-        version: 4.3.0
 
   packages/config: {}
 
@@ -131,6 +128,9 @@ packages:
     resolution: {integrity: sha512-uWoS8OU1MEIsOv8p/5a82c3H31LsWVR5qiyXVfBNOzfffjUWtPnhAb4BYI2uG2HfGmZmFjCtui5XNWaps+iFuw==}
     engines: {node: '>=10'}
 
+  perfect-debounce@1.0.0:
+    resolution: {integrity: sha512-xCy9V055GLEqoFaHoC1SoLIaLmWctgCUaBaWxDZ7/Zx4CTyX7cJQLJOok/orfjZAh9kEYpjJa4d0KcJmCbctZA==}
+
   deepmerge-ts@7.1.5:
     resolution: {integrity: sha512-HOJkrhaYsweh+W+e74Yn7YStZOilkoPb6fycpwNLKzSPtruFs48nYis0zy5yJz1+ktUhHxoRDJ27RQAWLIJVJw==}
     engines: {node: '>=16.0.0'}
@@ -142,15 +142,8 @@ packages:
     resolution: {integrity: sha512-i6UzDscO/XfAcNYD75CfICkmfLedpyPDdozrLMmQc5ORaQcdMoc21OnlEylMIqI7U8eniKrPMxxtj8k0vhmJhA==}
     engines: {node: '>=14'}
 
-  fast-check@4.3.0:
-    resolution: {integrity: sha512-JVw/DJSxVKl8uhCb7GrwanT9VWsCIdBkK3WpP37B/Au4pyaspriSjtrY2ApbSFwTg3ViPfniT13n75PhzE7VEQ==}
-    engines: {node: '>=12.17.0'}
-
   fastify@5.2.1:
     resolution: {}
-
-  pure-rand@7.0.1:
-    resolution: {integrity: sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ==}
 
   prisma@6.19.3:
     resolution: {integrity: sha512-++ZJ0ijLrDJF6hNB4t4uxg2br3fC4H9Yc9tcbjr2fcNFP3rh/SBNrAgjhsqBU4Ght8JPrVofG/ZkXfnSfnYsFg==}
@@ -227,7 +220,9 @@ snapshots:
 
   bcryptjs@2.4.3: {}
 
-  c12@3.1.0: {}
+  c12@3.1.0:
+    dependencies:
+      perfect-debounce: 1.0.0
 
   deepmerge-ts@7.1.5: {}
 
@@ -235,13 +230,9 @@ snapshots:
 
   empathic@2.0.0: {}
 
-  fast-check@4.3.0:
-    dependencies:
-      pure-rand: 7.0.1
+  perfect-debounce@1.0.0: {}
 
   fastify@5.2.1: {}
-
-  pure-rand@7.0.1: {}
 
   prisma@6.19.3(typescript@5.7.3):
     dependencies:
