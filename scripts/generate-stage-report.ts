@@ -240,22 +240,29 @@ function findVerifyScripts(files: string[]) {
   }));
 }
 
+function normalizeExpectedVerifyOutput(content: string) {
+  const logsSafeLoggingPassed = content.includes('L1/L2/L3/L4/L5/L6/L7 logs local verification passed.');
+  if (!logsSafeLoggingPassed) return content;
+  return content.replace(/^safeRecordBusinessEvent failed Error: mock logging failure.*$/gm, 'safeRecordBusinessEvent expected mock logging failure');
+}
+
 function parseLatestVerifyOutput() {
   const path = join(repoRoot, 'reports/latest-verify-output.txt');
   if (!existsSync(path)) return { exists: false, rows: [] as Array<{ command: string; result: string }> };
   const content = readFileSync(path, 'utf8');
+  const normalizedContent = normalizeExpectedVerifyOutput(content);
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const failureMarkers = ['ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
-  const hasFailure = failureMarkers.some((marker) => content.includes(marker));
-  const l15Passed = content.includes('L15 after-sale verification passed.') && content.includes('L1-L9 local verification passed.') && content.includes('Compliance scan passed.') && !hasFailure;
+  const hasFailure = failureMarkers.some((marker) => normalizedContent.includes(marker));
+  const l15Passed = normalizedContent.includes('L15 after-sale verification passed.') && normalizedContent.includes('L1-L9 local verification passed.') && normalizedContent.includes('Compliance scan passed.') && !hasFailure;
   const rows = commands.map((command) => {
-    const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
+    const index = normalizedContent.indexOf(command.replace('pnpm ', '')) >= 0 ? normalizedContent.indexOf(command.replace('pnpm ', '')) : normalizedContent.indexOf(command);
     if (index < 0) {
       if (command === 'pnpm verify:all' && l15Passed) return { command, result: 'passed' };
       if (command === 'pnpm compliance:scan' && l15Passed) return { command, result: 'passed' };
       return { command, result: 'not found' };
     }
-    const windowText = content.slice(index, index + 1600).toLowerCase();
+    const windowText = normalizedContent.slice(index, index + 1600).toLowerCase();
     if (windowText.includes('command failed') || windowText.includes('error') || /(^|[^_a-z])failed([^_a-z]|$)/.test(windowText)) return { command, result: 'failed' };
     return { command, result: l15Passed && command === 'pnpm verify:all' ? 'passed' : 'found / needs manual confirmation' };
   });
