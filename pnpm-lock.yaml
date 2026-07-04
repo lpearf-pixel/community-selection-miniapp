@@ -73,6 +73,9 @@ importers:
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
+      fast-check:
+        specifier: ^4.3.0
+        version: 4.3.0
 
   packages/config: {}
 
@@ -139,8 +142,15 @@ packages:
     resolution: {integrity: sha512-i6UzDscO/XfAcNYD75CfICkmfLedpyPDdozrLMmQc5ORaQcdMoc21OnlEylMIqI7U8eniKrPMxxtj8k0vhmJhA==}
     engines: {node: '>=14'}
 
+  fast-check@4.3.0:
+    resolution: {integrity: sha512-JVw/DJSxVKl8uhCb7GrwanT9VWsCIdBkK3WpP37B/Au4pyaspriSjtrY2ApbSFwTg3ViPfniT13n75PhzE7VEQ==}
+    engines: {node: '>=12.17.0'}
+
   fastify@5.2.1:
     resolution: {}
+
+  pure-rand@7.0.1:
+    resolution: {integrity: sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ==}
 
   prisma@6.19.3:
     resolution: {integrity: sha512-++ZJ0ijLrDJF6hNB4t4uxg2br3fC4H9Yc9tcbjr2fcNFP3rh/SBNrAgjhsqBU4Ght8JPrVofG/ZkXfnSfnYsFg==}
@@ -225,7 +235,13 @@ snapshots:
 
   empathic@2.0.0: {}
 
+  fast-check@4.3.0:
+    dependencies:
+      pure-rand: 7.0.1
+
   fastify@5.2.1: {}
+
+  pure-rand@7.0.1: {}
 
   prisma@6.19.3(typescript@5.7.3):
     dependencies:
