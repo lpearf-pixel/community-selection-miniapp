@@ -1836,10 +1836,10 @@ export function App() {
                   title: "操作",
                   render: (_: unknown, item: OpsAlert) => (
                     <Space>
-                      <Button onClick={() => updateAlert(item, "resolve")}>
+                      <Button onClick={() => updateAlert(item, 'resolve')}>
                         resolve
                       </Button>
-                      <Button onClick={() => updateAlert(item, "ignore")}>
+                      <Button onClick={() => updateAlert(item, 'ignore')}>
                         ignore
                       </Button>
                     </Space>
