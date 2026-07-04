@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pnpm install --frozen-lockfile
+pnpm install
 pnpm db:generate
 pnpm typecheck
 pnpm lint

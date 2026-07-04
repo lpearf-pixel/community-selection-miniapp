@@ -19,59 +19,6 @@ type FileRow = { type: string; file: string; description: string };
 type ApiRow = { method: string; path: string; permission: string; purpose: string; verified: string };
 type ModelRow = { model: string; change: string; description: string };
 type VerifyScriptRow = { script: string; exists: string; inVerifyAll: string; description: string };
-type StageManifest = {
-  files: string[];
-  apis: string[];
-  db: string[];
-  verify: string[];
-  acceptance: string[];
-  description: string;
-};
-
-const L15_STAGE_MANIFEST: StageManifest = {
-  files: [
-    'prisma/schema.prisma',
-    'prisma/migrations/202607030001_l15_after_sale/migration.sql',
-    'apps/api/src/modules/after-sale/after-sale-service.ts',
-    'apps/api/src/routes/after-sales.ts',
-    'apps/api/src/routes/admin/index.ts',
-    'apps/admin/src/App.tsx',
-    'scripts/verify-l15-after-sale-local.ts',
-    'docs/reviews/l15-after-sale.md'
-  ],
-  apis: [
-    'POST /api/after-sales',
-    'GET /api/after-sales',
-    'GET /api/after-sales/:id',
-    'POST /api/after-sales/:id/cancel',
-    'GET /api/admin/after-sales',
-    'GET /api/admin/after-sales/:id',
-    'POST /api/admin/after-sales/:id/review',
-    'POST /api/admin/after-sales/:id/resolve',
-    'POST /api/admin/after-sales/:id/add-note',
-    'POST /api/admin/after-sales/:id/link-loss'
-  ],
-  db: ['AfterSaleCase', 'AfterSaleLog', 'migration: 202607030001_l15_after_sale'],
-  verify: ['scripts/verify-l15-after-sale-local.ts', 'pnpm verify:all'],
-  acceptance: [
-    '用户提交售后',
-    '重复售后拦截',
-    'admin 未授权 401',
-    'admin list/detail',
-    'review approve partial_refund',
-    'resolve 创建退款',
-    '订单退款状态更新',
-    'commission after refund 重算',
-    'AI context 包含 after_sale 事件',
-    'link-loss 创建库存损耗并扣库存',
-    'submitted 可取消',
-    'rejected 不可取消',
-    '不启用自动打款',
-    '不启用自动报税',
-    '合规扫描通过'
-  ],
-  description: '本报告基于 L15 stage manifest 与 latest verify output 生成，用于覆盖跨多次提交的 L15 售后客服阶段范围。'
-};
 
 function argValue(name: string) {
   const prefix = `--${name}=`;
@@ -83,7 +30,6 @@ function argValue(name: string) {
 
 const stage = argValue('stage') ?? 'unknown';
 const normalizedStageForFile = stage.replace(/[^a-zA-Z0-9.-]/g, '-');
-const stageManifest = stage.toLowerCase() === 'l15' ? L15_STAGE_MANIFEST : undefined;
 
 function runGit(args: string[]): CommandResult {
   try {
@@ -103,7 +49,6 @@ function safeRead(path: string) {
 }
 
 function getChangedFiles() {
-  if (stageManifest) return { files: stageManifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
   if (!diff.ok) return { files: [] as string[], error: diff.output };
   const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -123,18 +68,6 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (stageManifest) {
-    return stageManifest.apis.map((api): ApiRow => {
-      const [method, path] = api.split(' ');
-      return {
-        method,
-        path,
-        permission: path.startsWith('/api/admin/') ? 'admin session' : 'public',
-        purpose: inferApiPurpose(path),
-        verified: 'yes'
-      };
-    });
-  }
   const routeFiles = files.filter((file) => file.startsWith('apps/api/src/routes/') && file.endsWith('.ts'));
   const rows: ApiRow[] = [];
   for (const file of routeFiles) {
@@ -162,8 +95,6 @@ function extractApis(files: string[]) {
 }
 
 function inferApiPurpose(path: string) {
-  if (path.includes('/admin/after-sales')) return '后台售后客服处理';
-  if (path.includes('/after-sales')) return '用户售后申请与售后详情';
   if (path.includes('/purchase-plans')) return '采购计划管理';
   if (path.includes('/inventory/batches')) return '批次库存 / 损耗 / 批次流水';
   if (path.includes('/inventory/expiry-alerts')) return '临期提醒';
@@ -186,7 +117,6 @@ function inferVerified(path: string, files: string[]) {
 }
 
 function extractModels(files: string[]) {
-  if (stageManifest) return stageManifest.db.map((model) => ({ model, change: 'L15 manifest', description: 'L15 售后客服阶段显式数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
   const schema = safeRead('prisma/schema.prisma');
   const models = [...schema.matchAll(/^model\s+(\w+)\s+\{/gm)].map((match) => match[1]);
@@ -197,9 +127,7 @@ function stageChecklist(stageName: string, files: string[]) {
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
   const hasFile = (needle: string) => files.some((file) => file.includes(needle));
-  if (stageManifest) {
-    items.push(...stageManifest.acceptance.map((label) => ({ label, checked: true })));
-  } else if (lower === 'l14.5' || lower === 'l14-5') {
+  if (lower === 'l14.5' || lower === 'l14-5') {
     items.push({ label: 'public/admin route 物理边界分离', checked: hasFile('routes/public') && hasFile('routes/admin') });
     items.push({ label: 'order service 承接下单、状态流转、自提核销', checked: hasFile('modules/order') });
     items.push({ label: 'inventory route 调用 inventory service', checked: hasFile('routes/inventory') && hasFile('modules/inventory') });
@@ -215,15 +143,6 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (stageManifest) {
-    const verifyAll = safeRead('scripts/verify-all-local.sh');
-    return stageManifest.verify.map((script): VerifyScriptRow => ({
-      script,
-      exists: script.startsWith('pnpm ') ? 'command' : existsSync(join(repoRoot, script)) ? 'yes' : 'no',
-      inVerifyAll: script === 'pnpm verify:all' || verifyAll.includes(script) ? 'yes' : 'no',
-      description: script === 'pnpm verify:all' ? '全量本地验收命令' : `${stage} 阶段验收脚本`
-    }));
-  }
   const normalized = stage.toLowerCase().replace('.', '-');
   const candidates = new Set<string>();
   for (const file of files) if (file.startsWith('scripts/verify-') && file.endsWith('.ts')) candidates.add(file);
@@ -240,33 +159,19 @@ function findVerifyScripts(files: string[]) {
   }));
 }
 
-function normalizeExpectedVerifyOutput(content: string) {
-  const logsSafeLoggingPassed = content.includes('L1/L2/L3/L4/L5/L6/L7 logs local verification passed.');
-  if (!logsSafeLoggingPassed) return content;
-  return content.replace(/^safeRecordBusinessEvent failed Error: mock logging failure.*$/gm, 'safeRecordBusinessEvent expected mock logging failure');
-}
-
 function parseLatestVerifyOutput() {
   const path = join(repoRoot, 'reports/latest-verify-output.txt');
   if (!existsSync(path)) return { exists: false, rows: [] as Array<{ command: string; result: string }> };
   const content = readFileSync(path, 'utf8');
-  const normalizedContent = normalizeExpectedVerifyOutput(content);
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
-  const failureMarkers = ['ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
-  const hasFailure = failureMarkers.some((marker) => normalizedContent.includes(marker));
-  const l15Passed = normalizedContent.includes('L15 after-sale verification passed.') && normalizedContent.includes('L1-L9 local verification passed.') && normalizedContent.includes('Compliance scan passed.') && !hasFailure;
   const rows = commands.map((command) => {
-    const index = normalizedContent.indexOf(command.replace('pnpm ', '')) >= 0 ? normalizedContent.indexOf(command.replace('pnpm ', '')) : normalizedContent.indexOf(command);
-    if (index < 0) {
-      if (command === 'pnpm verify:all' && l15Passed) return { command, result: 'passed' };
-      if (command === 'pnpm compliance:scan' && l15Passed) return { command, result: 'passed' };
-      return { command, result: 'not found' };
-    }
-    const windowText = normalizedContent.slice(index, index + 1600).toLowerCase();
-    if (windowText.includes('command failed') || windowText.includes('error') || /(^|[^_a-z])failed([^_a-z]|$)/.test(windowText)) return { command, result: 'failed' };
-    return { command, result: l15Passed && command === 'pnpm verify:all' ? 'passed' : 'found / needs manual confirmation' };
+    const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
+    if (index < 0) return { command, result: 'not found' };
+    const windowText = content.slice(index, index + 1600).toLowerCase();
+    if (windowText.includes('command failed') || windowText.includes('failed') || windowText.includes('error')) return { command, result: 'failed' };
+    return { command, result: 'found / needs manual confirmation' };
   });
-  return { exists: true, rows, raw: content, l15Passed };
+  return { exists: true, rows, raw: content };
 }
 
 function complianceItems(verifyOutput: ReturnType<typeof parseLatestVerifyOutput>) {
@@ -319,7 +224,7 @@ const reportPath = join(reportsDir, `stage-${normalizedStageForFile}-report.md`)
 
 mkdirSync(dirname(reportPath), { recursive: true });
 
-const conclusion = verifyOutput.exists && (verifyOutput.l15Passed || verifyOutput.rows.every((row) => !['failed', 'not found'].includes(row.result))) ? 'passed' : 'partial';
+const conclusion = verifyOutput.exists && verifyOutput.rows.every((row) => !['failed', 'not found'].includes(row.result)) ? 'passed' : 'partial';
 const generatedAt = new Date().toISOString();
 
 const report = `# 阶段验收报告：${stage}
@@ -330,8 +235,9 @@ const report = `# 阶段验收报告：${stage}
 - 分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
-- 本阶段目标：${stageManifest ? stageManifest.description : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
-- Codex 自评结论：${conclusion}
+- 本阶段目标：${stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- Codex 自评结论：
+  - ${conclusion}
 
 ## 2. 本阶段变更范围
 
@@ -372,7 +278,7 @@ ${complianceItems(verifyOutput).join('\n')}
 
 - 高风险：暂无自动发现，需人工 review
 - 中风险：${todos.length ? '本阶段改动文件存在 TODO / boundary / placeholder 等关键词，详见未完成项。' : '暂无自动发现，需人工 review'}
-- 低风险：${stageManifest ? '报告生成器基于 stage manifest 与 latest verify output，API 用途/验收状态仍建议人工复核。' : '报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。'}
+- 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
 
 ## 10. 未完成项
 
@@ -380,8 +286,8 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 
 ## 11. Codex 给人工 reviewer 的说明
 
-- 本阶段做了什么：${stageManifest ? stageManifest.description : `根据 ${stage} 的最近一次提交 diff 生成验收报告`} 自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
-- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与${stageManifest ? ' stage manifest 文件清单' : ' HEAD~1..HEAD 文件清单'}。
+- 本阶段做了什么：根据 ${stage} 的最近一次提交 diff 生成验收报告，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与 HEAD~1..HEAD 文件清单。
 - 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
 - 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
 `;
