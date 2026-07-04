@@ -125,8 +125,11 @@ packages:
 
 
   c12@3.1.0:
-    resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
+    resolution: {integrity: sha512-uWoS8OU1MEIsOv8p/5a82c3H31LsWVR5qiyXVfBNOzfffjUWtPnhAb4BYI2uG2HfGmZmFjCtui5XNWaps+iFuw==}
     engines: {node: '>=10'}
+
+  perfect-debounce@1.0.0:
+    resolution: {integrity: sha512-xCy9V055GLEqoFaHoC1SoLIaLmWctgCUaBaWxDZ7/Zx4CTyX7cJQLJOok/orfjZAh9kEYpjJa4d0KcJmCbctZA==}
 
   deepmerge-ts@7.1.5:
     resolution: {integrity: sha512-HOJkrhaYsweh+W+e74Yn7YStZOilkoPb6fycpwNLKzSPtruFs48nYis0zy5yJz1+ktUhHxoRDJ27RQAWLIJVJw==}
@@ -217,13 +220,17 @@ snapshots:
 
   bcryptjs@2.4.3: {}
 
-  c12@3.1.0: {}
+  c12@3.1.0:
+    dependencies:
+      perfect-debounce: 1.0.0
 
   deepmerge-ts@7.1.5: {}
 
   effect@3.21.0: {}
 
   empathic@2.0.0: {}
+
+  perfect-debounce@1.0.0: {}
 
   fastify@5.2.1: {}
 
