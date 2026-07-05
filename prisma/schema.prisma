@@ -151,6 +151,7 @@ model Product {
   batch_stock_ledgers  BatchStockLedger[]
   inventory_losses     InventoryLoss[]
   stock_check_items    StockCheckItem[]
+  orders               Order[]
   after_sale_cases     AfterSaleCase[]
 }
 
@@ -212,6 +213,7 @@ model Order {
   client_request_id   String?      @unique
   user_id             String
   group_buy_id        String?
+  product_id          String?
   leader_user_id      String?
   total_amount_cents  Int
   pay_amount_cents    Int
@@ -235,6 +237,7 @@ model Order {
   updated_at          DateTime     @updatedAt
   user                User         @relation("OrderUser", fields: [user_id], references: [id])
   group_buy           GroupBuy?    @relation(fields: [group_buy_id], references: [id])
+  product             Product?     @relation(fields: [product_id], references: [id])
   leader_user         User?        @relation("OrderLeader", fields: [leader_user_id], references: [id])
   pickup_store        PickupStore? @relation(fields: [pickup_store_id], references: [id])
   community           Community?   @relation(fields: [community_id], references: [id])
@@ -245,6 +248,7 @@ model Order {
 
   @@index([user_id])
   @@index([group_buy_id])
+  @@index([product_id])
 }
 
 model Payment {

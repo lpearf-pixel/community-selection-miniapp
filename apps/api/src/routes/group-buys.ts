@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { createGroupOrder, updateOrderStatus } from '../modules/order/order-service.js';
+import { createGroupOrder, createNormalOrder, updateOrderStatus } from '../modules/order/order-service.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 
@@ -339,9 +339,19 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post('/api/orders/normal', async (request, reply) => {
+    try {
+      const order = await createNormalOrder(request.body as CreateOrderBody & { product_id?: string });
+      return ok(order);
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '普通购买下单失败');
+    }
+  });
+
   app.get('/api/orders', async () => {
     const orders = await prisma.order.findMany({
-      include: { group_buy: { include: { product: true, community: true } }, user: true, pickup_store: true },
+      include: { product: true, group_buy: { include: { product: true, community: true } }, user: true, pickup_store: true },
       orderBy: { created_at: 'desc' }
     });
     return ok(orders);
@@ -357,7 +367,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
           ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
           ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
         },
-        include: { group_buy: { include: { product: true, community: true } }, pickup_store: true },
+        include: { product: true, group_buy: { include: { product: true, community: true } }, pickup_store: true },
         orderBy: { created_at: 'desc' }
       });
       reply.header('Content-Type', 'text/csv; charset=utf-8');
@@ -378,7 +388,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
       const rows = orders.map((order) => csvLine([
         order.order_no,
         order.group_buy?.community?.name ?? '',
-        order.group_buy?.product?.name ?? '',
+        order.group_buy?.product?.name ?? order.product?.name ?? '',
         order.quantity,
         order.receiver_name,
         maskPhone(order.receiver_phone),
@@ -397,7 +407,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { group_buy: { include: { product: true, community: true } }, user: true, pickup_store: true }
+      include: { product: true, group_buy: { include: { product: true, community: true } }, user: true, pickup_store: true }
     });
     if (!order) {
       reply.code(404);
@@ -507,7 +517,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
           ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
           ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
         },
-        include: { group_buy: { include: { product: true, community: true } }, pickup_store: true },
+        include: { product: true, group_buy: { include: { product: true, community: true } }, pickup_store: true },
         orderBy: { created_at: 'desc' }
       });
       reply.header('Content-Type', 'text/csv; charset=utf-8');
@@ -528,7 +538,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
       const rows = orders.map((order) => csvLine([
         order.order_no,
         order.group_buy?.community?.name ?? '',
-        order.group_buy?.product?.name ?? '',
+        order.group_buy?.product?.name ?? order.product?.name ?? '',
         order.quantity,
         order.receiver_name,
         maskPhone(order.receiver_phone),

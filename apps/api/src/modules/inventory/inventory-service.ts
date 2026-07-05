@@ -5,7 +5,7 @@ export async function lockStockForOrder(tx: Prisma.TransactionClient, input: {
   sale_quantity: number;
   user_id: string;
   order_id: string;
-  group_buy_id: string;
+  group_buy_id: string | null;
   client_request_id?: string;
 }) {
   const product = await tx.product.findUnique({ where: { id: input.product_id } });
