@@ -55,7 +55,8 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
         const latestOrder = await tx.order.findUnique({ where: { id: order.id }, include: { group_buy: true, product: true } });
         return { order: latestOrder, payment };
       }
-      await lockStockForOrder(tx, { product_id: order.product_id!, sale_quantity: order.quantity, user_id: order.user_id, order_id: order.id, group_buy_id: null });
+      const stockClientRequestId = order.client_request_id ?? `normal-pay-${order.id}`;
+      await lockStockForOrder(tx, { product_id: order.product_id!, sale_quantity: order.quantity, user_id: order.user_id, order_id: order.id, group_buy_id: null, client_request_id: stockClientRequestId });
       const paidPayment = payment ? await tx.payment.update({ where: { id: payment.id }, data: { trade_state: 'paid', transaction_id: payment.transaction_id ?? paymentInfo.transaction_id, ...(paymentInfo.raw_notify === undefined ? {} : { raw_notify: paymentInfo.raw_notify }) } }) : null;
       const paidOrder = await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: { product: true } });
       await safeRecordBusinessEvent(tx, { event_type: 'payment_mark_normal_order_paid', event_source: 'payment-service', order_id: order.id, payment_id: paidPayment?.id ?? null, before_snapshot: order, after_snapshot: paidOrder, payload: { transaction_id: paidPayment?.transaction_id ?? paymentInfo.transaction_id ?? null, product_id: order.product_id } });
