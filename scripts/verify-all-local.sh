@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export API_PORT="${API_PORT:-${PORT:-13080}}"
+export API_HOST="${API_HOST:-127.0.0.1}"
+export API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:${API_PORT}}"
+export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,::1}"
+export no_proxy="${no_proxy:-localhost,127.0.0.1,::1}"
+export PORT="${API_PORT}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:15432/community_selection?schema=public}"
-export PORT="${PORT:-13080}"
 export ADMIN_TOKEN="${ADMIN_TOKEN:-dev-admin-token}"
 export ADMIN_AUTH_ENABLED="${ADMIN_AUTH_ENABLED:-false}"
 export ADMIN_AUTH_MODE="${ADMIN_AUTH_MODE:-token}"
