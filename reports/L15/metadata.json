@@ -1,9 +1,9 @@
 {
   "stage": "L15",
-  "source_branch": "codex/fix-health-check-logic-in-verify/report-script",
-  "source_commit": "66d525e72b7c3cc70784d712c071136effe7ae7a",
+  "source_branch": "stable/l15-business-base",
+  "source_commit": "f726b597bc8c12ca482888da66bc09f29c421e98",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-05T09:12:15.320Z",
+  "generated_at": "2026-07-05T11:18:46.250Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
