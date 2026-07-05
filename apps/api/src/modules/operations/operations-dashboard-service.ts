@@ -380,8 +380,13 @@ export async function getOperationsAlerts(query: OperationsQuery): Promise<Opera
   return alerts;
 }
 
+function csvCell(value: unknown) {
+  const raw = String(value ?? '');
+  const formulaSafe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${formulaSafe.replace(/"/g, '""')}"`;
+}
+
 export function toOperationsCsv(rows: Array<Record<string, unknown>>) {
   const headers = Object.keys(rows[0] ?? { empty: '' });
-  const esc = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-  return ['\uFEFF' + headers.join(','), ...rows.map((row) => headers.map((key) => esc(row[key])).join(','))].join('\n');
+  return ['\uFEFF' + headers.join(','), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(','))].join('\n');
 }
