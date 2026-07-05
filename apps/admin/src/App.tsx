@@ -32,7 +32,8 @@ type ViewKey =
   | "withdrawals"
   | "alerts"
   | "taxRecords"
-  | "finance";
+  | "finance"
+  | "operations";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -126,6 +127,15 @@ type FinanceOverview = {
 type FinanceOrderRow = { order_id: string; order_status: string; paid_amount: number; refunded_amount: number; net_amount: number; after_sale_case_count: number; commission_reward_amount: number; };
 type FinanceRewardRow = { reward_id: string; leader_user_id: string; order_id: string; reward_amount: number; reward_status: string; available_at?: string | null; withdrawal_id?: string | null; recalculated_after_refund: boolean; };
 type FinanceAfterSaleRow = { after_sale_case_id: string; order_id: string; type: string; status: string; requested_amount: number; approved_amount: number; resolved_amount: number; linked_inventory_loss_id?: string | null; };
+
+
+
+type OperationsOverview = { order_count: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_rate: number; refund_rate: number; pickup_completed_count: number; inventory_loss_estimated_amount: number; service_reward_amount: number; };
+type OperationsTrendRow = { date: string; order_count: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_case_count: number; inventory_loss_count: number; pickup_completed_count: number; };
+type OperationsProductRow = { product_id: string; product_name: string; category_name: string; order_count: number; quantity_sold: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_rate: number; inventory_loss_count: number; };
+type OperationsCommunityRow = { community_id: string; community_name: string; order_count: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; pickup_completed_count: number; after_sale_case_count: number; active_group_buy_count: number; };
+type OperationsPickupStoreRow = { pickup_store_id: string; pickup_store_name: string; order_count: number; pickup_completed_count: number; pickup_pending_count: number; pickup_completion_rate: number; paid_amount: number; after_sale_case_count: number; };
+type OperationsAlertRow = { type: string; severity: string; title: string; description: string; metric_value: number; };
 
 type InventoryItem = {
   product_id: string;
@@ -381,6 +391,12 @@ export function App() {
   const [financeOrders, setFinanceOrders] = useState<FinanceOrderRow[]>([]);
   const [financeRewards, setFinanceRewards] = useState<FinanceRewardRow[]>([]);
   const [financeAfterSales, setFinanceAfterSales] = useState<FinanceAfterSaleRow[]>([]);
+  const [operationsOverview, setOperationsOverview] = useState<OperationsOverview | null>(null);
+  const [operationsTrends, setOperationsTrends] = useState<OperationsTrendRow[]>([]);
+  const [operationsProducts, setOperationsProducts] = useState<OperationsProductRow[]>([]);
+  const [operationsCommunities, setOperationsCommunities] = useState<OperationsCommunityRow[]>([]);
+  const [operationsPickupStores, setOperationsPickupStores] = useState<OperationsPickupStoreRow[]>([]);
+  const [operationsAlerts, setOperationsAlerts] = useState<OperationsAlertRow[]>([]);
   const [selectedOrderContext, setSelectedOrderContext] =
     useState<AiContext | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product>(emptyProduct);
@@ -409,6 +425,12 @@ export function App() {
       fetchJson<{ items: FinanceOrderRow[] }>("/api/admin/finance/reconciliation/orders"),
       fetchJson<FinanceRewardRow[]>("/api/admin/finance/reconciliation/rewards"),
       fetchJson<FinanceAfterSaleRow[]>("/api/admin/finance/reconciliation/after-sales"),
+      fetchJson<OperationsOverview>("/api/admin/operations/dashboard/overview"),
+      fetchJson<OperationsTrendRow[]>("/api/admin/operations/dashboard/trends?days=7"),
+      fetchJson<OperationsProductRow[]>("/api/admin/operations/dashboard/products"),
+      fetchJson<OperationsCommunityRow[]>("/api/admin/operations/dashboard/communities"),
+      fetchJson<OperationsPickupStoreRow[]>("/api/admin/operations/dashboard/pickup-stores"),
+      fetchJson<OperationsAlertRow[]>("/api/admin/operations/dashboard/alerts"),
     ])
       .then(
         ([
@@ -431,6 +453,12 @@ export function App() {
           financeOrderData,
           financeRewardData,
           financeAfterSaleData,
+          operationsOverviewData,
+          operationsTrendData,
+          operationsProductData,
+          operationsCommunityData,
+          operationsPickupStoreData,
+          operationsAlertData,
         ]) => {
           setCategories(categoryData);
           setProducts(productData.items);
@@ -451,6 +479,12 @@ export function App() {
           setFinanceOrders(financeOrderData.items);
           setFinanceRewards(financeRewardData);
           setFinanceAfterSales(financeAfterSaleData);
+          setOperationsOverview(operationsOverviewData);
+          setOperationsTrends(operationsTrendData);
+          setOperationsProducts(operationsProductData);
+          setOperationsCommunities(operationsCommunityData);
+          setOperationsPickupStores(operationsPickupStoreData);
+          setOperationsAlerts(operationsAlertData);
         },
       )
       .catch((error: Error) => setMessage(error.message));
@@ -970,6 +1004,7 @@ export function App() {
               <Button onClick={() => setView("alerts")}>告警中心</Button>
               <Button onClick={() => setView("taxRecords")}>税务记录</Button>
               <Button onClick={() => setView("finance")}>财务对账</Button>
+              <Button onClick={() => setView("operations")}>运营看板</Button>
               <Button onClick={refresh}>刷新</Button>
               <Button onClick={logoutAdmin}>退出登录</Button>
             </Space>
@@ -984,6 +1019,36 @@ export function App() {
           </Card>
         )}
 
+
+        {view === "operations" ? (
+          <>
+            <Card title="运营看板">
+              <Space wrap>
+                <Card title="今日订单数">{operationsOverview?.order_count ?? 0}</Card>
+                <Card title="实收金额">¥{formatYuan(operationsOverview?.paid_amount ?? 0)}</Card>
+                <Card title="退款金额">¥{formatYuan(operationsOverview?.refunded_amount ?? 0)}</Card>
+                <Card title="净销售额">¥{formatYuan(operationsOverview?.net_sales_amount ?? 0)}</Card>
+                <Card title="售后率">{((operationsOverview?.after_sale_rate ?? 0) * 100).toFixed(2)}%</Card>
+                <Card title="退款率">{((operationsOverview?.refund_rate ?? 0) * 100).toFixed(2)}%</Card>
+                <Card title="自提完成数">{operationsOverview?.pickup_completed_count ?? 0}</Card>
+                <Card title="库存损耗估算">¥{formatYuan(operationsOverview?.inventory_loss_estimated_amount ?? 0)}</Card>
+                <Card title="开团服务奖励金额">¥{formatYuan(operationsOverview?.service_reward_amount ?? 0)}</Card>
+              </Space>
+              <Space style={{ marginTop: 16 }} wrap>
+                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=trends`}>导出趋势 CSV</Button>
+                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=products`}>导出商品排行 CSV</Button>
+                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=communities`}>导出社区排行 CSV</Button>
+                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=pickup_stores`}>导出自提点排行 CSV</Button>
+                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=alerts`}>导出异常提醒 CSV</Button>
+              </Space>
+            </Card>
+            <Card title="近 7 日趋势表"><Table rowKey="date" dataSource={operationsTrends} columns={[{ title: "date", dataIndex: "date" }, { title: "order_count", dataIndex: "order_count" }, { title: "paid_amount", render: (_: unknown, row: OperationsTrendRow) => `¥${formatYuan(row.paid_amount)}` }, { title: "refunded_amount", render: (_: unknown, row: OperationsTrendRow) => `¥${formatYuan(row.refunded_amount)}` }, { title: "net_sales_amount", render: (_: unknown, row: OperationsTrendRow) => `¥${formatYuan(row.net_sales_amount)}` }, { title: "after_sale_case_count", dataIndex: "after_sale_case_count" }, { title: "inventory_loss_count", dataIndex: "inventory_loss_count" }]} /></Card>
+            <Card title="商品排行表"><Table rowKey="product_id" dataSource={operationsProducts} columns={[{ title: "商品", dataIndex: "product_name" }, { title: "分类", dataIndex: "category_name" }, { title: "订单数", dataIndex: "order_count" }, { title: "销售数量", dataIndex: "quantity_sold" }, { title: "实收金额", render: (_: unknown, row: OperationsProductRow) => `¥${formatYuan(row.paid_amount)}` }, { title: "退款金额", render: (_: unknown, row: OperationsProductRow) => `¥${formatYuan(row.refunded_amount)}` }, { title: "净销售额", render: (_: unknown, row: OperationsProductRow) => `¥${formatYuan(row.net_sales_amount)}` }, { title: "售后率", render: (_: unknown, row: OperationsProductRow) => `${(row.after_sale_rate * 100).toFixed(2)}%` }, { title: "损耗数", dataIndex: "inventory_loss_count" }]} /></Card>
+            <Card title="社区排行表"><Table rowKey="community_id" dataSource={operationsCommunities} columns={[{ title: "社区", dataIndex: "community_name" }, { title: "订单数", dataIndex: "order_count" }, { title: "实收金额", render: (_: unknown, row: OperationsCommunityRow) => `¥${formatYuan(row.paid_amount)}` }, { title: "退款金额", render: (_: unknown, row: OperationsCommunityRow) => `¥${formatYuan(row.refunded_amount)}` }, { title: "净销售额", render: (_: unknown, row: OperationsCommunityRow) => `¥${formatYuan(row.net_sales_amount)}` }, { title: "自提完成数", dataIndex: "pickup_completed_count" }, { title: "售后数", dataIndex: "after_sale_case_count" }]} /></Card>
+            <Card title="自提点履约表"><Table rowKey="pickup_store_id" dataSource={operationsPickupStores} columns={[{ title: "自提点", dataIndex: "pickup_store_name" }, { title: "订单数", dataIndex: "order_count" }, { title: "自提完成数", dataIndex: "pickup_completed_count" }, { title: "待自提数", dataIndex: "pickup_pending_count" }, { title: "自提完成率", render: (_: unknown, row: OperationsPickupStoreRow) => `${(row.pickup_completion_rate * 100).toFixed(2)}%` }, { title: "售后数", dataIndex: "after_sale_case_count" }]} /></Card>
+            <Card title="异常提醒列表"><Table rowKey="type" dataSource={operationsAlerts} columns={[{ title: "severity", dataIndex: "severity" }, { title: "title", dataIndex: "title" }, { title: "description", dataIndex: "description" }, { title: "metric_value", dataIndex: "metric_value" }]} /></Card>
+          </>
+        ) : null}
 
         {view === "finance" ? (
           <>
