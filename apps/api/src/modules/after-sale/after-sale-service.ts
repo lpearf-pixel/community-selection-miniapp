@@ -141,11 +141,11 @@ export async function createAfterSaleCase(input: CreateAfterSaleInput) {
   if (!input.order_id || !input.reason) throw new Error('缺少售后必填字段');
   const requestedRefundCents = input.requested_refund_cents == null ? null : ensurePositiveInteger(input.requested_refund_cents, '申请退款金额必须大于 0');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true } });
+    const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true, product: true } });
     if (!order) throw new Error('订单不存在');
     if (input.user_id && input.user_id !== order.user_id) throw new Error('不能为无关订单提交售后');
     if (order.pay_status !== 'paid' || ['unpaid', 'closed', 'refunded'].includes(order.order_status)) throw new Error('当前订单状态不可提交售后');
-    const productId = input.product_id ?? order.group_buy?.product_id ?? null;
+    const productId = input.product_id ?? order.group_buy?.product_id ?? order.product_id ?? null;
     if (!productId) throw new Error('售后商品不存在');
     const existing = await tx.afterSaleCase.findFirst({
       where: {

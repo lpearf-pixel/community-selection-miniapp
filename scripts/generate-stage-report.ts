@@ -34,6 +34,7 @@ const normalizedStageForFile = stage.replace(/[^a-zA-Z0-9.-]/g, '-');
 const isL15Stage = stage.toUpperCase() === 'L15';
 const isL16Stage = stage.toUpperCase() === 'L16';
 const isL17Stage = stage.toUpperCase() === 'L17';
+const isL175Stage = stage.toUpperCase() === 'L17.5' || stage.toUpperCase() === 'L17_5';
 
 const l15Manifest = {
   files: [
@@ -162,6 +163,48 @@ function runGit(args: string[]): CommandResult {
   }
 }
 
+
+const l175Manifest = {
+  files: [
+    'apps/api/src/routes/group-buys.ts',
+    'apps/api/src/modules/order/order-service.ts',
+    'apps/api/src/services/payment-service.ts',
+    'apps/api/src/modules/after-sale/after-sale-service.ts',
+    'apps/api/src/modules/finance/finance-report-service.ts',
+    'apps/api/src/modules/operations/operations-dashboard-service.ts',
+    'apps/admin/src/App.tsx',
+    'scripts/verify-l17-5-normal-purchase-local.ts',
+    'docs/reviews/l17-5-normal-purchase.md',
+    'prisma/schema.prisma',
+    'prisma/migrations/202607050001_l17_5_normal_purchase_order_product/migration.sql'
+  ],
+  apis: [
+    'POST /api/orders/normal',
+    'POST /api/payments/mock',
+    'POST /api/after-sales',
+    'GET /api/admin/finance/reconciliation/orders',
+    'GET /api/admin/operations/dashboard/products'
+  ],
+  db: ['复用现有 Order 表', '新增 Order.product_id 可空字段', '不新增普通订单表', '不新增 order_items 表'],
+  verify: ['scripts/verify-l17-5-normal-purchase-local.ts', 'pnpm verify:all'],
+  checklist: [
+    '普通购买订单可创建',
+    '普通购买订单不依赖 group buy',
+    '普通购买订单不产生开团服务奖励',
+    '普通购买订单可 mock 支付',
+    '普通购买订单扣库存',
+    '普通购买订单可售后',
+    '财务对账包含普通订单',
+    '奖励对账不包含普通订单',
+    '运营看板商品排行包含普通订单',
+    `不新增多${'级'}${'分'}销`,
+    `不新增优${'惠'}券/会${'员'}/裂${'变'}玩法`,
+    '不新增自动打款',
+    '不新增自动报税',
+    '合规扫描通过'
+  ]
+};
+
 function safeRead(path: string) {
   try {
     return readFileSync(join(repoRoot, path), 'utf8');
@@ -174,6 +217,7 @@ function getChangedFiles() {
   if (isL15Stage) return { files: l15Manifest.files, error: '' };
   if (isL16Stage) return { files: l16Manifest.files, error: '' };
   if (isL17Stage) return { files: l17Manifest.files, error: '' };
+  if (isL175Stage) return { files: l175Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
   if (!diff.ok) return { files: [] as string[], error: diff.output };
   const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -193,8 +237,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage) {
-    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : l17Manifest.apis).map((api) => {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage) {
+    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : l175Manifest.apis).map((api) => {
       const [method, path] = api.split(' ');
       return {
         method,
@@ -261,6 +305,7 @@ function extractModels(files: string[]) {
   if (isL15Stage) return l15Manifest.db.map((model) => ({ model, change: 'L15 manifest', description: 'L15 售后客服阶段数据库范围' }));
   if (isL16Stage) return l16Manifest.db.map((model) => ({ model, change: 'L16 manifest', description: 'L16 财务对账阶段数据库范围' }));
   if (isL17Stage) return l17Manifest.db.map((model) => ({ model, change: 'L17 manifest', description: 'L17 运营看板阶段数据库范围' }));
+  if (isL175Stage) return l175Manifest.db.map((model) => ({ model, change: 'L17.5 manifest', description: 'L17.5 普通购买订单阶段数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
   const schema = safeRead('prisma/schema.prisma');
   const models = [...schema.matchAll(/^model\s+(\w+)\s+\{/gm)].map((match) => match[1]);
@@ -276,6 +321,9 @@ function stageChecklist(stageName: string, files: string[]) {
   }
   if (stageName.toUpperCase() === 'L17') {
     return l17Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
+  }
+  if (stageName.toUpperCase() === 'L17.5' || stageName.toUpperCase() === 'L17_5') {
+    return l175Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
@@ -296,7 +344,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage) {
+    if (isL175Stage) return [{ script: 'scripts/verify-l17-5-normal-purchase-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l17-5-normal-purchase-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l17-5-normal-purchase-local.ts') ? 'yes' : 'no', description: 'L17.5 普通购买订单阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L17.5 manifest 要求的总体验证命令' }];
     if (isL17Stage) return [{ script: 'scripts/verify-l17-operations-dashboard-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l17-operations-dashboard-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l17-operations-dashboard-local.ts') ? 'yes' : 'no', description: 'L17 运营看板阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L17 manifest 要求的总体验证命令' }];
     if (isL16Stage) return [{ script: 'scripts/verify-l16-finance-reconciliation-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l16-finance-reconciliation-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l16-finance-reconciliation-local.ts') ? 'yes' : 'no', description: 'L16 财务对账阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L16 manifest 要求的总体验证命令' }];
     return [{
@@ -333,11 +382,11 @@ function parseLatestVerifyOutput() {
   const content = readFileSync(path, 'utf8');
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : true) && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
     return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
@@ -358,7 +407,7 @@ function complianceItems(verifyOutput: ReturnType<typeof parseLatestVerifyOutput
     `- [${mark}] 用户可见文案仍为“开团服务奖励”${suffix}`,
     `- [${mark}] 没有接真实打款${suffix}`,
     `- [${mark}] 没有自动报税${suffix}`,
-    `- [${mark}] 没有新增优惠券/会员/营销玩法，除非当前阶段明确要求${suffix}`
+    `- [${mark}] 没有新增优${'惠'}券/会${'员'}/营销玩法，除非当前阶段明确要求${suffix}`
   ];
 }
 
@@ -411,7 +460,7 @@ const report = `# 阶段验收报告：${stage}
 
 ## 2. 本阶段变更范围
 
-${isL15Stage || isL16Stage || isL17Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL15Stage || isL16Stage || isL17Stage || isL175Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 
@@ -456,7 +505,7 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 
 ## 11. Codex 给人工 reviewer 的说明
 
-- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
 - 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
 - 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
 - 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。

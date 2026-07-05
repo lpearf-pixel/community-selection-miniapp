@@ -79,6 +79,7 @@ type Order = {
   id: string;
   order_no: string;
   group_buy?: GroupBuy;
+  product?: Product;
   user?: { nickname: string };
   pay_amount_cents: number;
   pay_status: string;
@@ -1572,7 +1573,7 @@ export function App() {
                 {
                   title: "商品",
                   render: (_: unknown, order: Order) =>
-                    order.group_buy?.product?.name ?? "-",
+                    order.group_buy?.product?.name ?? order.product?.name ?? "-",
                 },
                 {
                   title: "用户",

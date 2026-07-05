@@ -20,6 +20,20 @@ type CreateGroupOrderInput = {
   credit_source_id?: string;
 };
 
+
+type CreateNormalOrderInput = {
+  product_id?: string;
+  user_id?: string;
+  user_openid?: string;
+  client_request_id?: string;
+  quantity?: number;
+  pickup_store_id?: string;
+  community_id?: string;
+  receiver_name?: string;
+  receiver_phone?: string;
+  receiver_address?: string;
+};
+
 type AdminMeta = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
 
 function positiveInt(value: unknown, fallback: number) {
@@ -133,6 +147,57 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
 
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'order_created', title: '订单已创建', to_status: order.order_status, actor_type: 'user', actor_user_id: userId, payload: { group_buy_id: groupBuy.id, quantity: saleQuantity } });
     await safeRecordBusinessEvent(tx, { event_type: 'order_created', event_source: 'order-service', order_id: order.id, group_buy_id: groupBuy.id, user_id: userId, idempotency_key: clientRequestId, after_snapshot: order });
+    return order;
+  });
+}
+
+
+export async function createNormalOrder(input: CreateNormalOrderInput) {
+  const saleQuantity = positiveInt(input.quantity, 1);
+  const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, input.receiver_name ?? '社区用户') : undefined);
+  const clientRequestId = input.client_request_id ?? `normal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  if (!userId || !input.product_id || !input.receiver_name || !input.receiver_phone) throw new Error('缺少普通购买下单必填字段');
+
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const existing = await tx.order.findUnique({ where: { client_request_id: clientRequestId } });
+    if (existing) return existing;
+
+    const product = await tx.product.findUnique({ where: { id: input.product_id } });
+    if (!product) throw new Error('商品不存在');
+    if (product.status !== 'active') throw new Error('商品不可购买');
+    const stockDeductQuantity = Math.max(1, product.stock_deduct_quantity ?? 1);
+    if (product.stock < saleQuantity * stockDeductQuantity) throw new Error('库存不足');
+    if (input.community_id) {
+      const community = await tx.community.findUnique({ where: { id: input.community_id } });
+      if (!community) throw new Error('社区不存在');
+    }
+    if (input.pickup_store_id) {
+      const pickupStore = await tx.pickupStore.findUnique({ where: { id: input.pickup_store_id } });
+      if (!pickupStore) throw new Error('自提点不存在');
+    }
+
+    const amount = product.price_cents * saleQuantity;
+    const order = await tx.order.create({
+      data: {
+        order_no: makeOrderNo(),
+        client_request_id: clientRequestId,
+        user_id: userId,
+        group_buy_id: null,
+        product_id: product.id,
+        total_amount_cents: amount,
+        pay_amount_cents: amount,
+        quantity: saleQuantity,
+        pickup_store_id: input.pickup_store_id,
+        community_id: input.community_id,
+        receiver_name: input.receiver_name,
+        receiver_phone: input.receiver_phone,
+        receiver_address: input.receiver_address
+      },
+      include: { product: true, pickup_store: true, community: true }
+    });
+
+    await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'order_created', title: '普通购买订单已创建', to_status: order.order_status, actor_type: 'user', actor_user_id: userId, payload: { product_id: product.id, quantity: saleQuantity } });
+    await safeRecordBusinessEvent(tx, { event_type: 'normal_order_created', event_source: 'order-service', order_id: order.id, user_id: userId, idempotency_key: clientRequestId, after_snapshot: order });
     return order;
   });
 }

@@ -114,6 +114,7 @@ async function scopedOrders(query: OperationsQuery) {
     include: {
       after_sale_cases: true,
       commissions: true,
+      product: { include: { category: true } },
       group_buy: {
         include: {
           product: { include: { category: true } },
@@ -213,11 +214,11 @@ export async function getOperationsProducts(query: OperationsQuery) {
     where: {
       ...orderWhere(query),
       pay_status: PayStatus.paid,
-      order_status: { in: validOrderStatuses },
-      group_buy_id: { not: null }
+      order_status: { in: validOrderStatuses }
     },
     include: {
       after_sale_cases: true,
+      product: { include: { category: true } },
       group_buy: { include: { product: { include: { category: true } } } }
     }
   });
@@ -225,7 +226,7 @@ export async function getOperationsProducts(query: OperationsQuery) {
   const rows = new Map<string, ProductRow>();
 
   for (const order of orders) {
-    const product = order.group_buy?.product;
+    const product = order.group_buy?.product ?? order.product;
     if (!product) continue;
 
     const row = rows.get(product.id) ?? {
