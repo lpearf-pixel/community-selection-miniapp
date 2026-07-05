@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { OrderStatus, PayStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 
 export type OperationsQuery = {
@@ -198,7 +198,29 @@ export async function getOperationsTrends(query: OperationsQuery) {
 }
 
 export async function getOperationsProducts(query: OperationsQuery) {
-  const orders = await scopedOrders(query);
+  const validOrderStatuses = [
+    OrderStatus.paid,
+    OrderStatus.grouped,
+    OrderStatus.preparing,
+    OrderStatus.ready,
+    OrderStatus.picked,
+    OrderStatus.delivered,
+    OrderStatus.completed,
+    OrderStatus.refunding,
+    OrderStatus.refunded
+  ];
+  const orders = await prisma.order.findMany({
+    where: {
+      ...orderWhere(query),
+      pay_status: PayStatus.paid,
+      order_status: { in: validOrderStatuses },
+      group_buy_id: { not: null }
+    },
+    include: {
+      after_sale_cases: true,
+      group_buy: { include: { product: { include: { category: true } } } }
+    }
+  });
   const losses = await prisma.inventoryLoss.findMany({ where: { created_at: dateWhere(query) } });
   const rows = new Map<string, ProductRow>();
 

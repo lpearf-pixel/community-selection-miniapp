@@ -125,6 +125,7 @@ async function main() {
   assert(typeof adminCookie === 'string' && adminCookie.includes('admin_session='), 'admin login should set session cookie');
   adminHeaders = { cookie: adminCookie };
 
+  const productQueryFrom = new Date(Date.now() - 60_000).toISOString();
   const primary = await seedPaidOrder('primary');
   const afterSale = await json(await app.inject({ method: 'POST', url: '/api/after-sales', payload: { order_id: primary.order.id, product_id: primary.product.id, type: 'bad_quality', reason: 'L17 partial_refund 售后', requested_refund_cents: 800 } }));
   await adminJson(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, headers: adminHeaders, payload: { status: 'approved', approved_refund_cents: 800, resolution_type: 'partial_refund', responsibility: 'supplier', admin_note: 'L17 审核' } }));
@@ -144,7 +145,8 @@ async function main() {
   const todayTrend = trends.find((item: any) => item.date === today);
   assert(todayTrend && todayTrend.paid_amount > 0, 'trends should include today with paid amount');
 
-  const productRows = await adminJson(await app.inject({ method: 'GET', url: '/api/admin/operations/dashboard/products', headers: adminHeaders }));
+  const productRows = await adminJson(await app.inject({ method: 'GET', url: `/api/admin/operations/dashboard/products?from=${encodeURIComponent(productQueryFrom)}&limit=100`, headers: adminHeaders }));
+  console.log('products dashboard response', JSON.stringify(productRows, null, 2));
   const productRow = productRows.find((item: any) => item.product_id === primary.product.id);
   assert(productRow, 'products should include test product');
   assert(productRow.net_sales_amount === productRow.paid_amount - productRow.refunded_amount, 'product net amount should be correct');
