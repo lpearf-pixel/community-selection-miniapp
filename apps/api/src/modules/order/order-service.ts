@@ -154,15 +154,18 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
 
 export async function createNormalOrder(input: CreateNormalOrderInput) {
   const saleQuantity = positiveInt(input.quantity, 1);
-  const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, input.receiver_name ?? '社区用户') : undefined);
+  const productId = input.product_id?.trim();
+  const receiverName = input.receiver_name?.trim();
+  const receiverPhone = input.receiver_phone?.trim();
+  const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, receiverName ?? '社区用户') : undefined);
   const clientRequestId = input.client_request_id ?? `normal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-  if (!userId || !input.product_id || !input.receiver_name || !input.receiver_phone) throw new Error('缺少普通购买下单必填字段');
+  if (!userId || !productId || !receiverName || !receiverPhone) throw new Error('缺少普通购买下单必填字段');
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({ where: { client_request_id: clientRequestId } });
     if (existing) return existing;
 
-    const product = await tx.product.findUnique({ where: { id: input.product_id } });
+    const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) throw new Error('商品不存在');
     if (product.status !== 'active') throw new Error('商品不可购买');
     const stockDeductQuantity = Math.max(1, product.stock_deduct_quantity ?? 1);
@@ -189,8 +192,8 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
         quantity: saleQuantity,
         pickup_store_id: input.pickup_store_id,
         community_id: input.community_id,
-        receiver_name: input.receiver_name,
-        receiver_phone: input.receiver_phone,
+        receiver_name: receiverName,
+        receiver_phone: receiverPhone,
         receiver_address: input.receiver_address
       },
       include: { product: true, pickup_store: true, community: true }
