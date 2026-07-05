@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 
 type Query = { from?: string; to?: string; community_id?: string; pickup_store_id?: string; status?: string; page?: number; page_size?: number };
@@ -10,16 +10,26 @@ function dateWhere(query: Query): Prisma.DateTimeFilter | undefined {
   return Object.keys(where).length ? where : undefined;
 }
 
+function toCents(value: number | null | undefined): number {
+  return value ?? 0;
+}
+
+function isOrderStatus(value: string | undefined): value is OrderStatus {
+  return !!value && Object.values(OrderStatus).includes(value as OrderStatus);
+}
+
 function orderWhere(query: Query): Prisma.OrderWhereInput {
   return {
     created_at: dateWhere(query),
     community_id: query.community_id,
     pickup_store_id: query.pickup_store_id,
-    order_status: query.status as any
+    order_status: isOrderStatus(query.status) ? query.status : undefined
   };
 }
 
-function sum(items: Array<number | null | undefined>) { return items.reduce((total, value) => total + (value ?? 0), 0); }
+function sum(items: Array<number | null | undefined>): number {
+  return items.reduce<number>((total, value) => total + toCents(value), 0);
+}
 
 export async function getFinanceOverview(query: Query) {
   const where = orderWhere(query);
