@@ -3,6 +3,11 @@ set -euo pipefail
 
 API_PID=""
 API_STARTED=0
+EXTERNAL_API_PORT="${API_PORT:-}"
+EXTERNAL_API_HOST="${API_HOST:-}"
+EXTERNAL_API_BASE_URL="${API_BASE_URL:-}"
+EXTERNAL_NO_PROXY="${NO_PROXY:-}"
+EXTERNAL_no_proxy="${no_proxy:-}"
 
 cleanup() {
   if [ "$API_STARTED" = "1" ] && [ -n "$API_PID" ]; then
@@ -135,12 +140,17 @@ console.log("Seed counts passed", Object.fromEntries(checks.map(([name, actual])
 }
 
 load_env
-API_PORT="${PORT:-13080}"
-API_BASE_URL="${API_BASE_URL:-http://localhost:$API_PORT}"
+API_PORT="${EXTERNAL_API_PORT:-${API_PORT:-${PORT:-13080}}}"
+API_HOST="${EXTERNAL_API_HOST:-${API_HOST:-127.0.0.1}}"
+API_BASE_URL="${EXTERNAL_API_BASE_URL:-${API_BASE_URL:-http://127.0.0.1:${API_PORT}}}"
+NO_PROXY="${EXTERNAL_NO_PROXY:-${NO_PROXY:-localhost,127.0.0.1,::1}}"
+no_proxy="${EXTERNAL_no_proxy:-${no_proxy:-localhost,127.0.0.1,::1}}"
+PORT="$API_PORT"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:15432/community_selection?schema=public}"
-export DATABASE_URL
+export API_PORT API_HOST API_BASE_URL NO_PROXY no_proxy PORT DATABASE_URL
 
 echo "Using API_PORT=$API_PORT"
+echo "Using API_HOST=$API_HOST"
 echo "Using API_BASE_URL=$API_BASE_URL"
 echo "Using DATABASE_URL=$DATABASE_URL"
 
@@ -156,7 +166,6 @@ else
   docker compose up -d postgres
 fi
 
-pnpm install
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
@@ -173,12 +182,12 @@ API_STARTED=1
 wait_for_health "$API_BASE_URL/health"
 
 json_get "$API_BASE_URL/health" | assert_success_response
-json_get "http://localhost:$API_PORT/api/categories" | assert_success_response
-products_json=$(json_get "http://localhost:$API_PORT/api/products")
+json_get "$API_BASE_URL/api/categories" | assert_success_response
+products_json=$(json_get "$API_BASE_URL/api/products")
 printf '%s' "$products_json" | assert_success_response
 product_id=$(printf '%s' "$products_json" | extract_first_product_id)
-json_get "http://localhost:$API_PORT/api/products/$product_id" | assert_success_response
-json_get "http://localhost:$API_PORT/api/communities" | assert_success_response
-json_get "http://localhost:$API_PORT/api/pickup-stores" | assert_success_response
+json_get "$API_BASE_URL/api/products/$product_id" | assert_success_response
+json_get "$API_BASE_URL/api/communities" | assert_success_response
+json_get "$API_BASE_URL/api/pickup-stores" | assert_success_response
 
 echo "L1/L2/L3 local verification passed."
