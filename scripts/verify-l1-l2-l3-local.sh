@@ -52,10 +52,27 @@ port_in_use() {
   node -e "require('node:net').createServer().once('error',()=>process.exit(0)).once('listening',function(){this.close(()=>process.exit(1))}).listen(Number(process.argv[1]), '127.0.0.1')" "$port"
 }
 
-wait_for_url() {
+is_healthy_payload() {
+  node -e '
+const fs = require("node:fs");
+let body = null;
+try {
+  body = JSON.parse(fs.readFileSync(0, "utf8"));
+} catch {
+  process.exit(1);
+}
+if (body?.success === true || body?.status === "ok" || body?.data?.status === "ok") {
+  process.exit(0);
+}
+process.exit(1);
+'
+}
+
+wait_for_health() {
   local url="$1"
+  local body
   for _ in $(seq 1 60); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    if body=$(curl -fsS "$url" 2>/dev/null) && printf '%s' "$body" | is_healthy_payload; then
       return 0
     fi
     sleep 1
@@ -119,10 +136,12 @@ console.log("Seed counts passed", Object.fromEntries(checks.map(([name, actual])
 
 load_env
 API_PORT="${PORT:-13080}"
+API_BASE_URL="${API_BASE_URL:-http://localhost:$API_PORT}"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:15432/community_selection?schema=public}"
 export DATABASE_URL
 
 echo "Using API_PORT=$API_PORT"
+echo "Using API_BASE_URL=$API_BASE_URL"
 echo "Using DATABASE_URL=$DATABASE_URL"
 
 if port_in_use "$API_PORT"; then
@@ -151,9 +170,9 @@ assert_seed_counts
 pnpm --dir apps/api exec tsx src/server.ts &
 API_PID=$!
 API_STARTED=1
-wait_for_url "http://localhost:$API_PORT/health"
+wait_for_health "$API_BASE_URL/health"
 
-json_get "http://localhost:$API_PORT/health" | assert_success_response
+json_get "$API_BASE_URL/health" | assert_success_response
 json_get "http://localhost:$API_PORT/api/categories" | assert_success_response
 products_json=$(json_get "http://localhost:$API_PORT/api/products")
 printf '%s' "$products_json" | assert_success_response
