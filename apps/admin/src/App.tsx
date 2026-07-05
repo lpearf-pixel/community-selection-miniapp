@@ -31,7 +31,8 @@ type ViewKey =
   | "afterSales"
   | "withdrawals"
   | "alerts"
-  | "taxRecords";
+  | "taxRecords"
+  | "finance";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -117,6 +118,14 @@ type TaxRecord = {
   tax_status: string;
   amount_cents: number;
 };
+
+
+type FinanceOverview = {
+  paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_case_count: number; inventory_loss_estimated_amount: number; service_reward_estimated_amount: number; tax_review_pending_count: number; withdrawal_paid_amount: number;
+};
+type FinanceOrderRow = { order_id: string; order_status: string; paid_amount: number; refunded_amount: number; net_amount: number; after_sale_case_count: number; commission_reward_amount: number; };
+type FinanceRewardRow = { reward_id: string; leader_user_id: string; order_id: string; reward_amount: number; reward_status: string; available_at?: string | null; withdrawal_id?: string | null; recalculated_after_refund: boolean; };
+type FinanceAfterSaleRow = { after_sale_case_id: string; order_id: string; type: string; status: string; requested_amount: number; approved_amount: number; resolved_amount: number; linked_inventory_loss_id?: string | null; };
 
 type InventoryItem = {
   product_id: string;
@@ -368,6 +377,10 @@ export function App() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
+  const [financeOverview, setFinanceOverview] = useState<FinanceOverview | null>(null);
+  const [financeOrders, setFinanceOrders] = useState<FinanceOrderRow[]>([]);
+  const [financeRewards, setFinanceRewards] = useState<FinanceRewardRow[]>([]);
+  const [financeAfterSales, setFinanceAfterSales] = useState<FinanceAfterSaleRow[]>([]);
   const [selectedOrderContext, setSelectedOrderContext] =
     useState<AiContext | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product>(emptyProduct);
@@ -392,6 +405,10 @@ export function App() {
       fetchJson<Withdrawal[]>("/api/admin/withdrawals"),
       fetchJson<OpsAlert[]>("/api/admin/logs/alerts"),
       fetchJson<TaxRecord[]>("/api/admin/tax-records"),
+      fetchJson<FinanceOverview>("/api/admin/finance/reconciliation/overview"),
+      fetchJson<{ items: FinanceOrderRow[] }>("/api/admin/finance/reconciliation/orders"),
+      fetchJson<FinanceRewardRow[]>("/api/admin/finance/reconciliation/rewards"),
+      fetchJson<FinanceAfterSaleRow[]>("/api/admin/finance/reconciliation/after-sales"),
     ])
       .then(
         ([
@@ -410,6 +427,10 @@ export function App() {
           withdrawalData,
           alertData,
           taxRecordData,
+          financeOverviewData,
+          financeOrderData,
+          financeRewardData,
+          financeAfterSaleData,
         ]) => {
           setCategories(categoryData);
           setProducts(productData.items);
@@ -426,6 +447,10 @@ export function App() {
           setWithdrawals(withdrawalData);
           setAlerts(alertData);
           setTaxRecords(taxRecordData);
+          setFinanceOverview(financeOverviewData);
+          setFinanceOrders(financeOrderData.items);
+          setFinanceRewards(financeRewardData);
+          setFinanceAfterSales(financeAfterSaleData);
         },
       )
       .catch((error: Error) => setMessage(error.message));
@@ -944,6 +969,7 @@ export function App() {
               <Button onClick={() => setView("withdrawals")}>提现管理</Button>
               <Button onClick={() => setView("alerts")}>告警中心</Button>
               <Button onClick={() => setView("taxRecords")}>税务记录</Button>
+              <Button onClick={() => setView("finance")}>财务对账</Button>
               <Button onClick={refresh}>刷新</Button>
               <Button onClick={logoutAdmin}>退出登录</Button>
             </Space>
@@ -957,6 +983,54 @@ export function App() {
             ) : null}
           </Card>
         )}
+
+
+        {view === "finance" ? (
+          <>
+            <Card title="财务对账">
+              <Space wrap>
+                <Card title="实收金额">¥{formatYuan(financeOverview?.paid_amount ?? 0)}</Card>
+                <Card title="退款金额">¥{formatYuan(financeOverview?.refunded_amount ?? 0)}</Card>
+                <Card title="净销售额">¥{formatYuan(financeOverview?.net_sales_amount ?? 0)}</Card>
+                <Card title="售后单数">{financeOverview?.after_sale_case_count ?? 0}</Card>
+                <Card title="库存损耗估算">¥{formatYuan(financeOverview?.inventory_loss_estimated_amount ?? 0)}</Card>
+                <Card title="开团服务奖励估算">¥{formatYuan(financeOverview?.service_reward_estimated_amount ?? 0)}</Card>
+                <Card title="待税务审核数量">{financeOverview?.tax_review_pending_count ?? 0}</Card>
+                <Card title="已打款提现金额">¥{formatYuan(financeOverview?.withdrawal_paid_amount ?? 0)}</Card>
+              </Space>
+              <Space style={{ marginTop: 16 }}>
+                <Button href={`${apiBaseUrl}/api/admin/finance/reconciliation/export.csv?type=orders`}>导出订单对账 CSV</Button>
+                <Button href={`${apiBaseUrl}/api/admin/finance/reconciliation/export.csv?type=rewards`}>导出开团服务奖励 CSV</Button>
+                <Button href={`${apiBaseUrl}/api/admin/finance/reconciliation/export.csv?type=after_sales`}>导出售后退款 CSV</Button>
+              </Space>
+            </Card>
+            <Card title="订单对账表">
+              <Table rowKey="order_id" dataSource={financeOrders} columns={[
+                { title: "order id", dataIndex: "order_id" }, { title: "状态", dataIndex: "order_status" },
+                { title: "支付金额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.paid_amount)}` },
+                { title: "退款金额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.refunded_amount)}` },
+                { title: "净额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.net_amount)}` },
+                { title: "售后数量", dataIndex: "after_sale_case_count" },
+                { title: "开团服务奖励金额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.commission_reward_amount)}` },
+              ]} />
+            </Card>
+            <Card title="开团服务奖励对账表">
+              <Table rowKey="reward_id" dataSource={financeRewards} columns={[
+                { title: "leader_user_id", dataIndex: "leader_user_id" }, { title: "order_id", dataIndex: "order_id" },
+                { title: "reward_amount", render: (_: unknown, row: FinanceRewardRow) => `¥${formatYuan(row.reward_amount)}` },
+                { title: "reward_status", dataIndex: "reward_status" }, { title: "available_at", dataIndex: "available_at" },
+                { title: "withdrawal_id", dataIndex: "withdrawal_id" }, { title: "recalculated_after_refund", render: (_: unknown, row: FinanceRewardRow) => row.recalculated_after_refund ? "是" : "否" },
+              ]} />
+            </Card>
+            <Card title="售后/退款对账表">
+              <Table rowKey="after_sale_case_id" dataSource={financeAfterSales} columns={[
+                { title: "after_sale_case_id", dataIndex: "after_sale_case_id" }, { title: "order_id", dataIndex: "order_id" }, { title: "type", dataIndex: "type" }, { title: "status", dataIndex: "status" },
+                { title: "requested_amount", render: (_: unknown, row: FinanceAfterSaleRow) => `¥${formatYuan(row.requested_amount)}` }, { title: "approved_amount", render: (_: unknown, row: FinanceAfterSaleRow) => `¥${formatYuan(row.approved_amount)}` },
+                { title: "resolved_amount", render: (_: unknown, row: FinanceAfterSaleRow) => `¥${formatYuan(row.resolved_amount)}` }, { title: "linked_inventory_loss_id", dataIndex: "linked_inventory_loss_id" },
+              ]} />
+            </Card>
+          </>
+        ) : null}
 
         {view === "products" ? (
           <>

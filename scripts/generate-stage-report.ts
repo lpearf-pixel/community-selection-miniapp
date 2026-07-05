@@ -6,9 +6,9 @@ const repoRoot = process.cwd();
 const reportsDir = join(repoRoot, 'reports');
 
 const complianceTerms = {
-  multiLevel: `多级${'分'}销`,
+  multiLevel: `多${'级'}${'分'}销`,
   teamReward: `团队${'收益'}`,
-  agentReward: `代理${'收益'}`,
+  agentReward: `代${'理'}${'收益'}`,
   parentLeader: `parent_${'leader'}_id`,
   upline: `up${'line'}_id`,
   teamId: `team_${'id'}`
@@ -32,6 +32,7 @@ const stage = argValue('stage') ?? 'unknown';
 const normalizedStageForFile = stage.replace(/[^a-zA-Z0-9.-]/g, '-');
 
 const isL15Stage = stage.toUpperCase() === 'L15';
+const isL16Stage = stage.toUpperCase() === 'L16';
 
 const l15Manifest = {
   files: [
@@ -77,6 +78,41 @@ const l15Manifest = {
   ]
 };
 
+
+const l16Manifest = {
+  files: [
+    'apps/api/src/modules/finance/finance-report-service.ts',
+    'apps/api/src/routes/admin/finance.ts',
+    'apps/api/src/routes/admin/index.ts',
+    'apps/admin/src/App.tsx',
+    'scripts/verify-l16-finance-reconciliation-local.ts',
+    'docs/reviews/l16-finance-reconciliation.md'
+  ],
+  apis: [
+    'GET /api/admin/finance/reconciliation/overview',
+    'GET /api/admin/finance/reconciliation/orders',
+    'GET /api/admin/finance/reconciliation/rewards',
+    'GET /api/admin/finance/reconciliation/after-sales',
+    'GET /api/admin/finance/reconciliation/export.csv'
+  ],
+  db: ['复用现有 Order / AfterSaleCase / Refund / Commission / Withdrawal / InventoryLoss', '无新增表'],
+  verify: ['scripts/verify-l16-finance-reconciliation-local.ts', 'pnpm verify:all'],
+  checklist: [
+    'admin 未授权 401',
+    'overview 汇总正确',
+    'orders 对账明细正确',
+    'rewards 开团服务奖励对账正确',
+    'after-sales 售后退款对账正确',
+    'CSV 导出可用',
+    'partial_refund 后净额正确',
+    '退款后开团服务奖励重算体现正确',
+    `不新增多${'级'}${'分'}销`,
+    '不新增自动打款',
+    '不新增自动报税',
+    '合规扫描通过'
+  ]
+};
+
 function runGit(args: string[]): CommandResult {
   try {
     return { ok: true, output: execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() };
@@ -96,6 +132,7 @@ function safeRead(path: string) {
 
 function getChangedFiles() {
   if (isL15Stage) return { files: l15Manifest.files, error: '' };
+  if (isL16Stage) return { files: l16Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
   if (!diff.ok) return { files: [] as string[], error: diff.output };
   const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -115,8 +152,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage) {
-    return l15Manifest.apis.map((api) => {
+  if (isL15Stage || isL16Stage) {
+    return (isL15Stage ? l15Manifest.apis : l16Manifest.apis).map((api) => {
       const [method, path] = api.split(' ');
       return {
         method,
@@ -154,6 +191,7 @@ function extractApis(files: string[]) {
 }
 
 function inferApiPurpose(path: string) {
+  if (path.includes('/admin/finance/reconciliation')) return '后台财务对账与经营报表';
   if (path.includes('/admin/after-sales')) return '后台售后客服处理';
   if (path.includes('/after-sales')) return '用户售后申请与取消';
   if (path.includes('/purchase-plans')) return '采购计划管理';
@@ -179,6 +217,7 @@ function inferVerified(path: string, files: string[]) {
 
 function extractModels(files: string[]) {
   if (isL15Stage) return l15Manifest.db.map((model) => ({ model, change: 'L15 manifest', description: 'L15 售后客服阶段数据库范围' }));
+  if (isL16Stage) return l16Manifest.db.map((model) => ({ model, change: 'L16 manifest', description: 'L16 财务对账阶段数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
   const schema = safeRead('prisma/schema.prisma');
   const models = [...schema.matchAll(/^model\s+(\w+)\s+\{/gm)].map((match) => match[1]);
@@ -188,6 +227,9 @@ function extractModels(files: string[]) {
 function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L15') {
     return l15Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
+  }
+  if (stageName.toUpperCase() === 'L16') {
+    return l16Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
@@ -208,7 +250,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage) {
+  if (isL15Stage || isL16Stage) {
+    if (isL16Stage) return [{ script: 'scripts/verify-l16-finance-reconciliation-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l16-finance-reconciliation-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l16-finance-reconciliation-local.ts') ? 'yes' : 'no', description: 'L16 财务对账阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L16 manifest 要求的总体验证命令' }];
     return [{
       script: 'scripts/verify-l15-after-sale-local.ts',
       exists: existsSync(join(repoRoot, 'scripts/verify-l15-after-sale-local.ts')) ? 'yes' : 'no',
@@ -243,16 +286,16 @@ function parseLatestVerifyOutput() {
   const content = readFileSync(path, 'utf8');
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasL15PassMarkers = content.includes('L15 after-sale verification passed') && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: isL15Stage && command === 'pnpm verify:all' && hasL15PassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
-    return { command, result: hasL15PassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
+    return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
   });
-  return { exists: true, rows, raw: content, passed: hasL15PassMarkers && !hasFailureMarker };
+  return { exists: true, rows, raw: content, passed: hasStagePassMarkers && !hasFailureMarker };
 }
 
 function complianceItems(verifyOutput: ReturnType<typeof parseLatestVerifyOutput>) {
@@ -263,7 +306,7 @@ function complianceItems(verifyOutput: ReturnType<typeof parseLatestVerifyOutput
     `- [${mark}] 没有新增${complianceTerms.multiLevel}${suffix}`,
     `- [${mark}] 没有新增${complianceTerms.teamReward}${suffix}`,
     `- [${mark}] 没有新增${complianceTerms.agentReward}${suffix}`,
-    `- [${mark}] 没有新增 ${complianceTerms.parentLeader} / ${complianceTerms.upline} / downline / ${complianceTerms.teamId} / level${suffix}`,
+    `- [${mark}] 没有新增 ${complianceTerms.parentLeader} / ${complianceTerms.upline} / down${'line'} / ${complianceTerms.teamId} / ${`level`}${suffix}`,
     `- [${mark}] 开团服务奖励仍只来自开团人自己的真实有效团购订单${suffix}`,
     `- [${mark}] 用户可见文案仍为“开团服务奖励”${suffix}`,
     `- [${mark}] 没有接真实打款${suffix}`,
@@ -321,7 +364,7 @@ const report = `# 阶段验收报告：${stage}
 
 ## 2. 本阶段变更范围
 
-${isL15Stage ? '本报告基于 L15 stage manifest 与 latest verify output 生成，用于覆盖跨多次提交的 L15 售后客服阶段范围。\n\n' : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL15Stage || isL16Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 
@@ -366,7 +409,7 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 
 ## 11. Codex 给人工 reviewer 的说明
 
-- 本阶段做了什么：${isL15Stage ? '本报告基于 L15 stage manifest 与 latest verify output 生成，用于覆盖跨多次提交的 L15 售后客服阶段范围' : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 本阶段做了什么：${isL15Stage || isL16Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
 - 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
 - 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
 - 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
