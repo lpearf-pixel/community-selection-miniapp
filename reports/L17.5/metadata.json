@@ -1,9 +1,9 @@
 {
   "stage": "L17.5",
   "source_branch": "codex/create-l17.5-branch-and-normal-purchase-orders",
-  "source_commit": "08090cbcbf1b640215a42580b56ddbe4812ac91d",
+  "source_commit": "84d4a33f93efe6b0048cb4b3f1caa724157ed6fb",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-05T16:15:07.171Z",
+  "generated_at": "2026-07-05T16:27:53.382Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
