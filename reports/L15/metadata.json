@@ -1,9 +1,9 @@
 {
   "stage": "L15",
-  "source_branch": "stable/l15-business-base",
-  "source_commit": "f726b597bc8c12ca482888da66bc09f29c421e98",
+  "source_branch": "codex/fix-l15-manifest-report-generation",
+  "source_commit": "d3b85d58b15172f8457893b9791387e95448bea4",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-05T11:18:46.250Z",
+  "generated_at": "2026-07-05T11:50:50.026Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
