@@ -1,0 +1,9 @@
+{
+  "stage": "L16",
+  "source_branch": "codex/add-l16-finance-reconciliation-reports",
+  "source_commit": "bc1e1abaaa53eef8575056434ab5305d172052ef",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-05T13:32:37.467Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
