@@ -219,7 +219,7 @@ export async function getOperationsProducts(query: OperationsQuery) {
     include: {
       after_sale_cases: true,
       product: { include: { category: true } },
-      group_buy: { include: { product: { include: { category: true } } } }
+      group_buy: { include: { product: { include: { category: true } }, community: true } }
     }
   });
   const losses = await prisma.inventoryLoss.findMany({ where: { created_at: dateWhere(query) } });
@@ -232,7 +232,7 @@ export async function getOperationsProducts(query: OperationsQuery) {
     const row = rows.get(product.id) ?? {
       product_id: product.id,
       product_name: product.name,
-      category_name: product.category.name,
+      category_name: product.category?.name ?? '-',
       order_count: 0,
       quantity_sold: 0,
       paid_amount: 0,

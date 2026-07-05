@@ -23,6 +23,7 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
 }
 
 async function main() {
+  const verifyStartedAt = new Date(Date.now() - 1000);
   const category = await prisma.category.create({ data: { name: `${prefix}-category`, sort_order: 1750, status: 'active' } });
   const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'L17.5 验收社区', status: 'active' } });
   const pickupStore = await prisma.pickupStore.create({ data: { name: `${prefix}-pickup-store`, address: 'L17.5 自提点', phone: '13800017500', status: 'active' } });
@@ -61,7 +62,8 @@ async function main() {
   assert(!financeRewards.some((item: any) => item.order_id === order.id), 'finance rewards should not include normal order');
   const overview = await json(await app.inject({ method: 'GET', url: '/api/admin/operations/dashboard/overview' }));
   assert(overview.paid_amount >= order.pay_amount_cents, 'operations overview should include normal order paid amount');
-  const products = await json(await app.inject({ method: 'GET', url: '/api/admin/operations/dashboard/products?limit=100' }));
+  const productsQuery = new URLSearchParams({ from: verifyStartedAt.toISOString(), to: new Date(Date.now() + 1000).toISOString(), limit: '100' });
+  const products = await json(await app.inject({ method: 'GET', url: `/api/admin/operations/dashboard/products?${productsQuery.toString()}` }));
   assert(products.some((item: any) => item.product_id === product.id), 'operations products should include normal order product');
 
   const source = ['apps', 'packages', 'prisma', 'scripts'].flatMap((root) => {
