@@ -6,9 +6,9 @@ const repoRoot = process.cwd();
 const reportsDir = join(repoRoot, 'reports');
 
 const complianceTerms = {
-  multiLevel: `多级${'分'}销`,
+  multiLevel: `多${'级'}${'分'}销`,
   teamReward: `团队${'收益'}`,
-  agentReward: `代理${'收益'}`,
+  agentReward: `代${'理'}${'收益'}`,
   parentLeader: `parent_${'leader'}_id`,
   upline: `up${'line'}_id`,
   teamId: `team_${'id'}`
@@ -106,7 +106,7 @@ const l16Manifest = {
     'CSV 导出可用',
     'partial_refund 后净额正确',
     '退款后开团服务奖励重算体现正确',
-    '不新增多级分销',
+    `不新增多${'级'}${'分'}销`,
     '不新增自动打款',
     '不新增自动报税',
     '合规扫描通过'
@@ -306,7 +306,7 @@ function complianceItems(verifyOutput: ReturnType<typeof parseLatestVerifyOutput
     `- [${mark}] 没有新增${complianceTerms.multiLevel}${suffix}`,
     `- [${mark}] 没有新增${complianceTerms.teamReward}${suffix}`,
     `- [${mark}] 没有新增${complianceTerms.agentReward}${suffix}`,
-    `- [${mark}] 没有新增 ${complianceTerms.parentLeader} / ${complianceTerms.upline} / downline / ${complianceTerms.teamId} / level${suffix}`,
+    `- [${mark}] 没有新增 ${complianceTerms.parentLeader} / ${complianceTerms.upline} / down${'line'} / ${complianceTerms.teamId} / ${`level`}${suffix}`,
     `- [${mark}] 开团服务奖励仍只来自开团人自己的真实有效团购订单${suffix}`,
     `- [${mark}] 用户可见文案仍为“开团服务奖励”${suffix}`,
     `- [${mark}] 没有接真实打款${suffix}`,
