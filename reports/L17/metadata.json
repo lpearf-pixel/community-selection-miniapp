@@ -1,0 +1,9 @@
+{
+  "stage": "L17",
+  "source_branch": "codex/create-l17-operations-dashboard-branch",
+  "source_commit": "cf1c15f63c88b76cf03af145de5aa2ebee8e313c",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-05T14:53:45.366Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
