@@ -48,9 +48,9 @@ async function main() {
   assert(listed, 'normal order should be in order list');
   assert(listed.product?.name === product.name, 'normal order list should include product name');
 
-  const afterSale = await json(await app.inject({ method: 'POST', url: '/api/after-sales', payload: { order_id: order.id, type: 'partial_refund', reason: 'L17.5 普通订单部分退款', requested_refund_cents: 500 } }));
-  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, payload: { status: 'approved', approved_refund_cents: 500, admin_note: '同意' } }));
-  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/resolve`, payload: { resolution_type: 'partial_refund', approved_refund_cents: 500, admin_note: '已退' } }));
+  const afterSale = await json(await app.inject({ method: 'POST', url: '/api/after-sales', payload: { order_id: order.id, type: 'bad_quality', reason: '普通订单测试售后', description: 'L17.5 normal purchase after-sale verification', requested_refund_cents: 500 } }));
+  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, payload: { status: 'approved', resolution_type: 'partial_refund', approved_refund_cents: 500, responsibility: 'platform', admin_note: 'L17.5 normal purchase after-sale approved' } }));
+  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/resolve`, payload: { resolution_type: 'partial_refund', approved_refund_cents: 500, admin_note: 'L17.5 normal purchase after-sale resolved' } }));
   const refundedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   assert(refundedOrder.refund_amount_cents > 0, 'normal order refund amount should update');
   assert(await prisma.commission.count({ where: { order_id: order.id } }) === 0, 'refunded normal order should not create service reward');
