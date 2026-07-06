@@ -1,9 +1,9 @@
 {
   "stage": "L20",
-  "source_branch": "codex/create-l19-branch-for-product-purchase-entry-6go43g",
-  "source_commit": "353f249fee7cb3957424c883c8d542693b22e2ab",
+  "source_branch": "codex/create-clean-l20-branch-from-stable/l18-business-base",
+  "source_commit": "cf2b1e3ee7ee7e0b9577b487f9087750467ff8ce",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-06T04:52:13.044Z",
+  "generated_at": "2026-07-06T06:32:37.918Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
