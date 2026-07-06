@@ -1,18 +1,9 @@
 <view class="page">
-  <view class="section-title">商品列表</view>
-  <block wx:for="{{products}}" wx:key="product_id">
-    <view class="product">
-      <image class="cover" src="{{item.cover_image}}" mode="aspectFill" bindtap="goDetail" data-id="{{item.product_id}}" />
-      <view class="info">
-        <view class="name" bindtap="goDetail" data-id="{{item.product_id}}">{{item.name}}</view>
-        <view class="price">¥{{item.price_yuan}}</view>
-        <view class="meta">{{item.sale_spec_name || item.sale_unit}} · 库存 {{item.display_stock}}</view>
-        <view class="meta">{{item.has_active_group_buy ? '有可参与开团' : '暂无可参与开团'}}</view>
-        <view class="actions">
-          <button size="mini" type="primary" bindtap="goNormalBuy" data-id="{{item.product_id}}">立即购买</button>
-          <button size="mini" bindtap="goDetail" data-id="{{item.product_id}}">查看详情</button>
-        </view>
-      </view>
-    </view>
-  </block>
+  <view class="search"><input placeholder="搜索社区好物" value="{{keyword}}" bindinput="onKeywordInput"/><button bindtap="onSearch">搜索</button></view>
+  <view wx:if="{{!products.length && !loading}}" class="empty">暂无可购商品</view>
+  <view wx:for="{{products}}" wx:key="product_id" class="card" bindtap="goDetail" data-id="{{item.product_id}}">
+    <image wx:if="{{item.cover_image}}" src="{{item.cover_image}}" mode="aspectFill" class="cover" />
+    <view class="info"><view class="name">{{item.name}}</view><view class="price">¥{{item.price_yuan}}</view><view class="meta">{{item.stock_label}}</view><view wx:if="{{item.has_active_group_buy}}" class="tag">可参与社区团购</view></view>
+    <button catchtap="goNormalBuy" data-id="{{item.product_id}}" disabled="{{item.stock <= 0}}">直接下单</button>
+  </view>
 </view>

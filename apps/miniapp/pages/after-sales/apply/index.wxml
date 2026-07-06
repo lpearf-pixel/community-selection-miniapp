@@ -1,0 +1,1 @@
+<view class="page"><view class="panel"><view class="title">申请售后</view><textarea data-field="reason" value="{{reason}}" bindinput="onInput" placeholder="请填写售后原因"/><input data-field="amount_cents" type="number" value="{{amount_cents}}" bindinput="onInput" placeholder="退款金额（分，可选）"/><button type="primary" loading="{{submitting}}" bindtap="submit">提交申请</button></view></view>

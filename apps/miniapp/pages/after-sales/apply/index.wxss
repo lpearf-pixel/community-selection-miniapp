@@ -1,0 +1,1 @@
+.page{padding:24rpx;background:#f7f8fa;min-height:100vh}.panel{background:#fff;border-radius:18rpx;padding:24rpx}.title{font-size:34rpx;font-weight:700;margin-bottom:20rpx}textarea{width:100%;min-height:220rpx;border:1rpx solid #eee;border-radius:12rpx;padding:16rpx;box-sizing:border-box}input{height:84rpx;border-bottom:1rpx solid #eee}button{margin-top:30rpx}

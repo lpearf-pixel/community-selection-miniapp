@@ -1,0 +1,1 @@
+<view wx:if="{{detail}}" class="page"><view class="panel"><view class="title">售后进度</view><view>售后单号：{{detail.id}}</view><view>状态：{{detail.status}}</view><view>退款金额：¥{{detail.refund_yuan}}</view><view>原因：{{detail.reason}}</view></view></view>
