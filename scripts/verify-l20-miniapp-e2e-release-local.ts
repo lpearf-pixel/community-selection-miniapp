@@ -107,7 +107,7 @@ async function runBackendE2E() {
   const pickupCode = await data(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/pickup-code`, headers: userHeaders }));
   assert(pickupCode.receiver_phone_masked === '138****5678', 'pickup code should return masked receiver phone');
 
-  const afterSale = await data(await app.inject({ method: 'POST', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: userHeaders, payload: { type: 'refund', reason: 'L20 验收售后', requested_refund_cents: 500 } }));
+  const afterSale = await data(await app.inject({ method: 'POST', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: userHeaders, payload: { type: 'bad_quality', reason: 'L20 验收售后', requested_refund_cents: 500 } }));
   assert(afterSale.id, 'POST /api/me/orders/:id/after-sales should create after-sale case');
 
   const afterSales = await data(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: userHeaders }));
