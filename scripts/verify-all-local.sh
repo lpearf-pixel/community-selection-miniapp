@@ -50,3 +50,4 @@ scripts/verify-l1-l2-l3-l4-l5-l6-l7-local.sh
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-logs-local.sh
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-l8-local.sh
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-l8-l9-local.sh
+pnpm exec tsx scripts/verify-docker-compose-local.ts
