@@ -83,3 +83,9 @@ reports/L15/latest-verify-output.txt
 - `--pull-source` 只用于发布前尝试快进当前分支。如果它实际拉取了新 commit，脚本会中止，并要求重新运行 verify:all。
 - 为了保证报告和验收日志对应同一个 commit，更推荐先手动 git pull，再运行 verify。
 - 发布前建议先保存完整 verify 输出，便于 reviewer 对照报告结论。
+
+## Verify and compliance scan guardrails
+
+Before generating or publishing a stage report / verify output, run the local verification flow first so reports are based on a checked workspace.
+
+Stage verify scripts and report-related tooling should reuse `scripts/lib/compliance-scan.ts` for forbidden-term checks. Do not write unsplit forbidden terms directly in report generators or verify scripts; the verify scripts themselves may be scanned, so terms must remain split at the source level.

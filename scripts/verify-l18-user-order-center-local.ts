@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
+import { scanComplianceFiles } from './lib/compliance-scan.js';
 
 process.env.WECHAT_PAY_MODE = 'mock';
 process.env.MOCK_WECHAT_PAY = 'true';
@@ -72,9 +72,7 @@ async function main() {
     'scripts/verify-l18-user-order-center-local.ts',
     'docs/reviews/l18-user-order-center.md'
   ];
-  const source = files.map((file) => readFileSync(file, 'utf8')).join('\n');
-  const forbidden = [`parent_${'leader'}_id`, `up${'line'}_id`, `down${'line'}`, `team_${'id'}`, `le${'vel'} ${'commission'}`, `多级${'分'}销`, `团队${'收益'}`, `代理${'收益'}`, `优${'惠'}券`, `会${'员'}`, `裂${'变'}`, `AUTO_PAYOUT_ENABLED = ${'true'}`, `AUTO_TAX_FILING_ENABLED = ${'true'}`];
-  for (const term of forbidden) assert(!source.includes(term), `forbidden term found: ${term}`);
+  scanComplianceFiles(files);
   console.log('Compliance scan passed.');
   console.log('L18 user order center verification passed.');
 }

@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
+import { scanComplianceFiles } from './lib/compliance-scan.js';
 
 process.env.WECHAT_PAY_MODE = 'mock';
 process.env.MOCK_WECHAT_PAY = 'true';
@@ -66,11 +66,10 @@ async function main() {
   const products = await json(await app.inject({ method: 'GET', url: `/api/admin/operations/dashboard/products?${productsQuery.toString()}` }));
   assert(products.some((item: any) => item.product_id === product.id), 'operations products should include normal order product');
 
-  const source = ['apps', 'packages', 'prisma', 'scripts'].flatMap((root) => {
+  const complianceFiles = ['apps', 'packages', 'prisma', 'scripts'].flatMap((root) => {
     return execSync(`find ${root} -type f \\( -name '*.ts' -o -name '*.tsx' -o -name '*.prisma' -o -name '*.sql' \\) -not -path '*/reports/*' -not -name 'verify-l16-finance-reconciliation-local.ts' -not -name 'verify-l17-operations-dashboard-local.ts'`, { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  }).map((file) => readFileSync(file, 'utf8')).join('\n');
-  const forbidden = [`parent_${'leader'}_id`, `up${'line'}_id`, `down${'line'}`, `team_${'id'}`, `le${'vel'} ${'commission'}`, `多级${'分'}销`, `团队${'收益'}`, `代理${'收益'}`, `优${'惠'}券`, `会${'员'}`, `裂${'变'}`, `AUTO_PAYOUT_ENABLED = ${'true'}`, `AUTO_TAX_FILING_ENABLED = ${'true'}`];
-  for (const term of forbidden) assert(!source.includes(term), `forbidden term found: ${term}`);
+  });
+  scanComplianceFiles(complianceFiles);
   console.log('Compliance scan passed.');
   console.log('L17.5 normal purchase verification passed.');
 }

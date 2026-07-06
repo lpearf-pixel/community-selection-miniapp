@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
+import { scanComplianceFiles } from './lib/compliance-scan.js';
 
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_AUTH_MODE = 'session';
@@ -166,12 +166,11 @@ async function main() {
   assert(csv.statusCode === 200, 'logged in csv export should return 200');
   assert(String(csv.headers['content-type']).includes('csv') || String(csv.headers['content-type']).includes('text/csv'), 'csv export should use csv content type');
 
-  const scan = [
+  scanComplianceFiles([
     'apps/api/src/modules/operations/operations-dashboard-service.ts',
     'apps/api/src/routes/admin/operations.ts',
     'apps/admin/src/App.tsx'
-  ].map((file) => readFileSync(file, 'utf8')).join('\n');
-  for (const forbidden of [`parent_${'leader'}_id`, `up${'line'}_id`, `down${'line'}`, `team_${'id'}`, `le${'vel'} ${'commission'}`, 'AUTO_PAYOUT_ENABLED = true', 'AUTO_TAX_FILING_ENABLED = true', `优${'惠'}券`, `会${'员'}`, `裂${'变'}`, `多级${'分'}销`]) assert(!scan.includes(forbidden), `compliance scan should not include ${forbidden}`);
+  ]);
   assert(process.env.AUTO_PAYOUT_ENABLED === 'false' && process.env.AUTO_TAX_FILING_ENABLED === 'false', 'L17 must not enable automatic payout or tax filing');
 
   console.log('Compliance scan passed');

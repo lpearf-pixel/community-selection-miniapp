@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
+import { COMPLIANCE_FORBIDDEN_TERMS, scanComplianceFiles } from './lib/compliance-scan.js';
 
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_AUTH_MODE = 'session';
@@ -142,7 +142,7 @@ async function main() {
   assert(reward, 'rewards reconciliation should include service reward');
   assert(reward.recalculated_after_refund === true && reward.related_refund_amount >= 800, 'reward should show recalculation after refund');
   const rewardText = JSON.stringify(rewards);
-  for (const forbidden of [`parent_${'leader'}_id`, `up${'line'}_id`, `down${'line'}`, `team_${'id'}`, `le${'vel'} ${'commission'}`]) assert(!rewardText.includes(forbidden), `reward response should not include ${forbidden}`);
+  for (const forbidden of COMPLIANCE_FORBIDDEN_TERMS.slice(0, 5)) assert(!rewardText.includes(forbidden), `reward response should not include ${forbidden}`);
 
   const afterSales = await adminJson(await app.inject({ method: 'GET', url: '/api/admin/finance/reconciliation/after-sales', headers: adminHeaders }));
   assert(afterSales.some((item: any) => item.after_sale_case_id === afterSale.id), 'after-sales reconciliation should include case');
@@ -151,12 +151,11 @@ async function main() {
   assert(csv.statusCode === 200, 'logged in csv export should return 200');
   assert(String(csv.headers['content-type']).includes('csv') || String(csv.headers['content-type']).includes('text/csv'), 'csv export should use csv content type');
 
-  const scan = [
+  scanComplianceFiles([
     'apps/api/src/modules/finance/finance-report-service.ts',
     'apps/api/src/routes/admin/finance.ts',
     'apps/admin/src/App.tsx'
-  ].map((file) => readFileSync(file, 'utf8')).join('\n');
-  for (const forbidden of [`parent_${'leader'}_id`, `up${'line'}_id`, `down${'line'}`, `team_${'id'}`, `le${'vel'} ${'commission'}`, 'AUTO_PAYOUT_ENABLED = true', 'AUTO_TAX_FILING_ENABLED = true']) assert(!scan.includes(forbidden), `compliance scan should not include ${forbidden}`);
+  ]);
   assert(process.env.AUTO_PAYOUT_ENABLED === 'false' && process.env.AUTO_TAX_FILING_ENABLED === 'false', 'L16 must not enable automatic payout or tax filing');
 
   console.log('L16 finance reconciliation verification passed.');
