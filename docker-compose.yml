@@ -37,7 +37,7 @@ services:
       - .:/app
       - api-node-modules:/app/node_modules
       - api-pnpm-store:/root/.local/share/pnpm/store
-    command: sh -lc "apt-get update -y && apt-get install -y openssl ca-certificates && corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm config set registry https://registry.npmjs.org/ && pnpm config set verify-store-integrity false && pnpm config set store-dir /root/.local/share/pnpm/store && (pnpm store prune || true) && pnpm install --force && pnpm db:generate && pnpm db:migrate && pnpm db:seed && pnpm --filter @community-selection/api dev"
+    command: sh -lc "apt-get update -y && apt-get install -y openssl ca-certificates && corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm config set registry https://registry.npmjs.org/ && pnpm config set verify-store-integrity false && pnpm config set store-dir /root/.local/share/pnpm/store && (pnpm store prune || true) && pnpm install --force && pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm db:generate && pnpm db:migrate && pnpm db:seed && pnpm --filter @community-selection/api dev"
 
   admin:
     image: node:22-bookworm-slim
@@ -52,7 +52,7 @@ services:
       - .:/app
       - admin-node-modules:/app/node_modules
       - admin-pnpm-store:/root/.local/share/pnpm/store
-    command: sh -lc "apt-get update -y && apt-get install -y openssl ca-certificates && corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm config set registry https://registry.npmjs.org/ && pnpm config set verify-store-integrity false && pnpm config set store-dir /root/.local/share/pnpm/store && (pnpm store prune || true) && pnpm install --force && pnpm --filter @community-selection/admin dev -- --host 0.0.0.0 --port 13081"
+    command: sh -lc "apt-get update -y && apt-get install -y openssl ca-certificates && corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm config set registry https://registry.npmjs.org/ && pnpm config set verify-store-integrity false && pnpm config set store-dir /root/.local/share/pnpm/store && (pnpm store prune || true) && pnpm install --force && pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/admin dev -- --host 0.0.0.0 --port 13081"
 
 volumes:
   postgres-data:

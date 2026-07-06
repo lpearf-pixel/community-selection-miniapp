@@ -21,6 +21,14 @@ function assertNotContains(content: string, needle: string, label: string): void
   }
 }
 
+function assertBefore(content: string, earlier: string, later: string, label: string): void {
+  const earlierIndex = content.indexOf(earlier);
+  const laterIndex = content.indexOf(later);
+  if (earlierIndex === -1 || laterIndex === -1 || earlierIndex >= laterIndex) {
+    throw new Error(`${label} must run ${earlier} before ${later}`);
+  }
+}
+
 function getServiceBlock(compose: string, serviceName: 'api' | 'admin'): string {
   const nextService = serviceName === 'api' ? '\n  admin:' : '\nvolumes:';
   const start = compose.indexOf(`\n  ${serviceName}:`);
@@ -42,6 +50,8 @@ assertContains(compose, 'registry.npmjs.org', 'docker-compose.yml');
 assertNotContains(compose, 'registry.yarnpkg.com', 'docker-compose.yml');
 assertContains(compose, 'verify-store-integrity false', 'docker-compose.yml');
 assertContains(compose, 'store-dir /root/.local/share/pnpm/store', 'docker-compose.yml');
+assertContains(compose, 'pnpm --filter @community-selection/shared build', 'docker-compose.yml');
+assertContains(compose, 'pnpm --filter @community-selection/config build', 'docker-compose.yml');
 
 for (const [label, block] of [['api command', api], ['admin command', admin]] as const) {
   assertContains(block, 'apt-get install -y openssl ca-certificates', label);
@@ -54,6 +64,8 @@ for (const [label, block] of [['api command', api], ['admin command', admin]] as
 }
 
 for (const needle of [
+  'pnpm --filter @community-selection/shared build',
+  'pnpm --filter @community-selection/config build',
   'pnpm db:generate',
   'pnpm db:migrate',
   'pnpm db:seed',
@@ -63,12 +75,20 @@ for (const needle of [
 }
 
 for (const needle of [
+  'pnpm --filter @community-selection/shared build',
+  'pnpm --filter @community-selection/config build',
   'pnpm --filter @community-selection/admin dev',
   '--host 0.0.0.0',
   '--port 13081',
 ]) {
   assertContains(admin, needle, 'admin command');
 }
+
+
+assertBefore(api, 'pnpm --filter @community-selection/shared build', 'pnpm db:generate', 'api command');
+assertBefore(api, 'pnpm --filter @community-selection/config build', 'pnpm db:generate', 'api command');
+assertBefore(admin, 'pnpm --filter @community-selection/shared build', 'pnpm --filter @community-selection/admin dev', 'admin command');
+assertBefore(admin, 'pnpm --filter @community-selection/config build', 'pnpm --filter @community-selection/admin dev', 'admin command');
 
 for (const needle of [
   'api-node-modules:/app/node_modules',
@@ -97,6 +117,9 @@ for (const needle of [
   'registry.npmjs.org',
   'named volumes',
   'OpenSSL',
+  '@community-selection/shared',
+  '@community-selection/config',
+  "does not provide an export named 'fail'",
 ]) {
   assertContains(docs, needle, 'docs/dev/docker-local.md');
 }

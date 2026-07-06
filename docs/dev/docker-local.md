@@ -48,3 +48,16 @@ API 和 Admin 服务使用 named volumes 隔离容器内 `node_modules` 与 pnpm
 - Prisma cannot detect OpenSSL。
 
 遇到以上问题时，优先执行本文的“推荐重置启动流程”。
+
+## 为什么启动前要构建 workspace 依赖包
+
+`@community-selection/shared` 和 `@community-selection/config` 的 package exports 指向各自的 `dist` 产物。Docker dev 容器挂载仓库源码后，如果直接启动 API 或 Admin，运行时可能读取不存在或过期的 `dist` 文件，而不是最新的 `src`。
+
+因此 Docker 启动命令会在 `pnpm db:generate` 和 dev server 启动前先执行：
+
+```bash
+pnpm --filter @community-selection/shared build
+pnpm --filter @community-selection/config build
+```
+
+如果跳过这一步，API 可能出现类似 `The requested module '@community-selection/shared' does not provide an export named 'fail'` 的错误。这通常表示 `packages/shared/src/index.ts` 已经导出目标符号，但 `dist/index.js` 仍是旧产物。
