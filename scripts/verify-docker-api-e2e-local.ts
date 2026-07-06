@@ -59,6 +59,7 @@ async function request<T>(method: string, path: string, options: { body?: unknow
   assert(response.ok, `${method} ${path} failed with HTTP ${response.status}: ${parsed.message}`);
   assert(parsed.success === true, `${method} ${path} must return success=true: ${parsed.message}`);
   assertNoForbiddenFields(parsed, `${method} ${path}`);
+  assertNoFullReceiverPhone(parsed, `${method} ${path}`);
   return parsed.data;
 }
 
@@ -104,7 +105,9 @@ async function main() {
   assertNoFullReceiverPhone(order, 'POST /api/orders/normal');
   const orderId = idOf(order, ['order_id', 'id'], 'POST /api/orders/normal');
 
-  await request('POST', '/api/payments/mock', { body: { order_id: orderId } });
+  const paymentResult = await request<unknown>('POST', '/api/payments/mock', { body: { order_id: orderId } });
+  assertNoForbiddenFields(paymentResult, 'POST /api/payments/mock');
+  assertNoFullReceiverPhone(paymentResult, 'POST /api/payments/mock');
 
   const userHeaders = { 'x-openid': openid };
   const orderList = await request<ListResponse<IdLike>>('GET', '/api/me/orders?page_size=20', { headers: userHeaders });

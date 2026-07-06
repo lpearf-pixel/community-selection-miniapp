@@ -45,6 +45,21 @@ function makeMockTransactionId(outTradeNo: string): string {
   return `MOCKTXN${outTradeNo}`;
 }
 
+
+function toPublicPaymentResult(input: { payment?: any | null; order: any; mock?: boolean }) {
+  return {
+    payment_id: input.payment?.id ?? null,
+    order_id: input.order.id,
+    order_no: input.order.order_no,
+    pay_status: input.order.pay_status,
+    order_status: input.order.order_status,
+    paid_at: input.order.paid_at,
+    pay_amount_cents: input.order.pay_amount_cents,
+    transaction_id: input.payment?.transaction_id ?? null,
+    mock: input.mock ?? true
+  };
+}
+
 function makeWxRequestPaymentShape(outTradeNo: string) {
   return {
     timeStamp: Math.floor(Date.now() / 1000).toString(),
@@ -109,7 +124,7 @@ export function registerPaymentRoutes(app: FastifyInstance) {
         payment_id: (paid.payment ?? payment).id,
         payload: { source: 'mock' }
       });
-      return ok({ payment: paid.payment ?? payment, order: paid.order });
+      return ok(toPublicPaymentResult({ payment: paid.payment ?? payment, order: paid.order, mock: true }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : 'MOCK 支付失败');
