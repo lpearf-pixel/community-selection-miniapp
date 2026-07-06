@@ -49,3 +49,9 @@ pnpm report:stage -- --stage=L23
 - 不要设置 AUTO_PAYOUT_ENABLED=true。
 - 不要设置 AUTO_TAX_FILING_ENABLED=true。
 - 本地 localhost 代理要注意 NO_PROXY。
+
+## Docker 本地运行
+
+- 推荐使用 `docker compose up --build` 启动本地 API、Admin 和 Postgres。
+- 容器通过 named volume 隔离 Linux `node_modules` 与 pnpm store，避免读取宿主机平台依赖。
+- 不要把宿主机 `node_modules` 复制到容器；如遇 native binary 平台不匹配，可执行 `docker compose down -v` 后重新启动。
