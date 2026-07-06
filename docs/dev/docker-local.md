@@ -69,3 +69,14 @@ pnpm --filter @community-selection/config build
 运行时 import 不能指向 `dist/index.d.ts`。`.d.ts` 只包含类型声明，没有运行时 JS export；如果 `tsx` 把运行时 import 解析到声明文件，就会看到空模块，并可能再次触发 `The requested module '@community-selection/shared' does not provide an export named 'fail'`。
 
 本地 Docker 配置应让 `@community-selection/shared` 和 `@community-selection/config` 指向 `dist/index.js`，或者直接依赖 package exports；不要把运行时路径映射到 `dist/index.d.ts`。
+
+
+## Docker API E2E 验证
+
+Docker API 启动后，可以执行以下命令通过 HTTP 验证本地 MVP 主链路：
+
+```bash
+pnpm exec tsx scripts/verify-docker-api-e2e-local.ts
+```
+
+该脚本默认请求 `http://127.0.0.1:13080`，也可以通过 `API_BASE_URL` 环境变量覆盖。

@@ -30,6 +30,7 @@ export function buildApp() {
   });
 
   app.get('/health', async () => ok({ status: 'ok' }));
+  app.get('/api/health', async () => ok({ status: 'ok' }));
   registerPublicRoutes(app);
   registerAdminRoutes(app);
 
