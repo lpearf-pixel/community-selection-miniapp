@@ -1,0 +1,9 @@
+{
+  "stage": "L21",
+  "source_branch": "codex/create-l21-branch-for-miniapp-development",
+  "source_commit": "91b10ebf9ad52ad522f66685288b3af40b06fdd8",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-06T07:05:32.049Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
