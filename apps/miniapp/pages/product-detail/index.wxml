@@ -3,8 +3,22 @@
   <view class="card">
     <view class="name">{{product.name}}</view>
     <view class="price">¥{{product.price_yuan}}</view>
-    <view class="meta">库存 {{product.stock}}{{product.unit}}</view>
-    <view class="meta">{{product.is_group_enabled ? '支持开团' : '普通商品'}}</view>
+    <view class="meta">{{product.sale_spec_name || product.sale_unit}} · 库存 {{product.display_stock}}</view>
     <view class="description">{{product.description}}</view>
+    <button type="primary" bindtap="goNormalBuy" disabled="{{!product.can_normal_buy}}">立即购买</button>
+  </view>
+
+  <view class="card">
+    <view class="section-title">可参与开团</view>
+    <block wx:if="{{product.active_group_buys.length}}">
+      <block wx:for="{{product.active_group_buys}}" wx:key="group_buy_id">
+        <view class="group-buy">
+          <view>{{item.community_name}} · {{item.leader_nickname}}</view>
+          <view class="meta">{{item.current_people}}/{{item.min_people}} 人 · ¥{{item.price_yuan}}</view>
+          <button size="mini" type="primary" bindtap="goGroupBuy" data-id="{{item.group_buy_id}}">参与开团</button>
+        </view>
+      </block>
+    </block>
+    <view wx:else class="meta">当前暂无可参与开团</view>
   </view>
 </view>

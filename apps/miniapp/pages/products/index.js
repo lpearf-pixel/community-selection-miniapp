@@ -9,6 +9,9 @@ Page({
     products: []
   },
   onLoad() {
+    this.loadProducts();
+  },
+  loadProducts() {
     wx.request({
       url: `${config.apiBaseUrl}/api/products`,
       success: (res) => {
@@ -25,5 +28,9 @@ Page({
   goDetail(event) {
     const { id } = event.currentTarget.dataset;
     wx.navigateTo({ url: `/pages/product-detail/index?id=${id}` });
+  },
+  goNormalBuy(event) {
+    const { id } = event.currentTarget.dataset;
+    wx.navigateTo({ url: `/pages/orders/confirm/index?type=normal&product_id=${id}` });
   }
 });
