@@ -15,6 +15,10 @@ Page({
     this.setData({ quantity: Number(event.detail.value) || 1 });
   },
   submit() {
+    if (!this.data.receiver_name || !this.data.receiver_phone) {
+      wx.showToast({ title: '请填写收货人和手机号', icon: 'none' });
+      return;
+    }
     wx.request({
       url: `${apiBaseUrl}/api/orders`,
       method: 'POST',
@@ -23,8 +27,8 @@ Page({
         user_openid: 'customer-openid',
         client_request_id: `miniapp-${Date.now()}`,
         quantity: this.data.quantity,
-        receiver_name: this.data.receiver_name || '测试用户',
-        receiver_phone: this.data.receiver_phone || '13800000001'
+        receiver_name: this.data.receiver_name,
+        receiver_phone: this.data.receiver_phone
       },
       success: (res) => {
         const order = res.data && res.data.data;
@@ -32,7 +36,6 @@ Page({
           wx.showToast({ title: (res.data && res.data.message) || '下单失败', icon: 'none' });
           return;
         }
-        // TODO L5: 真实微信支付接入后，先调用 /api/payments/wechat/jsapi，再调用 wx.requestPayment。
         wx.request({
           url: `${apiBaseUrl}/api/payments/mock`,
           method: 'POST',

@@ -1,0 +1,20 @@
+<view class="page">
+  <view class="title">售后进度</view>
+  <view wx:if="{{loading}}" class="state">加载中...</view>
+  <view wx:elif="{{error}}" class="state error">{{error}}</view>
+  <view wx:elif="{{empty}}" class="state">暂无售后记录</view>
+  <block wx:else>
+    <block wx:for="{{cases}}" wx:key="after_sale_case_id">
+      <view class="card">
+        <view class="row">类型：{{item.type}}</view>
+        <view class="row">状态：{{item.status}}</view>
+        <view class="row">处理结果：{{item.resolution_type || '待处理'}}</view>
+        <view class="row">原因：{{item.reason}}</view>
+        <view class="row">申请金额：¥{{item.requested_refund_yuan}}</view>
+        <view class="row">确认金额：¥{{item.approved_refund_yuan}}</view>
+        <view class="row">创建时间：{{item.created_at}}</view>
+        <view class="row">完成时间：{{item.resolved_at || '未完成'}}</view>
+      </view>
+    </block>
+  </block>
+</view>

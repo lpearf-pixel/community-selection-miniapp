@@ -1,0 +1,19 @@
+<view class="page">
+  <view class="title">下单确认</view>
+  <view wx:if="{{loading}}" class="state">加载中...</view>
+  <view wx:elif="{{error}}" class="state error">{{error}}</view>
+  <view wx:elif="{{empty}}" class="state">暂无下单信息</view>
+  <block wx:else>
+    <view class="card" wx:if="{{product}}">
+      <view class="name">{{product.name}}</view>
+      <view class="meta">{{type === 'group_buy' ? '参与开团' : '立即购买'}} · {{product.sale_text}} · 库存 {{product.display_stock}}</view>
+      <view class="price">¥{{product.price_yuan}}</view>
+    </view>
+    <input type="number" placeholder="数量" value="{{quantity}}" bindinput="onInput" data-field="quantity" />
+    <input placeholder="自提点 ID（可选）" value="{{pickup_store_id}}" bindinput="onInput" data-field="pickup_store_id" />
+    <input placeholder="社区 ID（可选）" value="{{community_id}}" bindinput="onInput" data-field="community_id" />
+    <input placeholder="收货人" value="{{receiver_name}}" bindinput="onInput" data-field="receiver_name" />
+    <input placeholder="手机号" value="{{receiver_phone}}" bindinput="onInput" data-field="receiver_phone" />
+    <button type="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">提交订单</button>
+  </block>
+</view>

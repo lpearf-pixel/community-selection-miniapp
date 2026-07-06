@@ -1,0 +1,11 @@
+<view class="page">
+  <view class="title">申请售后</view>
+  <view wx:if="{{error}}" class="state error">{{error}}</view>
+  <picker mode="selector" range="{{typeOptions}}" range-key="label" value="{{typeIndex}}" bindchange="onTypeChange">
+    <view class="picker">类型：{{typeOptions[typeIndex].label}}</view>
+  </picker>
+  <input placeholder="售后原因" value="{{reason}}" bindinput="onInput" data-field="reason" />
+  <textarea placeholder="问题描述" value="{{description}}" bindinput="onInput" data-field="description" />
+  <input type="digit" placeholder="申请金额（元，可选）" value="{{requested_refund_yuan}}" bindinput="onInput" data-field="requested_refund_yuan" />
+  <button type="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">提交申请</button>
+</view>

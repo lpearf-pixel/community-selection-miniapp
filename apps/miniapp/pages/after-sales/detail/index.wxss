@@ -1,0 +1,6 @@
+.page { padding: 24rpx; }
+.title { font-size: 36rpx; font-weight: 700; margin-bottom: 20rpx; }
+.card { padding: 24rpx; margin-bottom: 20rpx; background: #fff; border-radius: 16rpx; }
+.row { color: #4b5563; margin: 10rpx 0; }
+.state { padding: 40rpx 0; text-align: center; color: #6b7280; }
+.error { color: #dc2626; }

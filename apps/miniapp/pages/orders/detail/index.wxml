@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="title">订单详情</view>
+  <view wx:if="{{loading}}" class="state">加载中...</view>
+  <view wx:elif="{{error}}" class="state error">{{error}}</view>
+  <view wx:elif="{{empty || !order}}" class="state">暂无订单详情</view>
+  <block wx:else>
+    <view class="card">
+      <view class="name">{{order.product_name}}</view>
+      <view class="row">类型：{{order.order_type_text}}</view>
+      <view class="row">状态：{{order.user_status_text}}</view>
+      <view class="row">数量：{{order.quantity}}</view>
+      <view class="row">金额：¥{{order.amount_yuan}}</view>
+      <view class="row">手机号：{{order.receiver_phone_masked}}</view>
+    </view>
+    <view class="card">
+      <view class="section-title">自提信息</view>
+      <view class="row">自提点：{{order.pickup_store_name || '待确认'}}</view>
+      <view class="row">地址：{{order.pickup_store_address || '待确认'}}</view>
+      <button size="mini" bindtap="goPickupCode">查看自提凭证</button>
+    </view>
+    <view class="card">
+      <view class="section-title">售后状态</view>
+      <view class="row">{{order.after_sale_status_text}}</view>
+      <button size="mini" type="primary" bindtap="goAfterSaleApply">申请售后</button>
+      <button size="mini" bindtap="goAfterSaleDetail">查看售后进度</button>
+    </view>
+  </block>
+</view>
