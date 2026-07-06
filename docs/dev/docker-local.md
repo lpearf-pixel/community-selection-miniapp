@@ -61,3 +61,11 @@ pnpm --filter @community-selection/config build
 ```
 
 如果跳过这一步，API 可能出现类似 `The requested module '@community-selection/shared' does not provide an export named 'fail'` 的错误。这通常表示 `packages/shared/src/index.ts` 已经导出目标符号，但 `dist/index.js` 仍是旧产物。
+
+## tsx import 返回空对象时如何排查
+
+如果在 `tsx` 下执行 `import('@community-selection/shared')` 或 `import * as m from '@community-selection/shared'` 返回空对象 `[]`，需要检查 `tsconfig.base.json` 的 `paths` 配置。
+
+运行时 import 不能指向 `dist/index.d.ts`。`.d.ts` 只包含类型声明，没有运行时 JS export；如果 `tsx` 把运行时 import 解析到声明文件，就会看到空模块，并可能再次触发 `The requested module '@community-selection/shared' does not provide an export named 'fail'`。
+
+本地 Docker 配置应让 `@community-selection/shared` 和 `@community-selection/config` 指向 `dist/index.js`，或者直接依赖 package exports；不要把运行时路径映射到 `dist/index.d.ts`。

@@ -43,6 +43,7 @@ const compose = readRequired('docker-compose.yml');
 const npmrc = readRequired('.npmrc');
 const dockerignore = readRequired('.dockerignore');
 const docs = readRequired('docs/dev/docker-local.md');
+const tsconfig = readRequired('tsconfig.base.json');
 const api = getServiceBlock(compose, 'api');
 const admin = getServiceBlock(compose, 'admin');
 
@@ -52,6 +53,12 @@ assertContains(compose, 'verify-store-integrity false', 'docker-compose.yml');
 assertContains(compose, 'store-dir /root/.local/share/pnpm/store', 'docker-compose.yml');
 assertContains(compose, 'pnpm --filter @community-selection/shared build', 'docker-compose.yml');
 assertContains(compose, 'pnpm --filter @community-selection/config build', 'docker-compose.yml');
+assertContains(compose, "import * as m from '@community-selection/shared'", 'docker-compose.yml');
+assertContains(compose, 'shared exports ok', 'docker-compose.yml');
+assertNotContains(tsconfig, 'packages/shared/dist/index.d.ts', 'tsconfig.base.json');
+assertNotContains(tsconfig, 'packages/config/dist/index.d.ts', 'tsconfig.base.json');
+assertContains(tsconfig, 'packages/shared/dist/index.js', 'tsconfig.base.json');
+assertContains(tsconfig, 'packages/config/dist/index.js', 'tsconfig.base.json');
 
 for (const [label, block] of [['api command', api], ['admin command', admin]] as const) {
   assertContains(block, 'apt-get install -y openssl ca-certificates', label);
@@ -61,6 +68,8 @@ for (const [label, block] of [['api command', api], ['admin command', admin]] as
   assertContains(block, 'pnpm config set store-dir /root/.local/share/pnpm/store', label);
   assertContains(block, 'pnpm store prune || true', label);
   assertContains(block, 'pnpm install --force', label);
+  assertContains(block, "import * as m from '@community-selection/shared'", label);
+  assertContains(block, 'shared exports ok', label);
 }
 
 for (const needle of [
@@ -120,6 +129,10 @@ for (const needle of [
   '@community-selection/shared',
   '@community-selection/config',
   "does not provide an export named 'fail'",
+  'tsx',
+  'dist/index.js',
+  'dist/index.d.ts',
+  '返回空对象',
 ]) {
   assertContains(docs, needle, 'docs/dev/docker-local.md');
 }
