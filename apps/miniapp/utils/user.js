@@ -18,7 +18,9 @@ function setCurrentUser(user) {
 
 function getUserHeaders() {
   const user = getCurrentUser();
-  return user.user_id ? { 'x-user-id': user.user_id } : {};
+  if (user.user_id) return { 'x-user-id': user.user_id };
+  if (user.openid) return { 'x-openid': user.openid };
+  return {};
 }
 
 module.exports = { getCurrentUser, setCurrentUser, getUserHeaders };
