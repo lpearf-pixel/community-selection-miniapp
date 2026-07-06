@@ -35,6 +35,7 @@ const isL15Stage = stage.toUpperCase() === 'L15';
 const isL16Stage = stage.toUpperCase() === 'L16';
 const isL17Stage = stage.toUpperCase() === 'L17';
 const isL175Stage = stage.toUpperCase() === 'L17.5' || stage.toUpperCase() === 'L17_5';
+const isL18Stage = stage.toUpperCase() === 'L18';
 
 const l15Manifest = {
   files: [
@@ -205,6 +206,48 @@ const l175Manifest = {
   ]
 };
 
+
+const l18Manifest = {
+  files: [
+    'apps/api/src/modules/user-orders/user-order-service.ts',
+    'apps/api/src/routes/me/orders.ts',
+    'apps/api/src/routes/public/index.ts',
+    'scripts/verify-l18-user-order-center-local.ts',
+    'scripts/verify-all-local.sh',
+    'scripts/generate-stage-report.ts',
+    'docs/reviews/l18-user-order-center.md'
+  ],
+  apis: [
+    'GET /api/me/orders',
+    'GET /api/me/orders/:id',
+    'GET /api/me/orders/:id/after-sales',
+    'POST /api/me/orders/:id/after-sales',
+    'GET /api/me/orders/:id/pickup-code'
+  ],
+  db: ['复用 Order / Product / GroupBuy / AfterSaleCase / PickupStore / OrderTimelineLog', '无新增表', '无新增 pickup_code 字段'],
+  verify: ['scripts/verify-l18-user-order-center-local.ts', 'pnpm verify:all'],
+  checklist: [
+    '用户订单列表包含普通订单',
+    '用户订单列表包含开团订单',
+    'type=normal 过滤正确',
+    'type=group_buy 过滤正确',
+    '用户订单详情正确',
+    '越权访问被拒绝',
+    '用户可发起售后',
+    '用户可查看售后进度',
+    '用户可查看自提凭证',
+    '自提手机号脱敏',
+    '未支付订单不可查看自提凭证',
+    '普通订单不产生开团服务奖励',
+    `不新增多${'级'}${'分'}销`,
+    `不新增优${'惠'}券/会${'员'}/裂${'变'}玩法`,
+    '不新增自动退款',
+    '不新增自动打款',
+    '不新增自动报税',
+    '合规扫描通过'
+  ]
+};
+
 function safeRead(path: string) {
   try {
     return readFileSync(join(repoRoot, path), 'utf8');
@@ -218,6 +261,7 @@ function getChangedFiles() {
   if (isL16Stage) return { files: l16Manifest.files, error: '' };
   if (isL17Stage) return { files: l17Manifest.files, error: '' };
   if (isL175Stage) return { files: l175Manifest.files, error: '' };
+  if (isL18Stage) return { files: l18Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
   if (!diff.ok) return { files: [] as string[], error: diff.output };
   const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -237,8 +281,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage) {
-    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : l175Manifest.apis).map((api) => {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage) {
+    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : l18Manifest.apis).map((api) => {
       const [method, path] = api.split(' ');
       return {
         method,
@@ -306,6 +350,7 @@ function extractModels(files: string[]) {
   if (isL16Stage) return l16Manifest.db.map((model) => ({ model, change: 'L16 manifest', description: 'L16 财务对账阶段数据库范围' }));
   if (isL17Stage) return l17Manifest.db.map((model) => ({ model, change: 'L17 manifest', description: 'L17 运营看板阶段数据库范围' }));
   if (isL175Stage) return l175Manifest.db.map((model) => ({ model, change: 'L17.5 manifest', description: 'L17.5 普通购买订单阶段数据库范围' }));
+  if (isL18Stage) return l18Manifest.db.map((model) => ({ model, change: 'L18 manifest', description: 'L18 用户端订单中心阶段数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
   const schema = safeRead('prisma/schema.prisma');
   const models = [...schema.matchAll(/^model\s+(\w+)\s+\{/gm)].map((match) => match[1]);
@@ -324,6 +369,9 @@ function stageChecklist(stageName: string, files: string[]) {
   }
   if (stageName.toUpperCase() === 'L17.5' || stageName.toUpperCase() === 'L17_5') {
     return l175Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
+  }
+  if (stageName.toUpperCase() === 'L18') {
+    return l18Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
@@ -344,7 +392,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage) {
+    if (isL18Stage) return [{ script: 'scripts/verify-l18-user-order-center-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l18-user-order-center-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l18-user-order-center-local.ts') ? 'yes' : 'no', description: 'L18 用户端订单中心阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L18 manifest 要求的总体验证命令' }];
     if (isL175Stage) return [{ script: 'scripts/verify-l17-5-normal-purchase-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l17-5-normal-purchase-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l17-5-normal-purchase-local.ts') ? 'yes' : 'no', description: 'L17.5 普通购买订单阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L17.5 manifest 要求的总体验证命令' }];
     if (isL17Stage) return [{ script: 'scripts/verify-l17-operations-dashboard-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l17-operations-dashboard-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l17-operations-dashboard-local.ts') ? 'yes' : 'no', description: 'L17 运营看板阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L17 manifest 要求的总体验证命令' }];
     if (isL16Stage) return [{ script: 'scripts/verify-l16-finance-reconciliation-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l16-finance-reconciliation-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l16-finance-reconciliation-local.ts') ? 'yes' : 'no', description: 'L16 财务对账阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L16 manifest 要求的总体验证命令' }];
@@ -382,11 +431,11 @@ function parseLatestVerifyOutput() {
   const content = readFileSync(path, 'utf8');
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : true) && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
     return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
