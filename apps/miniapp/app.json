@@ -8,7 +8,11 @@
     "pages/start-group-buy/index",
     "pages/join-order/index",
     "pages/orders/confirm/index",
-    "pages/orders/index"
+    "pages/orders/index",
+    "pages/orders/detail/index",
+    "pages/pickup/code/index",
+    "pages/after-sales/apply/index",
+    "pages/after-sales/detail/index"
   ],
   "window": {
     "navigationBarTitleText": "社区甄选",

@@ -1,4 +1,1 @@
-.page { padding: 24rpx; }
-.title { font-size: 36rpx; font-weight: 600; margin-bottom: 20rpx; }
-.meta { color: #666; margin-bottom: 20rpx; }
-input { border: 1px solid #eee; border-radius: 12rpx; padding: 16rpx; margin-bottom: 16rpx; }
+.page{padding:24rpx;background:#f7f8fa;min-height:100vh}.panel{background:#fff;border-radius:18rpx;padding:24rpx}.title{font-size:34rpx;font-weight:700;margin-bottom:20rpx}.row{color:#666;margin-bottom:16rpx}input{height:84rpx;border-bottom:1rpx solid #eee}button{margin-top:30rpx}

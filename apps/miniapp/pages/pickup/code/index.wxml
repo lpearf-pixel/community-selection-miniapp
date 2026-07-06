@@ -1,0 +1,1 @@
+<view wx:if="{{code}}" class="page"><view class="card"><view class="label">自提凭证</view><view class="code">{{code.pickup_code}}</view><view>自提点：{{code.pickup_store_name}}</view><view>手机号：{{code.receiver_phone_masked}}</view><view class="hint">请到店出示该凭证，由门店完成核销。</view></view></view>

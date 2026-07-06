@@ -1,0 +1,1 @@
+.page{padding:24rpx;background:#f7f8fa;min-height:100vh}.panel{background:#fff;border-radius:18rpx;padding:24rpx;margin-bottom:20rpx;line-height:1.9}.title{font-weight:700;font-size:32rpx;margin-bottom:12rpx}.actions{display:flex;gap:16rpx}button{flex:1}
