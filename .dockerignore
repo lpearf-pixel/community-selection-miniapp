@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+.pnpm-store
+.git
+reports
+dist
+build
+coverage
+.DS_Store
+.env.local
+.env.*.local
