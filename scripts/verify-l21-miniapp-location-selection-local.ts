@@ -56,7 +56,7 @@ async function main() {
   requiredFiles.forEach((file) => assert(existsSync(file), `${file} should exist`));
   const appJson = source('apps/miniapp/app.json');
   assert(appJson.includes('pages/communities/index') && appJson.includes('pages/pickup/select/index'), 'app.json should include L21 pages');
-  const miniappSource = ['apps/miniapp/utils/selection.js','apps/miniapp/pages/communities/index.js','apps/miniapp/pages/pickup/select/index.js','apps/miniapp/pages/products/index.js','apps/miniapp/pages/product-detail/index.js','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/detail/index.js'].map(source).join('\n');
+  const miniappSource = ['apps/miniapp/utils/api.js','apps/miniapp/utils/user.js','apps/miniapp/utils/selection.js','apps/miniapp/pages/communities/index.js','apps/miniapp/pages/pickup/select/index.js','apps/miniapp/pages/products/index.js','apps/miniapp/pages/product-detail/index.js','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/confirm/index.wxml','apps/miniapp/pages/orders/detail/index.js'].map(source).join('\n');
   for (const needle of ['/api/communities','/api/pickup-stores','selected_community','selected_pickup_store','/api/orders/normal','/api/orders','/api/payments/mock']) assert(miniappSource.includes(needle), `miniapp source should include ${needle}`);
   for (const needle of ['wx.requestPayment','/api/payments/wechat','wx.login','wx.getLocation','cost_price_cents','commission_value','stock_deduct_quantity']) assert(!miniappSource.includes(needle), `miniapp source should not include ${needle}`);
   assert(miniappSource.includes('receiver_phone_masked') || miniappSource.includes('masked'), 'miniapp should use masked phone field');
