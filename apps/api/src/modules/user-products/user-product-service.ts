@@ -116,7 +116,6 @@ export async function listUserProducts(query: ProductListQuery) {
         stock_unit: product.stock_unit,
         sale_unit: product.sale_unit,
         sale_spec_name: product.sale_spec_name,
-        stock_deduct_quantity: product.stock_deduct_quantity,
         stock: product.stock,
         display_stock: displayStock(product),
         is_group_enabled: product.is_group_enabled,
@@ -156,13 +155,12 @@ export async function getUserProductDetail(productId: string) {
     stock_unit: product.stock_unit,
     sale_unit: product.sale_unit,
     sale_spec_name: product.sale_spec_name,
-    stock_deduct_quantity: product.stock_deduct_quantity,
     stock: product.stock,
     display_stock: displayStock(product),
     is_group_enabled: product.is_group_enabled,
     active_group_buys: activeGroupBuys,
-    can_normal_buy: product.stock > 0,
-    can_join_group_buy: product.is_group_enabled && product.stock > 0 && activeGroupBuys.length > 0
+    can_normal_buy: product.status === 'active' && product.stock > 0,
+    can_join_group_buy: product.status === 'active' && product.is_group_enabled && product.stock > 0 && activeGroupBuys.length > 0
   };
 }
 

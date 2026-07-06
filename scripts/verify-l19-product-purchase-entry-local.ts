@@ -21,6 +21,7 @@ function assertNoInternalFields(payload: unknown, label: string) {
   const text = JSON.stringify(payload);
   assert(!text.includes('cost_price_cents'), `${label} should not expose cost price`);
   assert(!text.includes('commission_value'), `${label} should not expose reward config`);
+  assert(!text.includes('stock_deduct_quantity'), `${label} should not expose stock deduction rule`);
 }
 
 async function main() {
