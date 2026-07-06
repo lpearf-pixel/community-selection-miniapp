@@ -1,6 +1,8 @@
 {
   "pages": [
     "pages/index/index",
+    "pages/communities/index",
+    "pages/pickup/select/index",
     "pages/products/index",
     "pages/product-detail/index",
     "pages/group-buys/index",

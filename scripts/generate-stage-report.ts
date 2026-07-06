@@ -38,6 +38,7 @@ const isL175Stage = stage.toUpperCase() === 'L17.5' || stage.toUpperCase() === '
 const isL18Stage = stage.toUpperCase() === 'L18';
 const isL19Stage = stage.toUpperCase() === 'L19';
 const isL20Stage = stage.toUpperCase() === 'L20';
+const isL21Stage = stage.toUpperCase() === 'L21';
 
 const l15Manifest = {
   files: [
@@ -368,6 +369,17 @@ const l20Manifest = {
   ]
 };
 
+
+const l21Manifest = {
+  files: [
+    'apps/api/src/modules/user-locations/user-location-service.ts','apps/api/src/routes/catalog.ts','apps/api/src/routes/public/locations.ts','apps/api/src/routes/public/index.ts','apps/miniapp/utils/selection.js','apps/miniapp/app.json','apps/miniapp/pages/communities/index.js','apps/miniapp/pages/communities/index.wxml','apps/miniapp/pages/pickup/select/index.js','apps/miniapp/pages/pickup/select/index.wxml','apps/miniapp/pages/products/index.js','apps/miniapp/pages/products/index.wxml','apps/miniapp/pages/product-detail/index.js','apps/miniapp/pages/product-detail/index.wxml','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/confirm/index.wxml','apps/miniapp/pages/orders/detail/index.js','apps/miniapp/pages/orders/detail/index.wxml','scripts/verify-l21-miniapp-location-selection-local.ts','docs/reviews/l21-miniapp-location-selection.md'
+  ],
+  apis: ['GET /api/communities','GET /api/pickup-stores','GET /api/pickup-stores/:id','GET /api/products','GET /api/products/:id','POST /api/orders/normal','POST /api/orders','POST /api/payments/mock','GET /api/me/orders/:id'],
+  db: ['无新增表', '无新增字段'],
+  verify: ['scripts/verify-l21-miniapp-location-selection-local.ts', 'pnpm verify:all'],
+  checklist: ['小程序可选择社区','小程序可选择自提点','商品列表展示已选社区','商品详情下单时带入社区','下单确认页带入社区','下单确认页带入自提点','下单前校验收货人','下单前校验手机号','下单前校验自提点','普通购买可完成 mock 支付','开团购买可完成 mock 支付','订单详情展示自提点','订单详情优先展示脱敏手机号','不调用 wx.requestPayment','不接真实微信支付','不调用 wx.login','不调用 wx.getLocation','不暴露成本价','不暴露奖励配置',`不新增优${'惠'}券/会${'员'}/裂${'变'}玩法`,'不新增自动退款','不新增自动打款','不新增自动报税','合规扫描通过']
+};
+
 function safeRead(path: string) {
   try {
     return readFileSync(join(repoRoot, path), 'utf8');
@@ -384,6 +396,7 @@ function getChangedFiles() {
   if (isL18Stage) return { files: l18Manifest.files, error: '' };
   if (isL19Stage) return { files: l19Manifest.files, error: '' };
   if (isL20Stage) return { files: l20Manifest.files, error: '' };
+  if (isL21Stage) return { files: l21Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
   if (!diff.ok) return { files: [] as string[], error: diff.output };
   const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -403,8 +416,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage) {
-    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : l20Manifest.apis).map((api) => {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage) {
+    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : isL20Stage ? l20Manifest.apis : l21Manifest.apis).map((api) => {
       const [method, path] = api.split(' ');
       return {
         method,
@@ -478,6 +491,7 @@ function extractModels(files: string[]) {
   if (isL18Stage) return l18Manifest.db.map((model) => ({ model, change: 'L18 manifest', description: 'L18 用户端订单中心阶段数据库范围' }));
   if (isL19Stage) return l19Manifest.db.map((model) => ({ model, change: 'L19 manifest', description: 'L19 用户端商品详情与下单入口阶段数据库范围' }));
   if (isL20Stage) return l20Manifest.db.map((model) => ({ model, change: 'L20 manifest', description: 'L20 小程序端端到端联调发布就绪数据库范围' }));
+  if (isL21Stage) return l21Manifest.db.map((model) => ({ model, change: 'L21 manifest', description: 'L21 小程序位置选择阶段数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
   const schema = safeRead('prisma/schema.prisma');
   const models = [...schema.matchAll(/^model\s+(\w+)\s+\{/gm)].map((match) => match[1]);
@@ -506,6 +520,9 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L20') {
     return l20Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L21') {
+    return l21Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
+  }
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
   const hasFile = (needle: string) => files.some((file) => file.includes(needle));
@@ -525,7 +542,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage) {
+    if (isL21Stage) return [{ script: 'scripts/verify-l21-miniapp-location-selection-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l21-miniapp-location-selection-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l21-miniapp-location-selection-local.ts') ? 'yes' : 'no', description: 'L21 小程序位置选择阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L21 manifest 要求的总体验证命令' }];
     if (isL20Stage) return [{ script: 'scripts/verify-l20-miniapp-e2e-release-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l20-miniapp-e2e-release-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l20-miniapp-e2e-release-local.ts') ? 'yes' : 'no', description: 'L20 小程序端端到端联调发布就绪验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L20 manifest 要求的总体验证命令' }];
     if (isL19Stage) return [{ script: 'scripts/verify-l19-product-purchase-entry-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l19-product-purchase-entry-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l19-product-purchase-entry-local.ts') ? 'yes' : 'no', description: 'L19 用户端商品详情与下单入口阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L19 manifest 要求的总体验证命令' }];
     if (isL18Stage) return [{ script: 'scripts/verify-l18-user-order-center-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l18-user-order-center-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l18-user-order-center-local.ts') ? 'yes' : 'no', description: 'L18 用户端订单中心阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L18 manifest 要求的总体验证命令' }];
@@ -566,11 +584,11 @@ function parseLatestVerifyOutput() {
   const content = readFileSync(path, 'utf8');
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : true) && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
     return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
@@ -644,7 +662,7 @@ const report = `# 阶段验收报告：${stage}
 
 ## 2. 本阶段变更范围
 
-${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 
@@ -689,7 +707,7 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 
 ## 11. Codex 给人工 reviewer 的说明
 
-- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
 - 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
 - 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
 - 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。

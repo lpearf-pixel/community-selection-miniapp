@@ -140,7 +140,7 @@ export async function getUserOrderDetail(userId: string, orderId: string) {
     product: product ? { product_id: product.id, name: product.name, cover_image: product.cover_image, price_cents: product.price_cents, sale_unit: product.sale_unit, sale_spec_name: product.sale_spec_name } : null,
     group_buy: order.group_buy ? { group_buy_id: order.group_buy.id, status: order.group_buy.status, min_people: order.group_buy.min_people, current_people: order.group_buy.current_people, end_time: order.group_buy.end_time.toISOString() } : null,
     pickup: { pickup_type: order.pickup_type, pickup_store_id: order.pickup_store_id, pickup_store_name: order.pickup_store?.name ?? null, pickup_store_address: order.pickup_store?.address ?? null, pickup_store_phone: order.pickup_store?.phone ?? null, pickup_code: pickupCode(order.order_no) },
-    receiver: { receiver_name: order.receiver_name, receiver_phone: order.receiver_phone, receiver_phone_masked: maskReceiverPhone(order.receiver_phone), receiver_address: order.receiver_address },
+    receiver: { receiver_name: order.receiver_name, receiver_phone_masked: maskReceiverPhone(order.receiver_phone), receiver_address: order.receiver_address },
     after_sales: order.after_sale_cases.map(mapAfterSale),
     timeline: timeline.length > 0 ? timeline.map((item) => ({ event_type: item.event_type, title: item.title, from_status: item.from_status, to_status: item.to_status, created_at: item.created_at.toISOString() })) : [{ event_type: 'order_status', title: toUserOrderStatus(order), to_status: order.order_status, created_at: order.created_at.toISOString() }]
   };
