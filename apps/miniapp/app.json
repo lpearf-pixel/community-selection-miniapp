@@ -7,6 +7,7 @@
     "pages/group-buy-detail/index",
     "pages/start-group-buy/index",
     "pages/join-order/index",
+    "pages/orders/confirm/index",
     "pages/orders/index"
   ],
   "window": {
