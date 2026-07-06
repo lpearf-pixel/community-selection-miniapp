@@ -1,6 +1,6 @@
 <view wx:if="{{product}}" class="page">
   <image wx:if="{{product.cover_image}}" src="{{product.cover_image}}" mode="aspectFill" class="hero" />
   <view class="panel"><view class="name">{{product.name}}</view><view class="price">¥{{product.price_yuan}}</view><view class="desc">{{product.description}}</view></view>
-  <view class="panel"><view class="section-title">可参与团购</view><view wx:if="{{!product.active_group_buys.length}}" class="empty">暂无进行中的社区团购</view><view wx:for="{{product.active_group_buys}}" wx:key="group_buy_id" class="group"><view>{{item.community_name}} · {{item.current_quantity}}/{{item.min_quantity}}</view><view class="price">¥{{item.price_yuan}}</view><button size="mini" bindtap="goGroupBuy" data-id="{{item.group_buy_id}}">参与</button></view></view>
+  <view class="panel"><view class="section-title">可参与团购</view><view wx:if="{{!product.active_group_buys.length}}" class="empty">暂无进行中的社区团购</view><view wx:for="{{product.active_group_buys}}" wx:key="group_buy_id" class="group"><view>{{item.community_name}} · {{item.current_quantity}}/{{item.min_quantity}}</view><view class="price">¥{{item.price_yuan}}</view><button size="mini" bindtap="goGroupBuy" data-id="{{item.group_buy_id}}" data-community-id="{{item.community_id}}">参与</button></view></view>
   <view class="footer"><button type="primary" bindtap="goNormalBuy" disabled="{{!product.can_normal_buy}}">直接下单</button></view>
 </view>

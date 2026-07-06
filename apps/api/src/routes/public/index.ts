@@ -7,10 +7,12 @@ import { registerRefundRoutes } from '../refunds.js';
 import { registerRewardRoutes } from '../rewards.js';
 import { registerPublicAfterSaleRoutes } from '../after-sales.js';
 import { registerUserOrderRoutes } from '../me/orders.js';
+import { registerPublicLocationRoutes } from './locations.js';
 
 export function registerPublicRoutes(app: FastifyInstance) {
   registerCatalogRoutes(app);
   registerUserProductRoutes(app);
+  registerPublicLocationRoutes(app);
   registerPublicGroupBuyRoutes(app);
   registerPaymentRoutes(app);
   registerRefundRoutes(app);
