@@ -38,6 +38,7 @@ pnpm exec tsx scripts/verify-l15-after-sale-local.ts
 pnpm exec tsx scripts/verify-l16-finance-reconciliation-local.ts
 pnpm exec tsx scripts/verify-l17-operations-dashboard-local.ts
 pnpm exec tsx scripts/verify-l17-5-normal-purchase-local.ts
+pnpm exec tsx scripts/verify-l18-user-order-center-local.ts
 scripts/verify-l1-l2-l3-local.sh
 pnpm exec tsx scripts/verify-l4-admin-basic-local.ts
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-local.sh

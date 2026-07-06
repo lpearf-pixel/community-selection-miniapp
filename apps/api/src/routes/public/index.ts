@@ -5,6 +5,7 @@ import { registerPaymentRoutes } from '../payments.js';
 import { registerRefundRoutes } from '../refunds.js';
 import { registerRewardRoutes } from '../rewards.js';
 import { registerPublicAfterSaleRoutes } from '../after-sales.js';
+import { registerUserOrderRoutes } from '../me/orders.js';
 
 export function registerPublicRoutes(app: FastifyInstance) {
   registerCatalogRoutes(app);
@@ -13,4 +14,5 @@ export function registerPublicRoutes(app: FastifyInstance) {
   registerRefundRoutes(app);
   registerRewardRoutes(app);
   registerPublicAfterSaleRoutes(app);
+  registerUserOrderRoutes(app);
 }
