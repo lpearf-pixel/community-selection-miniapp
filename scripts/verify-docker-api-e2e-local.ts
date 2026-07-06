@@ -32,8 +32,12 @@ function assert(condition: unknown, message: string): asserts condition {
 function assertNoForbiddenFields(value: unknown, context: string): void {
   const serialized = JSON.stringify(value);
   for (const field of forbiddenResponseFields) {
-    assert(!serialized.includes(`"${field}"`), `${context} response must not expose ${field}`);
+    assert(!serialized.includes(`\"${field}\"`), `${context} response must not expose ${field}`);
   }
+}
+
+function assertNoFullReceiverPhone(value: unknown, context: string): void {
+  assert(!JSON.stringify(value).includes(receiverPhone), `${context} response must not expose receiver_phone ${receiverPhone}`);
 }
 
 async function request<T>(method: string, path: string, options: { body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
@@ -96,6 +100,8 @@ async function main() {
       receiver_phone: receiverPhone
     }
   });
+  assertNoForbiddenFields(order, 'POST /api/orders/normal');
+  assertNoFullReceiverPhone(order, 'POST /api/orders/normal');
   const orderId = idOf(order, ['order_id', 'id'], 'POST /api/orders/normal');
 
   await request('POST', '/api/payments/mock', { body: { order_id: orderId } });
@@ -105,7 +111,7 @@ async function main() {
   assert(orderList.items.some((item) => idOf(item, ['order_id', 'id'], 'GET /api/me/orders item') === orderId), 'GET /api/me/orders must include created order');
 
   const orderDetail = await request<unknown>('GET', `/api/me/orders/${orderId}`, { headers: userHeaders });
-  assert(!JSON.stringify(orderDetail).includes(receiverPhone), 'GET /api/me/orders/:id must not expose full receiver phone 13812345678');
+  assertNoFullReceiverPhone(orderDetail, 'GET /api/me/orders/:id');
 
   await request('GET', `/api/me/orders/${orderId}/pickup-code`, { headers: userHeaders });
 
