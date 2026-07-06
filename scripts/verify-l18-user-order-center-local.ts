@@ -47,6 +47,9 @@ async function main() {
   const normalDetail = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}`, headers: { 'x-user-id': user.id } }));
   const groupDetail = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${groupOrder.id}`, headers: { 'x-user-id': user.id } }));
   assert(normalDetail.group_buy === null && normalDetail.product.name === product.name && normalDetail.pickup.pickup_code, 'normal detail should include product and no group buy');
+  assert(normalDetail.receiver?.receiver_phone_masked, 'normal detail should include masked receiver phone');
+  assert(normalDetail.receiver.receiver_phone_masked !== '13812340000', 'normal detail masked phone should not equal full phone');
+  assert(!normalDetail.receiver.receiver_phone_masked.includes('1234'), 'normal detail masked phone should hide middle digits');
   assert(groupDetail.group_buy?.group_buy_id === groupBuy.id && groupDetail.product.name === product.name && groupDetail.pickup, 'group detail should include group buy and pickup');
   const forbiddenDetail = await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}`, headers: { 'x-user-id': otherUser.id } });
   assert([403, 404].includes(forbiddenDetail.statusCode), 'other user should not read order detail');
