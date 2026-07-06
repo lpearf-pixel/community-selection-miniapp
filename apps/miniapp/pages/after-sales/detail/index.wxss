@@ -1,1 +1,1 @@
-.page{padding:24rpx;background:#f7f8fa;min-height:100vh}.panel{background:#fff;border-radius:18rpx;padding:24rpx;line-height:1.9}.title{font-size:34rpx;font-weight:700;margin-bottom:20rpx}
+.page{padding:24rpx;background:#f6f7fb;min-height:100vh}.title{font-size:38rpx;font-weight:700;margin-bottom:20rpx}.card,.form{background:#fff;border-radius:20rpx;padding:24rpx;margin-bottom:20rpx;line-height:1.8}.state{text-align:center;color:#666;margin:60rpx}.error{color:#e5484d}

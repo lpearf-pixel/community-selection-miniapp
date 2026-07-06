@@ -90,6 +90,7 @@ function listItem(order: any) {
     product_id: product?.id ?? null,
     product_name: product?.name ?? '',
     product_cover_image: product?.cover_image ?? null,
+    product: product ? { product_id: product.id, name: product.name, cover_image: product.cover_image ?? null } : null,
     quantity: order.quantity,
     total_amount_cents: order.total_amount_cents,
     pay_amount_cents: order.pay_amount_cents,
@@ -102,12 +103,14 @@ function listItem(order: any) {
     group_buy_status: order.group_buy?.status ?? null,
     pickup_type: order.pickup_type,
     pickup_store_name: order.pickup_store?.name ?? null,
+    pickup: { pickup_store_id: order.pickup_store_id, pickup_store_name: order.pickup_store?.name ?? null, pickup_store_address: order.pickup_store?.address ?? null, pickup_store_phone: order.pickup_store?.phone ?? null },
     community_name: order.community?.name ?? null,
     created_at: order.created_at.toISOString(),
     paid_at: iso(order.paid_at),
     completed_at: iso(order.completed_at),
     after_sale_case_count: order.after_sale_cases?.length ?? 0,
-    latest_after_sale_status: latestAfterSale?.status ?? null
+    latest_after_sale_status: latestAfterSale?.status ?? null,
+    after_sale_summary: { has_after_sale: (order.after_sale_cases?.length ?? 0) > 0, latest_status: latestAfterSale?.status ?? null }
   };
 }
 
@@ -115,7 +118,9 @@ export async function listUserOrders(userId: string, query: UserOrderQuery) {
   const page = Math.max(1, Number(query.page ?? 1) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(query.page_size ?? 20) || 20));
   const where: any = { user_id: userId };
-  if (query.status) where.order_status = query.status;
+  if (query.status === 'unpaid') where.pay_status = 'unpaid';
+  else if (query.status === 'refunded') where.OR = [{ refund_status: 'success' }, { order_status: 'refunded' }];
+  else if (query.status && query.status !== 'all' && query.status !== 'after_sale') where.order_status = query.status;
   if (query.type === 'normal') where.group_buy_id = null;
   if (query.type === 'group_buy') where.group_buy_id = { not: null };
   const [total, orders] = await Promise.all([
