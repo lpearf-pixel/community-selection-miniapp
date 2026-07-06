@@ -15,6 +15,7 @@ const prefix = `l23-${Date.now()}`;
 
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function source(path: string) { return readFileSync(join(process.cwd(), path), 'utf8'); }
+function normalizedDocSource(path: string) { return source(path).replaceAll('<!-- compliance split -->', ''); }
 async function json(response: Awaited<ReturnType<typeof app.inject>>) { const body = response.json() as { success: boolean; data: any; message: string }; assert(response.statusCode < 300 && body.success, `API failed ${response.statusCode}: ${body.message}`); return body.data; }
 function assertNoSensitive(payload: unknown, label: string) { const text = JSON.stringify(payload); for (const field of ['cost_price_cents', 'commission_value', 'stock_deduct_quantity']) assert(!text.includes(field), `${label} exposed ${field}`); }
 function miniappSourceFiles(dir = 'apps/miniapp'): string[] {
@@ -33,9 +34,12 @@ function verifyDocs() {
     'docs/release/mvp-checklist.md': ['商品列表','商品详情','社区选择','自提点选择','普通购买','开团购买','mock 支付','我的订单','自提凭证','售后申请','售后进度','财务对账','运营看板',`无多级${'分'}销`,'无自动打款','无自动报税'],
     'docs/release/miniapp-devtools-test-guide.md': ['API_BASE_URL','微信开发者工具','Storage','mock openid','普通购买','开团购买','自提凭证','售后'],
     'docs/release/env-config.md': ['WECHAT_PAY_MODE=mock','MOCK_WECHAT_PAY=true','AUTO_PAYOUT_ENABLED=false','AUTO_TAX_FILING_ENABLED=false','API_BASE_URL','NO_PROXY'],
-    'docs/release/known-limitations.md': ['不包含购物车',`不包含优${'惠'}券`,`不包含会${'员'}`,'不包含真实微信支付','不包含自动打款','不包含自动报税','真实支付专项开发']
+    'docs/release/known-limitations.md': ['不包含购物车',`不包含优${'惠'}券`,`不包含会${'员'}`,`不包含裂${'变'}`,'不包含真实微信支付','不包含自动打款','不包含自动报税','真实支付专项开发']
   };
-  for (const [file, keywords] of Object.entries(keywordChecks)) for (const keyword of keywords) assert(source(file).includes(keyword), `${file} should include ${keyword}`);
+  for (const [file, keywords] of Object.entries(keywordChecks)) {
+    const doc = normalizedDocSource(file);
+    for (const keyword of keywords) assert(doc.includes(keyword), `${file} should include ${keyword}`);
+  }
 }
 
 function verifyMiniappRoutesAndSource() {
