@@ -61,7 +61,11 @@ assertContains(tsconfig, 'packages/shared/dist/index.js', 'tsconfig.base.json');
 assertContains(tsconfig, 'packages/config/dist/index.js', 'tsconfig.base.json');
 
 for (const [label, block] of [['api command', api], ['admin command', admin]] as const) {
-  assertContains(block, 'apt-get install -y openssl ca-certificates', label);
+  for (const tool of ['git', 'openssh-client', 'curl', 'bash', 'ca-certificates', 'openssl']) {
+    assertContains(block, tool, label);
+  }
+  assertContains(block, 'apt-get install -y --no-install-recommends', label);
+  assertContains(block, 'rm -rf /var/lib/apt/lists/*', label);
   assertContains(block, 'corepack prepare pnpm@9.15.4 --activate', label);
   assertContains(block, 'pnpm config set registry https://registry.npmjs.org/', label);
   assertContains(block, 'pnpm config set verify-store-integrity false', label);
@@ -133,6 +137,12 @@ for (const needle of [
   'dist/index.js',
   'dist/index.d.ts',
   '返回空对象',
+  'GITHUB_TOKEN',
+  'git ls-remote origin stage-reports',
+  'report:publish',
+  'credential.helper',
+  'rm -f ~/.git-credentials',
+  'Contents: Read and write',
 ]) {
   assertContains(docs, needle, 'docs/dev/docker-local.md');
 }

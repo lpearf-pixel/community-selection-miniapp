@@ -92,3 +92,82 @@ API_BASE_URL=http://127.0.0.1:13080 pnpm exec tsx scripts/verify-docker-api-e2e-
 The script records all public API responses it touches and audits them at the end of the run. Public responses must not expose raw `receiver_phone`, full receiver phone values such as `13812345678`, internal cost fields such as `cost_price_cents`, service reward configuration such as `commission_value` / `commission_type`, or inventory internals such as `stock_deduct_quantity`.
 
 If the E2E audit reports risk findings, do not relax the test. Fix the backend response mapper for the reported endpoint so public APIs only return safe fields such as `receiver_phone_masked`, public `price_cents`, `sale_unit`, `sale_spec_name`, `pay_amount_cents`, `total_amount_cents`, `requested_refund_cents`, and `approved_refund_cents`.
+
+## 容器内发布 stage report 到 GitHub
+
+Docker 本地开发容器会在启动时安装本地开发和报告发布需要的工具：
+
+- `git`
+- `openssh-client`
+- `ca-certificates`
+- `curl`
+- `bash`
+
+这些工具只用于本地 Docker 开发/验证/报告发布环境；不要把该配置理解为生产镜像要求。
+
+如果需要在容器内执行 `report:publish` 并推送 `stage-reports`，需要用户自行临时提供 GitHub Fine-grained token。不要提交 token，不要把 token 写入 `docker-compose.yml`，也不要把 token 写入仓库中的任何文件。
+
+### 1. 创建 GitHub Fine-grained token
+
+在 GitHub 创建 Fine-grained token，并限定：
+
+- Repository: `lpearf-pixel/community-selection-miniapp`
+- Contents: Read and write
+- Metadata: Read
+
+如果后续遇到 `403 Write access not granted`，请重新生成 token，并确认 `Contents: Read and write` 已启用。
+
+### 2. 容器内临时配置 token
+
+```bash
+docker compose exec -e GITHUB_TOKEN="<token>" api sh -lc '
+cd /app &&
+git config --global user.name "lpearf-pixel" &&
+git config --global user.email "lpearf-pixel@users.noreply.github.com" &&
+git config --global --add safe.directory /app &&
+git remote set-url origin https://github.com/lpearf-pixel/community-selection-miniapp.git &&
+git config --global credential.helper store &&
+printf "https://x-access-token:%s@github.com\n" "$GITHUB_TOKEN" > ~/.git-credentials &&
+git ls-remote origin stage-reports
+'
+```
+
+说明：
+
+- `GITHUB_TOKEN` 只通过 `docker compose exec -e` 临时注入本地容器。
+- `credential.helper` 只用于本地容器临时发布。
+- `~/.git-credentials` 只存在于容器用户目录，不要复制或提交到仓库。
+- `git ls-remote origin stage-reports` 用于确认 token 至少可以访问远端分支。
+
+### 3. 生成并发布报告
+
+先生成 L24 报告：
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm report:stage -- --stage=L24
+"
+```
+
+如果 token 权限确认可用，再执行发布：
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm report:publish -- --stage=L24 --skip-source-sync-check --push
+"
+```
+
+没有 GitHub token 或 token 权限不足时，`report:publish --push` 可能会在 GitHub 权限阶段失败；这属于凭据问题。当前 Docker 容器应已包含 `git`，不应再出现 `spawnSync git ENOENT`。
+
+### 4. 发布后清理 token
+
+```bash
+docker compose exec api sh -lc "
+rm -f ~/.git-credentials &&
+git config --global --unset credential.helper || true
+"
+```
+
+再次强调：不要提交 token，不要把 token 写入 `docker-compose.yml`，token 只用于本地容器临时发布。
