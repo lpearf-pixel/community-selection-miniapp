@@ -4,9 +4,7 @@ import { createRequire } from "node:module";
 import { scanComplianceFiles } from "./lib/compliance-scan";
 
 const repoRoot = process.cwd();
-const requireFromRoot = createRequire(
-  join(repoRoot, "scripts/verify-l24-miniapp-cart-local.ts"),
-);
+const requireFromRoot = createRequire(join(repoRoot, "package.json"));
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
