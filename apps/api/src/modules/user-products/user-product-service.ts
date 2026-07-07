@@ -56,7 +56,24 @@ function groupBuyWhere(productId: string, query?: GroupBuyListQuery): Prisma.Gro
   };
 }
 
-function mapGroupBuy(groupBuy: any) {
+async function getPaidQuantity(groupBuyId: string) {
+  const result = await prisma.order.aggregate({
+    where: {
+      group_buy_id: groupBuyId,
+      pay_status: 'paid',
+      order_status: { notIn: ['closed', 'refunded'] },
+      refund_status: { notIn: ['success'] }
+    },
+    _sum: { quantity: true }
+  });
+  return result._sum.quantity ?? 0;
+}
+
+async function mapGroupBuy(groupBuy: any) {
+  const paidQuantity = await getPaidQuantity(groupBuy.id);
+  const targetCount = groupBuy.min_quantity;
+  const remainingQuantity = Math.max(0, targetCount - paidQuantity);
+  const isExpired = groupBuy.end_time.getTime() <= Date.now();
   return {
     group_buy_id: groupBuy.id,
     community_id: groupBuy.community_id,
@@ -65,12 +82,19 @@ function mapGroupBuy(groupBuy: any) {
     leader_nickname: groupBuy.leader_user?.nickname ?? '',
     min_people: groupBuy.min_people,
     min_quantity: groupBuy.min_quantity,
+    target_count: targetCount,
     current_people: groupBuy.current_people,
     current_quantity: groupBuy.current_quantity,
+    paid_quantity: paidQuantity,
+    remaining_quantity: remainingQuantity,
     price_cents: groupBuy.price_cents,
     status: groupBuy.status,
+    is_success: groupBuy.status === 'success',
+    is_expired: isExpired,
+    can_join: (groupBuy.status === 'pending' || groupBuy.status === 'success') && !isExpired && (groupBuy.product?.stock ?? 1) > 0,
     end_time: groupBuy.end_time.toISOString(),
-    pickup_time: groupBuy.pickup_time.toISOString()
+    pickup_time: groupBuy.pickup_time.toISOString(),
+    product: groupBuy.product ? { product_id: groupBuy.product.id, name: groupBuy.product.name, cover_image: groupBuy.product.cover_image, price_cents: groupBuy.product.price_cents, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock: groupBuy.product.stock } : undefined
   };
 }
 
@@ -135,13 +159,13 @@ export async function getUserProductDetail(productId: string) {
       category: true,
       group_buys: {
         where: groupBuyWhere(productId),
-        include: { community: true, leader_user: true },
+        include: { community: true, leader_user: true, product: true },
         orderBy: { end_time: 'asc' }
       }
     }
   });
   if (!product) throw Object.assign(new Error('商品不存在或已下架'), { statusCode: 404 });
-  const activeGroupBuys = product.group_buys.map(mapGroupBuy);
+  const activeGroupBuys = await Promise.all(product.group_buys.map(mapGroupBuy));
   return {
     id: product.id,
     product_id: product.id,
@@ -171,7 +195,7 @@ export async function listUserProductGroupBuys(productId: string, query: GroupBu
   const where = groupBuyWhere(productId, query);
   const [total, groupBuys] = await Promise.all([
     prisma.groupBuy.count({ where }),
-    prisma.groupBuy.findMany({ where, include: { community: true, leader_user: true }, orderBy: { end_time: 'asc' }, skip: (page - 1) * pageSize, take: pageSize })
+    prisma.groupBuy.findMany({ where, include: { community: true, leader_user: true, product: true }, orderBy: { end_time: 'asc' }, skip: (page - 1) * pageSize, take: pageSize })
   ]);
-  return { total, page, page_size: pageSize, items: groupBuys.map(mapGroupBuy) };
+  return { total, page, page_size: pageSize, items: await Promise.all(groupBuys.map(mapGroupBuy)) };
 }
