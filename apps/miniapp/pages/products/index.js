@@ -44,10 +44,13 @@ Page({
           products: (data.items || []).map((item) => ({
             ...item,
             price_yuan: formatYuan(item.price_cents),
+            out_of_stock: typeof item.stock === "number" && item.stock <= 0,
             stock_label:
-              item.stock > 0
-                ? `库存 ${item.stock}${item.unit || ""}`
-                : "已售罄",
+              typeof item.stock === "number"
+                ? item.stock > 0
+                  ? `库存：${item.stock}${item.unit || ""}`
+                  : "库存不足"
+                : "库存以门店确认为准",
           })),
         }),
       )
@@ -69,11 +72,22 @@ Page({
       (item) => item.product_id === event.currentTarget.dataset.id,
     );
     if (!product) return;
+    if (typeof product.stock === "number" && product.stock <= 0) {
+      wx.showToast({ title: "商品库存不足", icon: "none" });
+      return;
+    }
     addToCart(product, 1);
     this.refreshCartCount();
     wx.showToast({ title: "已加入购物车", icon: "success" });
   },
   goNormalBuy(event) {
+    const product = this.data.products.find(
+      (item) => item.product_id === event.currentTarget.dataset.id,
+    );
+    if (product && typeof product.stock === "number" && product.stock <= 0) {
+      wx.showToast({ title: "库存不足", icon: "none" });
+      return;
+    }
     const c = this.data.selectedCommunity;
     wx.navigateTo({
       url: `/pages/orders/confirm/index?type=normal&product_id=${event.currentTarget.dataset.id}${c ? `&community_id=${c.community_id}` : ""}`,

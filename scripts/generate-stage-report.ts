@@ -42,6 +42,7 @@ const isL21Stage = stage.toUpperCase() === 'L21';
 const isL22Stage = stage.toUpperCase() === 'L22';
 const isL23Stage = stage.toUpperCase() === 'L23';
 const isL24Stage = stage.toUpperCase() === 'L24';
+const isL25Stage = stage.toUpperCase() === 'L25';
 
 const l15Manifest = {
   files: [
@@ -410,6 +411,15 @@ const l24Manifest = {
   checklist: ['购物车使用小程序 Storage','新增购物车工具 cart.js','新增购物车页面','商品列表支持加入购物车','商品详情支持加入购物车','商品详情保留立即购买','我的页面增加购物车入口','购物车支持修改数量','购物车支持删除商品','购物车支持清空','购物车支持单商品结算','订单确认页支持 from_cart','购物车结算仍走普通购买接口','mock 支付链路不变','下单成功后删除购物车商品','下单失败不删除购物车商品','不新增后端购物车接口','不新增 DB 表','不新增 DB 字段','不调用 wx.requestPayment','不接真实微信支付','不调用 wx.login','不调用 wx.getLocation','不暴露成本价','不暴露奖励配置',`不新增优${'惠'}券/会${'员'}/裂${'变'}玩法`,'不新增自动退款','不新增自动打款','不新增自动报税','合规扫描通过']
 };
 
+
+const l25Manifest = {
+  files: ['apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/confirm/index.wxml','apps/miniapp/pages/orders/confirm/index.wxss','apps/miniapp/pages/product-detail/index.js','apps/miniapp/pages/product-detail/index.wxml','apps/miniapp/pages/products/index.js','apps/miniapp/pages/products/index.wxml','apps/miniapp/utils/cart.js','scripts/verify-l25-order-confirm-quantity-guard-local.ts','scripts/verify-all-local.sh','docs/reviews/l25-order-confirm-quantity-guard.md'],
+  apis: ['GET /api/products/:id','POST /api/orders/normal','POST /api/payments/mock'],
+  db: ['无新增表', '无新增字段'],
+  verify: ['scripts/verify-l25-order-confirm-quantity-guard-local.ts', 'pnpm verify:all'],
+  checklist: ['订单确认页支持数量增加','订单确认页支持数量减少','订单确认页支持数量输入','数量最小为 1','数量不超过库存','库存不足时不能提交','展示库存提示','展示商品单价','展示商品小计','展示应付金额','from_cart 链路保留','下单成功后才删除购物车商品','下单失败不删除购物车商品','缺少自提点时提示','提交中防重复提交','商品列表库存不足不可立即购买','商品详情库存不足不可立即购买','库存不足商品不可加入购物车','不新增后端购物车接口','不新增 DB 表','不新增 DB 字段','不调用 wx.requestPayment','不接真实微信支付','不暴露成本价','不暴露奖励配置','合规扫描通过']
+};
+
 function safeRead(path: string) {
   try {
     return readFileSync(join(repoRoot, path), 'utf8');
@@ -430,6 +440,7 @@ function getChangedFiles() {
   if (isL22Stage) return { files: l22Manifest.files, error: '' };
   if (isL23Stage) return { files: l23Manifest.files, error: '' };
   if (isL24Stage) return { files: l24Manifest.files, error: '' };
+  if (isL25Stage) return { files: l25Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
   if (!diff.ok) return { files: [] as string[], error: diff.output };
   const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -449,8 +460,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage) {
-    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : isL20Stage ? l20Manifest.apis : isL21Stage ? l21Manifest.apis : isL22Stage ? l22Manifest.apis : isL23Stage ? l23Manifest.apis : l24Manifest.apis).map((api) => {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage) {
+    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : isL20Stage ? l20Manifest.apis : isL21Stage ? l21Manifest.apis : isL22Stage ? l22Manifest.apis : isL23Stage ? l23Manifest.apis : isL24Stage ? l24Manifest.apis : l25Manifest.apis).map((api) => {
       const [method, path] = api.split(' ');
       return {
         method,
@@ -528,6 +539,7 @@ function extractModels(files: string[]) {
   if (isL22Stage) return l22Manifest.db.map((model) => ({ model, change: 'L22 manifest', description: 'L22 小程序订单中心阶段数据库范围' }));
   if (isL23Stage) return l23Manifest.db.map((model) => ({ model, change: 'L23 manifest', description: 'L23 MVP 发布前验收与内测准备数据库范围' }));
   if (isL24Stage) return l24Manifest.db.map((model) => ({ model, change: 'L24 manifest', description: 'L24 小程序本地购物车阶段数据库范围' }));
+  if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
   const schema = safeRead('prisma/schema.prisma');
   const models = [...schema.matchAll(/^model\s+(\w+)\s+\{/gm)].map((match) => match[1]);
@@ -568,6 +580,9 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L24') {
     return l24Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L25') {
+    return l25Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
+  }
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
   const hasFile = (needle: string) => files.some((file) => file.includes(needle));
@@ -587,7 +602,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage) {
+    if (isL25Stage) return [{ script: 'scripts/verify-l25-order-confirm-quantity-guard-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l25-order-confirm-quantity-guard-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l25-order-confirm-quantity-guard-local.ts') ? 'yes' : 'no', description: 'L25 订单确认页体验与库存/数量前置校验验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L25 manifest 要求的总体验证命令' }];
     if (isL24Stage) return [{ script: 'scripts/verify-l24-miniapp-cart-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l24-miniapp-cart-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l24-miniapp-cart-local.ts') ? 'yes' : 'no', description: 'L24 小程序本地购物车阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L24 manifest 要求的总体验证命令' }];
     if (isL23Stage) return [{ script: 'scripts/verify-l23-mvp-release-readiness-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l23-mvp-release-readiness-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l23-mvp-release-readiness-local.ts') ? 'yes' : 'no', description: 'L23 MVP 发布前验收与内测准备验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L23 manifest 要求的总体验证命令' }];
     if (isL22Stage) return [{ script: 'scripts/verify-l22-miniapp-order-center-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l22-miniapp-order-center-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l22-miniapp-order-center-local.ts') ? 'yes' : 'no', description: 'L22 小程序订单中心阶段验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L22 manifest 要求的总体验证命令' }];
@@ -632,11 +648,11 @@ function parseLatestVerifyOutput() {
   const content = readFileSync(path, 'utf8');
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : isL22Stage ? content.includes('L22 miniapp order center verification passed') : isL23Stage ? content.includes('L23 mvp release readiness verification passed') : isL24Stage ? content.includes('L24 miniapp cart verification passed') : true) && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : isL22Stage ? content.includes('L22 miniapp order center verification passed') : isL23Stage ? content.includes('L23 mvp release readiness verification passed') : isL24Stage ? content.includes('L24 miniapp cart verification passed') : isL25Stage ? content.includes('L25 order confirm quantity guard verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
     return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
@@ -710,7 +726,7 @@ const report = `# 阶段验收报告：${stage}
 
 ## 2. 本阶段变更范围
 
-${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 
@@ -755,7 +771,7 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 
 ## 11. Codex 给人工 reviewer 的说明
 
-- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
 - 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
 - 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
 - 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
