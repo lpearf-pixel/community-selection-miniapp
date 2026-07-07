@@ -1,9 +1,15 @@
 const { request, formatYuan } = require("../../utils/api");
 const { getSelectedCommunity } = require("../../utils/selection");
 const { addToCart } = require("../../utils/cart");
+function isOutOfStock(product) {
+  return product && typeof product.stock === "number" && product.stock <= 0;
+}
 function decorateProduct(product) {
+  const out_of_stock = isOutOfStock(product);
   return {
     ...product,
+    out_of_stock,
+    stock_label: typeof product.stock === "number" ? (product.stock > 0 ? `库存：${product.stock}` : "库存不足") : "库存以门店确认为准",
     price_yuan: formatYuan(product.price_cents),
     active_group_buys: (product.active_group_buys || []).map((item) => ({
       ...item,
@@ -28,6 +34,10 @@ Page({
   addCart() {
     const p = this.data.product;
     if (!p) return;
+    if (isOutOfStock(p)) {
+      wx.showToast({ title: "商品库存不足，暂不可购买", icon: "none" });
+      return;
+    }
     addToCart(p, 1);
     wx.showToast({ title: "已加入购物车", icon: "success" });
   },
@@ -37,6 +47,10 @@ Page({
   goNormalBuy() {
     const p = this.data.product;
     const c = this.data.selectedCommunity;
+    if (isOutOfStock(p)) {
+      wx.showToast({ title: "库存不足", icon: "none" });
+      return;
+    }
     if (p && p.can_normal_buy)
       wx.navigateTo({
         url: `/pages/orders/confirm/index?type=normal&product_id=${p.product_id}${c ? `&community_id=${c.community_id}` : ""}`,

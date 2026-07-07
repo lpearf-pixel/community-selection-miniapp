@@ -42,6 +42,8 @@ function saveCartItems(items) {
   );
 }
 function addToCart(product, quantity = 1) {
+  if (typeof product.stock === "number" && product.stock <= 0)
+    throw new Error("商品库存不足");
   const product_id = productIdOf(product);
   if (!product_id) throw new Error("缺少商品 ID");
   const items = getCartItems();

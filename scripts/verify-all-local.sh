@@ -45,6 +45,7 @@ pnpm exec tsx scripts/verify-l21-miniapp-location-selection-local.ts
 pnpm exec tsx scripts/verify-l22-miniapp-order-center-local.ts
 pnpm exec tsx scripts/verify-l23-mvp-release-readiness-local.ts
 pnpm exec tsx scripts/verify-l24-miniapp-cart-local.ts
+pnpm exec tsx scripts/verify-l25-order-confirm-quantity-guard-local.ts
 scripts/verify-l1-l2-l3-local.sh
 pnpm exec tsx scripts/verify-l4-admin-basic-local.ts
 scripts/verify-l1-l2-l3-l4-l5-l6-l7-local.sh
