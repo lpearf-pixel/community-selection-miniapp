@@ -1,5 +1,131 @@
-const { request, createMockPayment, formatYuan } = require('../../../utils/api');
-const { getCurrentUser } = require('../../../utils/user');
-const { getSelectedCommunity, getSelectedPickupStore } = require('../../../utils/selection');
-function validPhone(phone) { return /^1\d{10}$/.test(String(phone || '')); }
-Page({ data: { type: 'normal', product_id: '', group_buy_id: '', quantity: 1, pickup_store_id: '', community_id: '', receiver_name: '', receiver_phone: '', product: null, selectedCommunity: null, selectedPickupStore: null, error: '', loading: false, submitting: false }, onLoad(query) { const user = getCurrentUser(); this.setData({ type: query.type === 'group_buy' ? 'group_buy' : 'normal', product_id: query.product_id || '', group_buy_id: query.group_buy_id || '', community_id: query.community_id || '', receiver_name: user.receiver_name || user.nickname || '', receiver_phone: user.receiver_phone || '' }); this.refreshSelection(); this.loadProduct(); }, onShow() { this.refreshSelection(); }, refreshSelection() { const community = getSelectedCommunity(); const store = getSelectedPickupStore(); this.setData({ selectedCommunity: community, selectedPickupStore: store, community_id: this.data.community_id || (community && community.community_id) || '', pickup_store_id: (store && store.pickup_store_id) || this.data.pickup_store_id || '' }); }, onInput(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value }); }, chooseCommunity() { wx.navigateTo({ url: '/pages/communities/index' }); }, choosePickupStore() { wx.navigateTo({ url: '/pages/pickup/select/index' }); }, loadProduct() { if (!this.data.product_id) return Promise.resolve(); this.setData({ loading: true }); return request({ url: `/api/products/${this.data.product_id}` }).then((product) => this.setData({ product: { ...product, price_yuan: formatYuan(product.price_cents) } })).finally(() => this.setData({ loading: false })); }, validate() { const quantity = Number(this.data.quantity); if (!this.data.receiver_name.trim()) return '请填写收货人姓名'; if (!validPhone(this.data.receiver_phone)) return '请填写正确手机号'; if (!quantity || quantity < 1) return '购买数量至少为 1'; if (!this.data.pickup_store_id) return '请选择自提点'; if (this.data.type === 'group_buy' && !this.data.group_buy_id) return '缺少开团信息'; return ''; }, submit() { const error = this.validate(); if (error) { this.setData({ error }); wx.showToast({ title: error, icon: 'none' }); return; } const isGroupBuy = this.data.type === 'group_buy'; const user = getCurrentUser(); const payload = { client_request_id: `miniapp-l21-${Date.now()}`, user_id: user.user_id || undefined, user_openid: user.openid, quantity: Number(this.data.quantity) || 1, pickup_store_id: this.data.pickup_store_id, community_id: this.data.community_id || undefined, receiver_name: this.data.receiver_name, receiver_phone: this.data.receiver_phone, product_id: isGroupBuy ? undefined : this.data.product_id, group_buy_id: isGroupBuy ? this.data.group_buy_id : undefined }; this.setData({ submitting: true, error: '' }); request({ url: isGroupBuy ? '/api/orders' : '/api/orders/normal', method: 'POST', data: payload }).then((order) => createMockPayment(order.id).then(() => order)).then((order) => wx.redirectTo({ url: `/pages/orders/detail/index?id=${order.id}` })).catch((err) => this.setData({ error: err.message || '下单失败' })).finally(() => this.setData({ submitting: false })); } });
+const {
+  request,
+  createMockPayment,
+  formatYuan,
+} = require("../../../utils/api");
+const { getCurrentUser } = require("../../../utils/user");
+const {
+  getSelectedCommunity,
+  getSelectedPickupStore,
+} = require("../../../utils/selection");
+const { removeCartItem } = require("../../../utils/cart");
+const MOCK_PAYMENT_ENDPOINT = "/api/payments/mock";
+function validPhone(phone) {
+  return /^1\d{10}$/.test(String(phone || ""));
+}
+Page({
+  data: {
+    type: "normal",
+    product_id: "",
+    group_buy_id: "",
+    quantity: 1,
+    from_cart: false,
+    pickup_store_id: "",
+    community_id: "",
+    receiver_name: "",
+    receiver_phone: "",
+    product: null,
+    selectedCommunity: null,
+    selectedPickupStore: null,
+    error: "",
+    loading: false,
+    submitting: false,
+  },
+  onLoad(query) {
+    const user = getCurrentUser();
+    this.setData({
+      type: query.type === "group_buy" ? "group_buy" : "normal",
+      product_id: query.product_id || "",
+      group_buy_id: query.group_buy_id || "",
+      quantity:
+        Number(query.quantity) > 0 ? Math.floor(Number(query.quantity)) : 1,
+      from_cart: query.from_cart === "1",
+      community_id: query.community_id || "",
+      receiver_name: user.receiver_name || user.nickname || "",
+      receiver_phone: user.receiver_phone || "",
+    });
+    this.refreshSelection();
+    this.loadProduct();
+  },
+  onShow() {
+    this.refreshSelection();
+  },
+  refreshSelection() {
+    const community = getSelectedCommunity();
+    const store = getSelectedPickupStore();
+    this.setData({
+      selectedCommunity: community,
+      selectedPickupStore: store,
+      community_id:
+        this.data.community_id || (community && community.community_id) || "",
+      pickup_store_id:
+        (store && store.pickup_store_id) || this.data.pickup_store_id || "",
+    });
+  },
+  onInput(event) {
+    this.setData({ [event.currentTarget.dataset.field]: event.detail.value });
+  },
+  chooseCommunity() {
+    wx.navigateTo({ url: "/pages/communities/index" });
+  },
+  choosePickupStore() {
+    wx.navigateTo({ url: "/pages/pickup/select/index" });
+  },
+  loadProduct() {
+    if (!this.data.product_id) return Promise.resolve();
+    this.setData({ loading: true });
+    return request({ url: `/api/products/${this.data.product_id}` })
+      .then((product) =>
+        this.setData({
+          product: { ...product, price_yuan: formatYuan(product.price_cents) },
+        }),
+      )
+      .finally(() => this.setData({ loading: false }));
+  },
+  validate() {
+    const quantity = Number(this.data.quantity);
+    if (!this.data.receiver_name.trim()) return "请填写收货人姓名";
+    if (!validPhone(this.data.receiver_phone)) return "请填写正确手机号";
+    if (!quantity || quantity < 1) return "购买数量至少为 1";
+    if (!this.data.pickup_store_id) return "请选择自提点";
+    if (this.data.type === "group_buy" && !this.data.group_buy_id)
+      return "缺少开团信息";
+    return "";
+  },
+  submit() {
+    const error = this.validate();
+    if (error) {
+      this.setData({ error });
+      wx.showToast({ title: error, icon: "none" });
+      return;
+    }
+    const isGroupBuy = this.data.type === "group_buy";
+    const user = getCurrentUser();
+    const payload = {
+      client_request_id: `miniapp-l24-${Date.now()}`,
+      user_id: user.user_id || undefined,
+      user_openid: user.openid,
+      quantity: Number(this.data.quantity) || 1,
+      pickup_store_id: this.data.pickup_store_id,
+      community_id: this.data.community_id || undefined,
+      receiver_name: this.data.receiver_name,
+      receiver_phone: this.data.receiver_phone,
+      product_id: isGroupBuy ? undefined : this.data.product_id,
+      group_buy_id: isGroupBuy ? this.data.group_buy_id : undefined,
+    };
+    this.setData({ submitting: true, error: "" });
+    request({
+      url: isGroupBuy ? "/api/orders" : "/api/orders/normal",
+      method: "POST",
+      data: payload,
+    })
+      .then((order) => createMockPayment(order.id).then(() => order))
+      .then((order) => {
+        if (this.data.from_cart && this.data.product_id)
+          removeCartItem(this.data.product_id);
+        wx.redirectTo({ url: `/pages/orders/detail/index?id=${order.id}` });
+      })
+      .catch((err) => this.setData({ error: err.message || "下单失败" }))
+      .finally(() => this.setData({ submitting: false }));
+  },
+});

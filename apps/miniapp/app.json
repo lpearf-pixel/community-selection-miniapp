@@ -10,6 +10,7 @@
     "pages/group-buy-detail/index",
     "pages/start-group-buy/index",
     "pages/join-order/index",
+    "pages/cart/index",
     "pages/orders/confirm/index",
     "pages/orders/index",
     "pages/orders/detail/index",

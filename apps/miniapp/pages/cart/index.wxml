@@ -1,0 +1,12 @@
+<view class="page">
+  <view wx:if="{{!items.length}}" class="empty"><view>购物车暂无商品</view><button bindtap="goProducts">去逛逛</button></view>
+  <view wx:else>
+    <view wx:for="{{items}}" wx:key="product_id" class="cart-card">
+      <checkbox checked="{{item.selected}}" bindtap="toggleItem" data-id="{{item.product_id}}" data-selected="{{item.selected}}" />
+      <image wx:if="{{item.cover_image}}" src="{{item.cover_image}}" mode="aspectFill" class="cover" />
+      <view class="info"><view class="name">{{item.name}}</view><view class="meta">{{item.spec_label || '默认规格'}}</view><view class="price">¥{{item.price_yuan}}</view><view class="subtotal">小计 ¥{{item.subtotal_yuan}}</view></view>
+      <view class="ops"><view class="qty"><button size="mini" bindtap="decrease" data-id="{{item.product_id}}" data-quantity="{{item.quantity}}">-</button><input type="number" value="{{item.quantity}}" bindinput="onQuantityInput" data-id="{{item.product_id}}"/><button size="mini" bindtap="increase" data-id="{{item.product_id}}" data-quantity="{{item.quantity}}">+</button></view><button size="mini" bindtap="removeItem" data-id="{{item.product_id}}">删除</button></view>
+    </view>
+    <view class="bottom"><button size="mini" bindtap="clearAll">清空购物车</button><view class="summary">已选 {{selectedCount}} 件 · 合计 ¥{{selectedAmountYuan}}</view><button type="primary" bindtap="checkout">去结算</button></view>
+  </view>
+</view>
