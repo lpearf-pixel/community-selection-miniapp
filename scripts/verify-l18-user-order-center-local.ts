@@ -18,6 +18,12 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
   return body.data;
 }
 
+function assertNoPublicLeak(payload: unknown, label: string) {
+  const text = JSON.stringify(payload);
+  for (const field of ['cost_price_cents', 'commission_value', 'commission_type', 'stock_deduct_quantity', 'receiver_phone']) assert(!text.includes(`"${field}"`), `${label} exposed ${field}`);
+  for (const phone of ['13812340000', '13912340000', '13712340000']) assert(!text.includes(phone), `${label} exposed full receiver phone`);
+}
+
 async function main() {
   const category = await prisma.category.create({ data: { name: `${prefix}-category`, sort_order: 1800, status: 'active' } });
   const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'L18 验收社区', status: 'active' } });
@@ -56,8 +62,10 @@ async function main() {
 
   const afterSale = await json(await app.inject({ method: 'POST', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: { 'x-user-id': user.id }, payload: { type: 'bad_quality', reason: '品质问题', description: 'L18 用户售后入口', requested_refund_cents: 100 } }));
   assert(afterSale.status === 'submitted', 'after sale should be submitted');
+  assertNoPublicLeak(afterSale, 'after sale create response');
   const afterSales = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: { 'x-user-id': user.id } }));
   assert(afterSales.some((item: any) => item.after_sale_case_id === afterSale.id), 'after sale list should include submitted case');
+  assertNoPublicLeak(afterSales, 'after sale list response');
   const detailAfterSale = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}`, headers: { 'x-user-id': user.id } }));
   assert(detailAfterSale.after_sale_case_count >= 1, 'detail should show after sale count');
 

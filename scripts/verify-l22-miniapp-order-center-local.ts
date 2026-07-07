@@ -14,7 +14,7 @@ const prefix = `l22-${Date.now()}`;
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 async function json(response: Awaited<ReturnType<typeof app.inject>>) { const body = response.json() as { success: boolean; data: any; message: string }; assert(response.statusCode < 300 && body.success, `API failed ${response.statusCode}: ${body.message}`); return body.data; }
 function source(path: string) { return readFileSync(path, 'utf8'); }
-function assertNotExposed(payload: unknown, label: string) { const text = JSON.stringify(payload); for (const field of ['cost_price_cents','commission_value','stock_deduct_quantity']) assert(!text.includes(field), `${label} exposed ${field}`); for (const phone of ['13812342222','13912342222','13712342222']) assert(!text.includes(phone), `${label} exposed full receiver phone`); }
+function assertNotExposed(payload: unknown, label: string) { const text = JSON.stringify(payload); for (const field of ['cost_price_cents','commission_value','commission_type','stock_deduct_quantity','receiver_phone']) assert(!text.includes(`"${field}"`), `${label} exposed ${field}`); for (const phone of ['13812342222','13912342222','13712342222']) assert(!text.includes(phone), `${label} exposed full receiver phone`); }
 
 async function main() {
   const category = await prisma.category.create({ data: { name: `${prefix}-category`, sort_order: 2200, status: 'active' } });
@@ -52,8 +52,10 @@ async function main() {
   assertNotExposed(pickup, 'pickup code');
   const afterSale = await json(await app.inject({ method: 'POST', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: { 'x-user-id': customer.id }, payload: { type: 'bad_quality', reason: '品质问题', requested_refund_cents: 100 } }));
   assert(afterSale.status === 'submitted', 'after sale should submit');
+  assertNotExposed(afterSale, 'after sale create');
   const afterSales = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: { 'x-user-id': customer.id } }));
   assert(afterSales.some((item: any) => item.after_sale_case_id === afterSale.id), 'after sale list should include new case');
+  assertNotExposed(afterSales, 'after sale list');
 
   const requiredFiles = ['apps/miniapp/pages/orders/index.js','apps/miniapp/pages/orders/index.wxml','apps/miniapp/pages/orders/detail/index.js','apps/miniapp/pages/orders/detail/index.wxml','apps/miniapp/pages/pickup/code/index.js','apps/miniapp/pages/pickup/code/index.wxml','apps/miniapp/pages/after-sales/apply/index.js','apps/miniapp/pages/after-sales/apply/index.wxml','apps/miniapp/pages/after-sales/detail/index.js','apps/miniapp/pages/after-sales/detail/index.wxml','apps/miniapp/pages/mine/index.js','apps/miniapp/pages/mine/index.wxml'];
   requiredFiles.forEach((file) => assert(existsSync(file), `${file} should exist`));

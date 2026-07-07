@@ -67,6 +67,7 @@ export function toUserOrderStatus(order: any) {
 function mapAfterSale(item: any) {
   return {
     after_sale_case_id: item.id,
+    id: item.id,
     type: item.type,
     status: item.status,
     resolution_type: item.resolution_type,
@@ -160,7 +161,8 @@ export async function listUserOrderAfterSales(userId: string, orderId: string) {
 export async function createUserOrderAfterSale(userId: string, orderId: string, body: AfterSaleInput) {
   await ownedOrder(userId, orderId);
   if (!body.type || !body.reason) throw Object.assign(new Error('缺少售后必填字段'), { statusCode: 400 });
-  return createAfterSaleCase({ order_id: orderId, user_id: userId, type: body.type, reason: body.reason, description: body.description ?? null, requested_refund_cents: body.requested_refund_cents ?? null, evidence_image_urls: body.evidence_image_urls ?? null });
+  const afterSaleCase = await createAfterSaleCase({ order_id: orderId, user_id: userId, type: body.type, reason: body.reason, description: body.description ?? null, requested_refund_cents: body.requested_refund_cents ?? null, evidence_image_urls: body.evidence_image_urls ?? null });
+  return mapAfterSale(afterSaleCase);
 }
 
 export async function getUserOrderPickupCode(userId: string, orderId: string) {

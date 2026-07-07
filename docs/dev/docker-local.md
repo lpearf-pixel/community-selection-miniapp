@@ -80,3 +80,15 @@ pnpm exec tsx scripts/verify-docker-api-e2e-local.ts
 ```
 
 该脚本默认请求 `http://127.0.0.1:13080`，也可以通过 `API_BASE_URL` 环境变量覆盖。
+
+## Docker API E2E public response audit
+
+Run the Docker API E2E security audit after the API container is up:
+
+```bash
+API_BASE_URL=http://127.0.0.1:13080 pnpm exec tsx scripts/verify-docker-api-e2e-local.ts --debug
+```
+
+The script records all public API responses it touches and audits them at the end of the run. Public responses must not expose raw `receiver_phone`, full receiver phone values such as `13812345678`, internal cost fields such as `cost_price_cents`, service reward configuration such as `commission_value` / `commission_type`, or inventory internals such as `stock_deduct_quantity`.
+
+If the E2E audit reports risk findings, do not relax the test. Fix the backend response mapper for the reported endpoint so public APIs only return safe fields such as `receiver_phone_masked`, public `price_cents`, `sale_unit`, `sale_spec_name`, `pay_amount_cents`, `total_amount_cents`, `requested_refund_cents`, and `approved_refund_cents`.
