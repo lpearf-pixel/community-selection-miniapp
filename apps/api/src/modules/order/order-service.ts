@@ -73,6 +73,67 @@ async function findUserIdByOpenid(openid: string, fallbackNickname: string): Pro
   return user.id;
 }
 
+
+function maskReceiverPhone(phone?: string | null) {
+  if (!phone) return null;
+  return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+}
+
+function toPublicOrder(order: any) {
+  const product = order.product ?? order.group_buy?.product ?? null;
+  return {
+    id: order.id,
+    order_id: order.id,
+    order_no: order.order_no,
+    client_request_id: order.client_request_id,
+    user_id: order.user_id,
+    group_buy_id: order.group_buy_id,
+    product_id: order.product_id ?? product?.id ?? null,
+    leader_user_id: order.leader_user_id,
+    total_amount_cents: order.total_amount_cents,
+    pay_amount_cents: order.pay_amount_cents,
+    refund_amount_cents: order.refund_amount_cents,
+    quantity: order.quantity,
+    pay_status: order.pay_status,
+    order_status: order.order_status,
+    refund_status: order.refund_status,
+    pickup_type: order.pickup_type,
+    pickup_store_id: order.pickup_store_id,
+    community_id: order.community_id,
+    receiver_name: order.receiver_name,
+    receiver_phone_masked: maskReceiverPhone(order.receiver_phone),
+    receiver_address: order.receiver_address,
+    created_at: order.created_at,
+    paid_at: order.paid_at,
+    completed_at: order.completed_at,
+    product: product
+      ? {
+          product_id: product.id,
+          name: product.name,
+          cover_image: product.cover_image,
+          price_cents: product.price_cents,
+          sale_unit: product.sale_unit,
+          sale_spec_name: product.sale_spec_name
+        }
+      : null,
+    pickup_store: order.pickup_store
+      ? {
+          pickup_store_id: order.pickup_store.id,
+          name: order.pickup_store.name,
+          address: order.pickup_store.address,
+          phone: order.pickup_store.phone
+        }
+      : null,
+    community: order.community
+      ? {
+          community_id: order.community.id,
+          name: order.community.name,
+          address: order.community.address
+        }
+      : null
+  };
+}
+
 async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
   const entries = await tx.consumerCreditLedger.findMany({ where: { user_id: userId } });
   return entries.reduce((sum, entry) => sum + (entry.direction === 'in' ? entry.amount_cents : -entry.amount_cents), 0);
@@ -89,10 +150,13 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
   const pickupType = normalizePickupType(input.pickup_type);
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const existing = await tx.order.findUnique({ where: { client_request_id: clientRequestId } });
+    const existing = await tx.order.findUnique({
+      where: { client_request_id: clientRequestId },
+      include: { group_buy: { include: { product: true } }, pickup_store: true, community: true }
+    });
     if (existing) {
       await safeRecordBusinessEvent(tx, { event_type: 'order_idempotent_reused', event_source: 'order-service', order_id: existing.id, idempotency_key: clientRequestId, after_snapshot: existing });
-      return existing;
+      return toPublicOrder(existing);
     }
 
     const groupBuy = await tx.groupBuy.findUnique({ where: { id: groupBuyId }, include: { product: true } });
@@ -134,7 +198,8 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
         receiver_name: receiverName,
         receiver_phone: receiverPhone,
         receiver_address: input.receiver_address
-      }
+      },
+      include: { group_buy: { include: { product: true } }, pickup_store: true, community: true }
     });
 
     const stockLock = await lockStockForOrder(tx, { product_id: groupBuy.product_id, sale_quantity: saleQuantity, user_id: userId, order_id: order.id, group_buy_id: groupBuy.id, client_request_id: clientRequestId });
@@ -147,7 +212,7 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
 
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'order_created', title: '订单已创建', to_status: order.order_status, actor_type: 'user', actor_user_id: userId, payload: { group_buy_id: groupBuy.id, quantity: saleQuantity } });
     await safeRecordBusinessEvent(tx, { event_type: 'order_created', event_source: 'order-service', order_id: order.id, group_buy_id: groupBuy.id, user_id: userId, idempotency_key: clientRequestId, after_snapshot: order });
-    return order;
+    return toPublicOrder(order);
   });
 }
 
@@ -162,8 +227,11 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
   if (!userId || !productId || !receiverName || !receiverPhone) throw new Error('缺少普通购买下单必填字段');
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const existing = await tx.order.findUnique({ where: { client_request_id: clientRequestId } });
-    if (existing) return existing;
+    const existing = await tx.order.findUnique({
+      where: { client_request_id: clientRequestId },
+      include: { product: true, pickup_store: true, community: true }
+    });
+    if (existing) return toPublicOrder(existing);
 
     const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) throw new Error('商品不存在');
@@ -201,7 +269,7 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
 
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'order_created', title: '普通购买订单已创建', to_status: order.order_status, actor_type: 'user', actor_user_id: userId, payload: { product_id: product.id, quantity: saleQuantity } });
     await safeRecordBusinessEvent(tx, { event_type: 'normal_order_created', event_source: 'order-service', order_id: order.id, user_id: userId, idempotency_key: clientRequestId, after_snapshot: order });
-    return order;
+    return toPublicOrder(order);
   });
 }
 
