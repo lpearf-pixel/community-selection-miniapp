@@ -1,0 +1,9 @@
+{
+  "stage": "L24",
+  "source_branch": "codex/add-l24-miniapp-cart-functionality",
+  "source_commit": "05f536b60f11890d02bedd80a014df8646333628",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-07T11:50:15.348Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}

@@ -1,0 +1,402 @@
+Compliance scan passed.
+L24 miniapp cart verification passed.
+
+--- GET /api/health ---
+{
+  "success": true,
+  "data": {
+    "status": "ok"
+  },
+  "message": ""
+}
+
+--- GET /api/products ---
+{
+  "success": true,
+  "data": {
+    "total": 10,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "id": "cmral405j000rlpq04w3q11c3",
+        "product_id": "cmral405j000rlpq04w3q11c3",
+        "name": "福建香菇干",
+        "category_id": "cmral404z0007lpq0i62gxo67",
+        "category_name": "干货",
+        "category": {
+          "id": "cmral404z0007lpq0i62gxo67",
+          "name": "干货"
+        },
+        "cover_image": "/images/products/placeholder.png",
+        "price_cents": 4590,
+        "unit": "包",
+        "stock_unit": "piece",
+        "sale_unit": "包",
+        "sale_spec_name": null,
+        "stock": 59,
+        "display_stock": "59 piece",
+        "is_group_enabled": true,
+        "has_active_group_buy": false,
+        "active_group_buy_count": 0,
+        "min_group_price_cents": null,
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/products/:id ---
+{
+  "success": true,
+  "data": {
+    "id": "cmral405j000rlpq04w3q11c3",
+    "product_id": "cmral405j000rlpq04w3q11c3",
+    "name": "福建香菇干",
+    "category": {
+      "category_id": "cmral404z0007lpq0i62gxo67",
+      "name": "干货"
+    },
+    "cover_image": "/images/products/placeholder.png",
+    "images": [],
+    "description": "福建香菇干，社区甄选测试商品。",
+    "price_cents": 4590,
+    "unit": "包",
+    "stock_unit": "piece",
+    "sale_unit": "包",
+    "sale_spec_name": null,
+    "stock": 59,
+    "display_stock": "59 piece",
+    "is_group_enabled": true,
+    "active_group_buys": [],
+    "can_normal_buy": true,
+    "can_join_group_buy": false
+  },
+  "message": ""
+}
+
+--- GET /api/products/:id/group-buys ---
+{
+  "success": true,
+  "data": {
+    "total": 0,
+    "page": 1,
+    "page_size": 1,
+    "items": []
+  },
+  "message": ""
+}
+
+--- GET /api/communities ---
+{
+  "success": true,
+  "data": {
+    "total": 3,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "community_id": "cmral405l000ulpq0smc444dd",
+        "name": "滨河家园社区",
+        "address": "滨河路 36 号",
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/pickup-stores ---
+{
+  "success": true,
+  "data": {
+    "total": 1,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "pickup_store_id": "main-pickup-store",
+        "name": "社区甄选自提点",
+        "address": "中心街 18 号实体店",
+        "phone": "021-88888888",
+        "community_id": null,
+        "community_name": null,
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/pickup-stores/:id ---
+{
+  "success": true,
+  "data": {
+    "pickup_store_id": "main-pickup-store",
+    "name": "社区甄选自提点",
+    "address": "中心街 18 号实体店",
+    "phone": "021-88888888",
+    "community_id": null,
+    "community_name": null,
+    "status": "active"
+  },
+  "message": ""
+}
+
+--- POST /api/orders/normal ---
+{
+  "success": true,
+  "data": {
+    "id": "cmral5bcr000klprow7emfe82",
+    "order_id": "cmral5bcr000klprow7emfe82",
+    "order_no": "O17834249148752085",
+    "client_request_id": "docker-e2e-normal-1783424914862",
+    "user_id": "cmral5bcj000ilprovk5por9y",
+    "group_buy_id": null,
+    "product_id": "cmral405j000rlpq04w3q11c3",
+    "leader_user_id": null,
+    "total_amount_cents": 4590,
+    "pay_amount_cents": 4590,
+    "refund_amount_cents": 0,
+    "quantity": 1,
+    "pay_status": "unpaid",
+    "order_status": "unpaid",
+    "refund_status": "none",
+    "pickup_type": "store",
+    "pickup_store_id": "main-pickup-store",
+    "community_id": "cmral405l000ulpq0smc444dd",
+    "receiver_name": "Docker E2E 用户",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address": null,
+    "created_at": "2026-07-07T11:48:34.875Z",
+    "paid_at": null,
+    "completed_at": null,
+    "product": {
+      "product_id": "cmral405j000rlpq04w3q11c3",
+      "name": "福建香菇干",
+      "cover_image": "/images/products/placeholder.png",
+      "price_cents": 4590,
+      "sale_unit": "包",
+      "sale_spec_name": null
+    },
+    "pickup_store": {
+      "pickup_store_id": "main-pickup-store",
+      "name": "社区甄选自提点",
+      "address": "中心街 18 号实体店",
+      "phone": "021-88888888"
+    },
+    "community": {
+      "community_id": "cmral405l000ulpq0smc444dd",
+      "name": "滨河家园社区",
+      "address": "滨河路 36 号"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock ---
+{
+  "success": true,
+  "data": {
+    "payment_id": "cmral5bd0000nlprotttnwxsm",
+    "order_id": "cmral5bcr000klprow7emfe82",
+    "order_no": "O17834249148752085",
+    "pay_status": "paid",
+    "order_status": "paid",
+    "paid_at": "2026-07-07T11:48:34.888Z",
+    "pay_amount_cents": 4590,
+    "transaction_id": "MOCKTXNPAYO17834249148752085",
+    "mock": true
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders ---
+{
+  "success": true,
+  "data": {
+    "total": 1,
+    "page": 1,
+    "page_size": 20,
+    "items": [
+      {
+        "order_id": "cmral5bcr000klprow7emfe82",
+        "order_no": "O17834249148752085",
+        "order_type": "normal",
+        "product_id": "cmral405j000rlpq04w3q11c3",
+        "product_name": "福建香菇干",
+        "product_cover_image": "/images/products/placeholder.png",
+        "product": {
+          "product_id": "cmral405j000rlpq04w3q11c3",
+          "name": "福建香菇干",
+          "cover_image": "/images/products/placeholder.png"
+        },
+        "quantity": 1,
+        "total_amount_cents": 4590,
+        "pay_amount_cents": 4590,
+        "refund_amount_cents": 0,
+        "pay_status": "paid",
+        "order_status": "paid",
+        "user_status_text": "已支付",
+        "refund_status": "none",
+        "group_buy_id": null,
+        "group_buy_status": null,
+        "pickup_type": "store",
+        "pickup_store_name": "社区甄选自提点",
+        "pickup": {
+          "pickup_store_id": "main-pickup-store",
+          "pickup_store_name": "社区甄选自提点",
+          "pickup_store_address": "中心街 18 号实体店",
+          "pickup_store_phone": "021-88888888"
+        },
+        "community_name": "滨河家园社区",
+        "created_at": "2026-07-07T11:48:34.875Z",
+        "paid_at": "2026-07-07T11:48:34.888Z",
+        "completed_at": null,
+        "after_sale_case_count": 0,
+        "latest_after_sale_status": null,
+        "after_sale_summary": {
+          "has_after_sale": false,
+          "latest_status": null
+        }
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmral5bcr000klprow7emfe82",
+    "order_no": "O17834249148752085",
+    "order_type": "normal",
+    "product_id": "cmral405j000rlpq04w3q11c3",
+    "product_name": "福建香菇干",
+    "product_cover_image": "/images/products/placeholder.png",
+    "product": {
+      "product_id": "cmral405j000rlpq04w3q11c3",
+      "name": "福建香菇干",
+      "cover_image": "/images/products/placeholder.png",
+      "price_cents": 4590,
+      "sale_unit": "包",
+      "sale_spec_name": null
+    },
+    "quantity": 1,
+    "total_amount_cents": 4590,
+    "pay_amount_cents": 4590,
+    "refund_amount_cents": 0,
+    "pay_status": "paid",
+    "order_status": "paid",
+    "user_status_text": "已支付",
+    "refund_status": "none",
+    "group_buy_id": null,
+    "group_buy_status": null,
+    "pickup_type": "store",
+    "pickup_store_name": "社区甄选自提点",
+    "pickup": {
+      "pickup_type": "store",
+      "pickup_store_id": "main-pickup-store",
+      "pickup_store_name": "社区甄选自提点",
+      "pickup_store_address": "中心街 18 号实体店",
+      "pickup_store_phone": "021-88888888",
+      "pickup_code": "PICK-752085"
+    },
+    "community_name": "滨河家园社区",
+    "created_at": "2026-07-07T11:48:34.875Z",
+    "paid_at": "2026-07-07T11:48:34.888Z",
+    "completed_at": null,
+    "after_sale_case_count": 0,
+    "latest_after_sale_status": null,
+    "after_sale_summary": {
+      "has_after_sale": false,
+      "latest_status": null
+    },
+    "group_buy": null,
+    "receiver": {
+      "receiver_name": "Docker E2E 用户",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address": null
+    },
+    "after_sales": [],
+    "timeline": [
+      {
+        "event_type": "order_created",
+        "title": "普通购买订单已创建",
+        "from_status": null,
+        "to_status": "unpaid",
+        "created_at": "2026-07-07T11:48:34.877Z"
+      },
+      {
+        "event_type": "payment_mark_order_paid",
+        "title": "订单已支付",
+        "from_status": "unpaid",
+        "to_status": "paid",
+        "created_at": "2026-07-07T11:48:34.893Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id/pickup-code ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmral5bcr000klprow7emfe82",
+    "order_no": "O17834249148752085",
+    "pickup_code": "PICK-752085",
+    "pickup_status": "paid",
+    "pickup_store_name": "社区甄选自提点",
+    "pickup_store_address": "中心街 18 号实体店",
+    "pickup_store_phone": "021-88888888",
+    "receiver_name": "Docker E2E 用户",
+    "receiver_phone_masked": "138****5678"
+  },
+  "message": ""
+}
+
+--- POST /api/me/orders/:id/after-sales ---
+{
+  "success": true,
+  "data": {
+    "after_sale_case_id": "cmral5be8000vlprocev14sb0",
+    "id": "cmral5be8000vlprocev14sb0",
+    "type": "bad_quality",
+    "status": "submitted",
+    "resolution_type": null,
+    "reason": "Docker API E2E 品质问题",
+    "description": "Docker API E2E 售后验证",
+    "requested_refund_cents": 100,
+    "approved_refund_cents": null,
+    "responsibility": null,
+    "created_at": "2026-07-07T11:48:34.928Z",
+    "resolved_at": null
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id/after-sales ---
+{
+  "success": true,
+  "data": [
+    {
+      "after_sale_case_id": "cmral5be8000vlprocev14sb0",
+      "id": "cmral5be8000vlprocev14sb0",
+      "type": "bad_quality",
+      "status": "submitted",
+      "resolution_type": null,
+      "reason": "Docker API E2E 品质问题",
+      "description": "Docker API E2E 售后验证",
+      "requested_refund_cents": 100,
+      "approved_refund_cents": null,
+      "responsibility": null,
+      "created_at": "2026-07-07T11:48:34.928Z",
+      "resolved_at": null
+    }
+  ],
+  "message": ""
+}
+Docker API E2E verification passed.
