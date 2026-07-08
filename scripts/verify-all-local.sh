@@ -61,3 +61,5 @@ pnpm exec tsx scripts/verify-docker-compose-local.ts
 
 pnpm exec tsx scripts/verify-l28-refund-ledger-finance-check-local.ts
 pnpm exec tsx scripts/verify-l29-admin-refund-ledger-page-local.ts
+pnpm exec tsx scripts/verify-l30-refund-payment-risk-idempotency-local.ts
+pnpm exec tsx scripts/verify-l31-admin-access-control-baseline-local.ts
