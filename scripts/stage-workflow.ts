@@ -29,7 +29,7 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L25: { title: 'L25 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l25-order-confirm-quantity-guard-local.ts'] },
   L26: { title: 'L26 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l26-group-buy-success-rule-local.ts'] },
   L27: { title: 'L27 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts'] },
-  L28: { title: 'L28 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l28-refund-ledger-finance-local.ts'] }
+  L28: { title: 'L28 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l28-refund-ledger-finance-check-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {

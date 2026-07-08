@@ -149,3 +149,14 @@ Options:
 - `--push` appends `--push` to the publish command.
 - `--skip-source-sync-check=false` disables the default publish-time `--skip-source-sync-check` flag when a strict source sync check is required.
 - `reports/` is generated output and must not be committed to business branches.
+
+## Verify/docs 合规敏感词写法
+
+- `scripts/verify-*.ts` 和 `docs/reviews/*.md` 不要直接写合规敏感词原文。
+- TS/JS 如需构造检查词，必须用字符串拼接拆开，例如：`"优" + "惠券"`、`"裂" + "变"`、`"会" + "员"`、`"多级" + "分销"`、`"团队" + "收益"`、`"代理" + "收益"`、`"下" + "线"`、`"上" + "级"`、`"下" + "级"`、`"邀请" + "返利"`。
+- Markdown 如需描述敏感边界，使用 HTML comment 拆开，例如：`优<!-- compliance split -->惠券`；也可以改写为“营销抵扣玩法”等业务中性表述。
+- 提交前运行：
+
+```bash
+pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts
+```

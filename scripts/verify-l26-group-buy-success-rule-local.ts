@@ -74,7 +74,7 @@ const miniapp = [
   'apps/miniapp/pages/start-group-buy/index.js',
   'apps/miniapp/pages/join-order/index.js'
 ].map(read).join('\n');
-for (const keyword of ['邀请' + '返利', '拉人赚钱', '下级', '上级', '团队' + '收益', '代理' + '收益', '多级' + '分销', '裂' + '变奖励']) {
+for (const keyword of ['邀请' + '返利', '拉人' + '赚钱', '下' + '级', '上' + '级', '团队' + '收益', '代理' + '收益', '多级' + '分销', '裂' + '变奖励']) {
   assert(!miniapp.includes(keyword), `miniapp forbidden copy found: ${keyword}`);
 }
 for (const keyword of ['分享团购', '满', '成团', '还差']) assert(miniapp.includes(keyword), `miniapp missing allowed copy: ${keyword}`);

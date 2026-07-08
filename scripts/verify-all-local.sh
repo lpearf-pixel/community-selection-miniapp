@@ -16,6 +16,8 @@ export MOCK_WECHAT_PAY="${MOCK_WECHAT_PAY:-true}"
 export AUTO_PAYOUT_ENABLED="${AUTO_PAYOUT_ENABLED:-false}"
 export AUTO_TAX_FILING_ENABLED="${AUTO_TAX_FILING_ENABLED:-false}"
 
+pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts
+
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
@@ -57,4 +59,4 @@ scripts/verify-l1-l2-l3-l4-l5-l6-l7-l8-l9-local.sh
 
 pnpm exec tsx scripts/verify-docker-compose-local.ts
 
-pnpm exec tsx scripts/verify-l28-refund-ledger-finance-local.ts
+pnpm exec tsx scripts/verify-l28-refund-ledger-finance-check-local.ts

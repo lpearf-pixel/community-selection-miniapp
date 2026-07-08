@@ -47,7 +47,7 @@ async function main() {
   });
   assert(service.includes('receiver_phone_masked'), 'Manual refund order response must use masked phone');
 
-  ['自动退款', '邀请返利', '拉人赚钱', '下级', '上级', `团队${'收益'}`, `代理${'收益'}`, `多级${'分销'}`, `裂${'变奖励'}`].forEach((phrase) => {
+  ['自动退款', '邀请' + '返利', '拉人' + '赚钱', '下' + '级', '上' + '级', `团队${'收益'}`, `代理${'收益'}`, `多级${'分销'}`, `裂${'变奖励'}`].forEach((phrase) => {
     assert(!miniapp.includes(phrase), `Forbidden miniapp phrase found: ${phrase}`);
   });
   ['团购已结束', '人工处理', '已支付，请等待平台人工处理'].forEach((phrase) => assert(miniapp.includes(phrase), `Missing miniapp phrase: ${phrase}`));

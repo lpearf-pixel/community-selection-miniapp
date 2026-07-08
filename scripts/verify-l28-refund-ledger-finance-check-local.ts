@@ -10,7 +10,7 @@ async function main() {
   const requiredFiles = [
     'apps/api/src/modules/finance/finance-report-service.ts',
     'apps/api/src/routes/admin/finance.ts',
-    'scripts/verify-l28-refund-ledger-finance-local.ts',
+    'scripts/verify-l28-refund-ledger-finance-check-local.ts',
     'scripts/stage-workflow.ts',
     'scripts/generate-stage-report.ts',
     'scripts/verify-all-local.sh',
@@ -37,17 +37,17 @@ async function main() {
   assert(service.includes("? `'${text}` : text") || service.includes("? '\\''"), 'CSV export must prefix dangerous cells with apostrophe');
   assert(!combined.includes('wechat/refund') && !combined.includes('wx.requestPayment'), 'L28 must not call real WeChat refund/payment APIs');
   assert(!combined.includes('AUTO_REFUND_ENABLED = true'), 'L28 must not enable automatic refunds');
-  assert(!combined.includes('AUTO_PAYOUT_ENABLED = true'), 'L28 must not enable automatic payouts');
-  assert(!combined.includes('AUTO_TAX_FILING_ENABLED = true'), 'L28 must not enable automatic tax filing');
+  assert(!combined.includes('AUTO_PAYOUT_ENABLED = ' + 'true'), 'L28 must not enable automatic payouts');
+  assert(!combined.includes('AUTO_TAX_FILING_ENABLED = ' + 'true'), 'L28 must not enable automatic tax filing');
 
-  assert(workflow.includes('L28') && workflow.includes('verify-l28-refund-ledger-finance-local.ts'), 'stage workflow must register L28 verifier');
-  assert(verifyAll.includes('verify-l28-refund-ledger-finance-local.ts'), 'verify:all must include L28 verifier');
+  assert(workflow.includes('L28') && workflow.includes('verify-l28-refund-ledger-finance-check-local.ts'), 'stage workflow must register L28 verifier');
+  assert(verifyAll.includes('verify-l28-refund-ledger-finance-check-local.ts'), 'verify:all must include L28 verifier');
   assert(report.includes('l28Manifest') && report.includes('l28-refund-ledger-finance-check.md'), 'stage report manifest must include L28');
   ['退款台账', '财务对账', '人工退款', '不调用真实微信退款 API', 'CSV 防公式注入', 'receiver_phone_masked'].forEach((keyword) => assert(doc.includes(keyword), `Review doc missing keyword: ${keyword}`));
 
   scanComplianceFiles(requiredFiles.filter((file) => !file.includes('generate-stage-report')));
   console.log('Compliance scan passed.');
-  console.log('L28 refund ledger finance verification passed.');
+  console.log('L28 refund ledger finance check verification passed.');
 }
 
 main().catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); });
