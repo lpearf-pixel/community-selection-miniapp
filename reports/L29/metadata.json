@@ -1,0 +1,9 @@
+{
+  "stage": "L29",
+  "source_branch": "codex/add-l29-admin-refund-ledger-page",
+  "source_commit": "5a520bdc4c72fb03b001a7c309e0eb473f6691b2",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-08T12:50:53.698Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
