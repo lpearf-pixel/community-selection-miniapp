@@ -14,7 +14,9 @@ async function main() {
     'apps/miniapp/pages/group-buy-detail/index.wxml',
     'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts',
     'docs/reviews/l27-group-buy-expiry-manual-refund.md',
-    'scripts/generate-stage-report.ts'
+    'scripts/generate-stage-report.ts',
+    'scripts/stage-workflow.ts',
+    'docs/dev/reporting.md'
   ];
   for (const file of requiredFiles) assert(existsSync(join(repoRoot, file)), `Missing required file: ${file}`);
 
@@ -22,6 +24,7 @@ async function main() {
   const routes = read('apps/api/src/routes/group-buys.ts');
   const miniapp = `${read('apps/miniapp/pages/group-buy-detail/index.js')}\n${read('apps/miniapp/pages/group-buy-detail/index.wxml')}`;
   const combined = `${service}\n${routes}`;
+  const reportingDocs = read('docs/dev/reporting.md');
 
   [
     'expired', 'failed', 'manual', 'refund', 'refund_amount_cents', 'refund_channel', 'refund_transaction_id', 'admin_remark',
@@ -48,6 +51,10 @@ async function main() {
     assert(!miniapp.includes(phrase), `Forbidden miniapp phrase found: ${phrase}`);
   });
   ['团购已结束', '人工处理', '已支付，请等待平台人工处理'].forEach((phrase) => assert(miniapp.includes(phrase), `Missing miniapp phrase: ${phrase}`));
+
+  ['stage-workflow.ts', '--scope=stage', '--scope=chain', '--all', '--publish --push'].forEach((keyword) => {
+    assert(reportingDocs.includes(keyword), `Reporting docs missing stage workflow keyword: ${keyword}`);
+  });
 
   scanComplianceFiles(requiredFiles.filter((file) => file !== 'scripts/generate-stage-report.ts'));
   console.log('Compliance scan passed.');

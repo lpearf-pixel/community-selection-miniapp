@@ -89,3 +89,63 @@ reports/L15/latest-verify-output.txt
 Before generating or publishing a stage report / verify output, run the local verification flow first so reports are based on a checked workspace.
 
 Stage verify scripts and report-related tooling should reuse `scripts/lib/compliance-scan.ts` for forbidden-term checks. Do not write unsplit forbidden terms directly in report generators or verify scripts; the verify scripts themselves may be scanned, so terms must remain split at the source level.
+
+## Stage workflow
+
+`scripts/stage-workflow.ts` is a thin orchestrator for stage verification, latest verify output capture, report generation, and optional report publishing. It does not replace `report:stage` or `report:publish`; it calls them after verification.
+
+Run only L27:
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm exec tsx scripts/stage-workflow.ts --stage=L27 --verify
+"
+```
+
+Run the L27 regression chain:
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm exec tsx scripts/stage-workflow.ts --stage=L27 --verify --scope=chain
+"
+```
+
+Run all registered stage verifiers plus shared checks:
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm exec tsx scripts/stage-workflow.ts --verify --all
+"
+```
+
+Publish L27 without pushing:
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm exec tsx scripts/stage-workflow.ts --stage=L27 --publish
+"
+```
+
+Publish L27 and push the report branch:
+
+```bash
+docker compose exec api sh -lc "
+cd /app &&
+pnpm exec tsx scripts/stage-workflow.ts --stage=L27 --publish --push
+"
+```
+
+Options:
+
+- `--scope=stage` runs only the selected stage verifier.
+- `--scope=chain` runs the selected stage, its regression chain, Docker API E2E, and admin typecheck.
+- `--scope=all` runs every registered stage verifier, Docker API E2E, and admin typecheck.
+- `--all` is equivalent to `--verify --scope=all` and must not be combined with `--stage`.
+- `--publish` automatically runs verify first, writes `reports/latest-verify-output.txt`, runs `pnpm report:stage -- --stage=<stage>`, and runs `pnpm report:publish -- --stage=<stage> --skip-source-sync-check`.
+- `--push` appends `--push` to the publish command.
+- `--skip-source-sync-check=false` disables the default publish-time `--skip-source-sync-check` flag when a strict source sync check is required.
+- `reports/` is generated output and must not be committed to business branches.

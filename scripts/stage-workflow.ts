@@ -1,0 +1,163 @@
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+type Scope = 'stage' | 'chain' | 'all';
+type CommandSpec = {
+  title: string;
+  command: string;
+  args: string[];
+  env?: NodeJS.ProcessEnv;
+};
+
+type ParsedArgs = {
+  stage?: string;
+  verify: boolean;
+  publish: boolean;
+  push: boolean;
+  all: boolean;
+  debug: boolean;
+  scope?: Scope;
+  skipSourceSyncCheck: boolean;
+};
+
+const reportsDir = join(process.cwd(), 'reports');
+const latestVerifyOutput = join(reportsDir, 'latest-verify-output.txt');
+
+const stageVerifiers: Record<string, CommandSpec> = {
+  L24: { title: 'L24 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l24-miniapp-cart-local.ts'] },
+  L25: { title: 'L25 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l25-order-confirm-quantity-guard-local.ts'] },
+  L26: { title: 'L26 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l26-group-buy-success-rule-local.ts'] },
+  L27: { title: 'L27 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts'] }
+};
+
+const regressionChains: Record<string, string[]> = {
+  L24: ['L24'],
+  L25: ['L25', 'L24'],
+  L26: ['L26', 'L25', 'L24'],
+  L27: ['L27', 'L26', 'L25', 'L24']
+};
+
+const dockerApiE2E: CommandSpec = {
+  title: 'Docker API E2E',
+  command: 'pnpm',
+  args: ['exec', 'tsx', 'scripts/verify-docker-api-e2e-local.ts', '--debug'],
+  env: { API_BASE_URL: 'http://127.0.0.1:13080' }
+};
+
+const adminTypecheck: CommandSpec = {
+  title: 'Admin typecheck',
+  command: 'pnpm',
+  args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false']
+};
+
+function parseArgs(argv: string[]): ParsedArgs {
+  const parsed: ParsedArgs = { verify: false, publish: false, push: false, all: false, debug: false, skipSourceSyncCheck: true };
+  for (const arg of argv) {
+    if (arg === '--verify') parsed.verify = true;
+    else if (arg === '--publish') parsed.publish = true;
+    else if (arg === '--push') parsed.push = true;
+    else if (arg === '--all') parsed.all = true;
+    else if (arg === '--debug') parsed.debug = true;
+    else if (arg === '--skip-source-sync-check') parsed.skipSourceSyncCheck = true;
+    else if (arg === '--skip-source-sync-check=false') parsed.skipSourceSyncCheck = false;
+    else if (arg.startsWith('--stage=')) parsed.stage = normalizeStage(arg.slice('--stage='.length));
+    else if (arg.startsWith('--scope=')) parsed.scope = parseScope(arg.slice('--scope='.length));
+    else throw new Error(`Unknown argument: ${arg}`);
+  }
+  if (parsed.all) parsed.verify = true;
+  return parsed;
+}
+
+function parseScope(value: string): Scope {
+  if (value === 'stage' || value === 'chain' || value === 'all') return value;
+  throw new Error(`Unsupported scope: ${value}`);
+}
+
+function normalizeStage(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function validateArgs(args: ParsedArgs): void {
+  if (args.all && args.stage) throw new Error('Do not pass --all and --stage together; choose one to avoid ambiguity.');
+  if (args.publish && !args.stage) throw new Error('--publish requires --stage=Lxx.');
+  if (!args.verify && !args.publish) throw new Error('Nothing to do. Pass --verify, --publish, or --all.');
+  if (args.stage && !stageVerifiers[args.stage]) throw new Error(`No verifier registered for stage: ${args.stage}`);
+  if (args.stage && !regressionChains[args.stage]) throw new Error(`No regression chain registered for stage: ${args.stage}`);
+}
+
+function appendOutput(content: string): void {
+  if (!content) return;
+  appendFileSync(latestVerifyOutput, content);
+}
+
+function printAndAppend(content: string): void {
+  if (!content) return;
+  process.stdout.write(content);
+  appendOutput(content);
+}
+
+function runCommand(spec: CommandSpec): void {
+  const header = `\n=== Running ${spec.title} ===\n`;
+  printAndAppend(header);
+  const result = spawnSync(spec.command, spec.args, {
+    cwd: process.cwd(),
+    env: { ...process.env, ...(spec.env ?? {}) },
+    encoding: 'utf8'
+  });
+  printAndAppend(result.stdout ?? '');
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+    appendOutput(result.stderr);
+  }
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
+}
+
+function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
+  const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
+  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypecheck];
+  if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
+  if (scope === 'stage') return [stageVerifiers[args.stage]];
+  return [...regressionChains[args.stage].map((stage) => stageVerifiers[stage]), dockerApiE2E, adminTypecheck];
+}
+
+function prepareLatestOutput(): void {
+  mkdirSync(reportsDir, { recursive: true });
+  writeFileSync(latestVerifyOutput, '');
+}
+
+function runVerify(args: ParsedArgs, publishMode = false): void {
+  prepareLatestOutput();
+  for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
+  printAndAppend('\nStage workflow verification passed.\n');
+}
+
+function runReportStage(stage: string): void {
+  runCommand({ title: `report:stage ${stage}`, command: 'pnpm', args: ['report:stage', '--', `--stage=${stage}`] });
+}
+
+function runReportPublish(args: ParsedArgs): void {
+  if (!args.stage) throw new Error('--publish requires --stage=Lxx.');
+  const publishArgs = ['report:publish', '--', `--stage=${args.stage}`];
+  if (args.skipSourceSyncCheck) publishArgs.push('--skip-source-sync-check');
+  if (args.push) publishArgs.push('--push');
+  runCommand({ title: `report:publish ${args.stage}`, command: 'pnpm', args: publishArgs });
+}
+
+function main(): void {
+  const args = parseArgs(process.argv.slice(2));
+  validateArgs(args);
+  if (args.debug) {
+    console.log(`Stage workflow args: ${JSON.stringify(args)}`);
+  }
+  if (args.publish) {
+    runVerify(args, true);
+    runReportStage(args.stage!);
+    runReportPublish(args);
+    return;
+  }
+  if (args.verify) runVerify(args, false);
+}
+
+main();
