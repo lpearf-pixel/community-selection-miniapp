@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Form, Input, Select, Space, Table, Typography, message as antMessage } from "antd";
+import { Button, Card, Form, Input, Select, Space, Table, Typography } from "antd";
 import { formatYuan } from "@community-selection/shared";
 import {
   downloadFinanceRefundLedgerCsv,
@@ -31,7 +31,7 @@ function normalizeFilters(values: FinanceRefundLedgerParams): FinanceRefundLedge
 }
 
 export function FinanceRefundLedgerPage() {
-  const [form] = Form.useForm<FinanceRefundLedgerParams>();
+  const [form] = Form.useForm();
   const [filters, setFilters] = useState<FinanceRefundLedgerParams>({ page: 1, page_size: defaultPageSize });
   const [data, setData] = useState<FinanceRefundLedgerData>({
     total: 0,
@@ -42,14 +42,18 @@ export function FinanceRefundLedgerPage() {
   });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function load(params: FinanceRefundLedgerParams) {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const result = await getFinanceRefundLedger(params);
       setData(result);
     } catch (error) {
-      antMessage.error(error instanceof Error ? error.message : "退款台账查询失败");
+      const messageText = error instanceof Error ? error.message : "退款台账查询失败";
+      setErrorMessage(messageText);
+      console.error(messageText);
     } finally {
       setLoading(false);
     }
@@ -81,8 +85,12 @@ export function FinanceRefundLedgerPage() {
     [],
   );
 
-  function handleSearch(values: FinanceRefundLedgerParams) {
-    setFilters({ ...normalizeFilters(values), page: 1, page_size: data.page_size || defaultPageSize });
+  function handleSearch(values: unknown) {
+    setFilters({
+      ...normalizeFilters(values as FinanceRefundLedgerParams),
+      page: 1,
+      page_size: data.page_size || defaultPageSize,
+    });
   }
 
   function handleReset() {
@@ -92,6 +100,7 @@ export function FinanceRefundLedgerPage() {
 
   async function handleExport() {
     setExporting(true);
+    setErrorMessage(null);
     try {
       const blob = await downloadFinanceRefundLedgerCsv(filters);
       const url = URL.createObjectURL(blob);
@@ -101,7 +110,9 @@ export function FinanceRefundLedgerPage() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      antMessage.error(error instanceof Error ? error.message : "退款台账 CSV 导出失败");
+      const messageText = error instanceof Error ? error.message : "退款台账 CSV 导出失败";
+      setErrorMessage(messageText);
+      console.error(messageText);
     } finally {
       setExporting(false);
     }
@@ -113,6 +124,7 @@ export function FinanceRefundLedgerPage() {
         <Typography.Paragraph type="secondary">
           财务退款对账仅展示人工退款记录和退款状态，不触发自动退款。
         </Typography.Paragraph>
+        {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
         <Form form={form} layout="inline" onFinish={handleSearch}>
           <Form.Item name="order_no" label="订单号"><Input placeholder="order_no" /></Form.Item>
           <Form.Item name="group_buy_id" label="团购 ID"><Input placeholder="group_buy_id" /></Form.Item>
@@ -143,8 +155,9 @@ export function FinanceRefundLedgerPage() {
             current: data.page,
             pageSize: data.page_size,
             total: data.total,
-            showTotal: (total) => `total ${total}`,
-            onChange: (page, page_size) => setFilters((current) => ({ ...current, page, page_size })),
+            showTotal: (total: number) => `total ${total}`,
+            onChange: (page: number, pageSize: number) =>
+              setFilters((current) => ({ ...current, page, page_size: pageSize })),
           }}
           scroll={{ x: 1800 }}
         />

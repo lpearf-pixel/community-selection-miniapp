@@ -71,7 +71,7 @@ async function main() {
   assert(app.includes('FinanceRefundLedgerPage') && app.includes('退款台账') && app.includes('refundLedger'), 'Admin route/menu must expose refund ledger page');
   assert(page.includes('暂无退款记录'), 'Empty state must show no refund records copy');
   assert(page.includes('loading') && page.includes('exporting'), 'Page must expose loading and exporting states');
-  assert(page.includes('antMessage.error'), 'Page must show request errors');
+  assert(page.includes('errorMessage') && page.includes('console.error'), 'Page must show request errors');
 
   assertNoSensitiveFields(pageFile, page);
   assertNoSensitiveFields(apiFile, api);
