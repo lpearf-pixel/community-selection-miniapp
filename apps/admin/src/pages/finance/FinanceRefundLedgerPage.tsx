@@ -31,7 +31,7 @@ function normalizeFilters(values: FinanceRefundLedgerParams): FinanceRefundLedge
 }
 
 export function FinanceRefundLedgerPage() {
-  const [form] = Form.useForm();
+  const [draftFilters, setDraftFilters] = useState<FinanceRefundLedgerParams>({});
   const [filters, setFilters] = useState<FinanceRefundLedgerParams>({ page: 1, page_size: defaultPageSize });
   const [data, setData] = useState<FinanceRefundLedgerData>({
     total: 0,
@@ -85,16 +85,23 @@ export function FinanceRefundLedgerPage() {
     [],
   );
 
-  function handleSearch(values: unknown) {
+  function handleSearch() {
     setFilters({
-      ...normalizeFilters(values as FinanceRefundLedgerParams),
+      ...normalizeFilters(draftFilters),
       page: 1,
       page_size: data.page_size || defaultPageSize,
     });
   }
 
+  function updateDraftFilter(
+    key: keyof FinanceRefundLedgerParams,
+    value: string | undefined,
+  ) {
+    setDraftFilters((current) => ({ ...current, [key]: value }));
+  }
+
   function handleReset() {
-    form.resetFields();
+    setDraftFilters({});
     setFilters({ page: 1, page_size: defaultPageSize });
   }
 
@@ -125,16 +132,80 @@ export function FinanceRefundLedgerPage() {
           财务退款对账仅展示人工退款记录和退款状态，不触发自动退款。
         </Typography.Paragraph>
         {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
-        <Form form={form} layout="inline" onFinish={handleSearch}>
-          <Form.Item name="order_no" label="订单号"><Input placeholder="order_no" /></Form.Item>
-          <Form.Item name="group_buy_id" label="团购 ID"><Input placeholder="group_buy_id" /></Form.Item>
-          <Form.Item name="status" label="退款状态"><Select allowClear style={{ width: 160 }} options={["pending", "manual_recorded", "refunded", "partial_refunded", "failed"].map((value) => ({ label: value, value }))} /></Form.Item>
-          <Form.Item name="refund_method" label="退款方式"><Select allowClear style={{ width: 160 }} options={["manual", "wechat_mock", "offline"].map((value) => ({ label: value, value }))} /></Form.Item>
-          <Form.Item name="from" label="开始时间"><Input type="datetime-local" /></Form.Item>
-          <Form.Item name="to" label="结束时间"><Input type="datetime-local" /></Form.Item>
-          <Form.Item name="community_id" label="社区"><Input placeholder="community_id" /></Form.Item>
-          <Form.Item name="pickup_store_id" label="自提点"><Input placeholder="pickup_store_id" /></Form.Item>
-          <Form.Item><Button type="primary" htmlType="submit" loading={loading}>查询</Button></Form.Item>
+        <Form layout="inline">
+          <Form.Item label="订单号">
+            <Input
+              placeholder="order_no"
+              value={draftFilters.order_no ?? ""}
+              onChange={(event: { target: { value: string } }) =>
+                updateDraftFilter("order_no", event.target.value)
+              }
+            />
+          </Form.Item>
+          <Form.Item label="团购 ID">
+            <Input
+              placeholder="group_buy_id"
+              value={draftFilters.group_buy_id ?? ""}
+              onChange={(event: { target: { value: string } }) =>
+                updateDraftFilter("group_buy_id", event.target.value)
+              }
+            />
+          </Form.Item>
+          <Form.Item label="退款状态">
+            <Select
+              allowClear
+              style={{ width: 160 }}
+              value={draftFilters.status}
+              onChange={(value: string | undefined) => updateDraftFilter("status", value)}
+              options={["pending", "manual_recorded", "refunded", "partial_refunded", "failed"].map((value) => ({ label: value, value }))}
+            />
+          </Form.Item>
+          <Form.Item label="退款方式">
+            <Select
+              allowClear
+              style={{ width: 160 }}
+              value={draftFilters.refund_method}
+              onChange={(value: string | undefined) => updateDraftFilter("refund_method", value)}
+              options={["manual", "wechat_mock", "offline"].map((value) => ({ label: value, value }))}
+            />
+          </Form.Item>
+          <Form.Item label="开始时间">
+            <Input
+              type="datetime-local"
+              value={draftFilters.from ?? ""}
+              onChange={(event: { target: { value: string } }) =>
+                updateDraftFilter("from", event.target.value)
+              }
+            />
+          </Form.Item>
+          <Form.Item label="结束时间">
+            <Input
+              type="datetime-local"
+              value={draftFilters.to ?? ""}
+              onChange={(event: { target: { value: string } }) =>
+                updateDraftFilter("to", event.target.value)
+              }
+            />
+          </Form.Item>
+          <Form.Item label="社区">
+            <Input
+              placeholder="community_id"
+              value={draftFilters.community_id ?? ""}
+              onChange={(event: { target: { value: string } }) =>
+                updateDraftFilter("community_id", event.target.value)
+              }
+            />
+          </Form.Item>
+          <Form.Item label="自提点">
+            <Input
+              placeholder="pickup_store_id"
+              value={draftFilters.pickup_store_id ?? ""}
+              onChange={(event: { target: { value: string } }) =>
+                updateDraftFilter("pickup_store_id", event.target.value)
+              }
+            />
+          </Form.Item>
+          <Form.Item><Button type="primary" onClick={handleSearch} loading={loading}>查询</Button></Form.Item>
           <Form.Item><Button onClick={handleReset}>重置</Button></Form.Item>
         </Form>
       </Card>
