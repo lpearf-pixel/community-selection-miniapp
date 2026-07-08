@@ -29,7 +29,8 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L25: { title: 'L25 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l25-order-confirm-quantity-guard-local.ts'] },
   L26: { title: 'L26 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l26-group-buy-success-rule-local.ts'] },
   L27: { title: 'L27 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts'] },
-  L28: { title: 'L28 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l28-refund-ledger-finance-check-local.ts'] }
+  L28: { title: 'L28 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l28-refund-ledger-finance-check-local.ts'] },
+  L29: { title: 'L29 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l29-admin-refund-ledger-page-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
@@ -37,7 +38,8 @@ const regressionChains: Record<string, string[]> = {
   L25: ['L25', 'L24'],
   L26: ['L26', 'L25', 'L24'],
   L27: ['L27', 'L26', 'L25', 'L24'],
-  L28: ['L28', 'L27', 'L26', 'L25', 'L24']
+  L28: ['L28', 'L27', 'L26', 'L25', 'L24'],
+  L29: ['L29', 'L28', 'L27', 'L26', 'L25', 'L24']
 };
 
 const dockerApiE2E: CommandSpec = {

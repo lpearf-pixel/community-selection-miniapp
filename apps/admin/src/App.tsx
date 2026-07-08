@@ -13,6 +13,7 @@ import {
   Typography,
 } from "antd";
 import { formatYuan } from "@community-selection/shared";
+import { FinanceRefundLedgerPage } from "./pages/finance/FinanceRefundLedgerPage";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -33,6 +34,7 @@ type ViewKey =
   | "alerts"
   | "taxRecords"
   | "finance"
+  | "refundLedger"
   | "operations";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
@@ -1005,6 +1007,7 @@ export function App() {
               <Button onClick={() => setView("alerts")}>告警中心</Button>
               <Button onClick={() => setView("taxRecords")}>税务记录</Button>
               <Button onClick={() => setView("finance")}>财务对账</Button>
+              <Button onClick={() => setView("refundLedger")}>退款台账</Button>
               <Button onClick={() => setView("operations")}>运营看板</Button>
               <Button onClick={refresh}>刷新</Button>
               <Button onClick={logoutAdmin}>退出登录</Button>
@@ -1050,6 +1053,8 @@ export function App() {
             <Card title="异常提醒列表"><Table rowKey="type" dataSource={operationsAlerts} columns={[{ title: "severity", dataIndex: "severity" }, { title: "title", dataIndex: "title" }, { title: "description", dataIndex: "description" }, { title: "metric_value", dataIndex: "metric_value" }]} /></Card>
           </>
         ) : null}
+
+        {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
 
         {view === "finance" ? (
           <>
