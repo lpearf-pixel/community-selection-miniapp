@@ -4,13 +4,33 @@
 
 ## 推荐重置启动流程
 
-当遇到依赖安装、native binary 或 pnpm store 异常时，建议先清理本地与容器卷后重新构建：
+当遇到依赖安装、native binary 或 pnpm store 异常时，日常优先只清理容器内 `node_modules` / `pnpm-store` named volumes，然后重新构建：
 
 ```bash
-docker compose down -v
+docker compose down --remove-orphans
+
+docker volume ls --format '{{.Name}}' | grep -E 'node-modules|pnpm-store'
+
+docker volume ls --format '{{.Name}}' | grep -E 'node-modules|pnpm-store' | xargs -r docker volume rm
+
+docker compose up --build --force-recreate
+```
+
+不要在容器启动命令里执行 `pnpm store prune`。API 和 Admin 容器会并行启动并执行 `pnpm install`，如果其中一个容器在另一个容器安装依赖时 prune store，named volume 中可能出现缺文件，进而触发 `ERR_PNPM_ENOENT`。
+
+如果看到类似错误：
+
+```text
+ERR_PNPM_ENOENT ENOENT: no such file or directory, open '/root/.local/share/pnpm/store/v3/files/...'
+```
+
+请使用上面的恢复命令，只删除名称匹配 `node-modules` 或 `pnpm-store` 的 volumes。日常不要执行 `docker compose down -v`，因为 `down -v` 会同时删除 `postgres-data`，导致本地 PostgreSQL 数据被清空。只有明确需要连数据库也一起重置时，才使用 `docker compose down -v`。
+
+如还需要清理宿主机依赖缓存，可额外删除本地依赖目录，但这不是恢复 `ERR_PNPM_ENOENT` 的首选步骤：
+
+```bash
 rm -rf node_modules apps/*/node_modules packages/*/node_modules
 rm -rf .pnpm-store
-docker compose up --build
 ```
 
 ## 为什么固定 npm registry

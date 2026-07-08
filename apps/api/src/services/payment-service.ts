@@ -4,6 +4,52 @@ import { lockStockForOrder } from '../modules/inventory/inventory-service.js';
 import { ensureEstimatedCommission } from './commission-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
+
+export async function refreshGroupBuySuccessState(tx: Prisma.TransactionClient, groupBuyId: string) {
+  const groupBuy = await tx.groupBuy.findUnique({ where: { id: groupBuyId } });
+  if (!groupBuy) return null;
+  if (groupBuy.status === 'success') return { groupBuy, paid_quantity: groupBuy.current_quantity, is_success: true };
+  if (groupBuy.status !== 'pending') return { groupBuy, paid_quantity: groupBuy.current_quantity, is_success: false };
+  if (groupBuy.end_time.getTime() <= Date.now()) return { groupBuy, paid_quantity: groupBuy.current_quantity, is_success: false };
+
+  const paidOrderWhere: Prisma.OrderWhereInput = {
+    group_buy_id: groupBuyId,
+    pay_status: 'paid',
+    order_status: { notIn: ['closed', 'refunded'] },
+    refund_status: { notIn: ['success'] }
+  };
+  const paidQuantityResult = await tx.order.aggregate({
+    where: paidOrderWhere,
+    _sum: { quantity: true }
+  });
+  const paidPeople = await tx.order.count({ where: paidOrderWhere });
+  const paidQuantity = paidQuantityResult._sum.quantity ?? 0;
+  const target_count = groupBuy.min_quantity;
+
+  await tx.groupBuy.update({
+    where: { id: groupBuyId },
+    data: { current_quantity: paidQuantity, current_people: paidPeople }
+  });
+
+  if (paidQuantity < target_count) return { groupBuy, paid_quantity: paidQuantity, is_success: false };
+
+  const updatedGroupBuy = await tx.groupBuy.update({
+    where: { id: groupBuyId },
+    data: { status: 'success', current_quantity: paidQuantity, current_people: paidPeople }
+  });
+  await tx.order.updateMany({
+    where: { group_buy_id: groupBuyId, pay_status: 'paid', order_status: { notIn: ['closed', 'refunded'] } },
+    data: { order_status: 'grouped' }
+  });
+  await safeRecordBusinessEvent(tx, {
+    event_type: 'group_buy_success_refreshed',
+    event_source: 'payment-service',
+    group_buy_id: groupBuyId,
+    payload: { paid_quantity: paidQuantity, paid_people: paidPeople, target_count, status: 'success' }
+  });
+  return { groupBuy: updatedGroupBuy, paid_quantity: paidQuantity, is_success: true };
+}
+
 type PaymentInfo = {
   payment_id?: string;
   out_trade_no?: string;
@@ -44,6 +90,7 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
           }
         })
         : null;
+      if (order.group_buy_id) await refreshGroupBuySuccessState(tx, order.group_buy_id);
       return { order, payment: paidPayment };
     }
 
@@ -86,33 +133,13 @@ export async function markOrderPaid(orderId: string, paymentInfo: PaymentInfo = 
       })
       : null;
 
-    const updatedGroupBuy = await tx.groupBuy.update({
-      where: { id: groupBuy.id },
-      data: {
-        current_people: { increment: 1 },
-        current_quantity: { increment: order.quantity }
-      }
-    });
-    const nextGroupStatus = updatedGroupBuy.current_people >= updatedGroupBuy.min_people || updatedGroupBuy.current_quantity >= updatedGroupBuy.min_quantity ? 'success' : updatedGroupBuy.status;
-
-    if (nextGroupStatus === 'success' && updatedGroupBuy.status !== 'success') {
-      await tx.groupBuy.update({
-        where: { id: groupBuy.id },
-        data: { status: 'success' }
-      });
-    }
+    const refreshedGroupBuy = await refreshGroupBuySuccessState(tx, groupBuy.id);
+    const nextGroupStatus = refreshedGroupBuy?.is_success ? 'success' : groupBuy.status;
 
     const paidOrder = await tx.order.update({
       where: { id: order.id },
       data: { order_status: nextGroupStatus === 'success' ? 'grouped' : 'paid' }
     });
-
-    if (nextGroupStatus === 'success') {
-      await tx.order.updateMany({
-        where: { group_buy_id: groupBuy.id, pay_status: 'paid' },
-        data: { order_status: 'grouped' }
-      });
-    }
 
     await safeRecordBusinessEvent(tx, {
       event_type: 'payment_mark_order_paid',

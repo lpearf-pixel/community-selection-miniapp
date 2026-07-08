@@ -5,6 +5,7 @@ import { prisma } from '../db.js';
 import { createGroupOrder, createNormalOrder, updateOrderStatus } from '../modules/order/order-service.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
+import { closeUnpaidGroupBuyOrders, listExpiredPendingGroupBuys, listGroupBuyManualRefundOrders, markExpiredGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -36,6 +37,38 @@ type CreateOrderBody = {
 type UpdateOrderStatusBody = {
   next_status?: 'preparing' | 'ready' | 'picked' | 'delivered' | 'completed';
 };
+
+
+async function toSafeGroupBuyDetail(groupBuy: any) {
+  const paid = await prisma.order.aggregate({
+    where: { group_buy_id: groupBuy.id, pay_status: 'paid', order_status: { notIn: ['closed', 'refunded'] }, refund_status: { notIn: ['success'] } },
+    _sum: { quantity: true }
+  });
+  const paidQuantity = paid._sum.quantity ?? 0;
+  const targetCount = groupBuy.min_quantity;
+  const isExpired = groupBuy.end_time.getTime() <= Date.now();
+  return {
+    id: groupBuy.id,
+    group_buy_id: groupBuy.id,
+    product_id: groupBuy.product_id,
+    leader_user_id: groupBuy.leader_user_id,
+    community_id: groupBuy.community_id,
+    status: groupBuy.status,
+    min_people: groupBuy.min_people,
+    min_quantity: groupBuy.min_quantity,
+    target_count: targetCount,
+    paid_quantity: paidQuantity,
+    remaining_quantity: Math.max(0, targetCount - paidQuantity),
+    price_cents: groupBuy.price_cents,
+    end_time: groupBuy.end_time.toISOString(),
+    pickup_time: groupBuy.pickup_time.toISOString(),
+    is_success: groupBuy.status === 'success',
+    is_expired: isExpired,
+    can_join: (groupBuy.status === 'pending' || groupBuy.status === 'success') && !isExpired && (groupBuy.product?.stock ?? 0) > 0,
+    community: groupBuy.community ? { community_id: groupBuy.community.id, name: groupBuy.community.name } : null,
+    product: groupBuy.product ? { product_id: groupBuy.product.id, name: groupBuy.product.name, cover_image: groupBuy.product.cover_image, price_cents: groupBuy.product.price_cents, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock: groupBuy.product.stock } : null
+  };
+}
 
 type CloneGroupBuyBody = { end_time?: string; pickup_time?: string; price_cents?: number };
 type PickingCsvQuery = { date?: string; community_id?: string; group_buy_id?: string; format?: 'summary' | 'detail' };
@@ -74,86 +107,14 @@ function validPaidOrderWhere(): Prisma.OrderWhereInput {
 }
 
 export async function expireOverdueGroupBuys() {
-  const overdueGroupBuys = await prisma.groupBuy.findMany({
-    where: {
-      status: 'pending',
-      end_time: { lt: new Date() }
-    },
-    include: { orders: true, product: true }
-  });
-
-  for (const groupBuy of overdueGroupBuys) {
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.groupBuy.update({
-        where: { id: groupBuy.id },
-        data: { status: 'failed' }
-      });
-
-      const paidOrders = groupBuy.orders.filter((order) => order.pay_status === 'paid');
-      const unpaidOrders = groupBuy.orders.filter((order) => order.pay_status === 'unpaid');
-      const restoreSaleQuantity = [...paidOrders, ...unpaidOrders].reduce((sum, order) => sum + Math.max(1, order.quantity ?? 1), 0);
-      const restoreStockQuantity = restoreSaleQuantity * Math.max(1, groupBuy.product.stock_deduct_quantity ?? 1);
-      if (restoreStockQuantity > 0) {
-        await tx.product.update({
-          where: { id: groupBuy.product_id },
-          data: { stock: { increment: restoreStockQuantity } }
-        });
-        await tx.stockLedger.create({
-          data: {
-            product_id: groupBuy.product_id,
-            source_type: 'group_buy_failed_restore',
-            source_id: groupBuy.id,
-            direction: 'in',
-            quantity: restoreStockQuantity,
-            stock_before: groupBuy.product.stock,
-            stock_after: groupBuy.product.stock + restoreStockQuantity,
-            operator_type: 'system',
-            remark: '未成团恢复库存',
-            payload: { group_buy_id: groupBuy.id, paid_order_count: paidOrders.length, unpaid_order_count: unpaidOrders.length, sale_quantity: restoreSaleQuantity, stock_unit: groupBuy.product.stock_unit, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock_deduct_quantity: groupBuy.product.stock_deduct_quantity }
-          }
-        });
-      }
-
-      for (const order of paidOrders) {
-        await tx.order.update({
-          where: { id: order.id },
-          data: { order_status: 'refunding', refund_status: 'pending' }
-        });
-        await tx.refund.upsert({
-          where: { out_refund_no: `RF${order.order_no}` },
-          update: {
-            refund_amount_cents: order.pay_amount_cents - order.refund_amount_cents,
-            reason: '未成团自动进入待退款',
-            status: 'pending',
-            stock_restored: true
-          },
-          create: {
-            order_id: order.id,
-            out_refund_no: `RF${order.order_no}`,
-            client_refund_id: `group-expired-${order.id}`,
-            refund_amount_cents: order.pay_amount_cents - order.refund_amount_cents,
-            reason: '未成团自动进入待退款',
-            status: 'pending',
-            stock_restored: true
-          }
-        });
-      }
-
-      for (const order of unpaidOrders) {
-        await tx.order.update({
-          where: { id: order.id },
-          data: { order_status: 'closed', pay_status: 'closed' }
-        });
-      }
-
-      await tx.auditLog.create({
-        data: {
-          action: 'group_buy_expired',
-          target_type: 'GroupBuy',
-          target_id: groupBuy.id,
-          payload: { paid_orders: paidOrders.length, unpaid_orders: unpaidOrders.length }
-        }
-      });
+  // L27: overdue pending group buys are handled by admin APIs only.
+  // Do not perform programmatic refund, do not close paid orders, and do not call external refund APIs here.
+  const count = await prisma.groupBuy.count({ where: { status: 'pending', end_time: { lt: new Date() } } });
+  if (count > 0) {
+    await safeRecordBusinessEvent(prisma, {
+      event_type: 'group_buy_expired_manual_attention_required',
+      event_source: 'group-buys-route',
+      payload: { expired_pending_count: count, manual: true }
     });
   }
 }
@@ -215,7 +176,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
       },
       include: { product: true, community: true, leader_user: true }
     });
-    return ok(groupBuy);
+    return ok(await toSafeGroupBuyDetail(groupBuy));
   });
 
   app.get('/api/group-buys', async () => {
@@ -230,13 +191,13 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const groupBuy = await prisma.groupBuy.findUnique({
       where: { id },
-      include: { product: true, community: true, leader_user: true, orders: true }
+      include: { product: true, community: true, leader_user: true }
     });
     if (!groupBuy) {
       reply.code(404);
       return fail('团购不存在');
     }
-    return ok(groupBuy);
+    return ok(await toSafeGroupBuyDetail(groupBuy));
   });
 
   app.post('/api/group-buys/:id/clone', async (request, reply) => {
@@ -441,13 +402,67 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  const timer = setInterval(() => {
-    void expireOverdueGroupBuys();
-  }, 60_000);
-  timer.unref?.();
 }
 
 export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
+
+  app.get('/api/admin/group-buys/expired-pending', async (request, reply) => {
+    try {
+      return ok(await listExpiredPendingGroupBuys(request.query as { page?: number; page_size?: number }));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '查询过期未成团列表失败');
+    }
+  });
+
+  app.post('/api/admin/group-buys/:id/mark-failed', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      return ok(await markExpiredGroupBuyFailed(id, { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '标记团购失败失败');
+    }
+  });
+
+  app.get('/api/admin/group-buys/:id/manual-refund-orders', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      return ok(await listGroupBuyManualRefundOrders(id));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '查询人工退款订单失败');
+    }
+  });
+
+  app.post('/api/admin/group-buys/:id/close-unpaid-orders', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      return ok(await closeUnpaidGroupBuyOrders(id, { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '关闭未支付订单失败');
+    }
+  });
+
+  app.post('/api/admin/orders/:id/manual-refund', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const body = request.body as { refund_amount_cents?: number; refund_channel?: 'manual_wechat' | 'manual_offline' | 'manual_other'; refund_transaction_id?: string; refund_reason?: string; admin_remark?: string };
+      return ok(await markGroupBuyOrderManualRefunded({
+        order_id: id,
+        refund_amount_cents: Number(body.refund_amount_cents),
+        refund_channel: body.refund_channel ?? 'manual_wechat',
+        refund_transaction_id: body.refund_transaction_id ?? null,
+        refund_reason: body.refund_reason ?? null,
+        admin_remark: body.admin_remark ?? null,
+        admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }
+      }));
+    } catch (error) {
+      reply.code(400);
+      return fail(error instanceof Error ? error.message : '标记人工退款失败');
+    }
+  });
   app.post('/api/admin/group-buys/:id/clone', async (request, reply) => {
     const adminUserId = request.adminUser?.id;
     if (!adminUserId) {
