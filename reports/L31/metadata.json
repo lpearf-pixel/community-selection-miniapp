@@ -1,0 +1,9 @@
+{
+  "stage": "L31",
+  "source_branch": "codex/create-l30-refund-payment-risk-idempotency-a0nexz",
+  "source_commit": "4d5a7ab910aea328898212647e84b679695d8098",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-08T15:15:05.148Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
