@@ -1,8 +1,14 @@
 <view class="page" wx:if="{{groupBuy}}">
   <view class="name">{{groupBuy.product.name}}</view>
   <view class="price">¥{{groupBuy.price_cents / 100}}</view>
-  <view class="meta">社区：{{groupBuy.community.name}}</view>
-  <view class="meta">进度：{{groupBuy.current_people}}/{{groupBuy.min_people}} 人，{{groupBuy.current_quantity}}/{{groupBuy.min_quantity}} 份</view>
-  <view class="meta">状态：{{groupBuy.status}}</view>
-  <button type="primary" bindtap="join">参团下单</button>
+  <view class="meta">当前状态：{{groupBuy.status_text}}</view>
+  <view class="meta">成团目标：满 {{groupBuy.target_count}} 份成团</view>
+  <view class="meta">已支付有效份数：{{groupBuy.paid_quantity}}</view>
+  <view class="meta">还差 {{groupBuy.remaining_quantity}} 份成团</view>
+  <view class="meta">截止时间：{{groupBuy.end_time}}</view>
+  <view class="meta" wx:if="{{groupBuy.community}}">社区：{{groupBuy.community.name}}</view>
+  <button type="primary" bindtap="join" disabled="{{!groupBuy.can_join}}">{{groupBuy.join_button_text}}</button>
+  <button open-type="share">分享团购</button>
 </view>
+<view class="page" wx:elif="{{loading}}">加载中...</view>
+<view class="page" wx:else>团购不存在或已结束</view>

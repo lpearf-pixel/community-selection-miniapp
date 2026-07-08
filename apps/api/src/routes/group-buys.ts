@@ -37,6 +37,38 @@ type UpdateOrderStatusBody = {
   next_status?: 'preparing' | 'ready' | 'picked' | 'delivered' | 'completed';
 };
 
+
+async function toSafeGroupBuyDetail(groupBuy: any) {
+  const paid = await prisma.order.aggregate({
+    where: { group_buy_id: groupBuy.id, pay_status: 'paid', order_status: { notIn: ['closed', 'refunded'] }, refund_status: { notIn: ['success'] } },
+    _sum: { quantity: true }
+  });
+  const paidQuantity = paid._sum.quantity ?? 0;
+  const targetCount = groupBuy.min_quantity;
+  const isExpired = groupBuy.end_time.getTime() <= Date.now();
+  return {
+    id: groupBuy.id,
+    group_buy_id: groupBuy.id,
+    product_id: groupBuy.product_id,
+    leader_user_id: groupBuy.leader_user_id,
+    community_id: groupBuy.community_id,
+    status: groupBuy.status,
+    min_people: groupBuy.min_people,
+    min_quantity: groupBuy.min_quantity,
+    target_count: targetCount,
+    paid_quantity: paidQuantity,
+    remaining_quantity: Math.max(0, targetCount - paidQuantity),
+    price_cents: groupBuy.price_cents,
+    end_time: groupBuy.end_time.toISOString(),
+    pickup_time: groupBuy.pickup_time.toISOString(),
+    is_success: groupBuy.status === 'success',
+    is_expired: isExpired,
+    can_join: (groupBuy.status === 'pending' || groupBuy.status === 'success') && !isExpired && (groupBuy.product?.stock ?? 0) > 0,
+    community: groupBuy.community ? { community_id: groupBuy.community.id, name: groupBuy.community.name } : null,
+    product: groupBuy.product ? { product_id: groupBuy.product.id, name: groupBuy.product.name, cover_image: groupBuy.product.cover_image, price_cents: groupBuy.product.price_cents, sale_unit: groupBuy.product.sale_unit, sale_spec_name: groupBuy.product.sale_spec_name, stock: groupBuy.product.stock } : null
+  };
+}
+
 type CloneGroupBuyBody = { end_time?: string; pickup_time?: string; price_cents?: number };
 type PickingCsvQuery = { date?: string; community_id?: string; group_buy_id?: string; format?: 'summary' | 'detail' };
 
@@ -215,7 +247,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
       },
       include: { product: true, community: true, leader_user: true }
     });
-    return ok(groupBuy);
+    return ok(await toSafeGroupBuyDetail(groupBuy));
   });
 
   app.get('/api/group-buys', async () => {
@@ -230,13 +262,13 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const groupBuy = await prisma.groupBuy.findUnique({
       where: { id },
-      include: { product: true, community: true, leader_user: true, orders: true }
+      include: { product: true, community: true, leader_user: true }
     });
     if (!groupBuy) {
       reply.code(404);
       return fail('团购不存在');
     }
-    return ok(groupBuy);
+    return ok(await toSafeGroupBuyDetail(groupBuy));
   });
 
   app.post('/api/group-buys/:id/clone', async (request, reply) => {
