@@ -1,0 +1,9 @@
+{
+  "stage": "L28",
+  "source_branch": "codex/develop-community-selection-miniapp-l28-enhancements",
+  "source_commit": "7ac49fcd67d2c8727e4b7b1f3f60bbb35e893eb9",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-08T07:06:34.012Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
