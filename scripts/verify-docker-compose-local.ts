@@ -42,6 +42,7 @@ function getServiceBlock(compose: string, serviceName: 'api' | 'admin'): string 
 const compose = readRequired('docker-compose.yml');
 const npmrc = readRequired('.npmrc');
 const dockerignore = readRequired('.dockerignore');
+const dockerfileDev = readRequired('Dockerfile.dev');
 const docs = readRequired('docs/dev/docker-local.md');
 const tsconfig = readRequired('tsconfig.base.json');
 const api = getServiceBlock(compose, 'api');
@@ -51,6 +52,8 @@ assertContains(compose, 'registry.npmjs.org', 'docker-compose.yml');
 assertNotContains(compose, 'registry.yarnpkg.com', 'docker-compose.yml');
 assertContains(compose, 'verify-store-integrity false', 'docker-compose.yml');
 assertContains(compose, 'store-dir /root/.local/share/pnpm/store', 'docker-compose.yml');
+assertNotContains(compose, 'pnpm store prune', 'docker-compose.yml');
+assertContains(compose, 'dockerfile: Dockerfile.dev', 'docker-compose.yml');
 assertContains(compose, 'pnpm --filter @community-selection/shared build', 'docker-compose.yml');
 assertContains(compose, 'pnpm --filter @community-selection/config build', 'docker-compose.yml');
 assertContains(compose, "import * as m from '@community-selection/shared'", 'docker-compose.yml');
@@ -61,20 +64,21 @@ assertContains(tsconfig, 'packages/shared/dist/index.js', 'tsconfig.base.json');
 assertContains(tsconfig, 'packages/config/dist/index.js', 'tsconfig.base.json');
 
 for (const [label, block] of [['api command', api], ['admin command', admin]] as const) {
-  for (const tool of ['git', 'openssh-client', 'curl', 'bash', 'ca-certificates', 'openssl']) {
-    assertContains(block, tool, label);
-  }
-  assertContains(block, 'apt-get install -y --no-install-recommends', label);
-  assertContains(block, 'rm -rf /var/lib/apt/lists/*', label);
   assertContains(block, 'corepack prepare pnpm@9.15.4 --activate', label);
   assertContains(block, 'pnpm config set registry https://registry.npmjs.org/', label);
   assertContains(block, 'pnpm config set verify-store-integrity false', label);
   assertContains(block, 'pnpm config set store-dir /root/.local/share/pnpm/store', label);
-  assertContains(block, 'pnpm store prune || true', label);
+  assertNotContains(block, 'pnpm store prune', label);
   assertContains(block, 'pnpm install --force', label);
   assertContains(block, "import * as m from '@community-selection/shared'", label);
   assertContains(block, 'shared exports ok', label);
 }
+
+for (const tool of ['git', 'openssh-client', 'curl', 'bash', 'ca-certificates', 'openssl']) {
+  assertContains(dockerfileDev, tool, 'Dockerfile.dev');
+}
+assertContains(dockerfileDev, 'apt-get install -y --no-install-recommends', 'Dockerfile.dev');
+assertContains(dockerfileDev, 'rm -rf /var/lib/apt/lists/*', 'Dockerfile.dev');
 
 for (const needle of [
   'pnpm --filter @community-selection/shared build',
@@ -104,6 +108,11 @@ assertBefore(admin, 'pnpm --filter @community-selection/shared build', 'pnpm --f
 assertBefore(admin, 'pnpm --filter @community-selection/config build', 'pnpm --filter @community-selection/admin dev', 'admin command');
 
 for (const needle of [
+  'postgres-data:',
+  'api-node-modules:',
+  'api-pnpm-store:',
+  'admin-node-modules:',
+  'admin-pnpm-store:',
   'api-node-modules:/app/node_modules',
   'admin-node-modules:/app/node_modules',
   'api-pnpm-store:/root/.local/share/pnpm/store',
@@ -125,6 +134,14 @@ for (const needle of ['node_modules', '**/node_modules', '.pnpm-store', 'reports
 }
 
 for (const needle of [
+  'ERR_PNPM_ENOENT',
+  'pnpm store prune',
+  'docker compose down --remove-orphans',
+  "docker volume ls --format '{{.Name}}' | grep -E 'node-modules|pnpm-store'",
+  "xargs -r docker volume rm",
+  'docker compose up --build --force-recreate',
+  '日常不要执行 `docker compose down -v`',
+  'postgres-data',
   'ERR_PNPM_TARBALL_INTEGRITY',
   'c12@3.1.0',
   'registry.npmjs.org',
