@@ -6,6 +6,7 @@ import { createGroupOrder, createNormalOrder, updateOrderStatus } from '../modul
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 import { closeUnpaidGroupBuyOrders, listExpiredPendingGroupBuys, listGroupBuyManualRefundOrders, markExpiredGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
+import { requireAdminPermission } from '../modules/admin-access/admin-access-control.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -406,7 +407,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
 
 export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
 
-  app.get('/api/admin/group-buys/expired-pending', async (request, reply) => {
+  app.get('/api/admin/group-buys/expired-pending', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       return ok(await listExpiredPendingGroupBuys(request.query as { page?: number; page_size?: number }));
     } catch (error) {
@@ -415,7 +416,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/admin/group-buys/:id/mark-failed', async (request, reply) => {
+  app.post('/api/admin/group-buys/:id/mark-failed', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       return ok(await markExpiredGroupBuyFailed(id, { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }));
@@ -425,7 +426,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/admin/group-buys/:id/manual-refund-orders', async (request, reply) => {
+  app.get('/api/admin/group-buys/:id/manual-refund-orders', { preHandler: requireAdminPermission(['refund.view', 'refund.manage']) }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       return ok(await listGroupBuyManualRefundOrders(id));
@@ -435,7 +436,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/admin/group-buys/:id/close-unpaid-orders', async (request, reply) => {
+  app.post('/api/admin/group-buys/:id/close-unpaid-orders', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       return ok(await closeUnpaidGroupBuyOrders(id, { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }));
@@ -445,7 +446,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/admin/orders/:id/manual-refund', async (request, reply) => {
+  app.post('/api/admin/orders/:id/manual-refund', { preHandler: requireAdminPermission('refund.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const body = request.body as { refund_amount_cents?: number; refund_channel?: 'manual_wechat' | 'manual_offline' | 'manual_other'; refund_transaction_id?: string; refund_reason?: string; admin_remark?: string };
