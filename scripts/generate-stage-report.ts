@@ -47,6 +47,7 @@ const isL26Stage = stage.toUpperCase() === 'L26';
 const isL27Stage = stage.toUpperCase() === 'L27';
 const isL28Stage = stage.toUpperCase() === 'L28';
 const isL29Stage = stage.toUpperCase() === 'L29';
+const isL30Stage = stage.toUpperCase() === 'L30';
 
 
 const l29Manifest = {
@@ -95,6 +96,15 @@ const l29Manifest = {
     '不新增 DB 字段',
     '合规扫描通过'
   ]
+};
+
+
+const l30Manifest = {
+  files: ['apps/api/src/modules/finance/refund-risk-service.ts','apps/api/src/routes/admin/finance.ts','scripts/verify-l30-refund-payment-risk-idempotency-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l30-refund-payment-risk-idempotency.md'],
+  apis: ['GET /api/admin/finance/refund-risk/overview','GET /api/admin/finance/refund-risk/items','GET /api/admin/finance/refund-risk/export.csv'],
+  db: ['无新增表', '无新增字段'],
+  verify: ['scripts/verify-l30-refund-payment-risk-idempotency-local.ts', 'scripts/stage-workflow.ts --stage=L30 --verify', 'scripts/stage-workflow.ts --stage=L30 --verify --scope=chain'],
+  checklist: ['支付/退款风险汇总接口','支付/退款风险明细接口','风险 CSV 导出','支持风险等级筛选','支持订单号筛选','支持团购 ID 筛选','支持时间范围筛选','检测退款金额大于支付金额','检测累计退款金额大于支付金额','检测重复退款流水号','检测重复外部退款单号','检测支付状态和订单状态不一致','检测退款记录和订单退款金额不一致','人工退款安全校验函数','未支付订单不能记录退款','已全额退款订单不能重复退款','部分退款累计不能超过支付金额','响应只返回 receiver_phone_masked','CSV 防公式注入','不调用真实微信支付 API','不调用真实微信退款 API','不自动退款','不自动打款','不自动报税','不新增奖励结算','不新增 DB 表','不新增 DB 字段','合规扫描通过']
 };
 
 const l15Manifest = {
@@ -523,6 +533,7 @@ function getChangedFiles() {
   if (isL25Stage) return { files: l25Manifest.files, error: '' };
   if (isL26Stage) return { files: l26Manifest.files, error: '' };
   if (isL27Stage) return { files: l27Manifest.files, error: '' };
+  if (isL30Stage) return { files: l30Manifest.files, error: '' };
   if (isL29Stage) return { files: l29Manifest.files, error: '' };
   if (isL28Stage) return { files: l28Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
@@ -544,8 +555,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage) {
-    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : isL20Stage ? l20Manifest.apis : isL21Stage ? l21Manifest.apis : isL22Stage ? l22Manifest.apis : isL23Stage ? l23Manifest.apis : isL24Stage ? l24Manifest.apis : isL25Stage ? l25Manifest.apis : isL26Stage ? l26Manifest.apis : isL27Stage ? l27Manifest.apis : isL29Stage ? l29Manifest.apis : l28Manifest.apis).map((api) => {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage) {
+    return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : isL20Stage ? l20Manifest.apis : isL21Stage ? l21Manifest.apis : isL22Stage ? l22Manifest.apis : isL23Stage ? l23Manifest.apis : isL24Stage ? l24Manifest.apis : isL25Stage ? l25Manifest.apis : isL26Stage ? l26Manifest.apis : isL27Stage ? l27Manifest.apis : isL30Stage ? l30Manifest.apis : isL29Stage ? l29Manifest.apis : l28Manifest.apis).map((api) => {
       const [method, path] = api.split(' ');
       return {
         method,
@@ -626,6 +637,7 @@ function extractModels(files: string[]) {
   if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (isL26Stage) return l26Manifest.db.map((model) => ({ model, change: 'L26 manifest', description: 'L26 团购成团规则与参团链路校验数据库范围' }));
   if (isL27Stage) return l27Manifest.db.map((model) => ({ model, change: 'L27 manifest', description: 'L27 团购过期失败处理与人工退款/关闭流程数据库范围' }));
+  if (isL30Stage) return l30Manifest.db.map((model) => ({ model, change: 'L30 manifest', description: 'L30 退款/支付风控与幂等数据库范围' }));
   if (isL29Stage) return l29Manifest.db.map((model) => ({ model, change: 'L29 manifest', description: 'L29 Admin 退款台账页面数据库范围' }));
   if (isL28Stage) return l28Manifest.db.map((model) => ({ model, change: 'L28 manifest', description: 'L28 退款台账与财务对账增强数据库范围' }));
   if (!files.some((file) => file === 'prisma/schema.prisma' || file.startsWith('prisma/migrations/'))) return [] as ModelRow[];
@@ -683,6 +695,9 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L29') {
     return l29Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L30') {
+    return l30Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
+  }
   const lower = stageName.toLowerCase();
   const items: Array<{ label: string; checked: boolean; note?: string }> = [];
   const hasFile = (needle: string) => files.some((file) => file.includes(needle));
@@ -702,7 +717,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage) {
+    if (isL30Stage) return [{ script: 'scripts/verify-l30-refund-payment-risk-idempotency-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l30-refund-payment-risk-idempotency-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l30-refund-payment-risk-idempotency-local.ts') ? 'yes' : 'no', description: 'L30 退款/支付风控与幂等验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L30 manifest 要求的总体验证命令' }];
     if (isL29Stage) return [{ script: 'scripts/verify-l29-admin-refund-ledger-page-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l29-admin-refund-ledger-page-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l29-admin-refund-ledger-page-local.ts') ? 'yes' : 'no', description: 'L29 Admin 退款台账页面验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L29 manifest 要求的总体验证命令' }];
     if (isL28Stage) return [{ script: 'scripts/verify-l28-refund-ledger-finance-check-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l28-refund-ledger-finance-check-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l28-refund-ledger-finance-check-local.ts') ? 'yes' : 'no', description: 'L28 退款台账与财务对账增强验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L28 manifest 要求的总体验证命令' }];
     if (isL27Stage) return [{ script: 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l27-group-buy-expiry-manual-refund-local.ts') ? 'yes' : 'no', description: 'L27 团购过期失败处理与人工退款/关闭流程验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L27 manifest 要求的总体验证命令' }];
@@ -750,13 +766,13 @@ function parseLatestVerifyOutput() {
   const path = join(repoRoot, 'reports/latest-verify-output.txt');
   if (!existsSync(path)) return { exists: false, rows: [] as Array<{ command: string; result: string }>, passed: false };
   const content = readFileSync(path, 'utf8');
-  const failureMarkers = isL29Stage ? ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:'] : ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
+  const failureMarkers = (isL29Stage || isL30Stage) ? ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code'] : ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : isL22Stage ? content.includes('L22 miniapp order center verification passed') : isL23Stage ? content.includes('L23 mvp release readiness verification passed') : isL24Stage ? content.includes('L24 miniapp cart verification passed') : isL25Stage ? content.includes('L25 order confirm quantity guard verification passed') : isL29Stage ? content.includes('L29 admin refund ledger page verification passed') : isL28Stage ? content.includes('L28 refund ledger finance check verification passed') : isL27Stage ? content.includes('L27 group buy expiry manual refund verification passed') : isL26Stage ? content.includes('L26 group buy success rule verification passed') : true) && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : isL22Stage ? content.includes('L22 miniapp order center verification passed') : isL23Stage ? content.includes('L23 mvp release readiness verification passed') : isL24Stage ? content.includes('L24 miniapp cart verification passed') : isL25Stage ? content.includes('L25 order confirm quantity guard verification passed') : isL30Stage ? content.includes('L30 refund payment risk idempotency verification passed') : isL29Stage ? content.includes('L29 admin refund ledger page verification passed') : isL28Stage ? content.includes('L28 refund ledger finance check verification passed') : isL27Stage ? content.includes('L27 group buy expiry manual refund verification passed') : isL26Stage ? content.includes('L26 group buy success rule verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
     return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
