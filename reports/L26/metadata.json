@@ -1,0 +1,9 @@
+{
+  "stage": "L26",
+  "source_branch": "codex/add-l26-group-buy-success-rule",
+  "source_commit": "60bd28bee62acc4b159c8e093f2278656aea8ad6",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-08T02:28:53.884Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
