@@ -65,3 +65,5 @@ pnpm exec tsx scripts/verify-l30-refund-payment-risk-idempotency-local.ts
 pnpm exec tsx scripts/verify-l31-admin-access-control-baseline-local.ts
 
 pnpm exec tsx scripts/verify-l32-clerk-pickup-workbench-local.ts
+
+pnpm exec tsx scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts

@@ -33,11 +33,21 @@ function maskString(value: string, key?: string) {
 export function sanitizePayload<T = unknown>(payload: T): T {
   if (payload === null || payload === undefined) return payload;
   if (typeof payload === 'string') return maskString(payload) as T;
+  if (typeof payload === 'bigint') return payload.toString() as T;
+  if (typeof payload === 'function' || typeof payload === 'symbol') return undefined as T;
   if (typeof payload !== 'object') return payload;
-  if (Array.isArray(payload)) return payload.map((item) => sanitizePayload(item)) as T;
+  if (payload instanceof Date) return payload.toISOString() as T;
+  if (Array.isArray(payload)) return payload.map((item) => sanitizePayload(item)).filter((item) => item !== undefined) as T;
+
+  const maybeJson = payload as { toJSON?: () => unknown };
+  if (typeof maybeJson.toJSON === 'function' && maybeJson.toJSON !== Object.prototype.toString) {
+    const jsonValue = maybeJson.toJSON();
+    if (jsonValue !== payload) return sanitizePayload(jsonValue) as T;
+  }
 
   const sanitized: JsonRecord = {};
   for (const [key, value] of Object.entries(payload as JsonRecord)) {
+    if (key === 'constructor' || typeof value === 'function' || typeof value === 'symbol') continue;
     if (blockedKeyPattern.test(key)) {
       sanitized[key] = '[FILTERED]';
       continue;
@@ -50,7 +60,8 @@ export function sanitizePayload<T = unknown>(payload: T): T {
       sanitized[key] = value.length > 6 ? `${value.slice(0, 3)}***${value.slice(-2)}` : '***';
       continue;
     }
-    sanitized[key] = sanitizePayload(value);
+    const nextValue = sanitizePayload(value);
+    if (nextValue !== undefined) sanitized[key] = nextValue;
   }
   return sanitized as T;
 }
