@@ -1,0 +1,9 @@
+{
+  "stage": "L36",
+  "source_branch": "codex/add-l36-delivery-fee-and-window-range-baseline",
+  "source_commit": "3a7752df7c5a1a68db99fa3c588f3bb2233381e9",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-09T16:22:08.972Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
