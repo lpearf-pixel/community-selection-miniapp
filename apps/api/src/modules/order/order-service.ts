@@ -94,7 +94,7 @@ function maskReceiverPhone(phone?: string | null) {
 }
 
 function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number; delivery_time_window_text?: string }) {
-  // L36 门店配送响应展示配送时段与配送费；配送时段不落库，创建响应优先使用本次校验结果。
+  // L36 门店配送响应展示配送时段与配送费；配送时段不落库，创建响应优先使用本次校验结果；不调用达达，不调用第三方配送。
   const product = order.product ?? order.group_buy?.product ?? null;
   return {
     id: order.id,
