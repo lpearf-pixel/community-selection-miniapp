@@ -64,8 +64,12 @@ function normalizePickupType(value: unknown): PickupType {
 
 function validateFulfillment(input: { pickup_type?: string; pickup_store_id?: string; receiver_name?: string; receiver_phone?: string; receiver_address?: string; delivery_time_window_code?: string }) {
   const pickupType = normalizePickupType(input.pickup_type);
+  // L35: 自提点必填校验
   if (!input.pickup_store_id?.trim()) throw new Error('自提点必填校验：请选择自提点');
   if (pickupType === PickupType.delivery) {
+    // L35: 收货人必填校验
+    // L35: 手机号必填校验
+    // L35: 配送地址必填校验
     const result = validateDeliveryRuleForOrder(input);
     if (!result.ok) throw new Error(result.error_message || '配送规则校验失败');
   }
