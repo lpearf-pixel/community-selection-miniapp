@@ -1,0 +1,9 @@
+{
+  "stage": "L32",
+  "source_branch": "codex/add-l32-clerk-pickup-workbench",
+  "source_commit": "17ae4a1476df2746742e15226c15c50bff1df721",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-09T06:23:02.079Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
