@@ -15,6 +15,7 @@ import {
 import { formatYuan } from "@community-selection/shared";
 import { FinanceRefundLedgerPage } from "./pages/finance/FinanceRefundLedgerPage";
 import { PickupWorkbenchPage } from "./pages/pickup/PickupWorkbenchPage";
+import { DeliveryReservationPage } from "./pages/delivery/DeliveryReservationPage";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -37,7 +38,8 @@ type ViewKey =
   | "finance"
   | "refundLedger"
   | "operations"
-  | "pickupWorkbench";
+  | "pickupWorkbench"
+  | "deliveryReservation";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -1012,6 +1014,7 @@ export function App() {
               <Button onClick={() => setView("refundLedger")}>退款台账</Button>
               <Button onClick={() => setView("operations")}>运营看板</Button>
               <Button onClick={() => setView("pickupWorkbench")}>自提工作台</Button>
+              <Button onClick={() => setView("deliveryReservation")}>配送预留</Button>
               <Button onClick={refresh}>刷新</Button>
               <Button onClick={logoutAdmin}>退出登录</Button>
             </Space>
@@ -1059,6 +1062,7 @@ export function App() {
 
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
         {view === "pickupWorkbench" ? <PickupWorkbenchPage /> : null}
+        {view === "deliveryReservation" ? <DeliveryReservationPage /> : null}
 
         {view === "finance" ? (
           <>

@@ -4,6 +4,7 @@ import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../../db.js';
 import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } from '../../modules/audit/audit-service.js';
 import { requireAdminPermission } from '../../modules/admin-access/admin-access-control.js';
+import { buildAmapSearchUrl } from '../../modules/locations/navigation-url.js';
 
 type PickupOrdersQuery = {
   date?: string;
@@ -60,6 +61,8 @@ function safePickupOrder(order: any) {
     pickup_store_name: order.pickup_store?.name ?? null,
     pickup_store_address: order.pickup_store?.address ?? null,
     pickup_store_phone: order.pickup_store?.phone ?? null,
+    navigation_address: order.pickup_store?.address ?? null,
+    navigation_url: order.pickup_store?.address ? buildAmapSearchUrl({ address: order.pickup_store.address, name: order.pickup_store?.name ?? null }) : null,
     receiver_name: order.receiver_name,
     receiver_phone_masked: maskReceiverPhone(order['receiver' + '_phone']),
     pay_status: order.pay_status,
