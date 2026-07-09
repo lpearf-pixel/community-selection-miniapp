@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { getAdminScopeSummary } from "../../access/adminAccess";
 import { getPickupWorkbenchOrderByCode, getPickupWorkbenchOrders, getPickupWorkbenchSummary, verifyPickupWorkbenchOrder, type PickupWorkbenchOrder, type PickupWorkbenchSummary } from "../../api/pickupWorkbench";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -20,6 +21,7 @@ export function PickupWorkbenchPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const canAccess = useMemo(hasPickupPermission, []);
+  const scopeSummary = useMemo(getAdminScopeSummary, []);
 
   async function loadData() {
     if (!canAccess) return;
@@ -97,6 +99,7 @@ export function PickupWorkbenchPage() {
 
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
     <Typography.Title level={3}>店员自提工作台</Typography.Title>
+    <Card title="当前数据范围"><Typography.Text>{scopeSummary.label}</Typography.Text>{!scopeSummary.hasConfiguredScope ? <Typography.Paragraph type="warning">当前账号未配置自提点/社区范围，请联系管理员。</Typography.Paragraph> : null}</Card>
     {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
     <Space wrap>
       <Card title="今日待自提">{(summary?.pending_count ?? 0) + (summary?.ready_count ?? 0)}</Card>

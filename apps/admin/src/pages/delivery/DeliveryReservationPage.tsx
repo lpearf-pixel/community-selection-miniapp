@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Form, Input, Space, Table, Typography } from "antd";
+import { getAdminScopeSummary } from "../../access/adminAccess";
 import { getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryStatus } from "../../api/delivery";
 
 const statusOptions: Exclude<DeliveryStatus, "none">[] = ["pending_dispatch", "assigned", "delivering", "delivered", "delivery_failed", "canceled"];
@@ -11,6 +12,7 @@ export function DeliveryReservationPage() {
   const [keyword, setKeyword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const scopeSummary = getAdminScopeSummary();
 
   async function load() {
     setLoading(true);
@@ -45,6 +47,7 @@ export function DeliveryReservationPage() {
 
   return <Space direction="vertical" style={{ width: "100%" }}>
     <Card title="配送预留">
+      <Card title="当前数据范围"><Typography.Text>{scopeSummary.label}</Typography.Text>{!scopeSummary.hasConfiguredScope ? <Typography.Paragraph type="warning">当前账号未配置自提点/社区范围，请联系管理员。</Typography.Paragraph> : null}</Card>
       <Typography.Paragraph>门店配送/人工配送为 mock；达达配送接口已预留，当前不会创建真实配送单。页面仅展示 receiver_phone_masked 与 receiver_address_masked。</Typography.Paragraph>
       {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
       {successMessage ? <Typography.Text type="secondary">{successMessage}</Typography.Text> : null}

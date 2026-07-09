@@ -34,7 +34,8 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L30: { title: 'L30 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l30-refund-payment-risk-idempotency-local.ts'] },
   L31: { title: 'L31 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l31-admin-access-control-baseline-local.ts'] },
   L32: { title: 'L32 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l32-clerk-pickup-workbench-local.ts'] },
-  L33: { title: 'L33 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts'] }
+  L33: { title: 'L33 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts'] },
+  L34: { title: 'L34 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l34-admin-data-scope-baseline-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
@@ -47,7 +48,8 @@ const regressionChains: Record<string, string[]> = {
   L30: ['L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
   L31: ['L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
   L32: ['L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L33: ['L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24']
+  L33: ['L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
+  L34: ['L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24']
 };
 
 const dockerApiE2E: CommandSpec = {
