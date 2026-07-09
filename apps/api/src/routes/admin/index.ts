@@ -10,6 +10,7 @@ import { registerAdminGroupBuyRoutes } from '../group-buys.js';
 import { registerAdminAfterSaleRoutes } from '../after-sales.js';
 import { registerAdminFinanceRoutes } from './finance.js';
 import { registerAdminOperationsRoutes } from './operations.js';
+import { registerAdminPickupRoutes } from './pickup.js';
 
 export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminAuthRoutes(app);
@@ -23,4 +24,5 @@ export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminAfterSaleRoutes(app);
   registerAdminFinanceRoutes(app);
   registerAdminOperationsRoutes(app);
+  registerAdminPickupRoutes(app);
 }

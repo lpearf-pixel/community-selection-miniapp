@@ -14,6 +14,7 @@ import {
 } from "antd";
 import { formatYuan } from "@community-selection/shared";
 import { FinanceRefundLedgerPage } from "./pages/finance/FinanceRefundLedgerPage";
+import { PickupWorkbenchPage } from "./pages/pickup/PickupWorkbenchPage";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -35,7 +36,8 @@ type ViewKey =
   | "taxRecords"
   | "finance"
   | "refundLedger"
-  | "operations";
+  | "operations"
+  | "pickupWorkbench";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -1009,6 +1011,7 @@ export function App() {
               <Button onClick={() => setView("finance")}>财务对账</Button>
               <Button onClick={() => setView("refundLedger")}>退款台账</Button>
               <Button onClick={() => setView("operations")}>运营看板</Button>
+              <Button onClick={() => setView("pickupWorkbench")}>自提工作台</Button>
               <Button onClick={refresh}>刷新</Button>
               <Button onClick={logoutAdmin}>退出登录</Button>
             </Space>
@@ -1055,6 +1058,7 @@ export function App() {
         ) : null}
 
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
+        {view === "pickupWorkbench" ? <PickupWorkbenchPage /> : null}
 
         {view === "finance" ? (
           <>
