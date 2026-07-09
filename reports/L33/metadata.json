@@ -1,0 +1,9 @@
+{
+  "stage": "L33",
+  "source_branch": "codex/add-l33-pickup-navigation-and-delivery-reservation",
+  "source_commit": "fe9f68c61e3c6b662212d63e4ac5fb2c2adad57d",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-09T11:23:45.465Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
