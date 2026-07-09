@@ -5,7 +5,7 @@ import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedOrderWhere, ty
 import { createDadaDeliveryOrderMock } from './dada-adapter.js';
 import type { DeliveryMode, DeliveryProvider, DeliveryReservation, DeliveryStatus } from './delivery-types.js';
 
-type Query = { status?: DeliveryStatus; provider?: DeliveryProvider; pickup_store_id?: string; community_id?: string; keyword?: string; page?: string | number; page_size?: string | number };
+type Query = { status?: DeliveryStatus; provider?: DeliveryProvider; pickup_type?: string; delivery_mode?: string; pickup_store_id?: string; community_id?: string; keyword?: string; page?: string | number; page_size?: string | number };
 type Actor = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
 const closedStatuses = new Set<OrderStatus>([OrderStatus.refunded, OrderStatus.closed]);
 const activeStatuses = new Set<OrderStatus>([OrderStatus.paid, OrderStatus.grouped, OrderStatus.preparing, OrderStatus.ready, OrderStatus.picked, OrderStatus.completed]);
@@ -46,6 +46,8 @@ function whereOf(query: Query, context: AdminAccessContext): Prisma.OrderWhereIn
   const scopeWhere = getScopedOrderWhere(context);
   if (!scopeWhere) return null;
   const and: Prisma.OrderWhereInput[] = [{ pay_status: PayStatus.paid }, scopeWhere as Prisma.OrderWhereInput];
+  if (query.pickup_type === 'store' || query.pickup_type === 'delivery') and.push({ pickup_type: query.pickup_type as any });
+  else if (query.delivery_mode === 'store_delivery') and.push({ pickup_type: 'delivery' as any });
   if (query.pickup_store_id) and.push({ pickup_store_id: query.pickup_store_id }); // pickup_store_id 过滤
   if (query.community_id) and.push({ community_id: query.community_id }); // community_id 过滤
   if (query.keyword?.trim()) and.push({ OR: [{ order_no: { contains: query.keyword.trim() } }, { receiver_name: { contains: query.keyword.trim() } }] });
@@ -58,7 +60,7 @@ export async function listDeliveryReservations(query: Query, context: AdminAcces
   const page = positiveInt(query.page, 1, 10000); const pageSize = positiveInt(query.page_size, 20, 100);
   const where = whereOf(query, context);
   if (!where) return { total: 0, page, page_size: pageSize, items: [] };
-  const [total, orders] = await Promise.all([prisma.order.count({ where }), prisma.order.findMany({ where, include: { pickup_store: true, community: true }, orderBy: { created_at: 'desc' }, skip: (page - 1) * pageSize, take: pageSize })]);
+  const [total, orders] = await Promise.all([prisma.order.count({ where }), prisma.order.findMany({ where, include: { pickup_store: true, community: true }, orderBy: [{ pickup_type: 'desc' }, { created_at: 'desc' }] as any, skip: (page - 1) * pageSize, take: pageSize })]);
   const items = orders.map((order) => toReservation(order)).filter((item) => !query.provider || item.provider === query.provider);
   return { total, page, page_size: pageSize, items };
 }
@@ -68,7 +70,7 @@ export async function reserveDelivery(id: string, input: { provider: DeliveryPro
   if (!['store_delivery', 'third_party_delivery'].includes(input.delivery_mode)) throw new Error('配送模式不支持');
   const order = await prisma.order.findUnique({ where: { id }, include: { pickup_store: true, community: true } });
   if (!order) throw new Error('订单不存在'); if (!canAccessOrderDataScope(context, order)) throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 }); /* reserve scope 检查 */ if (order.pay_status !== PayStatus.paid) throw new Error('订单未支付，不能预留配送'); if (closedStatuses.has(order.order_status)) throw new Error('订单已关闭，不能预留配送');
-  if (input.provider === 'dada') await createDadaDeliveryOrderMock({ order_id: order.id, order_no: order.order_no, delivery_mode: input.delivery_mode, sender_address: order.pickup_store?.address ?? null, receiver_address_masked: maskAddress(order.community?.address ?? null) });
+  if (input.provider === 'dada') await createDadaDeliveryOrderMock({ order_id: order.id, order_no: order.order_no, delivery_mode: input.delivery_mode, sender_address: order.pickup_store?.address ?? null, receiver_address_masked: maskAddress(order.receiver_address ?? order.community?.address ?? null) });
   await safeRecordBusinessEvent(prisma, { event_type: 'delivery_reserved', event_source: 'delivery-reservation', order_id: id, payload: { provider: input.provider, delivery_mode: input.delivery_mode, remark: input.remark ?? null } });
   await recordAdminAudit(prisma, { admin_user_id: actor.admin_user_id ?? null, action: 'delivery_reserved', target_type: 'Order', target_id: id, ip_address: actor.ip_address ?? null, user_agent: actor.user_agent ?? null, payload: { provider: input.provider, delivery_mode: input.delivery_mode, remark: input.remark ?? null } });
   return toReservation(order, { provider: input.provider, delivery_mode: input.delivery_mode, delivery_status: 'pending_dispatch' });

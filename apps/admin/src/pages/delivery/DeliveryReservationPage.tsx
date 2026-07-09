@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Form, Input, Space, Table, Typography } from "antd";
+import { Button, Card, Form, Input, Select, Space, Table, Typography } from "antd";
 import { getAdminScopeSummary } from "../../access/adminAccess";
 import { getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryStatus } from "../../api/delivery";
 
@@ -10,6 +10,7 @@ export function DeliveryReservationPage() {
   const [items, setItems] = useState<DeliveryReservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
+  const [pickupType, setPickupType] = useState<"delivery" | "store" | "">("delivery");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const scopeSummary = getAdminScopeSummary();
@@ -18,7 +19,7 @@ export function DeliveryReservationPage() {
     setLoading(true);
     setErrorMessage("");
     try {
-      const [providerRows, orderRows] = await Promise.all([getDeliveryProviders(), getDeliveryOrders({ keyword, page_size: 50 })]);
+      const [providerRows, orderRows] = await Promise.all([getDeliveryProviders(), getDeliveryOrders({ keyword, pickup_type: pickupType || undefined, page_size: 50 })]);
       setProviders(providerRows.items);
       setItems(orderRows.items);
     } catch (error) {
@@ -52,11 +53,11 @@ export function DeliveryReservationPage() {
       {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
       {successMessage ? <Typography.Text type="secondary">{successMessage}</Typography.Text> : null}
       <Space wrap style={{ marginTop: 16 }}>{providers.map((item) => <Card key={item.provider} size="small" title={item.name}><Typography.Text>{item.enabled ? "enabled" : "disabled"}</Typography.Text><Typography.Text>{item.mode}</Typography.Text><Typography.Text>{item.description ?? "mock enabled"}</Typography.Text></Card>)}</Space>
-      <Form layout="inline" style={{ marginTop: 16 }} onFinish={load}><Form.Item label="关键词"><Input value={keyword} onChange={(event: { target: { value: string } }) => setKeyword(event.target.value)} placeholder="订单号/收货人" /></Form.Item><Button htmlType="submit" loading={loading}>查询</Button></Form>
+      <Form layout="inline" style={{ marginTop: 16 }} onFinish={load}><Form.Item label="关键词"><Input value={keyword} onChange={(event: { target: { value: string } }) => setKeyword(event.target.value)} placeholder="订单号/收货人" /></Form.Item><Form.Item label="pickup_type"><Select style={{ width: 140 }} value={pickupType} onChange={setPickupType} options={[{ value: "delivery", label: "门店配送" }, { value: "store", label: "到店自提" }, { value: "", label: "全部" }]} /></Form.Item><Button htmlType="submit" loading={loading}>查询</Button></Form>
     </Card>
     <Card title="配送订单列表">
       <Table rowKey="order_id" loading={loading} dataSource={items} columns={[
-        { title: "订单号", dataIndex: "order_no" }, { title: "收货人", dataIndex: "receiver_name" }, { title: "receiver_phone_masked", dataIndex: "receiver_phone_masked" },
+        { title: "订单号", dataIndex: "order_no" }, { title: "pickup_type", dataIndex: "pickup_type", render: (_: unknown, row: DeliveryReservation) => row.delivery_mode === "store_delivery" ? "门店配送" : "到店自提" }, { title: "收货人", dataIndex: "receiver_name" }, { title: "receiver_phone_masked", dataIndex: "receiver_phone_masked" },
         { title: "自提点", dataIndex: "pickup_store_name" }, { title: "sender_address / 自提点地址", dataIndex: "sender_address" }, { title: "receiver_address_masked", dataIndex: "receiver_address_masked" },
         { title: "delivery_status", dataIndex: "delivery_status" }, { title: "provider", dataIndex: "provider" },
         { title: "操作", render: (_: unknown, row: DeliveryReservation) => <Space><Button disabled={!row.can_create_delivery} onClick={() => reserve(row)}>预留配送</Button><Button onClick={() => updateStatus(row)}>更新状态</Button></Space> }
