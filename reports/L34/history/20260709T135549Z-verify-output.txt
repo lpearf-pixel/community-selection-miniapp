@@ -1,0 +1,481 @@
+
+=== Running L34 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L34 admin data scope baseline verification passed.
+
+=== Running L33 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L33 pickup navigation delivery reservation verification passed.
+
+=== Running L32 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L32 clerk pickup workbench verification passed.
+(node:2296) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L31 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L31 admin access control baseline verification passed.
+(node:2343) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L30 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L30 refund payment risk idempotency verification passed.
+(node:2390) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L29 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L29 admin refund ledger page verification passed.
+(node:2437) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L28 verifier ===
+Compliance scan passed.
+L28 refund ledger finance check verification passed.
+
+=== Running L27 verifier ===
+Compliance scan passed.
+L27 group buy expiry manual refund verification passed.
+
+=== Running L26 verifier ===
+Compliance scan passed.
+L26 group buy success rule verification passed.
+
+=== Running L25 verifier ===
+Compliance scan passed.
+L25 order confirm quantity guard verification passed.
+
+=== Running L24 verifier ===
+Compliance scan passed.
+L24 miniapp cart verification passed.
+
+=== Running Docker API E2E ===
+
+--- GET /api/health ---
+{
+  "success": true,
+  "data": {
+    "status": "ok"
+  },
+  "message": ""
+}
+
+--- GET /api/products ---
+{
+  "success": true,
+  "data": {
+    "total": 10,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "id": "cmrao6u1s000pomq0noh0dmvo",
+        "product_id": "cmrao6u1s000pomq0noh0dmvo",
+        "name": "宁夏枸杞",
+        "category_id": "cmrao6u1k0007omq07bhhlklq",
+        "category_name": "干货",
+        "category": {
+          "id": "cmrao6u1k0007omq07bhhlklq",
+          "name": "干货"
+        },
+        "cover_image": "/images/products/placeholder.png",
+        "price_cents": 3290,
+        "unit": "罐",
+        "stock_unit": "piece",
+        "sale_unit": "罐",
+        "sale_spec_name": null,
+        "stock": 69,
+        "display_stock": "69 piece",
+        "is_group_enabled": true,
+        "has_active_group_buy": false,
+        "active_group_buy_count": 0,
+        "min_group_price_cents": null,
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/products/:id ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrao6u1s000pomq0noh0dmvo",
+    "product_id": "cmrao6u1s000pomq0noh0dmvo",
+    "name": "宁夏枸杞",
+    "category": {
+      "category_id": "cmrao6u1k0007omq07bhhlklq",
+      "name": "干货"
+    },
+    "cover_image": "/images/products/placeholder.png",
+    "images": [],
+    "description": "宁夏枸杞，社区甄选测试商品。",
+    "price_cents": 3290,
+    "unit": "罐",
+    "stock_unit": "piece",
+    "sale_unit": "罐",
+    "sale_spec_name": null,
+    "stock": 69,
+    "display_stock": "69 piece",
+    "is_group_enabled": true,
+    "active_group_buys": [],
+    "can_normal_buy": true,
+    "can_join_group_buy": false
+  },
+  "message": ""
+}
+
+--- GET /api/products/:id/group-buys ---
+{
+  "success": true,
+  "data": {
+    "total": 0,
+    "page": 1,
+    "page_size": 1,
+    "items": []
+  },
+  "message": ""
+}
+
+--- GET /api/communities ---
+{
+  "success": true,
+  "data": {
+    "total": 3,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "community_id": "cmrao6u1u000tomq0jpvz23j4",
+        "name": "阳光花园社区",
+        "address": "阳光大道 168 号",
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/pickup-stores ---
+{
+  "success": true,
+  "data": {
+    "total": 1,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "pickup_store_id": "main-pickup-store",
+        "name": "社区甄选自提点",
+        "address": "中心街 18 号实体店",
+        "phone": "021-88888888",
+        "community_id": null,
+        "community_name": null,
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/pickup-stores/:id ---
+{
+  "success": true,
+  "data": {
+    "pickup_store_id": "main-pickup-store",
+    "name": "社区甄选自提点",
+    "address": "中心街 18 号实体店",
+    "phone": "021-88888888",
+    "community_id": null,
+    "community_name": null,
+    "status": "active"
+  },
+  "message": ""
+}
+
+--- POST /api/orders/normal ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrdkkm670014nxcf0cxy3mao",
+    "order_id": "cmrdkkm670014nxcf0cxy3mao",
+    "order_no": "O17836053476470928",
+    "client_request_id": "docker-e2e-normal-1783605347639",
+    "user_id": "cmrdkkm630012nxcfagcr5ool",
+    "group_buy_id": null,
+    "product_id": "cmrao6u1s000pomq0noh0dmvo",
+    "leader_user_id": null,
+    "total_amount_cents": 3290,
+    "pay_amount_cents": 3290,
+    "refund_amount_cents": 0,
+    "quantity": 1,
+    "pay_status": "unpaid",
+    "order_status": "unpaid",
+    "refund_status": "none",
+    "pickup_type": "store",
+    "pickup_store_id": "main-pickup-store",
+    "community_id": "cmrao6u1u000tomq0jpvz23j4",
+    "receiver_name": "Docker E2E 用户",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address": null,
+    "created_at": "2026-07-09T13:55:47.647Z",
+    "paid_at": null,
+    "completed_at": null,
+    "product": {
+      "product_id": "cmrao6u1s000pomq0noh0dmvo",
+      "name": "宁夏枸杞",
+      "cover_image": "/images/products/placeholder.png",
+      "price_cents": 3290,
+      "sale_unit": "罐",
+      "sale_spec_name": null
+    },
+    "pickup_store": {
+      "pickup_store_id": "main-pickup-store",
+      "name": "社区甄选自提点",
+      "address": "中心街 18 号实体店",
+      "phone": "021-88888888"
+    },
+    "community": {
+      "community_id": "cmrao6u1u000tomq0jpvz23j4",
+      "name": "阳光花园社区",
+      "address": "阳光大道 168 号"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock ---
+{
+  "success": true,
+  "data": {
+    "payment_id": "cmrdkkm6f0018nxcfki1e95w4",
+    "order_id": "cmrdkkm670014nxcf0cxy3mao",
+    "order_no": "O17836053476470928",
+    "pay_status": "paid",
+    "order_status": "paid",
+    "paid_at": "2026-07-09T13:55:47.658Z",
+    "pay_amount_cents": 3290,
+    "transaction_id": "MOCKTXNPAYO17836053476470928",
+    "mock": true
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders ---
+{
+  "success": true,
+  "data": {
+    "total": 1,
+    "page": 1,
+    "page_size": 20,
+    "items": [
+      {
+        "order_id": "cmrdkkm670014nxcf0cxy3mao",
+        "order_no": "O17836053476470928",
+        "order_type": "normal",
+        "product_id": "cmrao6u1s000pomq0noh0dmvo",
+        "product_name": "宁夏枸杞",
+        "product_cover_image": "/images/products/placeholder.png",
+        "product": {
+          "product_id": "cmrao6u1s000pomq0noh0dmvo",
+          "name": "宁夏枸杞",
+          "cover_image": "/images/products/placeholder.png"
+        },
+        "quantity": 1,
+        "total_amount_cents": 3290,
+        "pay_amount_cents": 3290,
+        "refund_amount_cents": 0,
+        "pay_status": "paid",
+        "order_status": "paid",
+        "user_status_text": "已支付",
+        "refund_status": "none",
+        "group_buy_id": null,
+        "group_buy_status": null,
+        "pickup_type": "store",
+        "pickup_store_name": "社区甄选自提点",
+        "pickup": {
+          "pickup_store_id": "main-pickup-store",
+          "pickup_store_name": "社区甄选自提点",
+          "pickup_store_address": "中心街 18 号实体店",
+          "pickup_store_phone": "021-88888888"
+        },
+        "community_name": "阳光花园社区",
+        "created_at": "2026-07-09T13:55:47.647Z",
+        "paid_at": "2026-07-09T13:55:47.658Z",
+        "completed_at": null,
+        "after_sale_case_count": 0,
+        "latest_after_sale_status": null,
+        "after_sale_summary": {
+          "has_after_sale": false,
+          "latest_status": null
+        }
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmrdkkm670014nxcf0cxy3mao",
+    "order_no": "O17836053476470928",
+    "order_type": "normal",
+    "product_id": "cmrao6u1s000pomq0noh0dmvo",
+    "product_name": "宁夏枸杞",
+    "product_cover_image": "/images/products/placeholder.png",
+    "product": {
+      "product_id": "cmrao6u1s000pomq0noh0dmvo",
+      "name": "宁夏枸杞",
+      "cover_image": "/images/products/placeholder.png",
+      "price_cents": 3290,
+      "sale_unit": "罐",
+      "sale_spec_name": null
+    },
+    "quantity": 1,
+    "total_amount_cents": 3290,
+    "pay_amount_cents": 3290,
+    "refund_amount_cents": 0,
+    "pay_status": "paid",
+    "order_status": "paid",
+    "user_status_text": "已支付",
+    "refund_status": "none",
+    "group_buy_id": null,
+    "group_buy_status": null,
+    "pickup_type": "store",
+    "pickup_store_name": "社区甄选自提点",
+    "pickup": {
+      "pickup_type": "store",
+      "pickup_store_id": "main-pickup-store",
+      "pickup_store_name": "社区甄选自提点",
+      "pickup_store_address": "中心街 18 号实体店",
+      "pickup_store_phone": "021-88888888",
+      "pickup_code": "PICK-470928"
+    },
+    "community_name": "阳光花园社区",
+    "created_at": "2026-07-09T13:55:47.647Z",
+    "paid_at": "2026-07-09T13:55:47.658Z",
+    "completed_at": null,
+    "after_sale_case_count": 0,
+    "latest_after_sale_status": null,
+    "after_sale_summary": {
+      "has_after_sale": false,
+      "latest_status": null
+    },
+    "group_buy": null,
+    "receiver": {
+      "receiver_name": "Docker E2E 用户",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address": null
+    },
+    "after_sales": [],
+    "timeline": [
+      {
+        "event_type": "order_created",
+        "title": "普通购买订单已创建",
+        "from_status": null,
+        "to_status": "unpaid",
+        "created_at": "2026-07-09T13:55:47.649Z"
+      },
+      {
+        "event_type": "payment_mark_order_paid",
+        "title": "订单已支付",
+        "from_status": "unpaid",
+        "to_status": "paid",
+        "created_at": "2026-07-09T13:55:47.662Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id/pickup-code ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmrdkkm670014nxcf0cxy3mao",
+    "order_no": "O17836053476470928",
+    "pickup_code": "PICK-470928",
+    "pickup_status": "paid",
+    "pickup_store_name": "社区甄选自提点",
+    "pickup_store_address": "中心街 18 号实体店",
+    "pickup_store_phone": "021-88888888",
+    "receiver_name": "Docker E2E 用户",
+    "receiver_phone_masked": "138****5678"
+  },
+  "message": ""
+}
+
+--- POST /api/me/orders/:id/after-sales ---
+{
+  "success": true,
+  "data": {
+    "after_sale_case_id": "cmrdkkm7h001gnxcf99anomhv",
+    "id": "cmrdkkm7h001gnxcf99anomhv",
+    "type": "bad_quality",
+    "status": "submitted",
+    "resolution_type": null,
+    "reason": "Docker API E2E 品质问题",
+    "description": "Docker API E2E 售后验证",
+    "requested_refund_cents": 100,
+    "approved_refund_cents": null,
+    "responsibility": null,
+    "created_at": "2026-07-09T13:55:47.693Z",
+    "resolved_at": null
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id/after-sales ---
+{
+  "success": true,
+  "data": [
+    {
+      "after_sale_case_id": "cmrdkkm7h001gnxcf99anomhv",
+      "id": "cmrdkkm7h001gnxcf99anomhv",
+      "type": "bad_quality",
+      "status": "submitted",
+      "resolution_type": null,
+      "reason": "Docker API E2E 品质问题",
+      "description": "Docker API E2E 售后验证",
+      "requested_refund_cents": 100,
+      "approved_refund_cents": null,
+      "responsibility": null,
+      "created_at": "2026-07-09T13:55:47.693Z",
+      "resolved_at": null
+    }
+  ],
+  "message": ""
+}
+Docker API E2E verification passed.
+
+=== Running Admin typecheck ===
+
+Stage workflow verification passed.
+
+=== Running report:stage L34 ===
+
+> community-selection-miniapp@0.1.0 report:stage /app
+> tsx scripts/generate-stage-report.ts "--" "--stage=L34"
+
+Stage report generated: /app/reports/stage-L34-report.md
+
+=== Running report:publish L34 ===

@@ -1,0 +1,9 @@
+{
+  "stage": "L34",
+  "source_branch": "codex/add-l34-admin-data-scope-baseline",
+  "source_commit": "5666133ed311b0d2ea38879008904312307bb50d",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-09T13:55:52.487Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
