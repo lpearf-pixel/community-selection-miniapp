@@ -1,0 +1,9 @@
+{
+  "stage": "L35",
+  "source_branch": "codex/add-l35-user-delivery-option-baseline",
+  "source_commit": "1c3bb6ffb90b7f6a53cba74b5fcaa67280e589c3",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-09T15:10:07.665Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
