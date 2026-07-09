@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Form, Input, Select, Space, Table, Typography } from "antd";
 import { getAdminScopeSummary } from "../../access/adminAccess";
-import { getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryStatus } from "../../api/delivery";
+import { getAdminDeliveryRules, getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryRule, type DeliveryStatus } from "../../api/delivery";
 
 const statusOptions: Exclude<DeliveryStatus, "none">[] = ["pending_dispatch", "assigned", "delivering", "delivered", "delivery_failed", "canceled"];
 
@@ -10,6 +10,7 @@ export function DeliveryReservationPage() {
   const [items, setItems] = useState<DeliveryReservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
+  const [rule, setRule] = useState<DeliveryRule | null>(null);
   const [pickupType, setPickupType] = useState<"delivery" | "store" | "">("delivery");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -19,8 +20,9 @@ export function DeliveryReservationPage() {
     setLoading(true);
     setErrorMessage("");
     try {
-      const [providerRows, orderRows] = await Promise.all([getDeliveryProviders(), getDeliveryOrders({ keyword, pickup_type: pickupType || undefined, page_size: 50 })]);
-      setProviders(providerRows.items);
+      const [ruleRow, providerRows, orderRows] = await Promise.all([getAdminDeliveryRules(), getDeliveryProviders(), getDeliveryOrders({ keyword, pickup_type: pickupType || undefined, page_size: 50 })]);
+      setRule(ruleRow);
+        setProviders(providerRows.items);
       setItems(orderRows.items);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "配送预留加载失败");
@@ -49,7 +51,14 @@ export function DeliveryReservationPage() {
   return <Space direction="vertical" style={{ width: "100%" }}>
     <Card title="配送预留">
       <Card title="当前数据范围"><Typography.Text>{scopeSummary.label}</Typography.Text>{!scopeSummary.hasConfiguredScope ? <Typography.Paragraph type="warning">当前账号未配置自提点/社区范围，请联系管理员。</Typography.Paragraph> : null}</Card>
-      <Typography.Paragraph>门店配送/人工配送为 mock；达达配送接口已预留，当前不会创建真实配送单。页面仅展示 receiver_phone_masked 与 receiver_address_masked。</Typography.Paragraph>
+      <Typography.Paragraph>门店配送/人工配送为 mock；达达接口未启用，达达配送接口已预留，当前不会创建真实配送单。页面仅展示 receiver_phone_masked 与 receiver_address_masked。</Typography.Paragraph>
+      <Card title="配送规则" style={{ marginBottom: 16 }}>
+        <Typography.Paragraph>配送模式：静态 baseline；规则只读，不做编辑保存。</Typography.Paragraph>
+        <Typography.Paragraph>配送费：{rule ? `${rule.base_fee_cents} 分` : "加载中"}</Typography.Paragraph>
+        <Typography.Paragraph>配送范围：{rule?.service_radius_text ?? "门店确认"}</Typography.Paragraph>
+        <Typography.Paragraph>配送时段：{rule?.available_time_windows.map((item) => `${item.label} ${item.start_time}-${item.end_time}`).join(" / ")}</Typography.Paragraph>
+        <Typography.Paragraph>达达接口未启用；{rule?.notice}</Typography.Paragraph>
+      </Card>
       {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
       {successMessage ? <Typography.Text type="secondary">{successMessage}</Typography.Text> : null}
       <Space wrap style={{ marginTop: 16 }}>{providers.map((item) => <Card key={item.provider} size="small" title={item.name}><Typography.Text>{item.enabled ? "enabled" : "disabled"}</Typography.Text><Typography.Text>{item.mode}</Typography.Text><Typography.Text>{item.description ?? "mock enabled"}</Typography.Text></Card>)}</Space>

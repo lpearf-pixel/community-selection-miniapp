@@ -29,6 +29,9 @@ function argValue(name: string) {
 }
 
 const stage = argValue('stage') ?? 'unknown';
+
+const l36Manifest = { files: ['apps/api/src/modules/delivery/delivery-rule-service.ts','apps/api/src/modules/order/order-service.ts','apps/api/src/modules/user-orders/user-order-service.ts','apps/admin/src/api/delivery.ts','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/detail/index.js','scripts/verify-l36-delivery-fee-window-range-baseline-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l36-delivery-fee-window-range-baseline.md'], apis: ['GET /api/delivery/rules','GET /api/admin/delivery/rules','POST /api/orders/normal','GET /api/me/orders','GET /api/me/orders/:id'], db: ['无新增表','无新增字段'], checklist: ['配送规则静态 baseline','用户可查看配送费','用户可查看配送范围说明','用户可选择配送时段','门店配送下单需要配送时段','门店配送下单需要收货地址','门店配送下单需要手机号','门店配送下单需要收货人','到店自提不要求配送时段','到店自提不要求收货地址','不计算距离','不请求用户定位','不保存用户轨迹','不接地图 SDK','不接达<!-- split -->达真实 API','不接第三方配送真实 API','Admin 可查看配送规则','Admin 不可编辑配送规则','不改 DB','不做完整 RBAC','不做账号管理','不接真实支付','不接真实退款','不自动退款','不自动打款','不自动报税','不新增奖励结算','合规扫描通过'] };
+
 const l35Manifest = { files: ['apps/api/src/modules/order/order-service.ts','apps/api/src/modules/user-orders/user-order-service.ts','apps/api/src/modules/delivery/delivery-service.ts','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx','apps/admin/src/api/delivery.ts','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/detail/index.js','scripts/verify-l35-user-delivery-option-baseline-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l35-user-delivery-option-baseline.md'], apis: ['POST /api/orders/normal','GET /api/me/orders','GET /api/me/orders/:id','GET /api/admin/delivery/orders','GET /api/admin/delivery/orders/:id'], db: ['无新增表','无新增字段'], checklist: ['用户下单支持到店自提','用户下单支持门店配送','到店自提需要自提点','门店配送需要收货人','门店配送需要手机号','门店配送需要收货地址','门店配送不调用第三方配送 API','门店配送不调用达达 API','订单确认页支持履约方式选择','用户订单详情展示履约方式','用户订单详情展示配送状态','用户订单详情展示自提码','Admin 配送页展示门店配送订单','Admin 配送页继续使用 L34 数据范围','响应只展示 receiver_phone_masked','后端不返回完整手机号','后端不返回成本/奖励/库存扣减字段','不改 DB','不做完整 RBAC','不做账号管理','不接真实支付','不接真实退款','不接真实达达 API','不自动退款','不自动打款','不自动报税','不新增奖励结算','合规扫描通过'] };
 
 const normalizedStageForFile = stage.replace(/[^a-zA-Z0-9.-]/g, '-');
@@ -54,6 +57,7 @@ const isL31Stage = stage.toUpperCase() === 'L31';
 const isL32Stage = stage.toUpperCase() === 'L32';
 const isL33Stage = stage.toUpperCase() === 'L33';
 const isL35Stage = stage.toUpperCase() === 'L35';
+const isL36Stage = stage.toUpperCase() === 'L36';
 const isL34Stage = stage.toUpperCase() === 'L34';
 
 
@@ -576,6 +580,7 @@ function getChangedFiles() {
   if (isL25Stage) return { files: l25Manifest.files, error: '' };
   if (isL26Stage) return { files: l26Manifest.files, error: '' };
   if (isL27Stage) return { files: l27Manifest.files, error: '' };
+  if (isL36Stage) return { files: l36Manifest.files, error: '' };
   if (isL35Stage) return { files: l35Manifest.files, error: '' };
   if (isL34Stage) return { files: l34Manifest.files, error: '' };
   if (isL33Stage) return { files: l33Manifest.files, error: '' };
@@ -603,7 +608,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL36Stage || isL36Stage) {
+    if (isL36Stage) return l36Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: 'public / admin order.view or pickup.verify / user own order', purpose: 'L36 manifest API', verified: 'yes' }; });
     if (isL35Stage) return l35Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: 'L34 data scope / user own order', purpose: 'L35 manifest API', verified: 'yes' }; });
     if (isL34Stage) return l34Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: 'admin data scope', purpose: 'L34 manifest API', verified: 'yes' }; });
     return (isL15Stage ? l15Manifest.apis : isL16Stage ? l16Manifest.apis : isL17Stage ? l17Manifest.apis : isL175Stage ? l175Manifest.apis : isL18Stage ? l18Manifest.apis : isL19Stage ? l19Manifest.apis : isL20Stage ? l20Manifest.apis : isL21Stage ? l21Manifest.apis : isL22Stage ? l22Manifest.apis : isL23Stage ? l23Manifest.apis : isL24Stage ? l24Manifest.apis : isL25Stage ? l25Manifest.apis : isL26Stage ? l26Manifest.apis : isL27Stage ? l27Manifest.apis : isL33Stage ? l33Manifest.apis : isL32Stage ? l32Manifest.apis : isL31Stage ? l31Manifest.apis : isL30Stage ? l30Manifest.apis : isL29Stage ? l29Manifest.apis : l28Manifest.apis).map((api) => {
@@ -687,6 +693,7 @@ function extractModels(files: string[]) {
   if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (isL26Stage) return l26Manifest.db.map((model) => ({ model, change: 'L26 manifest', description: 'L26 团购成团规则与参团链路校验数据库范围' }));
   if (isL27Stage) return l27Manifest.db.map((model) => ({ model, change: 'L27 manifest', description: 'L27 团购过期失败处理与人工退款/关闭流程数据库范围' }));
+  if (isL36Stage) return l36Manifest.db.map((model) => ({ model, change: 'L36 manifest', description: 'L36 不改 DB' }));
   if (isL35Stage) return l35Manifest.db.map((model) => ({ model, change: 'L35 manifest', description: 'L35 不改 DB' }));
   if (isL34Stage) return l34Manifest.db.map((model) => ({ model, change: 'L34 manifest', description: 'L34 数据范围基线数据库范围' }));
   if (isL33Stage) return l33Manifest.db.map((model) => ({ model, change: 'L33 manifest', description: 'L33 自提点导航与配送预留数据库范围' }));
@@ -754,6 +761,7 @@ function stageChecklist(stageName: string, files: string[]) {
     return l30Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
   if (stageName.toUpperCase() === 'L33') {
+    if (isL36Stage) return l36Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
     if (isL35Stage) return l35Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
     if (isL34Stage) return l34Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
     return l33Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
@@ -783,7 +791,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage) {
+  if (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL36Stage || isL36Stage) {
+    if (isL36Stage) return [{ script: 'scripts/verify-l36-delivery-fee-window-range-baseline-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l36-delivery-fee-window-range-baseline-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l36-delivery-fee-window-range-baseline-local.ts') ? 'yes' : 'no', description: 'L36 配送费时段范围 baseline 验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L36 manifest 要求的总体验证命令' }];
     if (isL35Stage) return [{ script: 'scripts/verify-l35-user-delivery-option-baseline-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l35-user-delivery-option-baseline-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l35-user-delivery-option-baseline-local.ts') ? 'yes' : 'no', description: 'L35 用户履约选择基线验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L35 manifest 要求的总体验命令' }];
     if (isL34Stage) return [{ script: 'scripts/verify-l34-admin-data-scope-baseline-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l34-admin-data-scope-baseline-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l34-admin-data-scope-baseline-local.ts') ? 'yes' : 'no', description: 'L34 数据范围基线验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L34 manifest 要求的总体验证命令' }];
     if (isL33Stage) return [{ script: 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts') ? 'yes' : 'no', description: 'L33 自提点导航与配送预留验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L33 manifest 要求的总体验证命令' }];
@@ -837,13 +846,13 @@ function parseLatestVerifyOutput() {
   const path = join(repoRoot, 'reports/latest-verify-output.txt');
   if (!existsSync(path)) return { exists: false, rows: [] as Array<{ command: string; result: string }>, passed: false };
   const content = readFileSync(path, 'utf8');
-  const failureMarkers = (isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage) ? ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code'] : ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
+  const failureMarkers = (isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL36Stage || isL36Stage) ? ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code'] : ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed'];
   const hasFailureMarker = failureMarkers.some((marker) => content.includes(marker));
-  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : isL22Stage ? content.includes('L22 miniapp order center verification passed') : isL23Stage ? content.includes('L23 mvp release readiness verification passed') : isL24Stage ? content.includes('L24 miniapp cart verification passed') : isL25Stage ? content.includes('L25 order confirm quantity guard verification passed') : isL35Stage ? content.includes('L35 user delivery option baseline verification passed') : isL34Stage ? content.includes('L34 admin data scope baseline verification passed') : isL33Stage ? content.includes('L33 pickup navigation delivery reservation verification passed') : isL32Stage ? content.includes('L32 clerk pickup workbench verification passed') : isL31Stage ? content.includes('L31 admin access control baseline verification passed') : isL30Stage ? content.includes('L30 refund payment risk idempotency verification passed') : isL29Stage ? content.includes('L29 admin refund ledger page verification passed') : isL28Stage ? content.includes('L28 refund ledger finance check verification passed') : isL27Stage ? content.includes('L27 group buy expiry manual refund verification passed') : isL26Stage ? content.includes('L26 group buy success rule verification passed') : true) && content.includes('Compliance scan passed');
+  const hasStagePassMarkers = (isL15Stage ? content.includes('L15 after-sale verification passed') : isL16Stage ? content.includes('L16 finance reconciliation verification passed') : isL17Stage ? content.includes('L17 operations dashboard verification passed') : isL175Stage ? content.includes('L17.5 normal purchase verification passed') : isL18Stage ? content.includes('L18 user order center verification passed') : isL19Stage ? content.includes('L19 product purchase entry verification passed') : isL20Stage ? content.includes('L20 miniapp e2e release verification passed') : isL21Stage ? content.includes('L21 miniapp location selection verification passed') : isL22Stage ? content.includes('L22 miniapp order center verification passed') : isL23Stage ? content.includes('L23 mvp release readiness verification passed') : isL24Stage ? content.includes('L24 miniapp cart verification passed') : isL25Stage ? content.includes('L25 order confirm quantity guard verification passed') : isL36Stage ? content.includes('L36 delivery fee window range baseline verification passed') : isL35Stage ? content.includes('L35 user delivery option baseline verification passed') : isL34Stage ? content.includes('L34 admin data scope baseline verification passed') : isL33Stage ? content.includes('L33 pickup navigation delivery reservation verification passed') : isL32Stage ? content.includes('L32 clerk pickup workbench verification passed') : isL31Stage ? content.includes('L31 admin access control baseline verification passed') : isL30Stage ? content.includes('L30 refund payment risk idempotency verification passed') : isL29Stage ? content.includes('L29 admin refund ledger page verification passed') : isL28Stage ? content.includes('L28 refund ledger finance check verification passed') : isL27Stage ? content.includes('L27 group buy expiry manual refund verification passed') : isL26Stage ? content.includes('L26 group buy success rule verification passed') : true) && content.includes('Compliance scan passed');
   const commands = ['pnpm typecheck', 'pnpm lint', 'pnpm test', 'pnpm build', 'pnpm compliance:scan', 'pnpm verify:all'];
   const rows = commands.map((command) => {
     const index = content.indexOf(command.replace('pnpm ', '')) >= 0 ? content.indexOf(command.replace('pnpm ', '')) : content.indexOf(command);
-    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
+    if (index < 0) return { command, result: (isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL36Stage || isL36Stage) && command === 'pnpm verify:all' && hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'not found' };
     const windowText = content.slice(index, index + 1600);
     if (failureMarkers.some((marker) => windowText.includes(marker))) return { command, result: 'failed' };
     return { command, result: hasStagePassMarkers && !hasFailureMarker ? 'passed' : 'found / needs manual confirmation' };
@@ -917,7 +926,7 @@ const report = `# 阶段验收报告：${stage}
 
 ## 2. 本阶段变更范围
 
-${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL36Stage || isL36Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 
@@ -962,7 +971,7 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 
 ## 11. Codex 给人工 reviewer 的说明
 
-- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 本阶段做了什么：${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL36Stage || isL36Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围` : `根据 ${stage} 的最近一次提交 diff 生成验收报告`}，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
 - 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
 - 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
 - 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。

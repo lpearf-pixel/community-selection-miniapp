@@ -10,6 +10,7 @@ const {
 } = require("../../../utils/selection");
 const { removeCartItem } = require("../../../utils/cart");
 const MOCK_PAYMENT_ENDPOINT = "/api/payments/mock";
+const DELIVERY_RULES_ENDPOINT_LABEL = "GET /api/delivery/rules";
 function validPhone(phone) {
   return /^1\d{10}$/.test(String(phone || ""));
 }
@@ -29,6 +30,9 @@ Page({
     community_id: "",
     receiver_name: "",
     receiver_phone: "",
+    delivery_time_window_code: "",
+    deliveryRule: null,
+    delivery_time_windows: [],
     product: null,
     selectedCommunity: null,
     selectedPickupStore: null,
@@ -57,6 +61,7 @@ Page({
     });
     this.refreshSelection();
     this.recalculateOrderState();
+    this.loadDeliveryRules();
     this.loadProduct();
   },
   onShow() {
@@ -124,6 +129,15 @@ Page({
     if (url) wx.setClipboardData({ data: url });
     else wx.showToast({ title: "可在高德地图搜索自提点地址", icon: "none" });
   },
+  loadDeliveryRules() {
+    return request({ url: "/api/delivery/rules" })
+      .then((rule) => this.setData({ deliveryRule: { ...rule, base_fee_yuan: formatYuan(rule.base_fee_cents || 0), free_threshold_yuan: rule.free_threshold_cents == null ? "" : formatYuan(rule.free_threshold_cents) }, delivery_time_windows: rule.available_time_windows || [] }))
+      .catch(() => this.setData({ deliveryRule: null, delivery_time_windows: [] }));
+  },
+  selectDeliveryTimeWindow(event) {
+    this.setData({ delivery_time_window_code: event.currentTarget.dataset.code });
+    this.recalculateOrderState();
+  },
   loadProduct() {
     if (!this.data.product_id) return Promise.resolve();
     this.setData({ loading: true });
@@ -151,6 +165,7 @@ Page({
     let submit_hint = "";
     if (stockInsufficient) submit_hint = "商品库存不足";
     else if (!this.data.pickup_store_id) submit_hint = "请选择自提点";
+    else if (this.data.pickup_type === "delivery" && !this.data.delivery_time_window_code) submit_hint = "提交校验：请选择配送时段";
     else if (this.data.pickup_type === "delivery" && (!this.data.receiver_name.trim() || !validPhone(this.data.receiver_phone) || !this.data.receiver_address.trim())) submit_hint = "提交校验：请填写完整配送信息";
     this.setData({
       quantity,
@@ -171,6 +186,7 @@ Page({
     const quantity = Number(this.data.quantity);
     const stock = this.data.product ? this.data.product.stock : undefined;
     if (isKnownStock(stock) && stock <= 0) return "商品库存不足";
+    if (this.data.pickup_type === "delivery" && !this.data.delivery_time_window_code) return "提交校验：请选择配送时段";
     if (this.data.pickup_type === "delivery" && !this.data.receiver_name.trim()) return "提交校验：请填写收货人姓名";
     if (this.data.pickup_type === "delivery" && !validPhone(this.data.receiver_phone)) return "提交校验：请填写正确手机号";
     if (this.data.pickup_type === "delivery" && !this.data.receiver_address.trim()) return "提交校验：请填写收货地址";
@@ -202,6 +218,7 @@ Page({
       receiver_name: this.data.receiver_name,
       receiver_phone: this.data.receiver_phone,
       receiver_address: this.data.pickup_type === "delivery" ? this.data.receiver_address : undefined,
+      delivery_time_window_code: this.data.pickup_type === "delivery" ? this.data.delivery_time_window_code : undefined,
       product_id: isGroupBuy ? undefined : this.data.product_id,
       group_buy_id: isGroupBuy ? this.data.group_buy_id : undefined,
     };

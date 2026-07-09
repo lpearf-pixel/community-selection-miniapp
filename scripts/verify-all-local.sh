@@ -70,3 +70,5 @@ pnpm exec tsx scripts/verify-l34-admin-data-scope-baseline-local.ts
 pnpm exec tsx scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts
 
 pnpm exec tsx scripts/verify-l35-user-delivery-option-baseline-local.ts
+
+pnpm exec tsx scripts/verify-l36-delivery-fee-window-range-baseline-local.ts

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { prisma } from '../../db.js';
 import { createAfterSaleCase } from '../after-sale/after-sale-service.js';
+import { getDeliveryRule } from '../delivery/delivery-rule-service.js';
 
 type QueryLike = { user_id?: string; openid?: string };
 type UserOrderQuery = { status?: string; type?: string; page?: string | number; page_size?: string | number };
@@ -114,6 +115,9 @@ function listItem(order: any) {
     pickup_type: order.pickup_type,
     fulfillment_type_text: fulfillmentText(order),
     delivery_status_text: deliveryStatusText(order),
+    delivery_fee_cents: order.pickup_type === 'delivery' ? getDeliveryRule().base_fee_cents : 0,
+    delivery_time_window_text: order.pickup_type === 'delivery' ? '以门店确认时段为准' : null,
+    service_radius_text: order.pickup_type === 'delivery' ? getDeliveryRule().service_radius_text : null,
     receiver_address: order.pickup_type === 'delivery' ? order.receiver_address : null,
     pickup_store_name: order.pickup_store?.name ?? null,
     pickup: { pickup_store_id: order.pickup_store_id, pickup_store_name: order.pickup_store?.name ?? null, pickup_store_address: order.pickup_store?.address ?? null, pickup_store_phone: order.pickup_store?.phone ?? null },
@@ -158,7 +162,7 @@ export async function getUserOrderDetail(userId: string, orderId: string) {
     product: product ? { product_id: product.id, name: product.name, cover_image: product.cover_image, price_cents: product.price_cents, sale_unit: product.sale_unit, sale_spec_name: product.sale_spec_name } : null,
     group_buy: order.group_buy ? { group_buy_id: order.group_buy.id, status: order.group_buy.status, min_people: order.group_buy.min_people, current_people: order.group_buy.current_people, end_time: order.group_buy.end_time.toISOString() } : null,
     pickup: { pickup_type: order.pickup_type, fulfillment_type_text: fulfillmentText(order), pickup_store_id: order.pickup_store_id, pickup_store_name: order.pickup_store?.name ?? null, pickup_store_address: order.pickup_store?.address ?? null, pickup_store_phone: order.pickup_store?.phone ?? null, pickup_code: pickupCode(order.order_no) },
-    delivery: { delivery_status_text: deliveryStatusText(order), receiver_address: order.pickup_type === 'delivery' ? order.receiver_address : null },
+    delivery: { delivery_status_text: deliveryStatusText(order), delivery_fee_cents: order.pickup_type === 'delivery' ? getDeliveryRule().base_fee_cents : 0, delivery_time_window_text: order.pickup_type === 'delivery' ? '以门店确认时段为准' : null, service_radius_text: order.pickup_type === 'delivery' ? getDeliveryRule().service_radius_text : null, notice: order.pickup_type === 'delivery' ? getDeliveryRule().notice : null, receiver_address: order.pickup_type === 'delivery' ? order.receiver_address : null },
     receiver: { receiver_name: order.receiver_name, receiver_phone_masked: maskReceiverPhone(order.receiver_phone), receiver_address: order.receiver_address },
     after_sales: order.after_sale_cases.map(mapAfterSale),
     timeline: timeline.length > 0 ? timeline.map((item) => ({ event_type: item.event_type, title: item.title, from_status: item.from_status, to_status: item.to_status, created_at: item.created_at.toISOString() })) : [{ event_type: 'order_status', title: toUserOrderStatus(order), to_status: order.order_status, created_at: order.created_at.toISOString() }]

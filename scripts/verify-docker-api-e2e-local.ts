@@ -91,7 +91,7 @@ function collectRiskFindings(label: string, value: unknown) {
   return findings.map((finding) => `${label}: ${finding}`);
 }
 
-async function request<T>(method: string, path: string, options: { body?: unknown; headers?: Record<string, string>; label?: string } = {}): Promise<T> {
+async function request<T>(method: string, path: string, options: { body?: unknown; headers?: Record<string, string>; label?: string; expectedStatus?: number } = {}): Promise<T> {
   const label = options.label ?? `${method} ${path}`;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -110,6 +110,10 @@ async function request<T>(method: string, path: string, options: { body?: unknow
     throw new Error(`${label} returned non-JSON response (${response.status}): ${text}`);
   }
   record(label, parsed);
+  if (options.expectedStatus) {
+    assert(response.status === options.expectedStatus, `${label} expected HTTP ${options.expectedStatus} but got ${response.status}: ${parsed.message}`);
+    return parsed as unknown as T;
+  }
   assert(response.ok, `${label} failed with HTTP ${response.status}: ${parsed.message}`);
   assert(parsed.success === true, `${label} must return success=true: ${parsed.message}`);
   return parsed.data;
@@ -153,6 +157,22 @@ async function main() {
   const pickupStores = await request<ListResponse<IdLike>>('GET', '/api/pickup-stores?page_size=1', { label: 'GET /api/pickup-stores' });
   const pickupStoreId = idOf(firstItem(pickupStores, 'GET /api/pickup-stores'), ['pickup_store_id', 'id'], 'GET /api/pickup-stores');
   await request('GET', `/api/pickup-stores/${pickupStoreId}`, { label: 'GET /api/pickup-stores/:id' });
+  const deliveryRules = await request<any>('GET', '/api/delivery/rules', { label: 'GET /api/delivery/rules' });
+  assert(Array.isArray(deliveryRules.available_time_windows) && deliveryRules.available_time_windows.length > 0, 'GET /api/delivery/rules must include available_time_windows');
+  const deliveryWindowCode = deliveryRules.available_time_windows[0].code;
+  const missingWindow = await request<any>('POST', '/api/orders/normal', {
+    label: 'POST /api/orders/normal delivery missing delivery_time_window_code',
+    expectedStatus: 400,
+    body: { product_id: productId, user_openid: `${openid}-missing-window`, client_request_id: `docker-e2e-delivery-missing-window-${Date.now()}`, quantity: 1, pickup_type: 'delivery', pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E 配送', receiver_phone: receiverPhone, receiver_address: '测试配送地址' }
+  });
+  assert(missingWindow === null || missingWindow.success === false || missingWindow.message, 'missing delivery_time_window_code should fail');
+  const deliveryOrder = await request<any>('POST', '/api/orders/normal', {
+    label: 'POST /api/orders/normal delivery with delivery_time_window_code',
+    body: { product_id: productId, user_openid: `${openid}-delivery`, client_request_id: `docker-e2e-delivery-${Date.now()}`, quantity: 1, pickup_type: 'delivery', pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E 配送', receiver_phone: receiverPhone, receiver_address: '测试配送地址', delivery_time_window_code: deliveryWindowCode }
+  });
+  assert(deliveryOrder.pickup_type === 'delivery', 'delivery order response must include pickup_type=delivery');
+  assert(deliveryOrder.receiver_phone_masked && !JSON.stringify(deliveryOrder).includes(receiverPhone), 'delivery order response must include receiver_phone_masked and hide raw phone');
+
 
   const order = await request<IdLike>('POST', '/api/orders/normal', {
     label: 'POST /api/orders/normal',

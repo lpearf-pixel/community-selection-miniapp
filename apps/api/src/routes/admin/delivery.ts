@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { requireAdminPermission, resolveAdminAccessContext } from '../../modules/admin-access/admin-access-control.js';
+import { getDeliveryRule } from '../../modules/delivery/delivery-rule-service.js';
 import { getDeliveryReservation, listDeliveryProviders, listDeliveryReservations, reserveDelivery, updateDeliveryStatus } from '../../modules/delivery/delivery-service.js';
 import type { DeliveryMode, DeliveryProvider, DeliveryStatus } from '../../modules/delivery/delivery-types.js';
 
@@ -11,6 +12,7 @@ type StatusBody = { delivery_status: Exclude<DeliveryStatus, 'none'>; remark?: s
 function actor(request: any) { return { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }; }
 
 export function registerAdminDeliveryRoutes(app: FastifyInstance) {
+  app.get('/api/admin/delivery/rules', { preHandler: requireAdminPermission(['order.view', 'pickup.verify']) }, async () => ok({ ...getDeliveryRule(), mode: 'static_baseline', editable: false }));
   app.get('/api/admin/delivery/orders', { preHandler: requireAdminPermission(['order.view', 'pickup.verify']) }, async (request, reply) => {
     try { return ok(await listDeliveryReservations(request.query as DeliveryQuery, resolveAdminAccessContext(request)!)); } catch (error) { reply.code(400); return fail(error instanceof Error ? error.message : '配送订单查询失败'); }
   });

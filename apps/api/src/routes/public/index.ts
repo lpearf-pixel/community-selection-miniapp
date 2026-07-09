@@ -8,11 +8,13 @@ import { registerRewardRoutes } from '../rewards.js';
 import { registerPublicAfterSaleRoutes } from '../after-sales.js';
 import { registerUserOrderRoutes } from '../me/orders.js';
 import { registerPublicLocationRoutes } from './locations.js';
+import { registerPublicDeliveryRoutes } from './delivery.js';
 
 export function registerPublicRoutes(app: FastifyInstance) {
   registerCatalogRoutes(app);
   registerUserProductRoutes(app);
   registerPublicLocationRoutes(app);
+  registerPublicDeliveryRoutes(app);
   registerPublicGroupBuyRoutes(app);
   registerPaymentRoutes(app);
   registerRefundRoutes(app);
