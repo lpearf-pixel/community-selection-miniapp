@@ -1,3 +1,4 @@
+import { getAdminScopeHeaders } from "../access/adminAccess";
 export type PickupWorkbenchFilters = {
   date?: string;
   pickup_store_id?: string;
@@ -72,7 +73,7 @@ function buildQuery(params: Record<string, unknown>): string {
 }
 
 async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+  const response = await fetch(`${apiBaseUrl}${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...getAdminScopeHeaders(), ...(init?.headers ?? {}) } });
   const json = (await response.json()) as ApiResponse<T>;
   if (!json.success) throw new Error(json.message || "自提工作台请求失败");
   return json.data;

@@ -45,11 +45,19 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
   operator: ['operations.view', 'product.manage', 'order.view']
 };
 
+export type AdminDataScope = {
+  pickup_store_ids: string[];
+  community_ids: string[];
+  can_access_all_pickup_stores: boolean;
+  can_access_all_communities: boolean;
+};
+
 export type AdminAccessContext = {
   admin_user_id: string;
   role: AdminRole;
   permissions: AdminPermission[];
   is_super_admin: boolean;
+  data_scope: AdminDataScope;
 };
 
 const roleValues = new Set<AdminRole>(['super_admin', 'store_manager', 'clerk', 'finance', 'aftersales', 'operator']);
@@ -57,6 +65,27 @@ const roleValues = new Set<AdminRole>(['super_admin', 'store_manager', 'clerk', 
 function headerValue(request: FastifyRequest, name: string): string | undefined {
   const value = request.headers[name];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function headerIds(request: FastifyRequest, singleName: string, multiName: string): string[] {
+  const values = [headerValue(request, singleName), headerValue(request, multiName)]
+    .flatMap((value) => (value ?? '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return Array.from(new Set(values));
+}
+
+export function resolveAdminDataScope(request: FastifyRequest, role: AdminRole): AdminDataScope {
+  // Only super_admin has default full data scope. clerk 不默认全量; store_manager 不默认全量.
+  if (role === 'super_admin') {
+    return { pickup_store_ids: [], community_ids: [], can_access_all_pickup_stores: true, can_access_all_communities: true };
+  }
+  return {
+    pickup_store_ids: headerIds(request, 'x-admin-pickup-store-id', 'x-admin-pickup-store-ids'),
+    community_ids: headerIds(request, 'x-admin-community-id', 'x-admin-community-ids'),
+    can_access_all_pickup_stores: false,
+    can_access_all_communities: false
+  };
 }
 
 function normalizeAdminRole(value: string | null | undefined, source: 'session' | 'header'): AdminRole | null {
@@ -78,7 +107,8 @@ export function resolveAdminAccessContext(request: FastifyRequest): AdminAccessC
       admin_user_id: request.adminUser.id,
       role: sessionRole,
       permissions: ROLE_PERMISSIONS[sessionRole],
-      is_super_admin: sessionRole === 'super_admin'
+      is_super_admin: sessionRole === 'super_admin',
+      data_scope: resolveAdminDataScope(request, sessionRole)
     };
   }
 
@@ -91,7 +121,8 @@ export function resolveAdminAccessContext(request: FastifyRequest): AdminAccessC
     admin_user_id: adminUserId,
     role: headerRole,
     permissions: ROLE_PERMISSIONS[headerRole],
-    is_super_admin: headerRole === 'super_admin'
+    is_super_admin: headerRole === 'super_admin',
+    data_scope: resolveAdminDataScope(request, headerRole)
   };
 }
 
@@ -112,4 +143,59 @@ export function requireAdminPermission(permission: AdminPermission | AdminPermis
       return;
     }
   };
+}
+
+
+export const ADMIN_SCOPE_FORBIDDEN = 'ADMIN_SCOPE_FORBIDDEN: Data scope denied';
+
+export function hasAllPickupStoreScope(context: AdminAccessContext): boolean {
+  return context.data_scope.can_access_all_pickup_stores;
+}
+
+export function hasAllCommunityScope(context: AdminAccessContext): boolean {
+  return context.data_scope.can_access_all_communities;
+}
+
+export function canAccessPickupStore(context: AdminAccessContext, pickupStoreId?: string | null): boolean {
+  if (hasAllPickupStoreScope(context)) return true;
+  return !!pickupStoreId && context.data_scope.pickup_store_ids.includes(pickupStoreId);
+}
+
+export function canAccessCommunity(context: AdminAccessContext, communityId?: string | null): boolean {
+  if (hasAllCommunityScope(context)) return true;
+  return !!communityId && context.data_scope.community_ids.includes(communityId);
+}
+
+export function canAccessOrderDataScope(context: AdminAccessContext, order: { pickup_store_id?: string | null; community_id?: string | null }): boolean {
+  const pickupAllowed = canAccessPickupStore(context, order.pickup_store_id);
+  const communityAllowed = canAccessCommunity(context, order.community_id);
+  return pickupAllowed || communityAllowed;
+}
+
+export function getScopedPickupStoreWhere(context: AdminAccessContext): Record<string, unknown> | null {
+  if (hasAllPickupStoreScope(context)) return {};
+  if (context.data_scope.pickup_store_ids.length === 0) return null;
+  return { pickup_store_id: { in: context.data_scope.pickup_store_ids } };
+}
+
+export function getScopedCommunityWhere(context: AdminAccessContext): Record<string, unknown> | null {
+  if (hasAllCommunityScope(context)) return {};
+  if (context.data_scope.community_ids.length === 0) return null;
+  return { community_id: { in: context.data_scope.community_ids } };
+}
+
+export function getScopedOrderWhere(context: AdminAccessContext): Record<string, unknown> | null {
+  const or: Record<string, unknown>[] = [];
+  if (hasAllPickupStoreScope(context) || hasAllCommunityScope(context)) return {};
+  if (context.data_scope.pickup_store_ids.length > 0) or.push({ pickup_store_id: { in: context.data_scope.pickup_store_ids } });
+  if (context.data_scope.community_ids.length > 0) or.push({ community_id: { in: context.data_scope.community_ids } });
+  return or.length > 0 ? { OR: or } : null;
+}
+
+export function requireAdminDataScopeForPickupStore(context: AdminAccessContext, pickupStoreId?: string | null): void {
+  if (!canAccessPickupStore(context, pickupStoreId)) throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 });
+}
+
+export function requireAdminDataScopeForCommunity(context: AdminAccessContext, communityId?: string | null): void {
+  if (!canAccessCommunity(context, communityId)) throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 });
 }

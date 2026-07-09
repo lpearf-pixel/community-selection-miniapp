@@ -3,7 +3,7 @@ import { OrderStatus, PayStatus, type Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../../db.js';
 import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } from '../../modules/audit/audit-service.js';
-import { requireAdminPermission } from '../../modules/admin-access/admin-access-control.js';
+import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedPickupStoreWhere, requireAdminPermission, resolveAdminAccessContext } from '../../modules/admin-access/admin-access-control.js';
 import { buildAmapSearchUrl } from '../../modules/locations/navigation-url.js';
 
 type PickupOrdersQuery = {
@@ -74,9 +74,9 @@ function safePickupOrder(order: any) {
   };
 }
 
-function buildWhere(query: PickupOrdersQuery): Prisma.OrderWhereInput {
+function buildWhere(query: PickupOrdersQuery, scopeWhere: Prisma.OrderWhereInput): Prisma.OrderWhereInput {
   const { start, end } = dayRange(query.date);
-  const and: Prisma.OrderWhereInput[] = [{ created_at: { gte: start, lt: end } }];
+  const and: Prisma.OrderWhereInput[] = [{ created_at: { gte: start, lt: end } }, scopeWhere];
   if (query.pickup_store_id) and.push({ pickup_store_id: query.pickup_store_id });
   if (query.status && listStatuses.has(query.status)) and.push({ order_status: query.status as OrderStatus });
   else and.push({ order_status: { in: [OrderStatus.paid, OrderStatus.ready] } });
@@ -107,7 +107,10 @@ export function registerAdminPickupRoutes(app: FastifyInstance) {
       const query = request.query as PickupOrdersQuery;
       const page = positiveInt(query.page, 1, 10000);
       const pageSize = positiveInt(query.page_size, 20, 100);
-      const where = buildWhere(query);
+      const context = resolveAdminAccessContext(request)!;
+      const scopeWhere = getScopedPickupStoreWhere(context); // data_scope pickup_store_id 过滤
+      if (!scopeWhere) return ok({ total: 0, page, page_size: pageSize, items: [] });
+      const where = buildWhere(query, scopeWhere as Prisma.OrderWhereInput);
       const [total, orders] = await Promise.all([
         prisma.order.count({ where }),
         prisma.order.findMany({
@@ -133,6 +136,12 @@ export function registerAdminPickupRoutes(app: FastifyInstance) {
         reply.code(404);
         return fail('自提码不存在');
       }
+      const context = resolveAdminAccessContext(request)!;
+      // by-code scope 检查
+      if (!canAccessOrderDataScope(context, order)) {
+        reply.code(403);
+        return fail(ADMIN_SCOPE_FORBIDDEN);
+      }
       if (order.pay_status !== PayStatus.paid) {
         reply.code(400);
         return fail('订单未支付，不能核销');
@@ -151,6 +160,9 @@ export function registerAdminPickupRoutes(app: FastifyInstance) {
       const result = await prisma.$transaction(async (tx) => {
         const existing = await tx.order.findUnique({ where: { id }, include: { product: true, group_buy: { include: { product: true } }, pickup_store: true } });
         if (!existing) throw new Error('订单不存在');
+        const context = resolveAdminAccessContext(request)!;
+        // verify scope 检查
+        if (!canAccessOrderDataScope(context, existing)) throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 });
         if (body.pickup_code && body.pickup_code.toUpperCase() !== pickupCode(existing.order_no)) throw new Error('自提码不匹配');
         if (existing.pay_status !== PayStatus.paid) throw new Error('订单未支付，不能核销');
         if (verifyDoneStatuses.has(existing.order_status)) return { order: existing, verified_at: existing.updated_at };
@@ -165,7 +177,7 @@ export function registerAdminPickupRoutes(app: FastifyInstance) {
       const safe = safePickupOrder(result.order);
       return ok({ order_id: safe.order_id, order_no: safe.order_no, pickup_status: safe.pickup_status, order_status: safe.order_status, verified_at: result.verified_at, receiver_name: safe.receiver_name, receiver_phone_masked: safe.receiver_phone_masked, product_name: safe.product_name, quantity: safe.quantity });
     } catch (error) {
-      reply.code(400);
+      reply.code((error as any)?.statusCode ?? 400);
       return fail(error instanceof Error ? error.message : '自提核销失败');
     }
   });
@@ -174,8 +186,14 @@ export function registerAdminPickupRoutes(app: FastifyInstance) {
     try {
       const query = request.query as PickupOrdersQuery;
       const range = dayRange(query.date);
-      const where: Prisma.OrderWhereInput = { created_at: { gte: range.start, lt: range.end }, ...(query.pickup_store_id ? { pickup_store_id: query.pickup_store_id } : {}) };
-      const orders = await prisma.order.findMany({ where: { ...where, order_status: { in: [OrderStatus.paid, OrderStatus.ready, OrderStatus.picked, OrderStatus.completed] } }, select: { order_status: true, quantity: true } });
+      const context = resolveAdminAccessContext(request)!;
+      const scopeWhere = getScopedPickupStoreWhere(context); // summary scope 过滤
+      if (!scopeWhere) {
+        reply.code(403);
+        return fail(ADMIN_SCOPE_FORBIDDEN);
+      }
+      const where: Prisma.OrderWhereInput = { AND: [{ created_at: { gte: range.start, lt: range.end } }, scopeWhere as Prisma.OrderWhereInput, ...(query.pickup_store_id ? [{ pickup_store_id: query.pickup_store_id }] : [])] };
+      const orders = await prisma.order.findMany({ where: { AND: [where, { order_status: { in: [OrderStatus.paid, OrderStatus.ready, OrderStatus.picked, OrderStatus.completed] } }] }, select: { order_status: true, quantity: true } });
       return ok({ date: range.date, pickup_store_id: query.pickup_store_id ?? null, pending_count: orders.filter((order) => order.order_status === OrderStatus.paid).length, ready_count: orders.filter((order) => order.order_status === OrderStatus.ready).length, picked_count: orders.filter((order) => order.order_status === OrderStatus.picked).length, completed_count: orders.filter((order) => order.order_status === OrderStatus.completed).length, total_quantity: orders.reduce((sum, order) => sum + order.quantity, 0) });
     } catch (error) {
       reply.code(400);
