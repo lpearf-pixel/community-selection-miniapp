@@ -106,9 +106,9 @@ export function PickupWorkbenchPage() {
     </Space>
     <Card title="查询区">
       <Space wrap>
-        <Input placeholder="自提码 / 订单号" value={keyword} onChange={(event) => setKeyword(event.target.value)} style={{ width: 220 }} />
-        <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} style={{ width: 180 }} />
-        <Input placeholder="自提点 ID" value={storeId} onChange={(event) => setStoreId(event.target.value)} style={{ width: 220 }} />
+        <Input placeholder="自提码 / 订单号" value={keyword} onChange={(event: { target: { value: string } }) => setKeyword(event.target.value)} style={{ width: 220 }} />
+        <Input type="date" value={date} onChange={(event: { target: { value: string } }) => setDate(event.target.value)} style={{ width: 180 }} />
+        <Input placeholder="自提点 ID" value={storeId} onChange={(event: { target: { value: string } }) => setStoreId(event.target.value)} style={{ width: 220 }} />
         <Button type="primary" loading={loading} onClick={queryByCode}>查询</Button>
         <Button onClick={resetFilters}>重置</Button>
       </Space>
