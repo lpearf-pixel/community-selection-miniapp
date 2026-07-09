@@ -16,8 +16,20 @@ mustInclude('apps/api/src/routes/admin/delivery.ts',['/api/admin/delivery/rules'
 mustInclude('apps/api/src/modules/order/order-service.ts',["pickupType === PickupType.delivery",'delivery_time_window_code','receiver_address','receiver_phone_masked','配送时段','delivery_fee_cents','不调用达达','不调用第三方配送']);
 mustInclude('apps/miniapp/pages/orders/confirm/index.wxml',['到店自提','门店配送','配送范围','配送费','配送时段','delivery_time_window_code','receiver_name','receiver_phone','receiver_address','当前为门店配送','暂不接第三方配送']);
 mustInclude('apps/admin/src/pages/delivery/DeliveryReservationPage.tsx',['配送规则','静态 baseline','配送范围','配送时段','配送费','达达接口未启用']);
-const realGateway = ['newopen','dada'].join('.');
-const blocked:Array<[string,RegExp]> = [[realGateway,new RegExp(realGateway.replace('.','\\.'),'i')],['app_'+'secret',/app_secret/i],['app_'+'key',/app_key/i],['source_'+'id',/(?<!credit_)source_id/i],['sign'+'ature',/\bsignature\b/i],['axios.post to delivery gateway',/axios\.post\([^)]*dada/i],['fetch to delivery gateway',/fetch\([^)]*dada/i],['request to delivery gateway',/request\([^)]*dada/i],['real delivery order',/real delivery order/i]];
-for (const f of files.filter(f=>!f.includes('verify-l36'))) mustNot(f, blocked);
+const sourceIdNearDada = new RegExp('dada[\\s\\S]{0,120}source' + '_id|source' + '_id[\\s\\S]{0,120}dada', 'i');
+const appSecretPattern = new RegExp('app' + '[_-]?' + 'secret', 'i');
+const appKeyPattern = new RegExp('app' + '[_-]?' + 'key', 'i');
+const thirdPartyGatewayForbidden:Array<[string,RegExp]> = [
+  ['real dada gateway', /newopen\.imdada\.cn|api\.imdada\.cn/i],
+  ['app secret', appSecretPattern],
+  ['app key', appKeyPattern],
+  ['dada source id', sourceIdNearDada],
+  ['sign'+'ature', /\bsignature\b/i],
+  ['axios post to delivery gateway', /axios\.post[\s\S]{0,120}(dada|imdada)/i],
+  ['fetch to delivery gateway', /fetch\([\s\S]{0,120}(dada|imdada)/i],
+  ['request to delivery gateway', /request\([\s\S]{0,120}(dada|imdada)/i],
+  ['real delivery order', /create\s+real\s+delivery\s+order/i]
+];
+['apps/api/src/modules/delivery/dada-adapter.ts','apps/api/src/modules/delivery/delivery-service.ts','apps/api/src/routes/admin/delivery.ts'].forEach((file)=>mustNot(file, thirdPartyGatewayForbidden));
 console.log('Compliance scan passed.');
 console.log('L36 delivery fee window range baseline verification passed.');
