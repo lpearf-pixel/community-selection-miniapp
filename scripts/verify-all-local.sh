@@ -68,3 +68,5 @@ pnpm exec tsx scripts/verify-l32-clerk-pickup-workbench-local.ts
 
 pnpm exec tsx scripts/verify-l34-admin-data-scope-baseline-local.ts
 pnpm exec tsx scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts
+
+pnpm exec tsx scripts/verify-l35-user-delivery-option-baseline-local.ts

@@ -23,7 +23,9 @@ Page({
     group_buy_id: "",
     quantity: 1,
     from_cart: false,
+    pickup_type: "store",
     pickup_store_id: "",
+    receiver_address: "",
     community_id: "",
     receiver_name: "",
     receiver_phone: "",
@@ -109,6 +111,19 @@ Page({
   choosePickupStore() {
     wx.navigateTo({ url: "/pages/pickup/select/index" });
   },
+  selectPickupType(event) {
+    this.setData({ pickup_type: event.currentTarget.dataset.type });
+    this.recalculateOrderState();
+  },
+  copyPickupAddress() {
+    const address = this.data.selectedPickupStore && this.data.selectedPickupStore.address;
+    if (address) wx.setClipboardData({ data: address });
+  },
+  copyNavigationUrl() {
+    const url = this.data.selectedPickupStore && this.data.selectedPickupStore.navigation_url;
+    if (url) wx.setClipboardData({ data: url });
+    else wx.showToast({ title: "可在高德地图搜索自提点地址", icon: "none" });
+  },
   loadProduct() {
     if (!this.data.product_id) return Promise.resolve();
     this.setData({ loading: true });
@@ -136,6 +151,7 @@ Page({
     let submit_hint = "";
     if (stockInsufficient) submit_hint = "商品库存不足";
     else if (!this.data.pickup_store_id) submit_hint = "请选择自提点";
+    else if (this.data.pickup_type === "delivery" && (!this.data.receiver_name.trim() || !validPhone(this.data.receiver_phone) || !this.data.receiver_address.trim())) submit_hint = "提交校验：请填写完整配送信息";
     this.setData({
       quantity,
       subtotal_cents,
@@ -155,8 +171,9 @@ Page({
     const quantity = Number(this.data.quantity);
     const stock = this.data.product ? this.data.product.stock : undefined;
     if (isKnownStock(stock) && stock <= 0) return "商品库存不足";
-    if (!this.data.receiver_name.trim()) return "请填写收货人姓名";
-    if (!validPhone(this.data.receiver_phone)) return "请填写正确手机号";
+    if (this.data.pickup_type === "delivery" && !this.data.receiver_name.trim()) return "提交校验：请填写收货人姓名";
+    if (this.data.pickup_type === "delivery" && !validPhone(this.data.receiver_phone)) return "提交校验：请填写正确手机号";
+    if (this.data.pickup_type === "delivery" && !this.data.receiver_address.trim()) return "提交校验：请填写收货地址";
     if (!quantity || quantity < 1) return "购买数量至少为 1";
     if (!this.data.pickup_store_id) return "请选择自提点";
     if (this.data.type === "group_buy" && !this.data.group_buy_id)
@@ -179,10 +196,12 @@ Page({
       user_id: user.user_id || undefined,
       user_openid: user.openid,
       quantity: Number(this.data.quantity) || 1,
+      pickup_type: this.data.pickup_type,
       pickup_store_id: this.data.pickup_store_id,
       community_id: this.data.community_id || undefined,
       receiver_name: this.data.receiver_name,
       receiver_phone: this.data.receiver_phone,
+      receiver_address: this.data.pickup_type === "delivery" ? this.data.receiver_address : undefined,
       product_id: isGroupBuy ? undefined : this.data.product_id,
       group_buy_id: isGroupBuy ? this.data.group_buy_id : undefined,
     };

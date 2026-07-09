@@ -32,6 +32,7 @@ type CreateNormalOrderInput = {
   receiver_name?: string;
   receiver_phone?: string;
   receiver_address?: string;
+  pickup_type?: string;
 };
 
 type AdminMeta = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
@@ -56,6 +57,17 @@ const allowedFulfillmentStatuses = new Set<OrderStatus>([
 function normalizePickupType(value: unknown): PickupType {
   if (value === PickupType.delivery) return PickupType.delivery;
   return PickupType.store;
+}
+
+function validateFulfillment(input: { pickup_type?: string; pickup_store_id?: string; receiver_name?: string; receiver_phone?: string; receiver_address?: string }) {
+  const pickupType = normalizePickupType(input.pickup_type);
+  if (!input.pickup_store_id?.trim()) throw new Error('自提点必填校验：请选择自提点');
+  if (pickupType === PickupType.delivery) {
+    if (!input.receiver_name?.trim()) throw new Error('门店配送需要收货人');
+    if (!input.receiver_phone?.trim()) throw new Error('门店配送需要手机号');
+    if (!input.receiver_address?.trim()) throw new Error('配送地址必填校验：请填写收货地址');
+  }
+  return pickupType;
 }
 
 function normalizeNextStatus(value: unknown): OrderStatus {
@@ -147,7 +159,7 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
   const clientRequestId = input.client_request_id;
   const receiverName = input.receiver_name;
   const receiverPhone = input.receiver_phone;
-  const pickupType = normalizePickupType(input.pickup_type);
+  const pickupType = validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address });
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({
@@ -225,6 +237,7 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
   const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, receiverName ?? '社区用户') : undefined);
   const clientRequestId = input.client_request_id ?? `normal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   if (!userId || !productId || !receiverName || !receiverPhone) throw new Error('缺少普通购买下单必填字段');
+  const pickupType = validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address });
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({
@@ -258,6 +271,7 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
         total_amount_cents: amount,
         pay_amount_cents: amount,
         quantity: saleQuantity,
+        pickup_type: pickupType,
         pickup_store_id: input.pickup_store_id,
         community_id: input.community_id,
         receiver_name: receiverName,

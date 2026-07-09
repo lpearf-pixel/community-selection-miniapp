@@ -3,7 +3,7 @@ const { normalizeOrder, formatOrderAmount } = require('../../../utils/order');
 function decorate(order) {
   const normalized = normalizeOrder(order);
   const receiver = order.receiver || {};
-  return { ...normalized, receiver, receiver_phone_masked: receiver.receiver_phone_masked || order.receiver_phone_masked || '', after_sales: order.after_sales || [], timeline: order.timeline || [] };
+  const pickup = order.pickup || {}; const delivery = order.delivery || {}; const fulfillment_type_text = order.fulfillment_type_text || pickup.fulfillment_type_text || (order.pickup_type === "delivery" ? "门店配送" : "到店自提"); return { ...normalized, pickup, delivery, fulfillment_type_text, receiver, receiver_phone_masked: receiver.receiver_phone_masked || order.receiver_phone_masked || '', after_sales: order.after_sales || [], timeline: order.timeline || [] };
 }
 Page({
   data: { order: null, order_id: '', loading: false, error: '' },
