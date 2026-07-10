@@ -1,9 +1,9 @@
 {
   "stage": "L39",
-  "source_branch": "codex/execute-next-stage-from-stable-branch",
-  "source_commit": "a11f65c656fc23829a88a7e4474db965156bdca6",
+  "source_branch": "stable/l38-business-base",
+  "source_commit": "36d5ecdf501b23a09cfa11e846c4185059d2f792",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-10T18:53:28.923Z",
+  "generated_at": "2026-07-10T22:28:16.831Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
