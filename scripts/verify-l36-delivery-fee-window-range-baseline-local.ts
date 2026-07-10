@@ -7,7 +7,6 @@ function exists(p: string) { return existsSync(join(root, p)); }
 function read(p: string) { return readFileSync(join(root, p), 'utf8'); }
 function mustFile(p: string) { if (!exists(p)) throw new Error(`Missing file: ${p}`); }
 function mustInclude(p: string, terms: string[]) { const s = read(p); for (const t of terms) if (!s.includes(t)) throw new Error(`${p} missing ${t}`); }
-function mustIncludeText(label: string, text: string, terms: string[]) { for (const t of terms) if (!text.includes(t)) throw new Error(`${label} missing ${t}`); }
 function mustNotText(label: string, text: string, patterns: Array<[string, RegExp]>) { for (const [name, pattern] of patterns) if (pattern.test(text)) throw new Error(`${label} contains forbidden ${name}`); }
 
 const compliance = spawnSync('pnpm', ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: root, encoding: 'utf8' });
@@ -44,18 +43,21 @@ mustInclude('apps/api/src/modules/delivery/delivery-rule-service.ts', [
 mustInclude('apps/api/src/routes/public/delivery.ts', ['/api/delivery/rules']);
 mustInclude('apps/api/src/routes/admin/delivery.ts', ['/api/admin/delivery/rules', 'requireAdminPermission', 'order.view', 'pickup.verify']);
 
+const orderServiceSource = read('apps/api/src/modules/order/order-service.ts');
 mustInclude('apps/api/src/modules/order/order-service.ts', [
   'pickup_type',
-  'delivery',
   'delivery_time_window_code',
   'delivery_time_window_text',
   'validateDeliveryRuleForOrder',
   'receiver_phone_masked',
   'receiver_address_masked'
 ]);
+if (!orderServiceSource.includes("pickupType === 'delivery'") && !orderServiceSource.includes("pickup_type === 'delivery'")) {
+  throw new Error("apps/api/src/modules/order/order-service.ts missing delivery pickup branch");
+}
 
-const miniappConfirmSource = `${read('apps/miniapp/pages/orders/confirm/index.js')}\n${read('apps/miniapp/pages/orders/confirm/index.wxml')}`;
-mustIncludeText('miniapp order confirm delivery UI', miniappConfirmSource, ['门店配送', '配送范围', '配送费', '配送时段', 'delivery_time_window_code']);
+mustInclude('apps/miniapp/pages/orders/confirm/index.js', ['delivery_time_window_code', 'delivery_fee_cents', 'deliveryRule', 'free_threshold_cents']);
+mustInclude('apps/miniapp/pages/orders/confirm/index.wxml', ['门店配送', '配送范围', '配送费', '配送时段', 'delivery_time_window_code']);
 mustInclude('apps/admin/src/pages/delivery/DeliveryReservationPage.tsx', ['配送规则', '配送范围', '配送时段', '配送费', '达达接口未启用']);
 
 const deliveryFiles = [
