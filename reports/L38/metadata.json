@@ -1,0 +1,9 @@
+{
+  "stage": "L38",
+  "source_branch": "codex/add-l38-delivery-fee-order-amount-baseline-dlmecz",
+  "source_commit": "8b7e0d49842029ff5664031de5b86619c731b8b0",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-10T13:43:05.923Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
