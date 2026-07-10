@@ -1,0 +1,9 @@
+{
+  "stage": "L37",
+  "source_branch": "codex/add-l37-delivery-rule-config-baseline",
+  "source_commit": "65d6b9150921c0c4fbfa0418e8453b82e1e2742e",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-10T06:07:04.737Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
