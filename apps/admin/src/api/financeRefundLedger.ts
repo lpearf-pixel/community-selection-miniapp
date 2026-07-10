@@ -19,6 +19,9 @@ export type FinanceRefundLedgerItem = {
   refund_status: string;
   refund_method?: string | null;
   refund_amount_cents: number;
+  product_refund_amount_cents: number;
+  delivery_refund_amount_cents: number;
+  remaining_refundable_amount_cents: number;
   refund_transaction_id?: string | null;
   out_refund_no?: string | null;
   manual_record_only: boolean;
@@ -37,6 +40,9 @@ export type FinanceRefundLedgerData = {
   summary: {
     refund_count: number;
     refund_amount_cents: number;
+    product_refund_amount_cents: number;
+    delivery_refund_amount_cents: number;
+    remaining_refundable_amount_cents: number;
   };
   items: FinanceRefundLedgerItem[];
 };

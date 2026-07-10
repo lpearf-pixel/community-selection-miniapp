@@ -27,6 +27,8 @@ type AfterSaleCasePayload = {
   resolution_type: string | null;
   requested_refund_cents: number | null;
   approved_refund_cents: number | null;
+  approved_product_refund_cents?: number | null;
+  approved_delivery_refund_cents?: number | null;
   responsibility: string | null;
 };
 
@@ -38,12 +40,16 @@ export type CreateAfterSaleInput = {
   reason: string;
   description?: string | null;
   requested_refund_cents?: number | null;
+  requested_product_refund_cents?: number | null;
+  requested_delivery_refund_cents?: number | null;
   evidence_image_urls?: string[] | null;
 };
 
 export type ReviewAfterSaleInput = {
   status: string;
   approved_refund_cents?: number | null;
+  approved_product_refund_cents?: number | null;
+  approved_delivery_refund_cents?: number | null;
   resolution_type?: string | null;
   responsibility?: string | null;
   admin_note?: string | null;
@@ -53,6 +59,8 @@ export type ReviewAfterSaleInput = {
 export type ResolveAfterSaleInput = {
   resolution_type: string;
   approved_refund_cents?: number | null;
+  approved_product_refund_cents?: number | null;
+  approved_delivery_refund_cents?: number | null;
   admin_note?: string | null;
   admin_user_id?: string | null;
 };
@@ -95,6 +103,8 @@ function afterSalePayload(afterSaleCase: AfterSaleCasePayload, extra: Record<str
     resolution_type: afterSaleCase.resolution_type,
     requested_refund_cents: afterSaleCase.requested_refund_cents,
     approved_refund_cents: afterSaleCase.approved_refund_cents,
+    approved_product_refund_cents: afterSaleCase.approved_product_refund_cents ?? null,
+    approved_delivery_refund_cents: afterSaleCase.approved_delivery_refund_cents ?? null,
     responsibility: afterSaleCase.responsibility,
     ...extra
   };
@@ -140,6 +150,9 @@ export async function createAfterSaleCase(input: CreateAfterSaleInput) {
   const type = ensureIn(input.type, afterSaleTypes, '售后类型不合法') as AfterSaleType;
   if (!input.order_id || !input.reason) throw new Error('缺少售后必填字段');
   const requestedRefundCents = input.requested_refund_cents == null ? null : ensurePositiveInteger(input.requested_refund_cents, '申请退款金额必须大于 0');
+  const requestedProductRefundCents = input.requested_product_refund_cents == null ? null : ensurePositiveInteger(input.requested_product_refund_cents, '申请商品退款金额必须大于 0');
+  const requestedDeliveryRefundCents = input.requested_delivery_refund_cents == null ? null : ensurePositiveInteger(input.requested_delivery_refund_cents, '申请配送费退款金额必须大于 0');
+  if ((requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0) > 0 && requestedRefundCents !== (requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0)) throw new Error('申请商品退款金额与配送费退款金额之和必须等于总退款金额');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true, product: true } });
     if (!order) throw new Error('订单不存在');
@@ -167,6 +180,8 @@ export async function createAfterSaleCase(input: CreateAfterSaleInput) {
         reason: input.reason,
         description: input.description ?? null,
         requested_refund_cents: requestedRefundCents,
+        requested_product_refund_cents: requestedProductRefundCents,
+        requested_delivery_refund_cents: requestedDeliveryRefundCents,
         evidence_image_urls: normalizeEvidence(input.evidence_image_urls),
         customer_note: input.description ?? null
       }
@@ -192,6 +207,9 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
   const resolutionType = input.resolution_type ? ensureIn(input.resolution_type, resolutionTypes, '售后处理结果不合法') as ResolutionType : null;
   const responsibility = input.responsibility ? ensureIn(input.responsibility, responsibilities, '售后责任方不合法') as Responsibility : null;
   const approvedRefundCents = input.approved_refund_cents == null ? null : ensurePositiveInteger(input.approved_refund_cents, '审核退款金额必须大于 0');
+  const approvedProductRefundCents = input.approved_product_refund_cents == null ? null : ensurePositiveInteger(input.approved_product_refund_cents, '审核商品退款金额必须大于 0');
+  const approvedDeliveryRefundCents = input.approved_delivery_refund_cents == null ? null : ensurePositiveInteger(input.approved_delivery_refund_cents, '审核配送费退款金额必须大于 0');
+  if ((approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0) > 0 && approvedRefundCents !== (approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0)) throw new Error('审核商品退款金额与配送费退款金额之和必须等于总退款金额');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const current = await tx.afterSaleCase.findUnique({ where: { id } });
     if (!current) throw new Error('售后工单不存在');
@@ -202,6 +220,8 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
         status,
         resolution_type: resolutionType,
         approved_refund_cents: approvedRefundCents ?? current.approved_refund_cents,
+        approved_product_refund_cents: approvedProductRefundCents ?? current.approved_product_refund_cents,
+        approved_delivery_refund_cents: approvedDeliveryRefundCents ?? current.approved_delivery_refund_cents,
         responsibility,
         admin_note: input.admin_note ?? current.admin_note,
         reviewed_by_admin_id: input.admin_user_id ?? null,
@@ -217,15 +237,20 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
 export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleInput) {
   const resolutionType = ensureIn(input.resolution_type, resolutionTypes, '售后处理结果不合法') as ResolutionType;
   const approvedRefundCents = input.approved_refund_cents == null ? null : ensurePositiveInteger(input.approved_refund_cents, '处理退款金额必须大于 0');
+  const approvedProductRefundCents = input.approved_product_refund_cents == null ? null : ensurePositiveInteger(input.approved_product_refund_cents, '处理商品退款金额必须大于 0');
+  const approvedDeliveryRefundCents = input.approved_delivery_refund_cents == null ? null : ensurePositiveInteger(input.approved_delivery_refund_cents, '处理配送费退款金额必须大于 0');
+  if ((approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0) > 0 && approvedRefundCents !== (approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0)) throw new Error('处理商品退款金额与配送费退款金额之和必须等于总退款金额');
   const current = await prisma.afterSaleCase.findUnique({ where: { id }, include: { order: true } });
   if (!current) throw new Error('售后工单不存在');
   if (['resolved', 'closed', 'cancelled', 'rejected'].includes(current.status)) throw new Error('当前售后状态不可解决');
   const refundAmount = approvedRefundCents ?? current.approved_refund_cents;
+  const productRefundAmount = approvedProductRefundCents ?? current.approved_product_refund_cents ?? undefined;
+  const deliveryRefundAmount = approvedDeliveryRefundCents ?? current.approved_delivery_refund_cents ?? undefined;
   if ((resolutionType === 'refund' || resolutionType === 'partial_refund') && !refundAmount) throw new Error('退款类售后必须填写审核退款金额');
   const processing = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const updated = await tx.afterSaleCase.update({
       where: { id },
-      data: { status: 'processing', resolution_type: resolutionType, approved_refund_cents: refundAmount, admin_note: input.admin_note ?? current.admin_note, resolved_by_admin_id: input.admin_user_id ?? null }
+      data: { status: 'processing', resolution_type: resolutionType, approved_refund_cents: refundAmount, approved_product_refund_cents: productRefundAmount, approved_delivery_refund_cents: deliveryRefundAmount, admin_note: input.admin_note ?? current.admin_note, resolved_by_admin_id: input.admin_user_id ?? null }
     });
     await recordAfterSaleLog(tx, updated, 'after_sale_resolved', { actor_type: 'admin', actor_id: input.admin_user_id ?? null }, input.admin_note, { resolution_type: resolutionType });
     return updated;
@@ -235,6 +260,8 @@ export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleIn
     const refund = await createMockRefund({
       order_id: current.order_id,
       refund_amount_cents: refundAmount,
+      product_refund_amount_cents: productRefundAmount,
+      delivery_refund_amount_cents: deliveryRefundAmount,
       reason: `售后处理：${current.reason}`,
       client_refund_id: `after-sale-${id}`
     });
