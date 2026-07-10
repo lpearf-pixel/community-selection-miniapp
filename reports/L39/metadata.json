@@ -3,7 +3,7 @@
   "source_branch": "stable/l38-business-base",
   "source_commit": "36d5ecdf501b23a09cfa11e846c4185059d2f792",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-10T22:28:16.831Z",
+  "generated_at": "2026-07-10T22:29:50.560Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
