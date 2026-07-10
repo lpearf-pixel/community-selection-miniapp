@@ -21,12 +21,16 @@ type CreateAfterSaleBody = {
   reason?: string;
   description?: string;
   requested_refund_cents?: number;
+  requested_product_refund_cents?: number;
+  requested_delivery_refund_cents?: number;
   evidence_image_urls?: string[];
 };
 
 type ReviewAfterSaleBody = {
   status?: string;
   approved_refund_cents?: number;
+  approved_product_refund_cents?: number;
+  approved_delivery_refund_cents?: number;
   resolution_type?: string;
   responsibility?: string;
   admin_note?: string;
@@ -35,6 +39,8 @@ type ReviewAfterSaleBody = {
 type ResolveAfterSaleBody = {
   resolution_type?: string;
   approved_refund_cents?: number;
+  approved_product_refund_cents?: number;
+  approved_delivery_refund_cents?: number;
   admin_note?: string;
 };
 
@@ -58,6 +64,8 @@ export function registerPublicAfterSaleRoutes(app: FastifyInstance) {
         reason: body.reason,
         description: body.description ?? null,
         requested_refund_cents: body.requested_refund_cents ?? null,
+        requested_product_refund_cents: body.requested_product_refund_cents ?? null,
+        requested_delivery_refund_cents: body.requested_delivery_refund_cents ?? null,
         evidence_image_urls: body.evidence_image_urls ?? null
       }));
     } catch (error) {

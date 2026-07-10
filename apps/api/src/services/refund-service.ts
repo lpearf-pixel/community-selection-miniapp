@@ -6,6 +6,8 @@ import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-serv
 type RefundInput = {
   order_id: string;
   refund_amount_cents: number;
+  product_refund_amount_cents?: number;
+  delivery_refund_amount_cents?: number;
   reason: string;
   client_refund_id?: string;
 };
@@ -43,12 +45,39 @@ function assertRefundNotifyMatches(
 }
 
 function assertIdempotencyInputMatches(
-  existing: { order_id: string; refund_amount_cents: number },
+  existing: { order_id: string; refund_amount_cents: number; product_refund_amount_cents?: number; delivery_refund_amount_cents?: number },
   input: RefundInput
 ) {
-  if (existing.order_id !== input.order_id || existing.refund_amount_cents !== input.refund_amount_cents) {
+  if (existing.order_id !== input.order_id || existing.refund_amount_cents !== input.refund_amount_cents || (input.product_refund_amount_cents != null && existing.product_refund_amount_cents !== input.product_refund_amount_cents) || (input.delivery_refund_amount_cents != null && existing.delivery_refund_amount_cents !== input.delivery_refund_amount_cents)) {
     throw new Error('退款幂等键已被使用，且请求参数不一致');
   }
+}
+
+
+function ensureNonNegativeInteger(value: unknown, message: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) throw new Error(message);
+  return parsed;
+}
+
+function allocateRefundSplit(order: { product_amount_cents: number | null; total_amount_cents: number; delivery_fee_cents: number; product_refund_amount_cents: number; delivery_refund_amount_cents: number }, input: RefundInput) {
+  const productPaid = order.product_amount_cents ?? order.total_amount_cents;
+  const deliveryPaid = order.delivery_fee_cents ?? 0;
+  const productRemaining = Math.max(0, productPaid - order.product_refund_amount_cents);
+  const deliveryRemaining = Math.max(0, deliveryPaid - order.delivery_refund_amount_cents);
+  const hasExplicitSplit = input.product_refund_amount_cents != null || input.delivery_refund_amount_cents != null;
+  if (hasExplicitSplit) {
+    const productRefund = ensureNonNegativeInteger(input.product_refund_amount_cents ?? 0, '商品退款金额不能小于 0');
+    const deliveryRefund = ensureNonNegativeInteger(input.delivery_refund_amount_cents ?? 0, '配送费退款金额不能小于 0');
+    if (productRefund + deliveryRefund !== input.refund_amount_cents) throw new Error('商品退款金额与配送费退款金额之和必须等于总退款金额');
+    if (productRefund > productRemaining) throw new Error('商品退款金额超过商品可退金额');
+    if (deliveryRefund > deliveryRemaining) throw new Error('配送费退款金额超过配送费可退金额');
+    return { productRefund, deliveryRefund, productRemaining, deliveryRemaining };
+  }
+  const productRefund = Math.min(input.refund_amount_cents, productRemaining);
+  const deliveryRefund = input.refund_amount_cents - productRefund;
+  if (deliveryRefund > deliveryRemaining) throw new Error('退款金额超过订单实付金额');
+  return { productRefund, deliveryRefund, productRemaining, deliveryRemaining };
 }
 
 export async function validateRefundRequest(tx: Prisma.TransactionClient, input: RefundInput) {
@@ -63,6 +92,7 @@ export async function validateRefundRequest(tx: Prisma.TransactionClient, input:
   if (!refundableOrderStatuses.includes(order.order_status)) throw new Error('当前订单状态不可退款');
   if (order.refund_amount_cents >= order.pay_amount_cents) throw new Error('订单已全额退款');
   if (!Number.isInteger(input.refund_amount_cents) || input.refund_amount_cents <= 0) throw new Error('退款金额必须大于 0');
+  const split = allocateRefundSplit(order, input);
   if (input.refund_amount_cents > getRefundableAmount(order)) {
     await safeRecordBusinessEvent(tx, {
       event_type: 'refund_amount_exceeded',
@@ -74,7 +104,7 @@ export async function validateRefundRequest(tx: Prisma.TransactionClient, input:
     });
     throw new Error('退款金额超过订单实付金额');
   }
-  return order;
+  return { ...order, refundSplit: split };
 }
 
 async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
@@ -122,6 +152,8 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
   }
 
   const nextRefundAmount = refund.order.refund_amount_cents + refund.refund_amount_cents;
+  const nextProductRefundAmount = refund.order.product_refund_amount_cents + refund.product_refund_amount_cents;
+  const nextDeliveryRefundAmount = refund.order.delivery_refund_amount_cents + refund.delivery_refund_amount_cents;
   const remainingRefundableAmount = refund.order.pay_amount_cents - nextRefundAmount;
   const isFullRefund = nextRefundAmount >= refund.order.pay_amount_cents;
   let stockRestored = refund.stock_restored;
@@ -206,6 +238,8 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     where: { id: refund.order_id },
     data: {
       refund_amount_cents: nextRefundAmount,
+      product_refund_amount_cents: nextProductRefundAmount,
+      delivery_refund_amount_cents: nextDeliveryRefundAmount,
       refund_status: 'success',
       order_status: isFullRefund ? 'refunded' : refund.order.order_status
     }
@@ -254,7 +288,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     refund_id: refund.id,
     before_snapshot: refund,
     after_snapshot: updatedRefund,
-    payload: { refund_amount_cents: refund.refund_amount_cents, is_full_refund: isFullRefund }
+    payload: { refund_amount_cents: refund.refund_amount_cents, product_refund_amount_cents: refund.product_refund_amount_cents, delivery_refund_amount_cents: refund.delivery_refund_amount_cents, is_full_refund: isFullRefund }
   });
   await safeRecordOrderTimeline(tx, {
     order_id: refund.order_id,
@@ -273,6 +307,8 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
         order_id: refund.order_id,
         out_refund_no: refund.out_refund_no,
         refund_amount_cents: refund.refund_amount_cents,
+        product_refund_amount_cents: refund.product_refund_amount_cents,
+        delivery_refund_amount_cents: refund.delivery_refund_amount_cents,
         total_refund_amount_cents: nextRefundAmount,
         remaining_refundable_amount_cents: remainingRefundableAmount,
         is_full_refund: isFullRefund,
@@ -344,6 +380,8 @@ export async function createMockRefund(input: RefundInput) {
         out_refund_no: outRefundNo,
         client_refund_id: input.client_refund_id,
         refund_amount_cents: input.refund_amount_cents,
+        product_refund_amount_cents: order.refundSplit.productRefund,
+        delivery_refund_amount_cents: order.refundSplit.deliveryRefund,
         reason: input.reason,
         status: 'pending'
       }
