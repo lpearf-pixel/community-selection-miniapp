@@ -190,8 +190,6 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
 
     const productAmountCents = groupBuy.price_cents * saleQuantity;
-    // L36: 配送时段校验；L36: 配送费规则校验；L36: 配送范围说明。
-    // L38: 商品金额与配送费分开；L38: 配送费计入订单应付金额。
     const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
     const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
     const payAmountCentsBeforeCredit = productAmountCents + deliveryFeeCents;
@@ -285,8 +283,6 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
     }
 
     const productAmountCents = product.price_cents * saleQuantity;
-    // L36: 配送时段校验；L36: 配送费规则校验；L36: 配送范围说明。
-    // L38: 商品金额与配送费分开；L38: 配送费计入订单应付金额。
     const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
     const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
     const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
