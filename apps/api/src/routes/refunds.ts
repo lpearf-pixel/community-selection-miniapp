@@ -6,6 +6,8 @@ import { buildOutRefundNo, createMockRefund, validateRefundRequest } from '../se
 type MockRefundBody = {
   order_id?: string;
   refund_amount_cents?: number;
+  product_refund_amount_cents?: number;
+  delivery_refund_amount_cents?: number;
   reason?: string;
   client_refund_id?: string;
 };
@@ -39,6 +41,8 @@ function parseMockRefundBody(body: MockRefundBody) {
   return {
     order_id: body.order_id,
     refund_amount_cents: refundAmount,
+    product_refund_amount_cents: body.product_refund_amount_cents,
+    delivery_refund_amount_cents: body.delivery_refund_amount_cents,
     reason: body.reason,
     client_refund_id: body.client_refund_id
   };

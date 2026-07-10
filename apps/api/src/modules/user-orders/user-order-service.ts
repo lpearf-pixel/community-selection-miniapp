@@ -5,7 +5,7 @@ import { getDeliveryRule } from '../delivery/delivery-rule-service.js';
 
 type QueryLike = { user_id?: string; openid?: string };
 type UserOrderQuery = { status?: string; type?: string; page?: string | number; page_size?: string | number };
-type AfterSaleInput = { type?: string; reason?: string; description?: string; requested_refund_cents?: number; evidence_image_urls?: string[] };
+type AfterSaleInput = { type?: string; reason?: string; description?: string; requested_refund_cents?: number; requested_product_refund_cents?: number; requested_delivery_refund_cents?: number; evidence_image_urls?: string[] };
 
 const orderInclude = {
   product: true,
@@ -84,7 +84,11 @@ function mapAfterSale(item: any) {
     reason: item.reason,
     description: item.description,
     requested_refund_cents: item.requested_refund_cents,
+    requested_product_refund_cents: item.requested_product_refund_cents,
+    requested_delivery_refund_cents: item.requested_delivery_refund_cents,
     approved_refund_cents: item.approved_refund_cents,
+    approved_product_refund_cents: item.approved_product_refund_cents,
+    approved_delivery_refund_cents: item.approved_delivery_refund_cents,
     responsibility: item.responsibility,
     created_at: item.created_at.toISOString(),
     resolved_at: iso(item.resolved_at)
@@ -108,6 +112,9 @@ function listItem(order: any) {
     delivery_fee_cents: order.delivery_fee_cents ?? 0,
     pay_amount_cents: order.pay_amount_cents,
     refund_amount_cents: order.refund_amount_cents,
+    product_refund_amount_cents: order.product_refund_amount_cents,
+    delivery_refund_amount_cents: order.delivery_refund_amount_cents,
+    remaining_refundable_amount_cents: Math.max(0, order.pay_amount_cents - order.refund_amount_cents),
     pay_status: order.pay_status,
     order_status: order.order_status,
     user_status_text: toUserOrderStatus(order),
@@ -164,6 +171,7 @@ export async function getUserOrderDetail(userId: string, orderId: string) {
     product: product ? { product_id: product.id, name: product.name, cover_image: product.cover_image, price_cents: product.price_cents, sale_unit: product.sale_unit, sale_spec_name: product.sale_spec_name } : null,
     group_buy: order.group_buy ? { group_buy_id: order.group_buy.id, status: order.group_buy.status, min_people: order.group_buy.min_people, current_people: order.group_buy.current_people, end_time: order.group_buy.end_time.toISOString() } : null,
     pickup: { pickup_type: order.pickup_type, fulfillment_type_text: fulfillmentText(order), pickup_store_id: order.pickup_store_id, pickup_store_name: order.pickup_store?.name ?? null, pickup_store_address: order.pickup_store?.address ?? null, pickup_store_phone: order.pickup_store?.phone ?? null, pickup_code: pickupCode(order.order_no) },
+    refund_split: { product_refund_amount_cents: order.product_refund_amount_cents, delivery_refund_amount_cents: order.delivery_refund_amount_cents, total_refund_amount_cents: order.refund_amount_cents, remaining_refundable_amount_cents: Math.max(0, order.pay_amount_cents - order.refund_amount_cents) },
     delivery: { delivery_status_text: deliveryStatusText(order), delivery_fee_cents: order.delivery_fee_cents ?? 0, delivery_time_window_code: order.pickup_type === 'delivery' ? (order.delivery_time_window_code ?? null) : null, delivery_time_window_text: order.pickup_type === 'delivery' ? (order.delivery_time_window_text ?? '以门店确认时段为准') : null, service_radius_text: order.pickup_type === 'delivery' ? '门店周边 3-5km，具体以门店确认为准' : null, notice: order.pickup_type === 'delivery' ? '当前为门店配送，暂不接第三方配送。配送范围与时段以门店确认为准。' : null, receiver_address: order.pickup_type === 'delivery' ? order.receiver_address : null },
     receiver: { receiver_name: order.receiver_name, receiver_phone_masked: maskReceiverPhone(order.receiver_phone), receiver_address: order.receiver_address },
     after_sales: order.after_sale_cases.map(mapAfterSale),
@@ -180,7 +188,7 @@ export async function listUserOrderAfterSales(userId: string, orderId: string) {
 export async function createUserOrderAfterSale(userId: string, orderId: string, body: AfterSaleInput) {
   await ownedOrder(userId, orderId);
   if (!body.type || !body.reason) throw Object.assign(new Error('缺少售后必填字段'), { statusCode: 400 });
-  const afterSaleCase = await createAfterSaleCase({ order_id: orderId, user_id: userId, type: body.type, reason: body.reason, description: body.description ?? null, requested_refund_cents: body.requested_refund_cents ?? null, evidence_image_urls: body.evidence_image_urls ?? null });
+  const afterSaleCase = await createAfterSaleCase({ order_id: orderId, user_id: userId, type: body.type, reason: body.reason, description: body.description ?? null, requested_refund_cents: body.requested_refund_cents ?? null, requested_product_refund_cents: body.requested_product_refund_cents ?? null, requested_delivery_refund_cents: body.requested_delivery_refund_cents ?? null, evidence_image_urls: body.evidence_image_urls ?? null });
   return mapAfterSale(afterSaleCase);
 }
 

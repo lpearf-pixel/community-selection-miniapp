@@ -37,7 +37,7 @@ export function FinanceRefundLedgerPage() {
     total: 0,
     page: 1,
     page_size: defaultPageSize,
-    summary: { refund_count: 0, refund_amount_cents: 0 },
+    summary: { refund_count: 0, refund_amount_cents: 0, product_refund_amount_cents: 0, delivery_refund_amount_cents: 0, remaining_refundable_amount_cents: 0 },
     items: [],
   });
   const [loading, setLoading] = useState(false);
@@ -72,6 +72,9 @@ export function FinanceRefundLedgerPage() {
       { title: "退款状态", dataIndex: "refund_status" },
       { title: "退款方式", dataIndex: "refund_method" },
       { title: "退款金额", render: (_: unknown, row: FinanceRefundLedgerItem) => `¥${formatYuan(row.refund_amount_cents)}` },
+      { title: "商品退款", render: (_: unknown, row: FinanceRefundLedgerItem) => `¥${formatYuan(row.product_refund_amount_cents)}` },
+      { title: "配送费退款", render: (_: unknown, row: FinanceRefundLedgerItem) => `¥${formatYuan(row.delivery_refund_amount_cents)}` },
+      { title: "剩余可退", render: (_: unknown, row: FinanceRefundLedgerItem) => `¥${formatYuan(row.remaining_refundable_amount_cents)}` },
       { title: "退款流水号", dataIndex: "refund_transaction_id" },
       { title: "外部退款单号", dataIndex: "out_refund_no" },
       { title: "是否人工记录", render: (_: unknown, row: FinanceRefundLedgerItem) => (row.manual_record_only ? "是" : "否") },
@@ -213,6 +216,9 @@ export function FinanceRefundLedgerPage() {
       <Space wrap>
         <Card title="退款笔数">{data.summary.refund_count}</Card>
         <Card title="退款总金额">¥{formatYuan(data.summary.refund_amount_cents)}</Card>
+        <Card title="商品退款合计">¥{formatYuan(data.summary.product_refund_amount_cents)}</Card>
+        <Card title="配送费退款合计">¥{formatYuan(data.summary.delivery_refund_amount_cents)}</Card>
+        <Card title="剩余可退合计">¥{formatYuan(data.summary.remaining_refundable_amount_cents)}</Card>
       </Space>
 
       <Card title="财务退款对账记录">

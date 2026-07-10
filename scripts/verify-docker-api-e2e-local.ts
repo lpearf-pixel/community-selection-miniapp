@@ -131,6 +131,22 @@ async function request<T>(method: string, path: string, options: { body?: unknow
   return parsed.data;
 }
 
+async function requestText(method: string, path: string, options: { body?: unknown; headers?: Record<string, string>; label?: string } = {}): Promise<string> {
+  const label = options.label ?? `${method} ${path}`;
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: {
+      ...(options.body ? { 'content-type': 'application/json' } : {}),
+      ...options.headers
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const text = await response.text();
+  record(label, { status: response.status, raw: text.slice(0, 1000) });
+  assert(response.ok, `${label} failed with HTTP ${response.status}: ${text}`);
+  return text;
+}
+
 function firstItem<T>(list: ListResponse<T>, label: string): T {
   assert(Array.isArray(list.items), `${label} response must contain items[]`);
   assert(list.items.length > 0, `${label} response must contain at least one item`);
@@ -200,6 +216,63 @@ async function main() {
   const financeOverview = await request<any>('GET', '/api/admin/finance/reconciliation/overview', withAdmin({ label: 'GET /api/admin/finance/reconciliation/overview' }));
   assert(typeof financeOverview.total_delivery_fee_cents === 'number', 'finance reconciliation summary must include total_delivery_fee_cents');
 
+  // L39: real non-zero delivery refund split baseline.
+  const l39WindowCode = `l39_window_${Date.now()}`;
+  await request<any>('POST', '/api/admin/delivery/rule-configs', withAdminJson({
+    label: 'POST /api/admin/delivery/rule-configs L39 base fee 500',
+    body: {
+      pickup_store_id: pickupStoreId,
+      enabled: true,
+      base_fee_cents: 500,
+      free_threshold_cents: null,
+      max_distance_km: null,
+      service_radius_text: 'Docker API E2E L39 配送范围',
+      notice: 'Docker API E2E L39 配送规则',
+      available_time_windows: [{ code: l39WindowCode, label: 'L39 验证时段', start_time: '10:00', end_time: '12:00' }]
+    }
+  }));
+
+  const l39DeliveryOrder = await request<any>('POST', '/api/orders/normal', {
+    label: 'POST /api/orders/normal L39 delivery fee 500',
+    body: { product_id: productId, user_openid: `${openid}-l39-delivery`, client_request_id: `docker-e2e-l39-delivery-${Date.now()}`, quantity: 1, pickup_type: 'delivery', pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E L39 配送', receiver_phone: receiverPhone, receiver_address: 'L39 配送地址', delivery_time_window_code: l39WindowCode }
+  });
+  const l39ProductAmount = l39DeliveryOrder.product_amount_cents ?? l39DeliveryOrder.total_amount_cents;
+  assert(l39DeliveryOrder.delivery_fee_cents === 500, 'L39 delivery order must use base_fee_cents=500');
+  assert(l39DeliveryOrder.pay_amount_cents === l39ProductAmount + 500, 'L39 delivery pay_amount_cents must equal product_amount_cents + 500');
+  await request<any>('POST', '/api/payments/mock', { label: 'POST /api/payments/mock L39 delivery', body: { order_id: l39DeliveryOrder.id } });
+
+  const l39DeliveryHeaders = { 'x-openid': `${openid}-l39-delivery` };
+  const l39AfterSale = await request<IdLike>('POST', `/api/me/orders/${l39DeliveryOrder.id}/after-sales`, {
+    label: 'POST /api/me/orders/:id/after-sales L39 split request',
+    headers: l39DeliveryHeaders,
+    body: { type: 'missing_item', reason: 'Docker API E2E L39 拆分退款', description: 'L39 product/delivery refund split', requested_refund_cents: 300, requested_product_refund_cents: 100, requested_delivery_refund_cents: 200 }
+  });
+  const l39AfterSaleId = idOf(l39AfterSale, ['after_sale_case_id', 'id'], 'POST /api/me/orders/:id/after-sales L39 split request');
+  await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, withAdminJson({
+    label: 'POST /api/admin/after-sales/:id/review L39 split approval',
+    body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split approval' }
+  }));
+  await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/resolve`, withAdminJson({
+    label: 'POST /api/admin/after-sales/:id/resolve L39 split refund',
+    body: { resolution_type: 'partial_refund', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split refund' }
+  }));
+
+  const l39Detail = await request<any>('GET', `/api/me/orders/${l39DeliveryOrder.id}`, { label: 'GET /api/me/orders/:id L39 split detail', headers: l39DeliveryHeaders });
+  assert(l39Detail.product_refund_amount_cents === 100, 'L39 detail must include product_refund_amount_cents=100');
+  assert(l39Detail.delivery_refund_amount_cents === 200, 'L39 detail must include delivery_refund_amount_cents=200');
+  assert(l39Detail.refund_amount_cents === 300, 'L39 detail must include refund_amount_cents=300');
+  assert(l39Detail.remaining_refundable_amount_cents === l39DeliveryOrder.pay_amount_cents - 300, 'L39 detail must include remaining_refundable_amount_cents=pay_amount_cents-300');
+
+  const l39FinanceOverview = await request<any>('GET', '/api/admin/finance/reconciliation/overview', withAdmin({ label: 'GET /api/admin/finance/reconciliation/overview L39 split refund' }));
+  assert(l39FinanceOverview.total_product_refund_amount_cents >= 100, 'L39 finance overview must include total_product_refund_amount_cents >= 100');
+  assert(l39FinanceOverview.total_delivery_refund_amount_cents >= 200, 'L39 finance overview must include total_delivery_refund_amount_cents >= 200');
+  assert(l39FinanceOverview.total_refund_amount_cents >= 300, 'L39 finance overview must include total_refund_amount_cents >= 300');
+
+  const refundCsv = await requestText('GET', '/api/admin/finance/refund-ledger/export.csv', withAdmin({ label: 'GET /api/admin/finance/refund-ledger/export.csv L39 split refund' }));
+  assert(refundCsv.includes('product_refund_amount_cents'), 'L39 refund CSV must include product_refund_amount_cents');
+  assert(refundCsv.includes('delivery_refund_amount_cents'), 'L39 refund CSV must include delivery_refund_amount_cents');
+  assert(refundCsv.includes('refund_amount_cents'), 'L39 refund CSV must include refund_amount_cents');
+
 
   const order = await request<IdLike>('POST', '/api/orders/normal', {
     label: 'POST /api/orders/normal',
@@ -220,6 +293,13 @@ async function main() {
   assert(((order as any).product_amount_cents ?? (order as any).total_amount_cents) === (order as any).pay_amount_cents, 'store pay_amount_cents must equal product_amount_cents');
 
   await request('POST', '/api/payments/mock', { label: 'POST /api/payments/mock', body: { order_id: orderId } });
+
+  await request<any>('POST', `/api/me/orders/${orderId}/after-sales`, {
+    label: 'POST /api/me/orders/:id/after-sales store delivery refund must fail',
+    headers: { 'x-openid': openid },
+    expectedStatus: 400,
+    body: { type: 'wrong_item', reason: 'Docker API E2E 门店自提配送费退款应失败', requested_refund_cents: 300, requested_product_refund_cents: 100, requested_delivery_refund_cents: 200 }
+  });
 
   const userHeaders = { 'x-openid': openid };
   const orderList = await request<ListResponse<IdLike>>('GET', '/api/me/orders?page_size=20', { label: 'GET /api/me/orders', headers: userHeaders });

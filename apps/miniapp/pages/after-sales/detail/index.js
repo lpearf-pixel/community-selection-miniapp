@@ -1,6 +1,6 @@
 const { request } = require('../../../utils/api');
 const { formatOrderAmount } = require('../../../utils/order');
-function decorate(item) { return { ...item, refund_yuan: formatOrderAmount(item.requested_refund_cents || item.approved_refund_cents || 0) }; }
+function decorate(item) { return { ...item, refund_yuan: formatOrderAmount(item.requested_refund_cents || item.approved_refund_cents || 0), product_refund_yuan: formatOrderAmount(item.requested_product_refund_cents || item.approved_product_refund_cents || 0), delivery_refund_yuan: formatOrderAmount(item.requested_delivery_refund_cents || item.approved_delivery_refund_cents || 0) }; }
 Page({
   data: { order_id: '', items: [], loading: false, error: '' },
   onLoad(query) { const orderId = query.order_id || ''; this.setData({ order_id: orderId }); if (orderId) this.loadList(orderId); else this.setData({ error: '缺少订单编号' }); },

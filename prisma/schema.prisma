@@ -242,6 +242,8 @@ model Order {
   pay_amount_cents    Int
   quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)
+  product_refund_amount_cents Int   @default(0)
+  delivery_refund_amount_cents Int  @default(0)
   credit_amount_cents Int          @default(0)
   credit_source_type   String?
   credit_source_id     String?
@@ -295,6 +297,8 @@ model Refund {
   refund_id           String?      @unique
   client_refund_id    String?      @unique
   refund_amount_cents Int
+  product_refund_amount_cents Int  @default(0)
+  delivery_refund_amount_cents Int @default(0)
   stock_restored      Boolean      @default(false)
   processed_at        DateTime?
   reason              String
@@ -776,7 +780,11 @@ model AfterSaleCase {
   reason                 String
   description            String?
   requested_refund_cents Int?
+  requested_product_refund_cents Int?
+  requested_delivery_refund_cents Int?
   approved_refund_cents  Int?
+  approved_product_refund_cents Int?
+  approved_delivery_refund_cents Int?
   evidence_image_urls    Json?
   responsibility         String?
   customer_note          String?
