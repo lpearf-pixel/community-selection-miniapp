@@ -178,6 +178,25 @@ model PickupStore {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   orders     Order[]
+  delivery_rule_configs DeliveryRuleConfig[]
+}
+
+model DeliveryRuleConfig {
+  id                    String   @id @default(cuid())
+  pickup_store_id       String?
+  enabled               Boolean  @default(true)
+  base_fee_cents        Int      @default(0)
+  free_threshold_cents  Int?
+  max_distance_km       Float?
+  service_radius_text   String
+  notice                String
+  time_windows_json     Json
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  pickup_store          PickupStore? @relation(fields: [pickup_store_id], references: [id])
+
+  @@index([pickup_store_id])
 }
 
 model GroupBuy {

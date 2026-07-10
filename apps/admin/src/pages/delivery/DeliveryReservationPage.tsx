@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Form, Input, Select, Space, Table, Typography } from "antd";
 import { getAdminScopeSummary } from "../../access/adminAccess";
-import { getAdminDeliveryRules, getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryRule, type DeliveryStatus } from "../../api/delivery";
+import { getAdminDeliveryRulesByStore, getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryRule, type DeliveryStatus } from "../../api/delivery";
 
 const statusOptions: Exclude<DeliveryStatus, "none">[] = ["pending_dispatch", "assigned", "delivering", "delivered", "delivery_failed", "canceled"];
 
@@ -20,7 +20,7 @@ export function DeliveryReservationPage() {
     setLoading(true);
     setErrorMessage("");
     try {
-      const [ruleRow, providerRows, orderRows] = await Promise.all([getAdminDeliveryRules(), getDeliveryProviders(), getDeliveryOrders({ keyword, pickup_type: pickupType || undefined, page_size: 50 })]);
+      const [ruleRow, providerRows, orderRows] = await Promise.all([getAdminDeliveryRulesByStore(), getDeliveryProviders(), getDeliveryOrders({ keyword, pickup_type: pickupType || undefined, page_size: 50 })]);
       setRule(ruleRow);
         setProviders(providerRows.items);
       setItems(orderRows.items);
@@ -53,11 +53,13 @@ export function DeliveryReservationPage() {
       <Card title="当前数据范围"><Typography.Text>{scopeSummary.label}</Typography.Text>{!scopeSummary.hasConfiguredScope ? <Typography.Paragraph type="warning">当前账号未配置自提点/社区范围，请联系管理员。</Typography.Paragraph> : null}</Card>
       <Typography.Paragraph>门店配送/人工配送为 mock；达达接口未启用，达达配送接口已预留，当前不会创建真实配送单。页面仅展示 receiver_phone_masked 与 receiver_address_masked。</Typography.Paragraph>
       <Card title="配送规则" style={{ marginBottom: 16 }}>
-        <Typography.Paragraph>配送模式：静态 baseline；规则只读，不做编辑保存。</Typography.Paragraph>
+        <Typography.Paragraph>当前生效规则：{rule?.source === "pickup_store" ? "自提点规则" : "全局默认"}；由 L36 静态 baseline 升级为 L37 配置化。</Typography.Paragraph>
         <Typography.Paragraph>配送费：{rule ? `${rule.base_fee_cents} 分` : "加载中"}</Typography.Paragraph>
+        <Typography.Paragraph>免配送门槛：{rule?.free_threshold_cents == null ? "无" : `${rule.free_threshold_cents} 分`}</Typography.Paragraph>
         <Typography.Paragraph>配送范围：{rule?.service_radius_text ?? "门店确认"}</Typography.Paragraph>
         <Typography.Paragraph>配送时段：{rule?.available_time_windows.map((item) => `${item.label} ${item.start_time}-${item.end_time}`).join(" / ")}</Typography.Paragraph>
-        <Typography.Paragraph>达达接口未启用；{rule?.notice}</Typography.Paragraph>
+        <Typography.Paragraph>{rule?.notice}</Typography.Paragraph>
+        <Button onClick={() => { window.location.hash = "deliveryRuleConfig"; }}>管理配送规则</Button>
       </Card>
       {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
       {successMessage ? <Typography.Text type="secondary">{successMessage}</Typography.Text> : null}

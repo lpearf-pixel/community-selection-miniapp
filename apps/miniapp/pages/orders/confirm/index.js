@@ -66,6 +66,7 @@ Page({
   },
   onShow() {
     this.refreshSelection();
+    this.loadDeliveryRules();
     this.recalculateOrderState();
   },
   refreshSelection() {
@@ -117,8 +118,10 @@ Page({
     wx.navigateTo({ url: "/pages/pickup/select/index" });
   },
   selectPickupType(event) {
-    this.setData({ pickup_type: event.currentTarget.dataset.type });
-    this.recalculateOrderState();
+    this.setData({ pickup_type: event.currentTarget.dataset.type }, () => {
+      this.loadDeliveryRules();
+      this.recalculateOrderState();
+    });
   },
   copyPickupAddress() {
     const address = this.data.selectedPickupStore && this.data.selectedPickupStore.address;
@@ -130,8 +133,16 @@ Page({
     else wx.showToast({ title: "可在高德地图搜索自提点地址", icon: "none" });
   },
   loadDeliveryRules() {
-    return request({ url: "/api/delivery/rules" })
-      .then((rule) => this.setData({ deliveryRule: { ...rule, base_fee_yuan: formatYuan(rule.base_fee_cents || 0), free_threshold_yuan: rule.free_threshold_cents == null ? "" : formatYuan(rule.free_threshold_cents) }, delivery_time_windows: rule.available_time_windows || [] }))
+    const pickup_store_id = this.data.pickup_store_id || (this.data.selectedPickupStore && this.data.selectedPickupStore.pickup_store_id) || "";
+    const query = pickup_store_id ? `?pickup_store_id=${encodeURIComponent(pickup_store_id)}` : "";
+    return request({ url: `/api/delivery/rules${query}` })
+      .then((rule) => {
+        if (rule && rule.enabled === false && this.data.pickup_type === "delivery") {
+          wx.showToast({ title: "该自提点暂不支持门店配送", icon: "none" });
+          this.setData({ pickup_type: "store" });
+        }
+        this.setData({ deliveryRule: { ...rule, base_fee_yuan: formatYuan(rule.base_fee_cents || 0), free_threshold_yuan: rule.free_threshold_cents == null ? "" : formatYuan(rule.free_threshold_cents) }, delivery_time_windows: rule.available_time_windows || [] });
+      })
       .catch(() => this.setData({ deliveryRule: null, delivery_time_windows: [] }));
   },
   selectDeliveryTimeWindow(event) {
