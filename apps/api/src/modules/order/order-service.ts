@@ -62,7 +62,7 @@ function normalizePickupType(value: unknown): PickupType {
   return PickupType.store;
 }
 
-function validateFulfillment(input: { pickup_type?: string; pickup_store_id?: string; receiver_name?: string; receiver_phone?: string; receiver_address?: string; delivery_time_window_code?: string }) {
+async function validateFulfillment(input: { pickup_type?: string; pickup_store_id?: string; receiver_name?: string; receiver_phone?: string; receiver_address?: string; delivery_time_window_code?: string }) {
   const pickupType = normalizePickupType(input.pickup_type);
   // L35: 自提点必填校验
   if (!input.pickup_store_id?.trim()) throw new Error('自提点必填校验：请选择自提点');
@@ -70,7 +70,7 @@ function validateFulfillment(input: { pickup_type?: string; pickup_store_id?: st
     // L35: 收货人必填校验
     // L35: 手机号必填校验
     // L35: 配送地址必填校验
-    const result = validateDeliveryRuleForOrder(input);
+    const result = await validateDeliveryRuleForOrder(input);
     if (!result.ok) throw new Error(result.error_message || '配送规则校验失败');
   }
   return pickupType;
@@ -97,7 +97,7 @@ function maskReceiverPhone(phone?: string | null) {
   return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
 }
 
-function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number; delivery_time_window_text?: string }) {
+function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number; delivery_time_window_text?: string; service_radius_text?: string }) {
   // L36 门店配送响应展示配送时段与配送费；配送时段不落库，创建响应优先使用本次校验结果；不调用达达，不调用第三方配送。
   const product = order.product ?? order.group_buy?.product ?? null;
   return {
@@ -123,9 +123,9 @@ function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number;
     receiver_phone_masked: maskReceiverPhone(order.receiver_phone),
     receiver_address: order.receiver_address,
     receiver_address_masked: order.receiver_address ? `${String(order.receiver_address).slice(0, 6)}***` : null,
-    delivery_fee_cents: order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_fee_cents ?? getDeliveryRule().base_fee_cents) : 0,
+    delivery_fee_cents: order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_fee_cents ?? 0) : 0,
     delivery_time_window_text: order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_time_window_text ?? '以门店确认时段为准') : null,
-    service_radius_text: order.pickup_type === 'delivery' ? getDeliveryRule().service_radius_text : null,
+    service_radius_text: order.pickup_type === 'delivery' ? (deliveryMeta?.service_radius_text ?? null) : null,
     created_at: order.created_at,
     paid_at: order.paid_at,
     completed_at: order.completed_at,
@@ -170,8 +170,8 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
   const clientRequestId = input.client_request_id;
   const receiverName = input.receiver_name;
   const receiverPhone = input.receiver_phone;
-  const pickupType = validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
-  const deliveryValidation = pickupType === 'delivery' ? validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code }) : null;
+  const pickupType = await validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
+  const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code }) : null;
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({
@@ -236,7 +236,7 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
 
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'order_created', title: '订单已创建', to_status: order.order_status, actor_type: 'user', actor_user_id: userId, payload: { group_buy_id: groupBuy.id, quantity: saleQuantity } });
     await safeRecordBusinessEvent(tx, { event_type: 'order_created', event_source: 'order-service', order_id: order.id, group_buy_id: groupBuy.id, user_id: userId, idempotency_key: clientRequestId, after_snapshot: order });
-    return toPublicOrder(order, deliveryValidation ? { delivery_fee_cents: deliveryValidation.delivery_fee_cents, delivery_time_window_text: deliveryTimeWindowText(deliveryValidation.delivery_time_window) } : undefined);
+    return toPublicOrder(order, deliveryValidation ? { delivery_fee_cents: deliveryValidation.delivery_fee_cents, delivery_time_window_text: deliveryTimeWindowText(deliveryValidation.delivery_time_window), service_radius_text: (await getDeliveryRule({ pickup_store_id: input.pickup_store_id })).service_radius_text } : undefined);
   });
 }
 
@@ -249,8 +249,8 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
   const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, receiverName ?? '社区用户') : undefined);
   const clientRequestId = input.client_request_id ?? `normal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   if (!userId || !productId || !receiverName || !receiverPhone) throw new Error('缺少普通购买下单必填字段');
-  const pickupType = validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
-  const deliveryValidation = pickupType === 'delivery' ? validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code }) : null;
+  const pickupType = await validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
+  const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code }) : null;
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({
@@ -296,7 +296,7 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
 
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'order_created', title: '普通购买订单已创建', to_status: order.order_status, actor_type: 'user', actor_user_id: userId, payload: { product_id: product.id, quantity: saleQuantity } });
     await safeRecordBusinessEvent(tx, { event_type: 'normal_order_created', event_source: 'order-service', order_id: order.id, user_id: userId, idempotency_key: clientRequestId, after_snapshot: order });
-    return toPublicOrder(order, deliveryValidation ? { delivery_fee_cents: deliveryValidation.delivery_fee_cents, delivery_time_window_text: deliveryTimeWindowText(deliveryValidation.delivery_time_window) } : undefined);
+    return toPublicOrder(order, deliveryValidation ? { delivery_fee_cents: deliveryValidation.delivery_fee_cents, delivery_time_window_text: deliveryTimeWindowText(deliveryValidation.delivery_time_window), service_radius_text: (await getDeliveryRule({ pickup_store_id: input.pickup_store_id })).service_radius_text } : undefined);
   });
 }
 

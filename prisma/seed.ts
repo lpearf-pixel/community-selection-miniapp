@@ -161,6 +161,25 @@ async function main() {
       status: 'active'
     }
   });
+
+  const defaultDeliveryRule = await (prisma as any).deliveryRuleConfig.findFirst({ where: { pickup_store_id: null } });
+  const defaultDeliveryRuleData = {
+    pickup_store_id: null,
+    enabled: true,
+    base_fee_cents: 0,
+    free_threshold_cents: null,
+    max_distance_km: null,
+    service_radius_text: '门店周边 3-5km，具体以门店确认为准',
+    notice: '当前为门店配送，暂不接第三方配送。配送范围与时段以门店确认为准。',
+    time_windows_json: [
+      { code: 'today_afternoon', label: '今日下午', start_time: '14:00', end_time: '18:00' },
+      { code: 'today_evening', label: '今日晚上', start_time: '18:00', end_time: '21:00' },
+      { code: 'tomorrow_morning', label: '明日上午', start_time: '09:00', end_time: '12:00' }
+    ]
+  };
+  if (defaultDeliveryRule) await (prisma as any).deliveryRuleConfig.update({ where: { id: defaultDeliveryRule.id }, data: defaultDeliveryRuleData });
+  else await (prisma as any).deliveryRuleConfig.create({ data: defaultDeliveryRuleData });
+
 }
 
 main()
