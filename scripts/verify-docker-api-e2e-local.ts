@@ -157,7 +157,8 @@ async function main() {
   const pickupStores = await request<ListResponse<IdLike>>('GET', '/api/pickup-stores?page_size=1', { label: 'GET /api/pickup-stores' });
   const pickupStoreId = idOf(firstItem(pickupStores, 'GET /api/pickup-stores'), ['pickup_store_id', 'id'], 'GET /api/pickup-stores');
   await request('GET', `/api/pickup-stores/${pickupStoreId}`, { label: 'GET /api/pickup-stores/:id' });
-  const deliveryRules = await request<any>('GET', '/api/delivery/rules', { label: 'GET /api/delivery/rules' });
+  // L38: delivery fee order amount baseline uses configured rule; idempotent read path.
+  const deliveryRules = await request<any>('GET', `/api/delivery/rules?pickup_store_id=${encodeURIComponent(pickupStoreId)}`, { label: 'GET /api/delivery/rules?pickup_store_id=main-pickup-store' });
   assert(Array.isArray(deliveryRules.available_time_windows) && deliveryRules.available_time_windows.length > 0, 'GET /api/delivery/rules must include available_time_windows');
   const deliveryWindowCode = deliveryRules.available_time_windows[0].code;
   const missingWindow = await request<any>('POST', '/api/orders/normal', {
@@ -172,6 +173,20 @@ async function main() {
   });
   assert(deliveryOrder.pickup_type === 'delivery', 'delivery order response must include pickup_type=delivery');
   assert(deliveryOrder.receiver_phone_masked && !JSON.stringify(deliveryOrder).includes(receiverPhone), 'delivery order response must include receiver_phone_masked and hide raw phone');
+  const expectedProductAmount = deliveryOrder.product_amount_cents ?? deliveryOrder.total_amount_cents;
+  assert(typeof expectedProductAmount === 'number' && expectedProductAmount > 0, 'delivery order must include product_amount_cents');
+  assert(typeof deliveryOrder.delivery_fee_cents === 'number', 'delivery order must include delivery_fee_cents');
+  assert(deliveryOrder.pay_amount_cents === expectedProductAmount + deliveryOrder.delivery_fee_cents, 'delivery pay_amount_cents must include delivery_fee_cents');
+  const paidDelivery = await request<any>('POST', '/api/payments/mock', { label: 'POST /api/payments/mock delivery amount', body: { order_id: deliveryOrder.id } });
+  assert(paidDelivery.pay_amount_cents === deliveryOrder.pay_amount_cents, 'mock payment amount must equal order pay_amount_cents');
+  const deliveryUserHeaders = { 'x-openid': `${openid}-delivery` };
+  const deliveryDetail = await request<any>('GET', `/api/me/orders/${deliveryOrder.id}`, { label: 'GET /api/me/orders/:id delivery detail', headers: deliveryUserHeaders });
+  assert(deliveryDetail.product_amount_cents === expectedProductAmount && deliveryDetail.delivery_fee_cents === deliveryOrder.delivery_fee_cents && deliveryDetail.pay_amount_cents === deliveryOrder.pay_amount_cents, 'user order detail must expose L38 amount fields');
+  assert(deliveryDetail.delivery_time_window_text || deliveryDetail.delivery?.delivery_time_window_text, 'user order detail must expose delivery_time_window_text');
+  const adminDelivery = await request<any>('GET', '/api/admin/delivery/orders?page_size=50&pickup_type=delivery', { label: 'GET /api/admin/delivery/orders' });
+  assert(JSON.stringify(adminDelivery).includes('delivery_fee_cents') && JSON.stringify(adminDelivery).includes('pay_amount_cents'), 'Admin delivery list must expose delivery fee and pay amount');
+  const financeOverview = await request<any>('GET', '/api/admin/finance/reconciliation/overview', { label: 'GET /api/admin/finance/reconciliation/overview' });
+  assert(typeof financeOverview.total_delivery_fee_cents === 'number', 'finance reconciliation summary must include total_delivery_fee_cents');
 
 
   const order = await request<IdLike>('POST', '/api/orders/normal', {
@@ -188,6 +203,9 @@ async function main() {
     }
   });
   const orderId = idOf(order, ['order_id', 'id'], 'POST /api/orders/normal');
+
+  assert((order as any).delivery_fee_cents === 0, 'store order delivery_fee_cents must be 0');
+  assert(((order as any).product_amount_cents ?? (order as any).total_amount_cents) === (order as any).pay_amount_cents, 'store pay_amount_cents must equal product_amount_cents');
 
   await request('POST', '/api/payments/mock', { label: 'POST /api/payments/mock', body: { order_id: orderId } });
 

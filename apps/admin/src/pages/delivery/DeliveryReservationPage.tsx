@@ -3,6 +3,7 @@ import { Button, Card, Form, Input, Select, Space, Table, Typography } from "ant
 import { getAdminScopeSummary } from "../../access/adminAccess";
 import { getAdminDeliveryRulesByStore, getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryRule, type DeliveryStatus } from "../../api/delivery";
 
+function formatYuan(cents?: number | null) { return ((cents ?? 0) / 100).toFixed(2); }
 const statusOptions: Exclude<DeliveryStatus, "none">[] = ["pending_dispatch", "assigned", "delivering", "delivered", "delivery_failed", "canceled"];
 
 export function DeliveryReservationPage() {
@@ -70,6 +71,7 @@ export function DeliveryReservationPage() {
       <Table rowKey="order_id" loading={loading} dataSource={items} columns={[
         { title: "订单号", dataIndex: "order_no" }, { title: "pickup_type", dataIndex: "pickup_type", render: (_: unknown, row: DeliveryReservation) => row.delivery_mode === "store_delivery" ? "门店配送" : "到店自提" }, { title: "收货人", dataIndex: "receiver_name" }, { title: "receiver_phone_masked", dataIndex: "receiver_phone_masked" },
         { title: "自提点", dataIndex: "pickup_store_name" }, { title: "sender_address / 自提点地址", dataIndex: "sender_address" }, { title: "receiver_address_masked", dataIndex: "receiver_address_masked" },
+        { title: "商品金额", dataIndex: "product_amount_cents", render: (v: number) => `¥${formatYuan(v)}` }, { title: "配送费", dataIndex: "delivery_fee_cents", render: (v: number) => `¥${formatYuan(v)}` }, { title: "应付金额", dataIndex: "pay_amount_cents", render: (v: number) => `¥${formatYuan(v)}` }, { title: "配送时段", dataIndex: "delivery_time_window_text" },
         { title: "delivery_status", dataIndex: "delivery_status" }, { title: "provider", dataIndex: "provider" },
         { title: "操作", render: (_: unknown, row: DeliveryReservation) => <Space><Button disabled={!row.can_create_delivery} onClick={() => reserve(row)}>预留配送</Button><Button onClick={() => updateStatus(row)}>更新状态</Button></Space> }
       ]} />

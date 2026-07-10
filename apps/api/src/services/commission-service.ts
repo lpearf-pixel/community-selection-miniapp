@@ -49,7 +49,7 @@ export async function ensureEstimatedCommission(orderId: string, tx?: Prisma.Tra
 
   const product = order.group_buy.product;
   if (product.commission_type === 'none' || product.commission_value <= 0) return null;
-  const baseAmount = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
+  const baseAmount = Math.max(0, (order.product_amount_cents ?? order.total_amount_cents) - order.refund_amount_cents); // L38: delivery_fee_cents 不参与开团服务奖励
   const estimatedAmount = calculateInitialAmount({
     commission_type: product.commission_type,
     commission_value: product.commission_value,
@@ -158,7 +158,7 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
     return commission;
   }
 
-  const baseAmount = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
+  const baseAmount = Math.max(0, (order.product_amount_cents ?? order.total_amount_cents) - order.refund_amount_cents); // L38: delivery_fee_cents 不参与开团服务奖励
   const isFullRefund = baseAmount <= 0 || order.order_status === 'refunded';
   const recalculated = isFullRefund
     ? 0
@@ -167,7 +167,7 @@ export async function syncCommissionAfterRefund(orderId: string, tx?: Prisma.Tra
       commission_value: commission.commission_value,
       quantity: order.quantity,
       base_amount_cents: baseAmount,
-      original_pay_amount_cents: order.pay_amount_cents
+      original_pay_amount_cents: order.product_amount_cents ?? order.total_amount_cents
     });
   const previousStatus = commission.status;
   const previousFinalAmount = commission.final_amount_cents;

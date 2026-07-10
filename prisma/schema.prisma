@@ -235,6 +235,10 @@ model Order {
   product_id          String?
   leader_user_id      String?
   total_amount_cents  Int
+  product_amount_cents Int?
+  delivery_fee_cents  Int          @default(0)
+  delivery_time_window_code String?
+  delivery_time_window_text String?
   pay_amount_cents    Int
   quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)

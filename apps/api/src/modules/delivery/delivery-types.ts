@@ -15,7 +15,10 @@ export type DeliveryReservation = {
   receiver_name: string;
   receiver_phone_masked: string;
   estimated_distance_km: number | null;
+  product_amount_cents?: number;
   delivery_fee_cents: number | null;
+  pay_amount_cents?: number;
+  delivery_time_window_text?: string | null;
   third_party_provider: 'dada' | null;
   third_party_order_no: string | null;
   can_create_delivery: boolean;

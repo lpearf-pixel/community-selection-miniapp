@@ -98,7 +98,7 @@ function maskReceiverPhone(phone?: string | null) {
 }
 
 function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number; delivery_time_window_text?: string; service_radius_text?: string }) {
-  // L36 门店配送响应展示配送时段与配送费；配送时段不落库，创建响应优先使用本次校验结果；不调用达达，不调用第三方配送。
+  // L38: product_amount_cents 为商品金额，delivery_fee_cents 为配送费，pay_amount_cents 为应付金额；不接真实支付/退款。
   const product = order.product ?? order.group_buy?.product ?? null;
   return {
     id: order.id,
@@ -110,6 +110,8 @@ function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number;
     product_id: order.product_id ?? product?.id ?? null,
     leader_user_id: order.leader_user_id,
     total_amount_cents: order.total_amount_cents,
+    product_amount_cents: order.product_amount_cents ?? order.total_amount_cents,
+    delivery_fee_cents: order.delivery_fee_cents ?? (order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_fee_cents ?? 0) : 0),
     pay_amount_cents: order.pay_amount_cents,
     refund_amount_cents: order.refund_amount_cents,
     quantity: order.quantity,
@@ -123,8 +125,8 @@ function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number;
     receiver_phone_masked: maskReceiverPhone(order.receiver_phone),
     receiver_address: order.receiver_address,
     receiver_address_masked: order.receiver_address ? `${String(order.receiver_address).slice(0, 6)}***` : null,
-    delivery_fee_cents: order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_fee_cents ?? 0) : 0,
-    delivery_time_window_text: order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_time_window_text ?? '以门店确认时段为准') : null,
+    delivery_time_window_code: order.pickup_type === 'delivery' ? (order.delivery_time_window_code ?? null) : null,
+    delivery_time_window_text: order.pickup_type === 'delivery' ? (order.delivery_time_window_text ?? deliveryMeta?.delivery_time_window_text ?? '以门店确认时段为准') : null,
     service_radius_text: order.pickup_type === 'delivery' ? (deliveryMeta?.service_radius_text ?? null) : null,
     created_at: order.created_at,
     paid_at: order.paid_at,
@@ -171,7 +173,6 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
   const receiverName = input.receiver_name;
   const receiverPhone = input.receiver_phone;
   const pickupType = await validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
-  const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code }) : null;
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({
@@ -188,10 +189,15 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
     if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可下单');
     if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
 
-    const amount = groupBuy.price_cents * saleQuantity;
+    const productAmountCents = groupBuy.price_cents * saleQuantity;
+    const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
+    const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
+    const payAmountCentsBeforeCredit = productAmountCents + deliveryFeeCents;
+    const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
+    const amount = productAmountCents;
     const creditAmount = Number(input.credit_amount_cents ?? 0);
     if (!Number.isInteger(creditAmount) || creditAmount < 0) throw new Error('消费额度抵扣金额不合法');
-    if (creditAmount > amount) throw new Error('消费额度抵扣金额不能超过订单金额');
+    if (creditAmount > productAmountCents) throw new Error('消费额度抵扣金额不能超过商品金额');
     if (creditAmount > 0 && !input.credit_source_id) throw new Error('缺少消费额度来源');
 
     let creditBalanceAfter: number | null = null;
@@ -210,8 +216,12 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
         user_id: userId,
         group_buy_id: groupBuy.id,
         leader_user_id: groupBuy.leader_user_id,
-        total_amount_cents: amount,
-        pay_amount_cents: amount - creditAmount,
+        total_amount_cents: productAmountCents,
+        product_amount_cents: productAmountCents,
+        delivery_fee_cents: deliveryFeeCents,
+        delivery_time_window_code: pickupType === PickupType.delivery ? input.delivery_time_window_code : null,
+        delivery_time_window_text: deliveryTimeWindowTextValue,
+        pay_amount_cents: payAmountCentsBeforeCredit - creditAmount,
         quantity: saleQuantity,
         credit_amount_cents: creditAmount,
         credit_source_type: creditAmount > 0 ? 'reward_conversion' : undefined,
@@ -250,7 +260,6 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
   const clientRequestId = input.client_request_id ?? `normal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   if (!userId || !productId || !receiverName || !receiverPhone) throw new Error('缺少普通购买下单必填字段');
   const pickupType = await validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
-  const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code }) : null;
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existing = await tx.order.findUnique({
@@ -273,7 +282,11 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
       if (!pickupStore) throw new Error('自提点不存在');
     }
 
-    const amount = product.price_cents * saleQuantity;
+    const productAmountCents = product.price_cents * saleQuantity;
+    const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
+    const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
+    const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
+    const amount = productAmountCents;
     const order = await tx.order.create({
       data: {
         order_no: makeOrderNo(),
@@ -281,8 +294,12 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
         user_id: userId,
         group_buy_id: null,
         product_id: product.id,
-        total_amount_cents: amount,
-        pay_amount_cents: amount,
+        total_amount_cents: productAmountCents,
+        product_amount_cents: productAmountCents,
+        delivery_fee_cents: deliveryFeeCents,
+        delivery_time_window_code: pickupType === PickupType.delivery ? input.delivery_time_window_code : null,
+        delivery_time_window_text: deliveryTimeWindowTextValue,
+        pay_amount_cents: productAmountCents + deliveryFeeCents,
         quantity: saleQuantity,
         pickup_type: pickupType,
         pickup_store_id: input.pickup_store_id,

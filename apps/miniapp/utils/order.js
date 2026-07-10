@@ -44,6 +44,9 @@ function normalizeOrder(order) {
     after_sale_summary: afterSaleSummary,
     order_type_text: formatOrderType(order.order_type),
     amount_yuan: formatOrderAmount(order.pay_amount_cents || order.total_amount_cents),
+    product_amount_yuan: formatOrderAmount(order.product_amount_cents || order.total_amount_cents),
+    delivery_fee_yuan: formatOrderAmount(order.delivery_fee_cents || 0),
+    pay_amount_yuan: formatOrderAmount(order.pay_amount_cents || order.total_amount_cents),
     can_show_pickup_code: canShowPickupCode(order),
     can_apply_after_sale: canApplyAfterSale(order),
     has_after_sale: hasAfterSale({ ...order, after_sale_summary: afterSaleSummary })
