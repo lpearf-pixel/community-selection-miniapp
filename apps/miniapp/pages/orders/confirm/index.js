@@ -41,6 +41,10 @@ Page({
     submitting: false,
     subtotal_cents: 0,
     subtotal_yuan: "0.00",
+    product_amount_cents: 0,
+    product_amount_yuan: "0.00",
+    delivery_fee_cents: 0,
+    delivery_fee_yuan: "0.00",
     pay_amount_cents: 0,
     pay_amount_yuan: "0.00",
     stock_label: "库存以门店确认为准",
@@ -171,6 +175,9 @@ Page({
     const hasStock = isKnownStock(stock);
     const stockInsufficient = hasStock && stock <= 0;
     const subtotal_cents = price * quantity;
+    const rule = this.data.deliveryRule || {};
+    const delivery_fee_cents = this.data.pickup_type === "delivery" ? ((rule.free_threshold_cents != null && subtotal_cents >= Number(rule.free_threshold_cents)) ? 0 : Number(rule.base_fee_cents || 0)) : 0;
+    const pay_amount_cents = subtotal_cents + delivery_fee_cents;
     let stock_label = "库存以门店确认为准";
     if (hasStock) stock_label = stock > 0 ? `库存：${stock}` : "库存不足";
     let submit_hint = "";
@@ -182,8 +189,12 @@ Page({
       quantity,
       subtotal_cents,
       subtotal_yuan: formatYuan(subtotal_cents),
-      pay_amount_cents: subtotal_cents,
-      pay_amount_yuan: formatYuan(subtotal_cents),
+      product_amount_cents: subtotal_cents,
+      product_amount_yuan: formatYuan(subtotal_cents),
+      delivery_fee_cents,
+      delivery_fee_yuan: formatYuan(delivery_fee_cents),
+      pay_amount_cents,
+      pay_amount_yuan: formatYuan(pay_amount_cents),
       stock_label,
       can_submit:
         Boolean(product || this.data.group_buy_id) &&

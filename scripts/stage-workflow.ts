@@ -38,7 +38,8 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L34: { title: 'L34 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l34-admin-data-scope-baseline-local.ts'] },
   L35: { title: 'L35 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l35-user-delivery-option-baseline-local.ts'] },
   L36: { title: 'L36 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l36-delivery-fee-window-range-baseline-local.ts'] },
-  L37: { title: 'L37 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts'] }
+  L37: { title: 'L37 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts'] },
+  L38: { title: 'L38 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
@@ -55,7 +56,8 @@ const regressionChains: Record<string, string[]> = {
   L34: ['L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
   L35: ['L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
   L36: ['L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L37: ['L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24']
+  L37: ['L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
+  L38: ['L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
 };
 
 const dockerApiE2E: CommandSpec = {
@@ -139,7 +141,8 @@ function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandS
   if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypecheck];
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
   if (scope === 'stage') return [stageVerifiers[args.stage]];
-  return [...regressionChains[args.stage].map((stage) => stageVerifiers[stage]), dockerApiE2E, adminTypecheck];
+  const chainCommands = regressionChains[args.stage].map((stage) => stage === 'DOCKER_API_E2E' ? dockerApiE2E : stage === 'ADMIN_TYPECHECK' ? adminTypecheck : stageVerifiers[stage]);
+  return chainCommands;
 }
 
 function prepareLatestOutput(): void {

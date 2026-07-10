@@ -54,6 +54,8 @@ function toPublicPaymentResult(input: { payment?: any | null; order: any; mock?:
     pay_status: input.order.pay_status,
     order_status: input.order.order_status,
     paid_at: input.order.paid_at,
+    product_amount_cents: input.order.product_amount_cents ?? input.order.total_amount_cents,
+    delivery_fee_cents: input.order.delivery_fee_cents ?? 0,
     pay_amount_cents: input.order.pay_amount_cents,
     transaction_id: input.payment?.transaction_id ?? null,
     mock: input.mock ?? true
