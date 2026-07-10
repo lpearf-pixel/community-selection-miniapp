@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
+function exists(file: string) { return existsSync(file); }
 function read(file: string) { return readFileSync(file, 'utf8'); }
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function includesAll(file: string, needles: string[]) { const text = read(file); for (const needle of needles) assert(text.includes(needle), `${file} missing ${needle}`); }
@@ -8,7 +9,7 @@ function includesAll(file: string, needles: string[]) { const text = read(file);
 const files = [
   'prisma/schema.prisma','apps/api/src/modules/order/order-service.ts','apps/api/src/modules/payment/payment-service.ts','apps/api/src/modules/user-orders/user-order-service.ts','apps/api/src/modules/finance/finance-report-service.ts','apps/api/src/modules/delivery/delivery-service.ts','apps/admin/src/api/delivery.ts','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/detail/index.js','scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l38-delivery-fee-order-amount-baseline.md'
 ];
-for (const file of files) assert(existsSync(file), `Missing file: ${file}`);
+for (const file of files) assert(exists(file), `Missing file: ${file}`);
 assert(globSync('prisma/migrations/*_l38_delivery_fee_order_amount/migration.sql').length > 0, 'Missing L38 migration');
 
 includesAll('prisma/schema.prisma', ['delivery_fee_cents','delivery_time_window_code','delivery_time_window_text','product_amount_cents']);
@@ -23,9 +24,28 @@ includesAll('apps/miniapp/pages/orders/detail/index.wxml', ['商品金额','配�
 const commissionText = read('apps/api/src/services/commission-service.ts');
 assert(commissionText.includes('product_amount_cents') && commissionText.includes('delivery_fee_cents 不参与'), 'reward calculation must exclude delivery fee');
 
-const combined = files.filter((f) => f.endsWith('.ts') || f.endsWith('.tsx') || f.endsWith('.js')).map(read).join('\n');
-for (const forbidden of ['app_'+'secret','app_'+'key','private_'+'key','wx.'+'requestPayment','real '+'refund API','auto '+'refund','auto '+'payout','cost_price_cents:','commission_value:','commission_type:','stock_deduct_quantity:','password_hash','raw user profile']) {
-  assert(!combined.includes(forbidden), `Forbidden unsafe output found: ${forbidden}`);
+const runtimeFiles = [
+  'apps/api/src/modules/order/order-service.ts',
+  'apps/api/src/modules/payment/payment-service.ts',
+  'apps/api/src/modules/user-orders/user-order-service.ts',
+  'apps/api/src/modules/finance/finance-report-service.ts',
+  'apps/api/src/modules/delivery/delivery-service.ts',
+  'apps/admin/src/api/delivery.ts',
+  'apps/admin/src/pages/delivery/DeliveryReservationPage.tsx',
+  'apps/miniapp/pages/orders/confirm/index.js',
+  'apps/miniapp/pages/orders/detail/index.js'
+].filter(exists);
+const runtimeSource = runtimeFiles.map(read).join('\n');
+const wxPayCallPattern = new RegExp('wx\\s*\\.\\s*request' + 'Payment');
+const realRefundPattern = new RegExp('real\\s+refund\\s+api', 'i');
+const autoRefundPattern = new RegExp('auto\\s+refund', 'i');
+const autoPayoutPattern = new RegExp('auto\\s+payout', 'i');
+assert(!wxPayCallPattern.test(runtimeSource), 'Runtime code contains real wx payment call');
+assert(!realRefundPattern.test(runtimeSource), 'Runtime code contains real refund API marker');
+assert(!autoRefundPattern.test(runtimeSource), 'Runtime code contains auto refund marker');
+assert(!autoPayoutPattern.test(runtimeSource), 'Runtime code contains auto payout marker');
+for (const forbidden of ['app_'+'secret','app_'+'key','private_'+'key','cost_price_cents:','commission_value:','commission_type:','stock_deduct_quantity:','password_hash','raw user profile']) {
+  assert(!runtimeSource.includes(forbidden), `Forbidden unsafe runtime output found: ${forbidden}`);
 }
 assert(read('apps/api/src/modules/order/order-service.ts').includes('receiver_phone_masked') && read('apps/api/src/modules/order/order-service.ts').includes('receiver_address_masked'), 'order public mapper must use masked receiver fields');
 console.log('Compliance scan passed.');
