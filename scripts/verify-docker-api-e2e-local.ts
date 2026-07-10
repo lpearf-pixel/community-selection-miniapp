@@ -47,6 +47,10 @@ const receiverPhone = '13812345678';
 const groupReceiverPhone = '13912345678';
 const forbiddenValues = [receiverPhone, groupReceiverPhone];
 const openid = `docker-e2e-${Date.now()}`;
+const adminHeaders = {
+  'x-admin-role': 'super_admin',
+  'x-admin-user-id': 'docker-e2e-admin'
+};
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -89,6 +93,14 @@ function collectRiskFindings(label: string, value: unknown) {
 
   walk(value, '$');
   return findings.map((finding) => `${label}: ${finding}`);
+}
+
+function withAdmin<T extends { headers?: Record<string, string> }>(init: T = {} as T): T {
+  return { ...init, headers: { ...(init.headers ?? {}), ...adminHeaders } };
+}
+
+function withAdminJson<T extends { headers?: Record<string, string> }>(init: T = {} as T): T {
+  return { ...init, headers: { 'content-type': 'application/json', ...(init.headers ?? {}), ...adminHeaders } };
 }
 
 async function request<T>(method: string, path: string, options: { body?: unknown; headers?: Record<string, string>; label?: string; expectedStatus?: number } = {}): Promise<T> {
@@ -183,9 +195,9 @@ async function main() {
   const deliveryDetail = await request<any>('GET', `/api/me/orders/${deliveryOrder.id}`, { label: 'GET /api/me/orders/:id delivery detail', headers: deliveryUserHeaders });
   assert(deliveryDetail.product_amount_cents === expectedProductAmount && deliveryDetail.delivery_fee_cents === deliveryOrder.delivery_fee_cents && deliveryDetail.pay_amount_cents === deliveryOrder.pay_amount_cents, 'user order detail must expose L38 amount fields');
   assert(deliveryDetail.delivery_time_window_text || deliveryDetail.delivery?.delivery_time_window_text, 'user order detail must expose delivery_time_window_text');
-  const adminDelivery = await request<any>('GET', '/api/admin/delivery/orders?page_size=50&pickup_type=delivery', { label: 'GET /api/admin/delivery/orders' });
+  const adminDelivery = await request<any>('GET', '/api/admin/delivery/orders?page_size=50&pickup_type=delivery', withAdmin({ label: 'GET /api/admin/delivery/orders' }));
   assert(JSON.stringify(adminDelivery).includes('delivery_fee_cents') && JSON.stringify(adminDelivery).includes('pay_amount_cents'), 'Admin delivery list must expose delivery fee and pay amount');
-  const financeOverview = await request<any>('GET', '/api/admin/finance/reconciliation/overview', { label: 'GET /api/admin/finance/reconciliation/overview' });
+  const financeOverview = await request<any>('GET', '/api/admin/finance/reconciliation/overview', withAdmin({ label: 'GET /api/admin/finance/reconciliation/overview' }));
   assert(typeof financeOverview.total_delivery_fee_cents === 'number', 'finance reconciliation summary must include total_delivery_fee_cents');
 
 
