@@ -274,6 +274,7 @@ async function main() {
     body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'inactive admin should fail' }
   });
   assert((inactiveAdminReview as any).message?.includes('管理员不存在或已停用'), 'Inactive admin id must return business error before Prisma FK violation');
+  await ensureDockerE2eFixtures(prisma);
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/review L39 split approval',
     body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split approval' }
@@ -296,6 +297,7 @@ async function main() {
   await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 insufficient permission', expectedStatus: 403 }), headers: { 'x-admin-role': 'operator', 'x-admin-user-id': 'docker-e2e-operator' } });
   await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
   await request<any>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, { ...withAdmin({ label: 'GET /api/admin/after-sales/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  await ensureDockerE2eFixtures(prisma);
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/resolve`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/resolve L39 split refund',
     body: { resolution_type: 'partial_refund', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split refund' }

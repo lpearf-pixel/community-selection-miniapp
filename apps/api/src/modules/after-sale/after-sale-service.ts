@@ -156,6 +156,20 @@ function ensureRefundSplitWithinOrder(order: { product_amount_cents: number | nu
 }
 
 
+
+function isAdminForeignKeyError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003' && String(error.meta?.constraint ?? error.meta?.field_name ?? '').includes('AfterSaleCase_');
+}
+
+async function mapAdminForeignKeyError<T>(operation: Promise<T>): Promise<T> {
+  try {
+    return await operation;
+  } catch (error) {
+    if (isAdminForeignKeyError(error)) throw new Error('管理员不存在或已停用');
+    throw error;
+  }
+}
+
 async function requireExistingAdmin(tx: Prisma.TransactionClient, adminUserId?: string | null) {
   if (!adminUserId) throw new Error('缺少管理员身份');
   const admin = await tx.adminUser.findUnique({ where: { id: adminUserId } });
@@ -239,7 +253,7 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
     const current = await tx.afterSaleCase.findUnique({ where: { id } });
     if (!current) throw new Error('售后工单不存在');
     if (!['submitted', 'reviewing'].includes(current.status)) throw new Error('当前售后状态不可审核');
-    const updated = await tx.afterSaleCase.update({
+    const updated = await mapAdminForeignKeyError(tx.afterSaleCase.update({
       where: { id },
       data: {
         status,
@@ -249,10 +263,10 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
         approved_delivery_refund_cents: approvedDeliveryRefundCents ?? current.approved_delivery_refund_cents,
         responsibility,
         admin_note: input.admin_note ?? current.admin_note,
-        reviewed_by_admin_id: adminUserId,
+        reviewed_by_admin: { connect: { id: adminUserId } },
         reviewed_at: new Date()
       }
-    });
+    }));
     const eventType = status === 'approved' ? 'after_sale_approved' : status === 'rejected' ? 'after_sale_rejected' : 'after_sale_reviewed';
     await recordAfterSaleLog(tx, updated, eventType, { actor_type: 'admin', actor_id: adminUserId }, input.admin_note, { previous_status: current.status });
     return updated;
@@ -275,10 +289,10 @@ export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleIn
   let resolvedByAdminId = '';
   const processing = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     resolvedByAdminId = await requireExistingAdmin(tx, input.admin_user_id);
-    const updated = await tx.afterSaleCase.update({
+    const updated = await mapAdminForeignKeyError(tx.afterSaleCase.update({
       where: { id },
-      data: { status: 'processing', resolution_type: resolutionType, approved_refund_cents: refundAmount, approved_product_refund_cents: productRefundAmount, approved_delivery_refund_cents: deliveryRefundAmount, admin_note: input.admin_note ?? current.admin_note, resolved_by_admin_id: resolvedByAdminId }
-    });
+      data: { status: 'processing', resolution_type: resolutionType, approved_refund_cents: refundAmount, approved_product_refund_cents: productRefundAmount, approved_delivery_refund_cents: deliveryRefundAmount, admin_note: input.admin_note ?? current.admin_note, resolved_by_admin: { connect: { id: resolvedByAdminId } } }
+    }));
     await recordAfterSaleLog(tx, updated, 'after_sale_resolved', { actor_type: 'admin', actor_id: resolvedByAdminId }, input.admin_note, { resolution_type: resolutionType });
     return updated;
   });
