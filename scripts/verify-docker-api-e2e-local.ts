@@ -252,6 +252,23 @@ async function main() {
     label: 'POST /api/admin/after-sales/:id/review L39 split approval',
     body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split approval' }
   }));
+
+  // L40: Admin order detail and after-sale workbench must expose split review data without triggering a refund automatically.
+  const l40AfterSaleList = await request<any[]>('GET', `/api/admin/after-sales?order_no=${encodeURIComponent(l39DeliveryOrder.order_no ?? '')}`, withAdmin({ label: 'GET /api/admin/after-sales L40 workbench list' }));
+  assert(Array.isArray(l40AfterSaleList) && l40AfterSaleList.some((item) => item.after_sale_case_id === l39AfterSaleId), 'L40 admin after-sale list must include reviewed case');
+  const l40AfterSaleDetail = await request<any>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, withAdmin({ label: 'GET /api/admin/after-sales/:id L40 detail' }));
+  assert(l40AfterSaleDetail.approved_product_refund_cents === 100, 'L40 after-sale detail must include approved_product_refund_cents=100');
+  assert(l40AfterSaleDetail.approved_delivery_refund_cents === 200, 'L40 after-sale detail must include approved_delivery_refund_cents=200');
+  assert(l40AfterSaleDetail.approved_refund_cents === 300, 'L40 after-sale detail must include approved_refund_cents=300');
+  assert(l40AfterSaleDetail.order.receiver_phone_masked && !JSON.stringify(l40AfterSaleDetail).includes(receiverPhone), 'L40 after-sale detail must only include masked receiver_phone');
+  const l40OrderDetailBeforeRefund = await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, withAdmin({ label: 'GET /api/admin/orders/:id L40 before manual refund' }));
+  assert(l40OrderDetailBeforeRefund.after_sale_summary.approved_product_refund_cents >= 100, 'L40 order detail must summarize approved product refund split');
+  assert(l40OrderDetailBeforeRefund.after_sale_summary.approved_delivery_refund_cents >= 200, 'L40 order detail must summarize approved delivery refund split');
+  assert(l40OrderDetailBeforeRefund.product_refund_amount_cents === 0 && l40OrderDetailBeforeRefund.delivery_refund_amount_cents === 0 && l40OrderDetailBeforeRefund.refund_amount_cents === 0, 'L40 review must not automatically create refund amounts before manual resolve');
+  assert(l40OrderDetailBeforeRefund.receiver_phone_masked && !JSON.stringify(l40OrderDetailBeforeRefund).includes(receiverPhone), 'L40 admin order detail must only include masked receiver_phone');
+  await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 insufficient permission', expectedStatus: 403 }), headers: { 'x-admin-role': 'operator', 'x-admin-user-id': 'docker-e2e-operator' } });
+  await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  await request<any>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, { ...withAdmin({ label: 'GET /api/admin/after-sales/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/resolve`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/resolve L39 split refund',
     body: { resolution_type: 'partial_refund', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split refund' }

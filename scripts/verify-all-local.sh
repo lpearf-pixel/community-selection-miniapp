@@ -76,3 +76,4 @@ pnpm exec tsx scripts/verify-l37-delivery-rule-config-baseline-local.ts
 
 pnpm exec tsx scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts
 pnpm exec tsx scripts/verify-l39-delivery-refund-finance-baseline-local.ts
+pnpm exec tsx scripts/verify-l40-admin-order-after-sale-workbench-local.ts

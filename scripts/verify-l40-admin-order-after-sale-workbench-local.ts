@@ -1,0 +1,45 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
+function read(path: string) { return readFileSync(join(process.cwd(), path), 'utf8'); }
+function includesAll(source: string, values: string[], label: string) { for (const value of values) assert(source.includes(value), `${label} missing ${value}`); }
+
+const adminOrdersRoute = read('apps/api/src/routes/admin/orders.ts');
+const afterSalesRoute = read('apps/api/src/routes/after-sales.ts');
+const adminOrderApi = read('apps/admin/src/api/adminOrders.ts');
+const adminAfterSaleApi = read('apps/admin/src/api/adminAfterSales.ts');
+const orderPage = read('apps/admin/src/pages/orders/AdminOrderDetailPage.tsx');
+const workbenchPage = read('apps/admin/src/pages/after-sales/AfterSaleWorkbenchPage.tsx');
+const stageWorkflow = read('scripts/stage-workflow.ts');
+
+assert(adminOrdersRoute.includes("/api/admin/orders/:id"), 'Admin order detail API missing');
+assert(adminOrdersRoute.includes("requireAdminPermission('order.view')"), 'Admin order detail must require order.view');
+assert(afterSalesRoute.includes("/api/admin/after-sales"), 'Admin after-sale list API missing');
+assert(afterSalesRoute.includes("requireAdminPermission('after_sale.manage')"), 'Admin after-sale APIs must require after_sale.manage');
+assert(afterSalesRoute.includes("/api/admin/after-sales/:id/review"), 'Admin after-sale review API missing');
+assert(afterSalesRoute.includes("requireAdminPermission(['after_sale.manage', 'refund.manage'])"), 'Review action must require after_sale.manage or refund.manage');
+assert(adminOrdersRoute.includes('canAccessOrderDataScope') && afterSalesRoute.includes('getScopedOrderWhere') && afterSalesRoute.includes('canAccessOrderDataScope'), 'Admin data scope must protect order and after-sale data');
+assert(adminOrdersRoute.includes('receiver_phone_masked') && afterSalesRoute.includes('receiver_phone_masked'), 'Phone must be masked in admin responses');
+assert(adminOrdersRoute.includes('receiver_address_masked') && afterSalesRoute.includes('receiver_address_masked'), 'Address must be masked by default');
+
+includesAll(adminOrdersRoute + afterSalesRoute + adminOrderApi + adminAfterSaleApi + orderPage + workbenchPage, [
+  'product_refund_amount_cents', 'delivery_refund_amount_cents', 'refund_amount_cents', 'remaining_refundable_amount_cents',
+  'requested_product_refund_cents', 'requested_delivery_refund_cents', 'approved_product_refund_cents', 'approved_delivery_refund_cents'
+], 'L39 refund split fields');
+includesAll(workbenchPage, ['状态筛选', '类型筛选', '订单号搜索', '审核通过', '审核拒绝', '人工备注'], 'After-sale workbench UI');
+
+const runtimeFiles = [adminOrdersRoute, afterSalesRoute, adminOrderApi, adminAfterSaleApi, orderPage, workbenchPage];
+const joinedRuntime = runtimeFiles.join('\n');
+for (const forbidden of ['cost_price_cents', 'commission_value', 'commission_type', 'stock_deduct_quantity', 'password_hash', 'private_key', 'totp_secret']) {
+  assert(!joinedRuntime.includes(forbidden), `Sensitive field leaked in runtime files: ${forbidden}`);
+}
+assert(!joinedRuntime.includes('createMockRefund('), 'L40 review workbench must not trigger mock/real refund');
+assert(!/wechat.*refund|refund.*wechat/i.test(joinedRuntime), 'L40 runtime must not integrate real WeChat refund');
+assert(!/auto.*payout|自动打款/.test(joinedRuntime), 'L40 runtime must not implement automatic payout');
+assert(!/auto.*tax|自动报税/.test(joinedRuntime), 'L40 runtime must not implement automatic tax filing');
+
+assert(stageWorkflow.includes('L40') && stageWorkflow.includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'L40 must be registered in stage workflow');
+assert(read('scripts/verify-all-local.sh').includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'verify-all must include L40');
+assert(existsSync(join(process.cwd(), 'docs/reviews/l40-admin-order-after-sale-workbench.md')), 'L40 review doc missing');
+console.log('L40 admin order after sale workbench verification passed.');
