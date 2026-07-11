@@ -598,7 +598,7 @@ function getChangedFiles() {
   if (isL25Stage) return { files: l25Manifest.files, error: '' };
   if (isL26Stage) return { files: l26Manifest.files, error: '' };
   if (isL27Stage) return { files: l27Manifest.files, error: '' };
-  if (isL40Stage) return { files: ['apps/api/src/routes/admin/orders.ts','apps/api/src/routes/after-sales.ts','apps/admin/src/api/adminOrders.ts','apps/admin/src/api/adminAfterSales.ts','apps/admin/src/pages/orders/AdminOrderDetailPage.tsx','apps/admin/src/pages/after-sales/AfterSaleWorkbenchPage.tsx','scripts/verify-l40-admin-order-after-sale-workbench-local.ts','docs/reviews/l40-admin-order-after-sale-workbench.md'], error: '' };
+  if (isL40Stage) return { files: ['apps/api/src/modules/after-sale/after-sale-service.ts','apps/api/src/routes/admin/orders.ts','apps/api/src/routes/after-sales.ts','apps/admin/src/api/adminOrders.ts','apps/admin/src/api/adminAfterSales.ts','apps/admin/src/pages/orders/AdminOrderDetailPage.tsx','apps/admin/src/pages/after-sales/AfterSaleWorkbenchPage.tsx','scripts/lib/docker-e2e-fixtures.ts','scripts/verify-docker-api-e2e-local.ts','scripts/verify-l40-admin-order-after-sale-workbench-local.ts','docs/reviews/l40-admin-order-after-sale-workbench.md'], error: '' };
   if (isL39Stage) return { files: l39Manifest.files, error: '' };
   if (isL38Stage) return { files: l38Manifest.files, error: '' };
   if (isL37Stage) return { files: l37Manifest.files, error: '' };

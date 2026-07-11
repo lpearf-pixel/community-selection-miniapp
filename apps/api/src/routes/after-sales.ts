@@ -186,11 +186,14 @@ export function registerAdminAfterSaleRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/admin/after-sales/:id/resolve', async (request, reply) => {
+  app.post('/api/admin/after-sales/:id/resolve', { preHandler: requireAdminPermission(['after_sale.manage', 'refund.manage']) }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      const scoped = await ensureAfterSaleScope(request, id, reply);
+      if (!scoped) return fail(reply.statusCode === 403 ? ADMIN_SCOPE_FORBIDDEN : '售后工单不存在');
       const body = request.body as ResolveAfterSaleBody;
-      return ok(await resolveAfterSaleCase(id, { ...body, resolution_type: body.resolution_type ?? '', admin_user_id: request.adminUser?.id ?? null }));
+      const context = resolveAdminAccessContext(request);
+      return ok(await resolveAfterSaleCase(id, { ...body, resolution_type: body.resolution_type ?? '', admin_user_id: context?.admin_user_id ?? request.adminUser?.id ?? null }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '售后解决失败');

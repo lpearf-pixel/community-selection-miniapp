@@ -12,6 +12,9 @@ const adminAfterSaleApi = read('apps/admin/src/api/adminAfterSales.ts');
 const orderPage = read('apps/admin/src/pages/orders/AdminOrderDetailPage.tsx');
 const workbenchPage = read('apps/admin/src/pages/after-sales/AfterSaleWorkbenchPage.tsx');
 const stageWorkflow = read('scripts/stage-workflow.ts');
+const dockerE2e = read('scripts/verify-docker-api-e2e-local.ts');
+const fixtures = read('scripts/lib/docker-e2e-fixtures.ts');
+const afterSaleService = read('apps/api/src/modules/after-sale/after-sale-service.ts');
 
 assert(adminOrdersRoute.includes("/api/admin/orders/:id"), 'Admin order detail API missing');
 assert(adminOrdersRoute.includes("requireAdminPermission('order.view')"), 'Admin order detail must require order.view');
@@ -39,6 +42,10 @@ assert(!/wechat.*refund|refund.*wechat/i.test(joinedRuntime), 'L40 runtime must 
 assert(!/auto.*payout|自动打款/.test(joinedRuntime), 'L40 runtime must not implement automatic payout');
 assert(!/auto.*tax|自动报税/.test(joinedRuntime), 'L40 runtime must not implement automatic tax filing');
 
+assert(fixtures.includes('DOCKER_E2E_ADMIN_ID') && fixtures.includes('docker-e2e-admin') && fixtures.includes('prisma.adminUser.upsert'), 'Docker E2E admin fixture must upsert deterministic admin');
+assert(dockerE2e.includes('ensureDockerE2eFixtures(prisma)') && dockerE2e.indexOf('ensureDockerE2eFixtures(prisma)') < dockerE2e.indexOf('/api/admin/'), 'Docker E2E fixture must run before admin requests');
+assert(afterSaleService.includes('requireExistingAdmin') && afterSaleService.includes('缺少管理员身份') && afterSaleService.includes('管理员不存在或已停用'), 'After-sale service must validate admin identity before FK writes');
+assert(dockerE2e.includes('reviewed_by_admin_id') && dockerE2e.includes('resolved_by_admin_id') && dockerE2e.includes('docker-e2e-missing-admin') && dockerE2e.includes('docker-e2e-inactive-admin'), 'Docker E2E must cover deterministic reviewer/resolver and invalid admin errors');
 assert(stageWorkflow.includes('L40') && stageWorkflow.includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'L40 must be registered in stage workflow');
 assert(read('scripts/verify-all-local.sh').includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'verify-all must include L40');
 assert(existsSync(join(process.cwd(), 'docs/reviews/l40-admin-order-after-sale-workbench.md')), 'L40 review doc missing');

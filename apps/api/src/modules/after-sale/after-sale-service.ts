@@ -155,6 +155,14 @@ function ensureRefundSplitWithinOrder(order: { product_amount_cents: number | nu
   if (totalRefund > totalRemaining) throw new Error('退款金额超过订单实付金额');
 }
 
+
+async function requireExistingAdmin(tx: Prisma.TransactionClient, adminUserId?: string | null) {
+  if (!adminUserId) throw new Error('缺少管理员身份');
+  const admin = await tx.adminUser.findUnique({ where: { id: adminUserId } });
+  if (!admin || admin.status !== 'active') throw new Error('管理员不存在或已停用');
+  return admin.id;
+}
+
 function normalizeEvidence(value: string[] | null | undefined) {
   if (!value) return Prisma.JsonNull;
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) throw new Error('售后凭证必须是图片 URL 字符串数组');
@@ -227,6 +235,7 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
   const approvedDeliveryRefundCents = input.approved_delivery_refund_cents == null ? null : ensurePositiveInteger(input.approved_delivery_refund_cents, '审核配送费退款金额必须大于 0');
   if ((approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0) > 0 && approvedRefundCents !== (approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0)) throw new Error('审核商品退款金额与配送费退款金额之和必须等于总退款金额');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const adminUserId = await requireExistingAdmin(tx, input.admin_user_id);
     const current = await tx.afterSaleCase.findUnique({ where: { id } });
     if (!current) throw new Error('售后工单不存在');
     if (!['submitted', 'reviewing'].includes(current.status)) throw new Error('当前售后状态不可审核');
@@ -240,12 +249,12 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
         approved_delivery_refund_cents: approvedDeliveryRefundCents ?? current.approved_delivery_refund_cents,
         responsibility,
         admin_note: input.admin_note ?? current.admin_note,
-        reviewed_by_admin_id: input.admin_user_id ?? null,
+        reviewed_by_admin_id: adminUserId,
         reviewed_at: new Date()
       }
     });
     const eventType = status === 'approved' ? 'after_sale_approved' : status === 'rejected' ? 'after_sale_rejected' : 'after_sale_reviewed';
-    await recordAfterSaleLog(tx, updated, eventType, { actor_type: 'admin', actor_id: input.admin_user_id ?? null }, input.admin_note, { previous_status: current.status });
+    await recordAfterSaleLog(tx, updated, eventType, { actor_type: 'admin', actor_id: adminUserId }, input.admin_note, { previous_status: current.status });
     return updated;
   });
 }
@@ -263,12 +272,14 @@ export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleIn
   const productRefundAmount = approvedProductRefundCents ?? current.approved_product_refund_cents ?? undefined;
   const deliveryRefundAmount = approvedDeliveryRefundCents ?? current.approved_delivery_refund_cents ?? undefined;
   if ((resolutionType === 'refund' || resolutionType === 'partial_refund') && !refundAmount) throw new Error('退款类售后必须填写审核退款金额');
+  let resolvedByAdminId = '';
   const processing = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    resolvedByAdminId = await requireExistingAdmin(tx, input.admin_user_id);
     const updated = await tx.afterSaleCase.update({
       where: { id },
-      data: { status: 'processing', resolution_type: resolutionType, approved_refund_cents: refundAmount, approved_product_refund_cents: productRefundAmount, approved_delivery_refund_cents: deliveryRefundAmount, admin_note: input.admin_note ?? current.admin_note, resolved_by_admin_id: input.admin_user_id ?? null }
+      data: { status: 'processing', resolution_type: resolutionType, approved_refund_cents: refundAmount, approved_product_refund_cents: productRefundAmount, approved_delivery_refund_cents: deliveryRefundAmount, admin_note: input.admin_note ?? current.admin_note, resolved_by_admin_id: resolvedByAdminId }
     });
-    await recordAfterSaleLog(tx, updated, 'after_sale_resolved', { actor_type: 'admin', actor_id: input.admin_user_id ?? null }, input.admin_note, { resolution_type: resolutionType });
+    await recordAfterSaleLog(tx, updated, 'after_sale_resolved', { actor_type: 'admin', actor_id: resolvedByAdminId }, input.admin_note, { resolution_type: resolutionType });
     return updated;
   });
   let refundId: string | null = null;
@@ -289,7 +300,7 @@ export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleIn
       data: { status: 'resolved', resolution_type: resolutionType, refund_id: refundId, resolved_at: new Date() }
     });
     if (refundId) {
-      await recordAfterSaleLog(tx, updated, 'after_sale_refund_created', { actor_type: 'admin', actor_id: input.admin_user_id ?? null }, input.admin_note, { refund_id: refundId, processing_case_id: processing.id });
+      await recordAfterSaleLog(tx, updated, 'after_sale_refund_created', { actor_type: 'admin', actor_id: resolvedByAdminId }, input.admin_note, { refund_id: refundId, processing_case_id: processing.id });
     }
     return updated;
   });
