@@ -8,10 +8,7 @@
     "outDir": "dist",
     "noEmit": true,
     "types": [
-      "vite/client",
-      "node",
-      "react",
-      "react-dom"
+      "vite/client"
     ],
     "strict": true,
     "esModuleInterop": true,

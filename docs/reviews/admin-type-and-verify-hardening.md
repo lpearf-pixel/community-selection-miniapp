@@ -34,7 +34,7 @@ Admin 全局 JSX 错误的真实根因是 `apps/admin/src/types.d.ts` 中存在�
 
 ## 是否存在多份 React 类型
 
-仓库本身未在 `package.json` 中直接声明 `@types/react` 或 `@types/react-dom`。由于本环境无法完成依赖安装与 `pnpm why`，未能验证容器中是否存在多份 React 类型。治理后的配置通过删除本地 React override，并在 Admin `types` 中显式包含 `react` / `react-dom`，避免本地声明继续遮蔽官方类型源。
+仓库本身未在 `package.json` 中直接声明 `@types/react` 或 `@types/react-dom`。由于本环境无法完成依赖安装与 `pnpm why`，未能验证容器中是否存在多份 React 类型。治理后的配置通过删除本地 React override，并且不把 `react` / `react-dom` 放入 `compilerOptions.types` 白名单，避免把 React 类型包误当作必须存在的全局 `@types/*` 入口。
 
 ## 是否存在本地 JSX / antd override
 
@@ -43,7 +43,7 @@ Admin 全局 JSX 错误的真实根因是 `apps/admin/src/types.d.ts` 中存在�
 ## 最终修复方式
 
 1. 删除本地 React / JSX runtime / Ant Design ambient module override，让官方类型生效。
-2. Admin tsconfig 显式包含 `vite/client`、`node`、`react`、`react-dom` 类型。
+2. Admin tsconfig 仅显式包含 `vite/client`，不把 React 类型包作为 `compilerOptions.types` 白名单项，让 TypeScript 按默认 node_modules 规则解析 React / Ant Design 类型。
 3. 将 `skipLibCheck` 设为 `false`，避免用跳过库检查掩盖类型冲突。
 4. 新增结构化 verification result 模型，区分阶段、合规安全、新增类型、历史基线类型、环境错误。
 5. 新增 Admin type baseline diff 工具：默认只比较当前错误与基线；新增错误阻塞，基线错误报告但不自动隐藏，`--update-baseline` 才能显式更新基线。
