@@ -9,11 +9,13 @@
     "noEmit": true,
     "types": [
       "vite/client",
-      "node"
+      "node",
+      "react",
+      "react-dom"
     ],
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },

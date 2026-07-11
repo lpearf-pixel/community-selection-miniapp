@@ -23,6 +23,7 @@ pnpm db:migrate
 pnpm db:seed
 pnpm seed:check
 pnpm typecheck
+pnpm exec tsx scripts/verify-admin-type-baseline-local.ts
 pnpm lint
 pnpm test
 pnpm build
