@@ -15,6 +15,10 @@ function assertSafeL42Payload(payload: unknown, label: string) {
 
 async function main() {
   const service = read('apps/api/src/modules/group-buy/group-buy-expiry-service.ts');
+  assert(
+    /import\s*\{[\s\S]*getOrderInventorySummary[\s\S]*restoreInventoryForRefund[\s\S]*\}\s*from\s*['"]\.\.\/inventory\/inventory-order-service\.js['"]/.test(service),
+    'L42 group buy service must import L41 inventory summary and restore functions'
+  );
   const routes = read('apps/api/src/routes/group-buys.ts');
   const adminUi = read('apps/admin/src/App.tsx');
   for (const keyword of ['getFailedGroupBuyClosureSummary', 'markGroupBuyFailed', 'closeFailedGroupBuyUnpaidOrders', 'listFailedGroupBuyPendingRefundOrders', 'confirmFailedGroupBuyRefundHandled', 'closeFailedGroupBuy']) assert(service.includes(keyword), `missing service keyword ${keyword}`);

@@ -1,7 +1,10 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 import { recordAdminAudit } from '../audit/audit-service.js';
-import { restoreInventoryForRefund } from '../inventory/inventory-order-service.js';
+import {
+  getOrderInventorySummary,
+  restoreInventoryForRefund
+} from '../inventory/inventory-order-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../../services/logging-service.js';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
