@@ -1,6 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
 
 export const DOCKER_E2E_ADMIN_ID = 'docker-e2e-admin';
+export const DOCKER_E2E_OPERATOR_ADMIN_ID = 'docker-e2e-operator';
+export const DOCKER_E2E_STORE_MANAGER_ADMIN_ID = 'docker-e2e-store-manager';
+export const DOCKER_E2E_INACTIVE_ADMIN_ID = 'docker-e2e-inactive-admin';
+export const DOCKER_E2E_FINANCE_ADMIN_ID = 'docker-e2e-finance-admin';
 export const DOCKER_E2E_CATEGORY_ID = 'docker-e2e-category';
 export const DOCKER_E2E_PRODUCT_ID = 'docker-e2e-product';
 export const DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID = 'docker-e2e-insufficient-stock-product';
@@ -123,6 +127,55 @@ export async function ensureDockerE2eFixtures(prisma: PrismaClient) {
       username: 'docker-e2e-admin-user',
       password_hash: 'docker-e2e-placeholder-not-for-login',
       role: 'super_admin',
+      status: 'active'
+    }
+  });
+
+  await prisma.adminUser.upsert({
+    where: { id: DOCKER_E2E_OPERATOR_ADMIN_ID },
+    update: { role: 'operator', status: 'active' },
+    create: {
+      id: DOCKER_E2E_OPERATOR_ADMIN_ID,
+      username: 'docker-e2e-operator-user',
+      password_hash: 'docker-e2e-placeholder-not-for-login',
+      role: 'operator',
+      status: 'active'
+    }
+  });
+
+  await prisma.adminUser.upsert({
+    where: { id: DOCKER_E2E_STORE_MANAGER_ADMIN_ID },
+    update: { role: 'store_manager', status: 'active' },
+    create: {
+      id: DOCKER_E2E_STORE_MANAGER_ADMIN_ID,
+      username: 'docker-e2e-store-manager-user',
+      password_hash: 'docker-e2e-placeholder-not-for-login',
+      role: 'store_manager',
+      status: 'active'
+    }
+  });
+
+  await prisma.adminUser.upsert({
+    where: { id: DOCKER_E2E_INACTIVE_ADMIN_ID },
+    update: { role: 'super_admin', status: 'inactive' },
+    create: {
+      id: DOCKER_E2E_INACTIVE_ADMIN_ID,
+      username: 'docker-e2e-inactive-admin-user',
+      password_hash: 'docker-e2e-placeholder-not-for-login',
+      role: 'super_admin',
+      status: 'inactive'
+    }
+  });
+
+
+  await prisma.adminUser.upsert({
+    where: { id: DOCKER_E2E_FINANCE_ADMIN_ID },
+    update: { role: 'finance', status: 'active' },
+    create: {
+      id: DOCKER_E2E_FINANCE_ADMIN_ID,
+      username: 'docker-e2e-finance-admin-user',
+      password_hash: 'docker-e2e-placeholder-not-for-login',
+      role: 'finance',
       status: 'active'
     }
   });

@@ -46,7 +46,17 @@ assert(fixtures.includes('DOCKER_E2E_ADMIN_ID') && fixtures.includes('docker-e2e
 assert(dockerE2e.includes('ensureDockerE2eFixtures(prisma)') && dockerE2e.indexOf('ensureDockerE2eFixtures(prisma)') < dockerE2e.indexOf('/api/admin/'), 'Docker E2E fixture must run before admin requests');
 assert(afterSaleService.includes('requireExistingAdmin') && afterSaleService.includes('缺少管理员身份') && afterSaleService.includes('管理员不存在或已停用'), 'After-sale service must validate admin identity before FK writes');
 assert(afterSaleService.includes('mapAdminForeignKeyError') && afterSaleService.includes('reviewed_by_admin: { connect') && afterSaleService.includes('resolved_by_admin: { connect'), 'After-sale service must map admin FK errors and connect validated admin relations');
-assert(dockerE2e.includes('reviewed_by_admin_id') && dockerE2e.includes('resolved_by_admin_id') && dockerE2e.includes('docker-e2e-missing-admin') && dockerE2e.includes('docker-e2e-inactive-admin'), 'Docker E2E must cover deterministic reviewer/resolver and invalid admin errors');
+const dockerAuthSources = `${dockerE2e}
+${fixtures}`;
+assert(fixtures.includes('DOCKER_E2E_ADMIN_ID') && fixtures.includes('prisma.adminUser.upsert') && fixtures.includes("status: 'active'"), 'Docker E2E deterministic admin fixture missing');
+assert(fixtures.includes('DOCKER_E2E_INACTIVE_ADMIN_ID') && fixtures.includes("role: 'super_admin'") && fixtures.includes("status: 'inactive'"), 'Docker E2E inactive admin fixture missing');
+assert(fixtures.includes('DOCKER_E2E_OPERATOR_ADMIN_ID') && fixtures.includes("role: 'operator'") && fixtures.includes("status: 'active'"), 'Docker E2E operator admin fixture missing');
+assert(fixtures.includes('DOCKER_E2E_STORE_MANAGER_ADMIN_ID') && fixtures.includes("role: 'store_manager'") && fixtures.includes("status: 'active'"), 'Docker E2E store manager admin fixture missing');
+assert(dockerAuthSources.includes('missing admin fixture') && dockerAuthSources.includes('expectedStatus: 401') && dockerAuthSources.includes('ADMIN_UNAUTHORIZED'), 'Docker E2E missing-admin 401 coverage missing');
+assert(dockerAuthSources.includes('inactive admin') && dockerAuthSources.includes('expectedStatus: 401') && dockerAuthSources.includes('ADMIN_UNAUTHORIZED'), 'Docker E2E inactive-admin 401 coverage missing');
+assert(dockerAuthSources.includes('insufficient permission') && dockerAuthSources.includes('expectedStatus: 403') && dockerAuthSources.includes('ADMIN_FORBIDDEN'), 'Docker E2E permission-denied 403 coverage missing');
+assert(dockerAuthSources.includes('cross pickup scope') && dockerAuthSources.includes('expectedStatus: 403') && dockerAuthSources.includes('ADMIN_SCOPE_FORBIDDEN'), 'Docker E2E data-scope 403 coverage missing');
+assert(dockerE2e.includes('reviewed_by_admin_id') && dockerE2e.includes('resolved_by_admin_id') && dockerE2e.includes('DOCKER_E2E_ADMIN_ID'), 'Docker E2E deterministic reviewer/resolver coverage missing');
 assert(stageWorkflow.includes('L40') && stageWorkflow.includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'L40 must be registered in stage workflow');
 assert(read('scripts/verify-all-local.sh').includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'verify-all must include L40');
 assert(existsSync(join(process.cwd(), 'docs/reviews/l40-admin-order-after-sale-workbench.md')), 'L40 review doc missing');

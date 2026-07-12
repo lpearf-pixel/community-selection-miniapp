@@ -38,14 +38,20 @@ for (const required of [
   'Admin 订单详情接口返回订单金额、退款拆分、剩余可退金额和配送摘要。',
   'L40 verifier',
   'L41 verifier',
+  'L42 verifier',
   'L24-L40 chain regression',
   'L24-L41 chain regression',
+  'L24-L42 chain regression',
   'Docker API E2E',
   'Admin typecheck config',
   'Admin full typecheck',
   'Admin typecheck passed.',
   "commandSection(content, 'Admin typecheck')",
   'detectAdminTypecheck',
+  'hasExplicitFailure',
+  'commandPassed',
+  'isTodoScannerDefinition',
+  'L42 business base branch must be configured',
   'error TS',
   'raw compliance scan',
   'Stage workflow',
@@ -53,19 +59,23 @@ for (const required of [
   'placeholder-not-for-login',
   'businessBaseBranch',
   'stable/l40-business-base',
+  'stable/l41-business-base',
   'businessBaseCommit',
   '429fe77c104f26e8f0a886727e7ee09902bcca4b',
   '7af8cb37b3c0babefe70900b27e3f85ed84caaec',
+  'c56f72cdf8fbc283bab694cc410a5415d3d0cf42',
   '报告生成分支',
   '报告生成 commit',
   'order.view',
   "permissions: ['after_sale.manage', 'refund.manage']",
+  "permissions: ['refund.view','refund.manage']",
   "api.permissions.join(' + ')"
 ]) {
   assert(generateSource.includes(required), `generate script should include ${required}`);
 }
 assert(!generateSource.includes("permission: 'L40 admin permission'"), 'L40 report must not use generic admin permission text');
 assert(!generateSource.includes("({ item, status: 'passed'"), 'L40 checklist must not use item/status shape that renders undefined');
+assert(!generateSource.includes('/\\bfailed\\b/i.test'), 'stage report must not treat the business word failed as a failure marker');
 assert(publishSource.includes('--orphan'), 'publish script may initialize the report branch through an orphan worktree');
 
 const reportingDocs = read(docsPath);

@@ -38,6 +38,42 @@ const stage = argValue('stage') ?? 'unknown';
 
 
 
+
+const l42Manifest: {
+  title: string;
+  files: string[];
+  businessBaseBranch: string;
+  businessBaseCommit: string;
+  apis: ManifestApiRow[];
+  db: string[];
+  verify: string[];
+  checklist: StageManifestChecklistItem[];
+} = {
+  title: 'L42 failed group buy manual closure',
+  businessBaseBranch: 'stable/l41-business-base',
+  businessBaseCommit: 'c56f72cdf8fbc283bab694cc410a5415d3d0cf42',
+  files: ['apps/api/src/modules/group-buy/group-buy-expiry-service.ts','apps/api/src/routes/group-buys.ts','apps/api/src/modules/admin-access/admin-access-control.ts','apps/admin/src/App.tsx','scripts/verify-l42-failed-group-buy-manual-closure-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l42-failed-group-buy-manual-closure.md'],
+  apis: [
+    { method: 'GET', path: '/api/admin/group-buys/:id/closure-summary', permissions: ['order.view','order.manage'], purpose: '失败团购关闭摘要', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/group-buys/:id/mark-failed', permissions: ['order.manage'], purpose: '人工标记团购失败', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/group-buys/:id/close-unpaid-orders', permissions: ['order.manage'], purpose: '关闭未支付订单且不退款', verified: 'yes' },
+    { method: 'GET', path: '/api/admin/group-buys/:id/manual-refund-orders', permissions: ['refund.view','refund.manage'], purpose: '列出已支付待人工退款订单', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund', permissions: ['refund.manage'], purpose: '确认已成功退款并复用 L41 回补库存', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/group-buys/:id/close', permissions: ['order.manage'], purpose: '最终关闭失败团购', verified: 'yes' }
+  ],
+  db: ['无新增表','无新增字段','复用 GroupBuy','复用 Order','复用 Refund','复用 StockLedger','复用 OrderTimelineLog','复用 BusinessEventLog','复用 AdminAuditLog'],
+  verify: ['scripts/verify-l42-failed-group-buy-manual-closure-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L42 --verify --scope=chain'],
+  checklist: [
+    { text: '团购失败由人工确认，标记失败不自动退款、不直接回补库存。', passed: true, evidence: 'L42 verifier' },
+    { text: '未支付订单批量关闭保持 pay_status=unpaid，且不产生 refund 或库存回补流水。', passed: true, evidence: 'L42 verifier' },
+    { text: '已支付订单进入待人工退款列表且不泄露敏感字段。', passed: true, evidence: 'L42 verifier' },
+    { text: '退款成功后才允许确认处理完成，库存回补复用 L41 且幂等。', passed: true, evidence: 'L42 verifier' },
+    { text: '存在 pending refund 或阻塞项时不能最终关闭，全部收口后可 closed。', passed: true, evidence: 'L42 verifier' },
+    { text: 'Admin 权限、active AdminUser 与 data scope 校验保留。', passed: true, evidence: 'L42 verifier' },
+    { text: '不开发 L43，不修改依赖和类型基线。', passed: true, evidence: 'raw compliance scan' }
+  ]
+};
+
 const l40Manifest: {
   title: string;
   files: string[];
@@ -145,6 +181,7 @@ const isL33Stage = stage.toUpperCase() === 'L33';
 const isL35Stage = stage.toUpperCase() === 'L35';
 const isL40Stage = stage.toUpperCase() === 'L40';
 const isL41Stage = stage.toUpperCase() === 'L41';
+const isL42Stage = stage.toUpperCase() === 'L42';
 const isL39Stage = stage.toUpperCase() === 'L39';
 const isL38Stage = stage.toUpperCase() === 'L38';
 const isL37Stage = stage.toUpperCase() === 'L37';
@@ -671,6 +708,7 @@ function getChangedFiles() {
   if (isL25Stage) return { files: l25Manifest.files, error: '' };
   if (isL26Stage) return { files: l26Manifest.files, error: '' };
   if (isL27Stage) return { files: l27Manifest.files, error: '' };
+  if (isL42Stage) return { files: l42Manifest.files, error: '' };
   if (isL41Stage) return { files: l41Manifest.files, error: '' };
   if (isL40Stage) return { files: l40Manifest.files, error: '' };
   if (isL39Stage) return { files: l39Manifest.files, error: '' };
@@ -704,7 +742,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+  if (isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL42Stage) return l42Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL41Stage) return l41Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL40Stage) return l40Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL39Stage) return l39Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: pathParts.join(' ').startsWith('/api/admin/') ? 'admin finance permissions' : pathParts.join(' ').startsWith('/api/me/') ? 'user identity' : 'public', purpose: 'L39 manifest API', verified: 'yes' }; });
@@ -794,6 +833,7 @@ function extractModels(files: string[]) {
   if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (isL26Stage) return l26Manifest.db.map((model) => ({ model, change: 'L26 manifest', description: 'L26 团购成团规则与参团链路校验数据库范围' }));
   if (isL27Stage) return l27Manifest.db.map((model) => ({ model, change: 'L27 manifest', description: 'L27 团购过期失败处理与人工退款/关闭流程数据库范围' }));
+  if (isL42Stage) return l42Manifest.db.map((model) => ({ model, change: 'L42 manifest', description: '复用既有失败团购收口相关模型' }));
   if (isL41Stage) return l41Manifest.db.map((model) => ({ model, change: 'L41 manifest', description: 'StockLedger 最小增强' }));
   if (isL40Stage) return l40Manifest.db.map((model) => ({ model, change: 'L40 manifest', description: '无新增 DB' }));
   if (isL39Stage) return l39Manifest.db.map((model) => ({ model, change: 'L39 manifest', description: 'L39 退款拆分字段范围' }));
@@ -866,6 +906,7 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L30') {
     return l30Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L42') return l42Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L41') return l41Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L40') return l40Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L39') {
@@ -904,7 +945,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+  if (isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL42Stage) return l42Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L42 阶段报告质量门禁验收脚本' }));
     if (isL41Stage) return l41Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L41 阶段报告质量门禁验收脚本' }));
     if (isL40Stage) return l40Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L40 阶段报告质量门禁验收脚本' }));
     if (isL39Stage) return [{ script: 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts', exists: existsSync(join(repoRoot, 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts')) ? 'yes' : 'no', inVerifyAll: safeRead('scripts/verify-all-local.sh').includes('scripts/verify-l39-delivery-refund-finance-baseline-local.ts') ? 'yes' : 'no', description: 'L39 配送费退款与财务对账拆分 baseline 验收脚本；pnpm verify:all 必须覆盖' }, { script: 'pnpm verify:all', exists: 'yes', inVerifyAll: 'yes', description: 'L39 manifest 要求的总体验证命令' }];
@@ -984,13 +1026,51 @@ function detectAdminTypecheck(content: string): StageVerifyStatus {
   return content.includes('Stage workflow verification passed.') || content.includes('Stage workflow verification passed') ? 'passed' : 'not detected';
 }
 
+function hasExplicitFailure(content: string) {
+  return [
+    'ERR_PNPM',
+    'Command failed',
+    'ELIFECYCLE',
+    'failed with exit code',
+    'exit code 1',
+    'exit code 2',
+    'MODULE_NOT_FOUND',
+    'TypeScript error TS',
+    'PrismaClientKnownRequestError',
+    'ReferenceError'
+  ].some((marker) => content.includes(marker)) || /\berror TS\d{4}\b/.test(content) || /Docker API E2E found \d+ risk findings/.test(content) || /Error:\s*(?!.*verification passed)/.test(content);
+}
+
+function commandPassed(content: string, title: string, successMarkers: string[], requireAllMarkers = false): StageVerifyStatus {
+  const section = commandSection(content, title);
+  const haystack = section || content;
+  if (!haystack) return 'not detected';
+  if (hasExplicitFailure(haystack)) return 'failed';
+  const matched = requireAllMarkers
+    ? successMarkers.every((marker) => content.includes(marker))
+    : successMarkers.some((marker) => haystack.includes(marker) || content.includes(marker));
+  return matched ? 'passed' : 'not detected';
+}
+
 function stageVerifyChecks(content: string) {
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code', 'exit code 1', 'exit code 2', 'MODULE_NOT_FOUND', 'TypeScript error TS'];
-  const hasFailureMarker = hasAnyMarker(content, failureMarkers) || /\bfailed\b/i.test(content.replace(/verification passed/gi, '').replace(/scan passed/gi, '').replace(/workflow verification passed/gi, ''));
-  const passIf = (markers: string[]): StageVerifyStatus => {
+  const hasFailureMarker = hasExplicitFailure(content);
+  const passIf = (markers: string[], title = ''): StageVerifyStatus => {
+    if (title) return commandPassed(content, title, markers);
     if (hasFailureMarker) return 'failed';
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
+  if (isL42Stage) {
+    return [
+      { command: 'L42 verifier', result: commandPassed(content, 'L42 verifier', ['L42 failed group buy manual closure verification passed.']) },
+      { command: 'L24-L42 chain regression', result: commandPassed(content, 'L24-L42 chain regression', ['L42 failed group buy manual closure verification passed.', 'L41 inventory deduct restore verification passed.', 'L40 admin order after sale workbench verification passed.', 'L24 miniapp cart verification passed', 'Stage workflow verification passed.'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.']) },
+      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
+      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
+      { command: 'raw compliance scan', result: commandPassed(content, 'raw compliance scan', ['Compliance scan passed.']) },
+      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
+    ];
+  }
   if (isL41Stage) {
     return [
       { command: 'L41 verifier', result: passIf(['L41 inventory deduct restore verification passed.']) },
@@ -1056,6 +1136,18 @@ function isAllowedPlaceholderLine(file: string, line: string) {
   return false;
 }
 
+function isTodoScannerDefinition(file: string, line: string) {
+  return file === 'scripts/generate-stage-report.ts' && (
+    line.includes('const keywords =') ||
+    line.includes('本阶段改动文件存在 TODO') ||
+    line.includes('isTodoScannerDefinition')
+  );
+}
+
+function isVerifierTodoTestString(file: string, line: string) {
+  return /verify.*\.(ts|tsx|js)$/.test(file) && /TODO|FIXME|TBD|NOT_IMPLEMENTED/.test(line) && /assert|includes|keywords|forbidden|required/.test(line);
+}
+
 function findTodoItems(files: string[]) {
   const keywords = /(TODO:|FIXME:|TBD:|NOT_IMPLEMENTED|throw new Error\([`'"]Not implemented[`'"]\)|待实现|功能占位)/i;
   const rows: string[] = [];
@@ -1066,6 +1158,8 @@ function findTodoItems(files: string[]) {
     lines.forEach((line, index) => {
       if (isL39Stage) return;
       if (isAllowedPlaceholderLine(file, line)) return;
+      if (isTodoScannerDefinition(file, line)) return;
+      if (isVerifierTodoTestString(file, line)) return;
       if (keywords.test(line)) rows.push(`- ${file}:${index + 1} — ${line.trim()}`);
     });
   }
@@ -1100,6 +1194,7 @@ function assertReportQuality(condition: unknown, message: string): asserts condi
 }
 
 function validateReportInputs() {
+  if (isL42Stage) assertReportQuality(l42Manifest, 'L42 stage manifest must exist');
   if (isL41Stage) assertReportQuality(l41Manifest, 'L41 stage manifest must exist');
   if (isL40Stage) assertReportQuality(l40Manifest, 'L40 stage manifest must exist');
   assertReportQuality(checklist.length > 0, 'stage checklist must contain at least one item');
@@ -1107,6 +1202,17 @@ function validateReportInputs() {
   assertReportQuality(!isL41Stage || l41Manifest.businessBaseCommit === '7af8cb37b3c0babefe70900b27e3f85ed84caaec', 'L41 business base commit must be explicitly configured');
   assertReportQuality(!isL40Stage || l40Manifest.businessBaseBranch === 'stable/l40-business-base', 'L40 business base branch must be explicitly configured');
   assertReportQuality(!isL40Stage || l40Manifest.businessBaseCommit === '429fe77c104f26e8f0a886727e7ee09902bcca4b', 'L40 business base commit must be explicitly configured');
+  if (isL42Stage) {
+    assertReportQuality(l42Manifest.businessBaseBranch === 'stable/l41-business-base', 'L42 business base branch must be configured');
+    assertReportQuality(l42Manifest.businessBaseCommit === 'c56f72cdf8fbc283bab694cc410a5415d3d0cf42', 'L42 business base commit must be configured');
+    assertReportQuality(l42Manifest.title.trim().length > 0, 'L42 title must be non-empty');
+    assertReportQuality(l42Manifest.apis.length === 6, 'L42 report must list six Admin APIs');
+    assertReportQuality(l42Manifest.checklist.length > 0 && l42Manifest.checklist.every((item) => item.passed), 'L42 checklist must be fully checked');
+    if (verifyOutput.exists) {
+      assertReportQuality(verifyOutput.rows.length === 7, 'L42 report must track seven verification rows');
+      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), 'L42 verification rows must all be passed');
+    }
+  }
   checklist.forEach((item, index) => {
     assertReportQuality(typeof item.label === 'string' && item.label.trim().length > 0, `stage checklist item ${index + 1} text must be non-empty`);
   });
@@ -1134,14 +1240,14 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
+- 业务稳定 commit：${isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
-- 本阶段目标：${isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- 本阶段目标：${isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
 - Codex 自评结论：${conclusion}
 
 ## 2. 本阶段变更范围
@@ -1198,5 +1304,6 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 `;
 
 if (report.includes('undefined')) throw new Error('generated report contains forbidden string: undefined');
+if (isL42Stage && report.includes('未配置')) throw new Error('L42 generated report must not contain 未配置');
 writeFileSync(reportPath, report);
 console.log(`Stage report generated: ${reportPath}`);
