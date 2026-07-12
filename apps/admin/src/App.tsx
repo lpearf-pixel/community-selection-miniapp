@@ -1215,7 +1215,7 @@ export function App() {
                   <InputNumber
                     value={editingProduct.price_cents / 100}
                     min={0}
-                    onChange={(value: number) =>
+                    onChange={(value: number | null) =>
                       setEditingProduct({
                         ...editingProduct,
                         price_cents: Math.round((value ?? 0) * 100),
@@ -1227,7 +1227,7 @@ export function App() {
                   <InputNumber
                     value={editingProduct.stock}
                     min={0}
-                    onChange={(value: number) =>
+                    onChange={(value: number | null) =>
                       setEditingProduct({
                         ...editingProduct,
                         stock: value ?? 0,
@@ -1272,7 +1272,7 @@ export function App() {
                   <InputNumber
                     value={editingProduct.stock_deduct_quantity}
                     min={1}
-                    onChange={(value: number) =>
+                    onChange={(value: number | null) =>
                       setEditingProduct({
                         ...editingProduct,
                         stock_deduct_quantity: value ?? 1,
@@ -1315,7 +1315,7 @@ export function App() {
                         : editingProduct.commission_value
                     }
                     min={0}
-                    onChange={(value: number) =>
+                    onChange={(value: number | null) =>
                       setEditingProduct({
                         ...editingProduct,
                         commission_value:
