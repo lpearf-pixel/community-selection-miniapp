@@ -69,6 +69,12 @@ const dockerApiE2E: CommandSpec = {
   env: { API_BASE_URL: 'http://127.0.0.1:13080' }
 };
 
+const adminTypeConfigCheck: CommandSpec = {
+  title: 'Admin typecheck config check',
+  command: 'pnpm',
+  args: ['exec', 'tsx', 'scripts/verify-admin-type-config-local.ts']
+};
+
 const adminTypecheck: CommandSpec = {
   title: 'Admin typecheck',
   command: 'pnpm',
@@ -158,10 +164,10 @@ function runCommand(spec: CommandSpec): void {
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
-  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypecheck];
+  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
   if (scope === 'stage') return [stageVerifiers[args.stage]];
-  const chainCommands = regressionChains[args.stage].map((stage) => stage === 'DOCKER_API_E2E' ? dockerApiE2E : stage === 'ADMIN_TYPECHECK' ? adminTypecheck : stageVerifiers[stage]);
+  const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
   return chainCommands;
 }
 

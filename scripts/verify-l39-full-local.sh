@@ -20,6 +20,7 @@ fi
 run_step pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts
 run_step pnpm exec tsx scripts/verify-l39-delivery-refund-finance-baseline-local.ts
 run_step pnpm exec tsx scripts/verify-docker-api-e2e-local.ts
+run_step pnpm exec tsx scripts/verify-admin-type-config-local.ts
 run_step pnpm --filter @community-selection/admin exec tsc -p tsconfig.json --noEmit --pretty false
 run_step pnpm exec tsx scripts/stage-workflow.ts --stage=L39 --verify --scope=chain
 
