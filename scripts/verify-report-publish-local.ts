@@ -48,6 +48,10 @@ for (const required of [
   'Admin typecheck passed.',
   "commandSection(content, 'Admin typecheck')",
   'detectAdminTypecheck',
+  'hasExplicitFailure',
+  'commandPassed',
+  'isTodoScannerDefinition',
+  'L42 business base branch must be configured',
   'error TS',
   'raw compliance scan',
   'Stage workflow',
@@ -71,6 +75,7 @@ for (const required of [
 }
 assert(!generateSource.includes("permission: 'L40 admin permission'"), 'L40 report must not use generic admin permission text');
 assert(!generateSource.includes("({ item, status: 'passed'"), 'L40 checklist must not use item/status shape that renders undefined');
+assert(!generateSource.includes('/\\bfailed\\b/i.test'), 'stage report must not treat the business word failed as a failure marker');
 assert(publishSource.includes('--orphan'), 'publish script may initialize the report branch through an orphan worktree');
 
 const reportingDocs = read(docsPath);

@@ -1026,22 +1026,49 @@ function detectAdminTypecheck(content: string): StageVerifyStatus {
   return content.includes('Stage workflow verification passed.') || content.includes('Stage workflow verification passed') ? 'passed' : 'not detected';
 }
 
+function hasExplicitFailure(content: string) {
+  return [
+    'ERR_PNPM',
+    'Command failed',
+    'ELIFECYCLE',
+    'failed with exit code',
+    'exit code 1',
+    'exit code 2',
+    'MODULE_NOT_FOUND',
+    'TypeScript error TS',
+    'PrismaClientKnownRequestError',
+    'ReferenceError'
+  ].some((marker) => content.includes(marker)) || /\berror TS\d{4}\b/.test(content) || /Docker API E2E found \d+ risk findings/.test(content) || /Error:\s*(?!.*verification passed)/.test(content);
+}
+
+function commandPassed(content: string, title: string, successMarkers: string[], requireAllMarkers = false): StageVerifyStatus {
+  const section = commandSection(content, title);
+  const haystack = section || content;
+  if (!haystack) return 'not detected';
+  if (hasExplicitFailure(haystack)) return 'failed';
+  const matched = requireAllMarkers
+    ? successMarkers.every((marker) => content.includes(marker))
+    : successMarkers.some((marker) => haystack.includes(marker) || content.includes(marker));
+  return matched ? 'passed' : 'not detected';
+}
+
 function stageVerifyChecks(content: string) {
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code', 'exit code 1', 'exit code 2', 'MODULE_NOT_FOUND', 'TypeScript error TS'];
-  const hasFailureMarker = hasAnyMarker(content, failureMarkers) || /\bfailed\b/i.test(content.replace(/verification passed/gi, '').replace(/scan passed/gi, '').replace(/workflow verification passed/gi, ''));
-  const passIf = (markers: string[]): StageVerifyStatus => {
+  const hasFailureMarker = hasExplicitFailure(content);
+  const passIf = (markers: string[], title = ''): StageVerifyStatus => {
+    if (title) return commandPassed(content, title, markers);
     if (hasFailureMarker) return 'failed';
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
   if (isL42Stage) {
     return [
-      { command: 'L42 verifier', result: passIf(['L42 failed group buy manual closure verification passed.']) },
-      { command: 'L24-L42 chain regression', result: passIf(['L24 miniapp cart verification passed']) },
-      { command: 'Docker API E2E', result: passIf(['Docker API E2E verification passed.']) },
-      { command: 'Admin typecheck config', result: passIf(['Admin typecheck config check passed.']) },
+      { command: 'L42 verifier', result: commandPassed(content, 'L42 verifier', ['L42 failed group buy manual closure verification passed.']) },
+      { command: 'L24-L42 chain regression', result: commandPassed(content, 'L24-L42 chain regression', ['L42 failed group buy manual closure verification passed.', 'L41 inventory deduct restore verification passed.', 'L40 admin order after sale workbench verification passed.', 'L24 miniapp cart verification passed', 'Stage workflow verification passed.'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.']) },
+      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
       { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
-      { command: 'raw compliance scan', result: passIf(['Compliance scan passed.']) },
-      { command: 'Stage workflow', result: passIf(['Stage workflow verification passed.']) }
+      { command: 'raw compliance scan', result: commandPassed(content, 'raw compliance scan', ['Compliance scan passed.']) },
+      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
     ];
   }
   if (isL41Stage) {
@@ -1109,6 +1136,18 @@ function isAllowedPlaceholderLine(file: string, line: string) {
   return false;
 }
 
+function isTodoScannerDefinition(file: string, line: string) {
+  return file === 'scripts/generate-stage-report.ts' && (
+    line.includes('const keywords =') ||
+    line.includes('本阶段改动文件存在 TODO') ||
+    line.includes('isTodoScannerDefinition')
+  );
+}
+
+function isVerifierTodoTestString(file: string, line: string) {
+  return /verify.*\.(ts|tsx|js)$/.test(file) && /TODO|FIXME|TBD|NOT_IMPLEMENTED/.test(line) && /assert|includes|keywords|forbidden|required/.test(line);
+}
+
 function findTodoItems(files: string[]) {
   const keywords = /(TODO:|FIXME:|TBD:|NOT_IMPLEMENTED|throw new Error\([`'"]Not implemented[`'"]\)|待实现|功能占位)/i;
   const rows: string[] = [];
@@ -1119,6 +1158,8 @@ function findTodoItems(files: string[]) {
     lines.forEach((line, index) => {
       if (isL39Stage) return;
       if (isAllowedPlaceholderLine(file, line)) return;
+      if (isTodoScannerDefinition(file, line)) return;
+      if (isVerifierTodoTestString(file, line)) return;
       if (keywords.test(line)) rows.push(`- ${file}:${index + 1} — ${line.trim()}`);
     });
   }
@@ -1153,6 +1194,7 @@ function assertReportQuality(condition: unknown, message: string): asserts condi
 }
 
 function validateReportInputs() {
+  if (isL42Stage) assertReportQuality(l42Manifest, 'L42 stage manifest must exist');
   if (isL41Stage) assertReportQuality(l41Manifest, 'L41 stage manifest must exist');
   if (isL40Stage) assertReportQuality(l40Manifest, 'L40 stage manifest must exist');
   assertReportQuality(checklist.length > 0, 'stage checklist must contain at least one item');
@@ -1160,6 +1202,17 @@ function validateReportInputs() {
   assertReportQuality(!isL41Stage || l41Manifest.businessBaseCommit === '7af8cb37b3c0babefe70900b27e3f85ed84caaec', 'L41 business base commit must be explicitly configured');
   assertReportQuality(!isL40Stage || l40Manifest.businessBaseBranch === 'stable/l40-business-base', 'L40 business base branch must be explicitly configured');
   assertReportQuality(!isL40Stage || l40Manifest.businessBaseCommit === '429fe77c104f26e8f0a886727e7ee09902bcca4b', 'L40 business base commit must be explicitly configured');
+  if (isL42Stage) {
+    assertReportQuality(l42Manifest.businessBaseBranch === 'stable/l41-business-base', 'L42 business base branch must be configured');
+    assertReportQuality(l42Manifest.businessBaseCommit === 'c56f72cdf8fbc283bab694cc410a5415d3d0cf42', 'L42 business base commit must be configured');
+    assertReportQuality(l42Manifest.title.trim().length > 0, 'L42 title must be non-empty');
+    assertReportQuality(l42Manifest.apis.length === 6, 'L42 report must list six Admin APIs');
+    assertReportQuality(l42Manifest.checklist.length > 0 && l42Manifest.checklist.every((item) => item.passed), 'L42 checklist must be fully checked');
+    if (verifyOutput.exists) {
+      assertReportQuality(verifyOutput.rows.length === 7, 'L42 report must track seven verification rows');
+      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), 'L42 verification rows must all be passed');
+    }
+  }
   checklist.forEach((item, index) => {
     assertReportQuality(typeof item.label === 'string' && item.label.trim().length > 0, `stage checklist item ${index + 1} text must be non-empty`);
   });
@@ -1187,14 +1240,14 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
+- 业务稳定 commit：${isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
-- 本阶段目标：${isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- 本阶段目标：${isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
 - Codex 自评结论：${conclusion}
 
 ## 2. 本阶段变更范围
@@ -1251,5 +1304,6 @@ ${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
 `;
 
 if (report.includes('undefined')) throw new Error('generated report contains forbidden string: undefined');
+if (isL42Stage && report.includes('未配置')) throw new Error('L42 generated report must not contain 未配置');
 writeFileSync(reportPath, report);
 console.log(`Stage report generated: ${reportPath}`);
