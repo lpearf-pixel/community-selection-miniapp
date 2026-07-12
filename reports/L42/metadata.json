@@ -3,7 +3,7 @@
   "source_branch": "codex/add-manual-closure-workflow-for-failed-group-buys",
   "source_commit": "781af3ca1542d02488cc82d4260982c68befdc38",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-12T22:02:09.013Z",
+  "generated_at": "2026-07-12T22:19:21.352Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
