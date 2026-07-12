@@ -8,12 +8,11 @@
     "outDir": "dist",
     "noEmit": true,
     "types": [
-      "vite/client",
-      "node"
+      "vite/client"
     ],
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
