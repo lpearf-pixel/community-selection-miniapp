@@ -33,3 +33,9 @@
 - Admin full typecheck 现在优先识别 `Admin typecheck passed.`；兼容旧日志中 `=== Running Admin typecheck ===` 且段落内无 TS/PNPM/模块错误并最终 `Stage workflow verification passed.` 的零输出成功场景。
 - L40 报告第 1 节明确区分业务稳定分支/commit 与报告生成分支/commit。
 - 售后审核接口权限完整展示 `after_sale.manage + refund.manage`，避免只取权限数组第一项。
+
+## Docker E2E fixture 抽取后的 verifier 修复
+
+- L40 verifier 不再要求所有 Docker E2E Admin fixture 字面量都位于 `scripts/verify-docker-api-e2e-local.ts` 单文件内。
+- 静态检查改为组合读取 `scripts/verify-docker-api-e2e-local.ts` 与 `scripts/lib/docker-e2e-fixtures.ts`，分别验证 deterministic super admin、inactive super admin、operator、store manager fixture 以及 401/403 负向场景。
+- reviewer / resolver 仍继续校验 `reviewed_by_admin_id`、`resolved_by_admin_id` 与 `DOCKER_E2E_ADMIN_ID`，确保 L40 确定性审核人/处理人覆盖不丢失。
