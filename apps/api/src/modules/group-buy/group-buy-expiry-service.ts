@@ -314,7 +314,7 @@ export async function markGroupBuyOrderManualRefunded(input: {
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'manual_refund_marked', title: '人工退款已记录', from_status: order.order_status, to_status: updatedOrder.order_status, actor_type: 'admin', actor_user_id: input.admin_meta?.admin_user_id ?? null, payload: { refund_amount_cents: input.refund_amount_cents, refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null } });
     await safeRecordBusinessEvent(tx, { event_type: 'group_buy_manual_refund_marked', event_source: 'group-buy-expiry-service', order_id: order.id, group_buy_id: order.group_buy_id, refund_id: refund.id, payload: { refund_amount_cents: input.refund_amount_cents, refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, manual: true } });
     await recordAdminAudit(tx, { admin_user_id: input.admin_meta?.admin_user_id ?? null, action: 'order_manual_refund_marked', target_type: 'Order', target_id: order.id, ip_address: input.admin_meta?.ip_address ?? null, user_agent: input.admin_meta?.user_agent ?? null, payload: { refund_amount_cents: input.refund_amount_cents, refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null } });
-    return { order: updatedOrder, refund };
+    return { order: toSafeClosureOrder(updatedOrder), refund: toSafeClosureRefund(refund) };
   });
 }
 

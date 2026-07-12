@@ -42,10 +42,33 @@ async function main() {
   assert(/nextRefundAmount > order\.pay_amount_cents/.test(service), 'manual refund must cap amount by paid amount');
   assert(/pay_status: 'unpaid'/.test(service) && /pay_status: 'closed'/.test(service), 'close unpaid orders must only target unpaid orders');
 
-  ['receiver_phone:', 'cost_price_cents', 'commission_value', 'commission_type', 'stock_deduct_quantity', 'before_snapshot', 'after_snapshot', 'private_key', 'password_hash'].forEach((keyword) => {
-    assert(!service.includes(keyword), `Unsafe response/internal field found in service: ${keyword}`);
-  });
+  const alwaysForbidden = ['cost_price_cents', 'commission_value', 'commission_type', 'private_key', 'password_hash'];
+  for (const keyword of alwaysForbidden) {
+    assert(!service.includes(keyword), `Forbidden internal field found in group-buy expiry service: ${keyword}`);
+  }
   assert(service.includes('receiver_phone_masked'), 'Manual refund order response must use masked phone');
+  assert(service.includes('receiver_address_masked'), 'Manual refund order response must use masked address');
+  assert(service.includes('toSafeClosureOrder'), 'Safe closure order mapper must exist');
+  const unsafeResponsePatterns: Array<{ pattern: RegExp; message: string }> = [
+    { pattern: /receiver_phone\s*:\s*(?:order|updatedOrder|refund\.order)\.receiver_phone/, message: 'Raw receiver_phone must not be mapped into response' },
+    { pattern: /receiver_address\s*:\s*(?:order|updatedOrder|refund\.order)\.receiver_address/, message: 'Raw receiver_address must not be mapped into response' },
+    { pattern: /order\s*:\s*updatedOrder\b/, message: 'Full Prisma Order must not be returned' },
+    { pattern: /order\s*:\s*order\b/, message: 'Full Prisma Order must not be returned' },
+    { pattern: /return\s+updatedOrder\b/, message: 'Full Prisma Order must not be returned directly' },
+    { pattern: /\.\.\.\s*updatedOrder\b/, message: 'Full Prisma Order must not be spread into response' },
+    { pattern: /\.\.\.\s*order\b/, message: 'Full Prisma Order must not be spread into response' },
+    { pattern: /refund\s*(?:,|})/, message: 'Full Prisma Refund must not be returned directly' },
+    { pattern: /\.\.\.\s*refund\b/, message: 'Full Prisma Refund must not be spread into response' }
+  ];
+  const responseSurface = service
+    .replace(/toSafeClosureRefund\(refund\)/g, 'safeRefund')
+    .replace(/refund_status/g, 'safe_refund_status')
+    .replace(/refund_amount_cents/g, 'safe_refund_amount_cents')
+    .replace(/product_refund_amount_cents/g, 'safe_product_refund_amount_cents')
+    .replace(/delivery_refund_amount_cents/g, 'safe_delivery_refund_amount_cents');
+  for (const item of unsafeResponsePatterns) {
+    assert(!item.pattern.test(responseSurface), item.message);
+  }
 
   ['自动退款', '邀请' + '返利', '拉人' + '赚钱', '下' + '级', '上' + '级', `团队${'收益'}`, `代理${'收益'}`, `多级${'分销'}`, `裂${'变奖励'}`].forEach((phrase) => {
     assert(!miniapp.includes(phrase), `Forbidden miniapp phrase found: ${phrase}`);
