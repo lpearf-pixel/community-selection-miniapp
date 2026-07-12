@@ -51,3 +51,10 @@
 - 库存幂等键前缀已结构化为 `inventoryIdempotencyPrefixes`，并通过 `buildInventoryIdempotencyKey(prefix, sourceId)` 统一生成。
 - L41 verifier 不再依赖 `refund-success-restore:` / `group-failed-refund-restore:` 这类脆弱源码连续字面量，而是检查结构化前缀、构造函数和运行时 StockLedger 结果。
 - 保持既有幂等键格式兼容：`order-paid-deduct:<order_id>`、`refund-success-restore:<refund_id>`、`group-failed-refund-restore:<refund_id>`；`manual_restock` 映射到 `manual-restock:<source_id>`，避免误用普通退款前缀。
+
+## Docker API E2E fixture 隔离修正
+
+- Docker API E2E 不再使用公共 seed 商品作为主下单商品，改为 `docker-e2e-product` 固定测试商品。
+- `ensureDockerE2eFixtures` 每次运行都会 upsert 并重置测试商品库存到 `100000`，同时维护独立测试分类、社区、自提点、配送规则、低库存商品和 AdminUser。
+- Docker API E2E 订单仍使用唯一 openid、client_request_id、client_refund_id 隔离当前运行；历史 StockLedger 可保留，但 L41 库存摘要按当前 order_id 聚合，不按 product_id 聚合旧流水。
+- 库存不足场景使用 `docker-e2e-insufficient-stock-product`，避免污染主测试商品库存。
