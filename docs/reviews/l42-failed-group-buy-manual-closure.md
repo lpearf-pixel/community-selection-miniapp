@@ -23,3 +23,10 @@
 - 未支付订单关闭只改 `order_status=closed`，保留 `pay_status=unpaid`。
 - 已支付订单必须基于真实存在且 `status=success` 的退款单确认，库存回补继续复用 L41 `restoreInventoryForRefund`。
 - 最终关闭前统一通过 closure summary 校验阻塞项，满足条件后 `failed -> closed`。
+
+## L42 fixture 修复
+
+- L42 本地 verifier 必须创建真实存在的 active `AdminUser`，所有人工服务调用统一传入该 `admin.id`，避免 `AdminAuditLog.admin_user_id` 外键失败。
+- 失败团购人工关闭服务在写业务状态和审计日志前统一校验 active AdminUser；不存在或停用时返回 `管理员不存在或已停用`，不依赖 Prisma 外键错误作为业务校验。
+- verifier 覆盖 inactive AdminUser 被拒绝、状态不变、未写审计、未关闭订单、未产生退款确认、库存不变，并校验关键审计 action 均归属真实 admin id。
+- Docker E2E 继续复用 `DOCKER_E2E_ADMIN_ID`，在 L42 场景开始前断言该 Admin fixture 存在且 active。

@@ -455,6 +455,8 @@ async function main() {
   }
 
 
+  const l42Admin = await prisma.adminUser.findUnique({ where: { id: DOCKER_E2E_ADMIN_ID } });
+  assert(l42Admin?.status === 'active', 'Docker E2E active admin fixture missing');
   const l42Prefix = `docker-l42-${Date.now()}`;
   const l42Product = await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } });
   const l42Leader = await prisma.user.upsert({ where: { openid: `${l42Prefix}-leader` }, update: {}, create: { openid: `${l42Prefix}-leader`, nickname: 'Docker L42 leader', role: 'leader', status: 'active' } });

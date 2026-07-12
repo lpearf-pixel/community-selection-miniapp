@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
@@ -98,6 +98,16 @@ function maskPhone(phone?: string | null) {
 
 function csvLine(values: Array<string | number | null | undefined>) {
   return values.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',');
+}
+
+
+function adminMetaFromAccess(request: FastifyRequest) {
+  const context = resolveAdminAccessContext(request);
+  return {
+    admin_user_id: context?.admin_user_id ?? request.adminUser?.id ?? null,
+    ip_address: request.ip,
+    user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null
+  };
 }
 
 function validPaidOrderWhere(): Prisma.OrderWhereInput {
@@ -381,7 +391,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/orders/:id/status', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      return ok(await updateOrderStatus({ order_id: id, next_status: (request.body as UpdateOrderStatusBody).next_status, admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null } }));
+      return ok(await updateOrderStatus({ order_id: id, next_status: (request.body as UpdateOrderStatusBody).next_status, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '订单状态更新失败');
@@ -396,7 +406,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
         reply.code(400);
         return fail('支付请使用 /api/payments/mock 或 /api/payments/wechat/jsapi');
       }
-      return ok(await updateOrderStatus({ order_id: id, next_status: body.next_status, admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null } }));
+      return ok(await updateOrderStatus({ order_id: id, next_status: body.next_status, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '订单完成失败');
@@ -454,7 +464,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/admin/group-buys/:id/close-unpaid-orders', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      return ok(await closeFailedGroupBuyUnpaidOrders({ group_buy_id: id, admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null } }));
+      return ok(await closeFailedGroupBuyUnpaidOrders({ group_buy_id: id, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '关闭未支付订单失败');
@@ -467,7 +477,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
       const { groupBuyId, orderId } = request.params as { groupBuyId: string; orderId: string };
       const body = request.body as { refund_id?: string; admin_note?: string };
       if (!body.refund_id) throw new Error('refund_id 不能为空');
-      return ok(await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuyId, order_id: orderId, refund_id: body.refund_id, admin_note: body.admin_note ?? null, admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null } }));
+      return ok(await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuyId, order_id: orderId, refund_id: body.refund_id, admin_note: body.admin_note ?? null, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '确认退款处理失败');
@@ -478,7 +488,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const body = request.body as { admin_note?: string };
-      return ok(await closeFailedGroupBuy({ group_buy_id: id, admin_note: body.admin_note ?? null, admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null } }));
+      return ok(await closeFailedGroupBuy({ group_buy_id: id, admin_note: body.admin_note ?? null, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
       reply.code(400);
       return fail(error instanceof Error ? error.message : '最终关闭团购失败');
@@ -496,7 +506,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
         refund_transaction_id: body.refund_transaction_id ?? null,
         refund_reason: body.refund_reason ?? null,
         admin_remark: body.admin_remark ?? null,
-        admin_meta: { admin_user_id: request.adminUser?.id ?? null, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null }
+        admin_meta: adminMetaFromAccess(request)
       }));
     } catch (error) {
       reply.code(400);

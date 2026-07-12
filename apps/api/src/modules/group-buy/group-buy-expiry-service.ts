@@ -29,6 +29,14 @@ function manualRefundNo(orderId: string) {
   return `MANUAL-${orderId}`;
 }
 
+
+async function requireActiveAdmin(tx: Prisma.TransactionClient, adminUserId?: string | null) {
+  if (!adminUserId) throw new Error('管理员不存在或已停用');
+  const admin = await tx.adminUser.findUnique({ where: { id: adminUserId } });
+  if (!admin || admin.status !== 'active') throw new Error('管理员不存在或已停用');
+  return admin;
+}
+
 export async function getGroupBuyPaidProgress(groupBuyId: string, client: DbClient = prisma) {
   const groupBuy = await client.groupBuy.findUnique({ where: { id: groupBuyId } });
   if (!groupBuy) throw new Error('团购不存在');
@@ -162,6 +170,7 @@ export async function markGroupBuyOrderManualRefunded(input: {
 }) {
   if (!refundChannelValues.includes(input.refund_channel)) throw new Error('人工退款方式不支持');
   return prisma.$transaction(async (tx) => {
+    await requireActiveAdmin(tx, input.admin_meta?.admin_user_id);
     const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true } });
     if (!order) throw new Error('订单不存在');
     if (!order.group_buy_id) throw new Error('非团购订单不能走团购失败人工退款');
@@ -303,6 +312,7 @@ export async function getFailedGroupBuyClosureSummary(groupBuyId: string): Promi
 export async function markGroupBuyFailed(input: { group_buy_id: string; reason: string; admin_note?: string | null; admin_meta?: AdminMeta }) {
   if (!input.reason.trim()) throw new Error('失败原因不能为空');
   return prisma.$transaction(async (tx) => {
+    await requireActiveAdmin(tx, input.admin_meta?.admin_user_id);
     const progress = await getGroupBuyPaidProgress(input.group_buy_id, tx);
     const groupBuy = progress.groupBuy;
     if (groupBuy.status === 'success') throw new Error('已成团团购不能标记失败');
@@ -320,6 +330,7 @@ export async function markGroupBuyFailed(input: { group_buy_id: string; reason: 
 
 export async function closeFailedGroupBuyUnpaidOrders(input: { group_buy_id: string; reason?: string | null; admin_note?: string | null; admin_meta?: AdminMeta }) {
   return prisma.$transaction(async (tx) => {
+    await requireActiveAdmin(tx, input.admin_meta?.admin_user_id);
     const groupBuy = await tx.groupBuy.findUnique({ where: { id: input.group_buy_id } });
     if (!groupBuy) throw new Error('团购不存在');
     if (groupBuy.status !== 'failed') throw new Error('只有失败团购可关闭未支付订单');
@@ -390,6 +401,7 @@ export async function listFailedGroupBuyPendingRefundOrders(groupBuyId: string) 
 
 export async function confirmFailedGroupBuyRefundHandled(input: { group_buy_id: string; order_id: string; refund_id: string; admin_note?: string | null; admin_meta?: AdminMeta }) {
   return prisma.$transaction(async (tx) => {
+    await requireActiveAdmin(tx, input.admin_meta?.admin_user_id);
     const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true } });
     if (!order || order.group_buy_id !== input.group_buy_id) throw new Error('订单不属于该团购');
     if (order.group_buy?.status !== 'failed' && order.group_buy?.status !== 'closed') throw new Error('只有失败团购订单可确认退款处理');
@@ -411,6 +423,7 @@ export async function confirmFailedGroupBuyRefundHandled(input: { group_buy_id: 
 
 export async function closeFailedGroupBuy(input: { group_buy_id: string; admin_note?: string | null; admin_meta?: AdminMeta }) {
   return prisma.$transaction(async (tx) => {
+    await requireActiveAdmin(tx, input.admin_meta?.admin_user_id);
     const groupBuy = await tx.groupBuy.findUnique({ where: { id: input.group_buy_id } });
     if (!groupBuy) throw new Error('团购不存在');
     if (groupBuy.status === 'closed') return { applied: false, idempotent: true, status: 'closed', summary: await getFailedGroupBuyClosureSummary(input.group_buy_id) };
