@@ -29,6 +29,40 @@ assert(!publishSource.includes('git checkout stage-reports'), 'publish script mu
 assert(!publishSource.includes('git switch stage-reports'), 'publish script must not directly switch the current worktree');
 assert(!publishSource.includes('push --force'), 'publish script must not force push');
 assert(!publishSource.includes('push -f'), 'publish script must not force push');
+
+const generateSource = read(generatePath);
+for (const required of [
+  'type StageManifestChecklistItem',
+  'stage checklist item',
+  'generated report contains forbidden string: undefined',
+  'Admin 订单详情接口返回订单金额、退款拆分、剩余可退金额和配送摘要。',
+  'L40 verifier',
+  'L24-L40 chain regression',
+  'Docker API E2E',
+  'Admin typecheck config',
+  'Admin full typecheck',
+  'Admin typecheck passed.',
+  "commandSection(content, 'Admin typecheck')",
+  'detectAdminTypecheck',
+  'error TS',
+  'raw compliance scan',
+  'Stage workflow',
+  'placeholder\\s*=',
+  'placeholder-not-for-login',
+  'businessBaseBranch',
+  'stable/l40-business-base',
+  'businessBaseCommit',
+  '429fe77c104f26e8f0a886727e7ee09902bcca4b',
+  '报告生成分支',
+  '报告生成 commit',
+  'order.view',
+  "permissions: ['after_sale.manage', 'refund.manage']",
+  "api.permissions.join(' + ')"
+]) {
+  assert(generateSource.includes(required), `generate script should include ${required}`);
+}
+assert(!generateSource.includes("permission: 'L40 admin permission'"), 'L40 report must not use generic admin permission text');
+assert(!generateSource.includes("({ item, status: 'passed'"), 'L40 checklist must not use item/status shape that renders undefined');
 assert(publishSource.includes('--orphan'), 'publish script may initialize the report branch through an orphan worktree');
 
 const reportingDocs = read(docsPath);

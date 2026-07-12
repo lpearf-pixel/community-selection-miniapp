@@ -8,6 +8,7 @@ type CommandSpec = {
   command: string;
   args: string[];
   env?: NodeJS.ProcessEnv;
+  successMessage?: string;
 };
 
 type ParsedArgs = {
@@ -74,13 +75,15 @@ const dockerApiE2E: CommandSpec = {
 const adminTypeConfigCheck: CommandSpec = {
   title: 'Admin typecheck config check',
   command: 'pnpm',
-  args: ['exec', 'tsx', 'scripts/verify-admin-type-config-local.ts']
+  args: ['exec', 'tsx', 'scripts/verify-admin-type-config-local.ts'],
+  successMessage: 'Admin typecheck config check passed.'
 };
 
 const adminTypecheck: CommandSpec = {
   title: 'Admin typecheck',
   command: 'pnpm',
-  args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false']
+  args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false'],
+  successMessage: 'Admin typecheck passed.'
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -162,6 +165,7 @@ function runCommand(spec: CommandSpec): void {
   }
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
+  if (spec.successMessage) printAndAppend(`${spec.successMessage}\n`);
 }
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
