@@ -1,0 +1,9 @@
+{
+  "stage": "L40",
+  "source_branch": "stable/l40-business-base",
+  "source_commit": "429fe77c104f26e8f0a886727e7ee09902bcca4b",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-12T09:42:46.464Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
