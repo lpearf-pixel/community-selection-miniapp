@@ -17,6 +17,7 @@ const complianceTerms = {
 type CommandResult = { ok: boolean; output: string };
 type FileRow = { type: string; file: string; description: string };
 type ApiRow = { method: string; path: string; permission: string; purpose: string; verified: string };
+type ManifestApiRow = { method: string; path: string; permissions: string[]; purpose: string; verified: string };
 type ModelRow = { model: string; change: string; description: string };
 type VerifyScriptRow = { script: string; exists: string; inVerifyAll: string; description: string };
 type StageChecklistItem = { label: string; checked: boolean; note?: string };
@@ -40,18 +41,22 @@ const stage = argValue('stage') ?? 'unknown';
 const l40Manifest: {
   title: string;
   files: string[];
-  apis: Array<{ method: string; path: string; permission: string; purpose: string; verified: string }>;
+  businessBaseBranch: string;
+  businessBaseCommit: string;
+  apis: ManifestApiRow[];
   db: string[];
   verify: string[];
   checklist: StageManifestChecklistItem[];
 } = {
   title: 'L40 admin order after sale workbench',
+  businessBaseBranch: 'stable/l40-business-base',
+  businessBaseCommit: '429fe77c104f26e8f0a886727e7ee09902bcca4b',
   files: ['apps/api/src/modules/after-sale/after-sale-service.ts','apps/api/src/routes/admin/orders.ts','apps/api/src/routes/after-sales.ts','apps/admin/src/api/adminOrders.ts','apps/admin/src/api/adminAfterSales.ts','apps/admin/src/pages/orders/AdminOrderDetailPage.tsx','apps/admin/src/pages/after-sales/AfterSaleWorkbenchPage.tsx','scripts/lib/docker-e2e-fixtures.ts','scripts/verify-docker-api-e2e-local.ts','scripts/verify-l40-admin-order-after-sale-workbench-local.ts','docs/reviews/l40-admin-order-after-sale-workbench.md'],
   apis: [
-    { method: 'GET', path: '/api/admin/orders/:id', permission: 'order.view', purpose: 'Admin 订单详情增强', verified: 'yes' },
-    { method: 'GET', path: '/api/admin/after-sales', permission: 'after_sale.manage', purpose: 'Admin 售后列表与 data scope 过滤', verified: 'yes' },
-    { method: 'GET', path: '/api/admin/after-sales/:id', permission: 'after_sale.manage', purpose: 'Admin 售后详情与审计信息', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/after-sales/:id/review', permission: 'after_sale.manage', purpose: 'Admin 售后人工审核', verified: 'yes' }
+    { method: 'GET', path: '/api/admin/orders/:id', permissions: ['order.view'], purpose: 'Admin 订单详情增强', verified: 'yes' },
+    { method: 'GET', path: '/api/admin/after-sales', permissions: ['after_sale.manage'], purpose: 'Admin 售后列表与 data scope 过滤', verified: 'yes' },
+    { method: 'GET', path: '/api/admin/after-sales/:id', permissions: ['after_sale.manage'], purpose: 'Admin 售后详情与审计信息', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/after-sales/:id/review', permissions: ['after_sale.manage', 'refund.manage'], purpose: 'Admin 售后人工审核', verified: 'yes' }
   ],
   db: ['复用 Order','复用 AfterSaleCase','复用 AfterSaleLog','复用 OrderTimelineLog','复用 Refund'],
   verify: ['scripts/verify-l40-admin-order-after-sale-workbench-local.ts', 'scripts/verify-docker-api-e2e-local.ts', 'scripts/stage-workflow.ts --stage=L40 --verify --scope=chain'],
@@ -666,7 +671,7 @@ function classifyFile(file: string): FileRow {
 
 function extractApis(files: string[]) {
   if (isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
-    if (isL40Stage) return l40Manifest.apis;
+    if (isL40Stage) return l40Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL39Stage) return l39Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: pathParts.join(' ').startsWith('/api/admin/') ? 'admin finance permissions' : pathParts.join(' ').startsWith('/api/me/') ? 'user identity' : 'public', purpose: 'L39 manifest API', verified: 'yes' }; });
     if (isL38Stage) return l38Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: 'public / admin scoped permissions', purpose: 'L38 manifest API', verified: 'yes' }; });
     if (isL37Stage) return l37Manifest.apis.map((api) => { const [method, ...pathParts] = api.split(' '); return { method, path: pathParts.join(' '), permission: 'public / admin scoped permissions', purpose: 'L37 manifest API', verified: 'yes' }; });
@@ -921,6 +926,26 @@ function hasAnyMarker(content: string, markers: string[]) {
   return markers.some((marker) => content.includes(marker));
 }
 
+function commandSection(content: string, title: string) {
+  const startMarker = `=== Running ${title} ===`;
+  const start = content.indexOf(startMarker);
+  if (start < 0) return '';
+  const next = content.indexOf('\n=== Running ', start + startMarker.length);
+  return next >= 0 ? content.slice(start, next) : content.slice(start);
+}
+
+function hasTypecheckFailure(content: string) {
+  return /\berror TS\d{4}\b/.test(content) || ['ERR_PNPM', 'failed with exit code', 'Command failed', 'MODULE_NOT_FOUND'].some((marker) => content.includes(marker));
+}
+
+function detectAdminTypecheck(content: string): StageVerifyStatus {
+  if (content.includes('Admin typecheck passed.')) return hasTypecheckFailure(commandSection(content, 'Admin typecheck')) ? 'failed' : 'passed';
+  const section = commandSection(content, 'Admin typecheck');
+  if (!section) return 'not detected';
+  if (hasTypecheckFailure(section)) return 'failed';
+  return content.includes('Stage workflow verification passed.') || content.includes('Stage workflow verification passed') ? 'passed' : 'not detected';
+}
+
 function stageVerifyChecks(content: string) {
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code', 'exit code 1', 'exit code 2', 'MODULE_NOT_FOUND', 'TypeScript error TS'];
   const hasFailureMarker = hasAnyMarker(content, failureMarkers) || /\bfailed\b/i.test(content.replace(/verification passed/gi, '').replace(/scan passed/gi, '').replace(/workflow verification passed/gi, ''));
@@ -933,8 +958,8 @@ function stageVerifyChecks(content: string) {
       { command: 'L40 verifier', result: passIf(['L40 admin order after sale workbench verification passed.','L40 admin order after sale workbench verification passed']) },
       { command: 'L24-L40 chain regression', result: passIf(['L24 miniapp cart verification passed']) },
       { command: 'Docker API E2E', result: passIf(['Docker API E2E verification passed.','Docker API E2E verification passed']) },
-      { command: 'Admin typecheck config', result: passIf(['Admin typecheck config verified']) },
-      { command: 'Admin full typecheck', result: passIf(['Command passed: admin full typecheck', 'admin full typecheck', 'tsc -p tsconfig.json --noEmit --pretty false']) },
+      { command: 'Admin typecheck config', result: passIf(['Admin typecheck config check passed.', 'Admin typecheck config verified']) },
+      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
       { command: 'raw compliance scan', result: passIf(['Compliance scan passed.','Compliance scan passed']) },
       { command: 'Stage workflow', result: passIf(['Stage workflow verification passed.','Stage workflow verification passed']) }
     ];
@@ -1017,7 +1042,8 @@ const reportPath = join(reportsDir, `stage-${normalizedStageForFile}-report.md`)
 
 mkdirSync(dirname(reportPath), { recursive: true });
 
-const conclusion = verifyOutput.passed ? 'passed' : 'partial';
+const checklistPassed = checklist.length > 0 && checklist.every((item) => item.checked);
+const conclusion = verifyOutput.passed && checklistPassed ? 'passed' : 'partial';
 const generatedAt = new Date().toISOString();
 
 function assertReportQuality(condition: unknown, message: string): asserts condition {
@@ -1027,6 +1053,8 @@ function assertReportQuality(condition: unknown, message: string): asserts condi
 function validateReportInputs() {
   if (isL40Stage) assertReportQuality(l40Manifest, 'L40 stage manifest must exist');
   assertReportQuality(checklist.length > 0, 'stage checklist must contain at least one item');
+  assertReportQuality(!isL40Stage || l40Manifest.businessBaseBranch === 'stable/l40-business-base', 'L40 business base branch must be explicitly configured');
+  assertReportQuality(!isL40Stage || l40Manifest.businessBaseCommit === '429fe77c104f26e8f0a886727e7ee09902bcca4b', 'L40 business base commit must be explicitly configured');
   checklist.forEach((item, index) => {
     assertReportQuality(typeof item.label === 'string' && item.label.trim().length > 0, `stage checklist item ${index + 1} text must be non-empty`);
   });
@@ -1038,6 +1066,7 @@ function validateReportInputs() {
     if (row.script.startsWith('scripts/') && row.script.endsWith('.ts')) assertReportQuality(row.exists === 'yes', `verify script must exist: ${row.script}`);
   });
   if (conclusion === 'passed') {
+    assertReportQuality(checklistPassed, 'passed report requires all checklist items to be checked');
     for (const row of verifyOutput.rows) assertReportQuality(row.result === 'passed', `${row.command} marker must be passed before passed conclusion`);
     assertReportQuality(!(verifyOutput.raw ?? '').includes('ERR_PNPM'), 'passed report cannot contain ERR_PNPM');
     assertReportQuality(!(verifyOutput.raw ?? '').includes('MODULE_NOT_FOUND'), 'passed report cannot contain MODULE_NOT_FOUND');
@@ -1053,9 +1082,13 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
+- 业务稳定分支：${isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
+- 业务稳定 commit：${isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
+- 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
+- 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
-- 当前 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
+- 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
 - 本阶段目标：${isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
 - Codex 自评结论：${conclusion}
 

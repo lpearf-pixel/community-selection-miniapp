@@ -41,12 +41,23 @@ for (const required of [
   'Docker API E2E',
   'Admin typecheck config',
   'Admin full typecheck',
+  'Admin typecheck passed.',
+  "commandSection(content, 'Admin typecheck')",
+  'detectAdminTypecheck',
+  'error TS',
   'raw compliance scan',
   'Stage workflow',
   'placeholder\\s*=',
   'placeholder-not-for-login',
+  'businessBaseBranch',
+  'stable/l40-business-base',
+  'businessBaseCommit',
+  '429fe77c104f26e8f0a886727e7ee09902bcca4b',
+  '报告生成分支',
+  '报告生成 commit',
   'order.view',
-  'after_sale.manage'
+  "permissions: ['after_sale.manage', 'refund.manage']",
+  "api.permissions.join(' + ')"
 ]) {
   assert(generateSource.includes(required), `generate script should include ${required}`);
 }

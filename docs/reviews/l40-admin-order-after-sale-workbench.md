@@ -29,3 +29,7 @@
 - 阶段验证结果优先解析实际 stage workflow marker：L40 verifier、L24-L40 chain regression、Docker API E2E、Admin typecheck config、Admin full typecheck、raw compliance scan 与 Stage workflow。
 - 未完成项扫描仅识别明确 TODO / FIXME / TBD / NOT_IMPLEMENTED / Not implemented 类标记，不把 UI `placeholder` 属性或 Docker E2E 测试 fixture 字符串当作未完成业务项。
 - API 权限在报告中按路由展示 `order.view` 与 `after_sale.manage`，不再使用笼统的 L40 admin permission。
+
+- Admin full typecheck 现在优先识别 `Admin typecheck passed.`；兼容旧日志中 `=== Running Admin typecheck ===` 且段落内无 TS/PNPM/模块错误并最终 `Stage workflow verification passed.` 的零输出成功场景。
+- L40 报告第 1 节明确区分业务稳定分支/commit 与报告生成分支/commit。
+- 售后审核接口权限完整展示 `after_sale.manage + refund.manage`，避免只取权限数组第一项。
