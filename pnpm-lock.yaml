@@ -40,7 +40,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       antd:
-        specifier: ^5.23.0
+        specifier: 5.23.0
         version: 5.23.0
       react:
         specifier: 18.3.1
@@ -53,10 +53,10 @@ importers:
         version: 6.0.7
     devDependencies:
       '@types/react':
-        specifier: ^18.3.0
+        specifier: 18.3.27
         version: 18.3.27
       '@types/react-dom':
-        specifier: ^18.3.0
+        specifier: 18.3.7
         version: 18.3.7(@types/react@18.3.27)
 
   apps/api:
