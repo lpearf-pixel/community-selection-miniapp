@@ -44,3 +44,10 @@
 - 不新增第二套库存表，复用并最小增强 `StockLedger`。
 - 库存扣减统一移动到支付成功确认事务内，先原子条件扣减，再标记订单 paid。
 - 退款回补统一由 L41 inventory order service 处理，只在成功退款且满足全额商品退款或显式 `restore_quantity` 时回补，配送费退款不影响库存。
+
+
+## L41 verifier 幂等键修正
+
+- 库存幂等键前缀已结构化为 `inventoryIdempotencyPrefixes`，并通过 `buildInventoryIdempotencyKey(prefix, sourceId)` 统一生成。
+- L41 verifier 不再依赖 `refund-success-restore:` / `group-failed-refund-restore:` 这类脆弱源码连续字面量，而是检查结构化前缀、构造函数和运行时 StockLedger 结果。
+- 保持既有幂等键格式兼容：`order-paid-deduct:<order_id>`、`refund-success-restore:<refund_id>`、`group-failed-refund-restore:<refund_id>`；`manual_restock` 映射到 `manual-restock:<source_id>`，避免误用普通退款前缀。

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { prisma } from '../apps/api/src/db.js';
-import { deductInventoryForPaidOrder, getOrderInventorySummary, restoreInventoryForRefund } from '../apps/api/src/modules/inventory/inventory-order-service.js';
+import { buildInventoryIdempotencyKey, deductInventoryForPaidOrder, getInventoryIdempotencyPrefix, getOrderInventorySummary, inventoryIdempotencyPrefixes, restoreInventoryForRefund } from '../apps/api/src/modules/inventory/inventory-order-service.js';
 
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string) { return readFileSync(path, 'utf8'); }
@@ -10,7 +10,12 @@ async function main() {
   for (const field of ['idempotency_key', 'event_type', 'quantity_delta', 'order_id', 'refund_id', 'after_sale_case_id']) assert(schema.includes(field), `StockLedger missing ${field}`);
   assert(schema.includes('@unique'), 'StockLedger idempotency_key must be unique');
   const service = read('apps/api/src/modules/inventory/inventory-order-service.ts');
-  for (const text of ['updateMany', 'stock: { gte: quantity }', 'order-paid-deduct:', 'refund-success-restore:', 'group-failed-refund-restore:', 'delivery_refund_amount_cents']) assert(service.includes(text), `inventory service missing ${text}`);
+  for (const text of ['inventoryIdempotencyPrefixes', 'updateMany', 'stock: { gte: quantity }', 'order-paid-deduct', 'refund-success-restore', 'group-failed-refund-restore', 'buildInventoryIdempotencyKey', 'delivery_refund_amount_cents']) assert(service.includes(text), `inventory service missing ${text}`);
+  assert(service.includes('`${prefix}:${sourceId}`') || service.includes('${prefix}:${sourceId}'), 'inventory service missing structured idempotency key builder');
+  assert(buildInventoryIdempotencyKey(inventoryIdempotencyPrefixes.orderPaidDeduct, 'order-1') === 'order-paid-deduct:order-1', 'paid deduction prefix builder incorrect');
+  assert(buildInventoryIdempotencyKey(getInventoryIdempotencyPrefix('refund_success_restore'), 'refund-1') === 'refund-success-restore:refund-1', 'refund restore prefix builder incorrect');
+  assert(buildInventoryIdempotencyKey(getInventoryIdempotencyPrefix('group_failed_refund_restore'), 'refund-2') === 'group-failed-refund-restore:refund-2', 'group failed refund restore prefix builder incorrect');
+  assert(buildInventoryIdempotencyKey(getInventoryIdempotencyPrefix('manual_restock'), 'manual-1') === 'manual-restock:manual-1', 'manual restock prefix builder incorrect');
   const payment = read('apps/api/src/services/payment-service.ts');
   assert(payment.includes('deductInventoryForPaidOrder'), 'payment service must deduct inventory during paid confirmation');
   const refund = read('apps/api/src/services/refund-service.ts');
@@ -28,6 +33,8 @@ async function main() {
   await prisma.$transaction((tx) => deductInventoryForPaidOrder(tx, { order }));
   assert((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock === 14, 'duplicate paid event must not deduct twice');
   assert(await prisma.stockLedger.count({ where: { order_id: order.id, event_type: 'order_paid_deduct' } }) === 1, 'deduct ledger must be unique');
+  const deductLedger = await prisma.stockLedger.findFirst({ where: { order_id: order.id, event_type: 'order_paid_deduct' } });
+  assert(deductLedger?.idempotency_key === `order-paid-deduct:${order.id}`, 'paid deduction idempotency key incorrect');
 
   const poorProduct = await prisma.product.create({ data: { name: `${prefix}-poor`, category_id: category.id, price_cents: 1000, cost_price_cents: 500, stock: 2, unit: '份', stock_unit: '份', sale_unit: '份', stock_deduct_quantity: 3, status: 'active' } });
   const poorOrder = await prisma.order.create({ data: { order_no: `${prefix}-poor-order`, user_id: user.id, product_id: poorProduct.id, total_amount_cents: 1000, product_amount_cents: 1000, pay_amount_cents: 1000, quantity: 1, receiver_name: 'L41', receiver_phone: '13800000000' } });
@@ -41,6 +48,8 @@ async function main() {
   await prisma.$transaction((tx) => restoreInventoryForRefund(tx, { refund_id: refundRow.id }));
   await prisma.$transaction((tx) => restoreInventoryForRefund(tx, { refund_id: refundRow.id }));
   assert((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock === 20, 'full refund must restore once');
+  const restoreLedger = await prisma.stockLedger.findFirst({ where: { refund_id: refundRow.id, event_type: 'refund_success_restore' } });
+  assert(restoreLedger?.idempotency_key === `refund-success-restore:${refundRow.id}`, 'refund restore idempotency key incorrect');
 
   const summary = await prisma.$transaction((tx) => getOrderInventorySummary(tx, order.id));
   assert(summary.deducted_quantity === 6 && summary.restored_quantity === 6 && summary.remaining_restorable_quantity === 0 && summary.current_product_stock === 20, 'Admin inventory summary incorrect');

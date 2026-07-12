@@ -1,8 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
 type OrderStockInput = { id: string; quantity: number; product_id: string | null; group_buy?: { product_id: string } | null };
-type ProductStockInput = { id: string; stock: number; stock_deduct_quantity: number | null };
-
 export type InventoryEventResult = {
   applied: boolean;
   idempotent: boolean;
@@ -23,6 +21,24 @@ export type OrderInventorySummary = {
 
 const deductEventType = 'order_paid_deduct';
 const restoreEventTypes = ['refund_success_restore', 'group_failed_refund_restore', 'manual_restock'] as const;
+
+export const inventoryIdempotencyPrefixes = {
+  orderPaidDeduct: 'order-paid-deduct',
+  refundSuccessRestore: 'refund-success-restore',
+  groupFailedRefundRestore: 'group-failed-refund-restore',
+  manualRestock: 'manual-restock'
+} as const;
+
+export function buildInventoryIdempotencyKey(prefix: string, sourceId: string) {
+  return `${prefix}:${sourceId}`;
+}
+
+export function getInventoryIdempotencyPrefix(eventType: string) {
+  if (eventType === 'order_paid_deduct') return inventoryIdempotencyPrefixes.orderPaidDeduct;
+  if (eventType === 'group_failed_refund_restore') return inventoryIdempotencyPrefixes.groupFailedRefundRestore;
+  if (eventType === 'manual_restock') return inventoryIdempotencyPrefixes.manualRestock;
+  return inventoryIdempotencyPrefixes.refundSuccessRestore;
+}
 
 function assertPositiveInteger(value: number, message: string) {
   if (!Number.isInteger(value) || value <= 0) throw new Error(message);
@@ -46,7 +62,7 @@ async function existingResult(tx: Prisma.TransactionClient, idempotencyKey: stri
 }
 
 export async function deductInventoryForPaidOrder(tx: Prisma.TransactionClient, input: { order: OrderStockInput; operator_user_id?: string | null }): Promise<InventoryEventResult> {
-  const idempotencyKey = `order-paid-deduct:${input.order.id}`;
+  const idempotencyKey = buildInventoryIdempotencyKey(inventoryIdempotencyPrefixes.orderPaidDeduct, input.order.id);
   const existing = await existingResult(tx, idempotencyKey, deductEventType);
   if (existing) return existing;
   const productId = resolveOrderProductId(input.order);
@@ -80,7 +96,8 @@ export async function restoreInventoryForRefund(tx: Prisma.TransactionClient, in
   if (refund.status !== 'success') throw new Error('退款尚未成功');
   if (refund.order.pay_status !== 'paid') throw new Error('订单未支付不能执行退款回补');
   const eventType = input.event_type ?? (refund.order.group_buy?.status === 'failed' ? 'group_failed_refund_restore' : 'refund_success_restore');
-  const idempotencyKey = `${eventType === 'group_failed_refund_restore' ? 'group-failed-refund-restore' : 'refund-success-restore'}:${refund.id}`;
+  const prefix = getInventoryIdempotencyPrefix(eventType);
+  const idempotencyKey = buildInventoryIdempotencyKey(prefix, refund.id);
   const existing = await existingResult(tx, idempotencyKey, eventType);
   if (existing) return existing;
   const productId = refund.order.product_id ?? refund.order.group_buy?.product_id ?? null;
