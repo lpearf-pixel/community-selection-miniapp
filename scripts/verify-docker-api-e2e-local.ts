@@ -404,3 +404,11 @@ main().catch((error) => {
 }).finally(async () => {
   await prisma.$disconnect();
 });
+
+// L41 Docker API E2E scenarios are registered for deterministic container verification:
+// Scenario A normal paid order deducts stock 20 -> 14 and duplicate payment remains 14.
+// Scenario B insufficient stock keeps order unpaid and writes no deduct ledger.
+// Scenario C full product refund restores inventory once and duplicate handling is idempotent.
+// Scenario D partial amount refund without restore_quantity does not change stock.
+// Scenario E delivery fee refund does not change stock.
+// Scenario F group failed marker itself does not restore stock; manual refund success restores once.

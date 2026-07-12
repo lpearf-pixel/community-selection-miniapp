@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { syncCommissionAfterRefund } from './commission-service.js';
+import { restoreInventoryForRefund } from '../modules/inventory/inventory-order-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
 type RefundInput = {
@@ -159,52 +160,8 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
   let stockRestored = refund.stock_restored;
   let stockRestoreSkippedReason: string | null = null;
 
-  // L6 第一版只做金额退款：部分退款不恢复库存；只有全额退款才按订单状态判断是否可自动恢复库存。
-  if (isFullRefund && !stockRestored && refund.order.group_buy) {
-    if (autoRestoreStockStatuses.includes(refund.order.order_status)) {
-      const product = await tx.product.findUnique({ where: { id: refund.order.group_buy.product_id } });
-      if (!product) throw new Error('退款恢复库存商品不存在');
-      const stockDeductQuantity = Math.max(1, product.stock_deduct_quantity ?? 1);
-      const restoreStockQuantity = refund.order.quantity * stockDeductQuantity;
-      await tx.product.update({
-        where: { id: refund.order.group_buy.product_id },
-        data: { stock: { increment: restoreStockQuantity } }
-      });
-      await tx.stockLedger.create({
-        data: {
-          product_id: refund.order.group_buy.product_id,
-          source_type: 'refund_restore',
-          source_id: refund.id,
-          direction: 'in',
-          quantity: restoreStockQuantity,
-          stock_before: product.stock,
-          stock_after: product.stock + restoreStockQuantity,
-          operator_type: 'system',
-          remark: '退款恢复库存',
-          payload: { order_id: refund.order_id, refund_id: refund.id, sale_quantity: refund.order.quantity, sale_unit: product.sale_unit, sale_spec_name: product.sale_spec_name, stock_unit: product.stock_unit, stock_deduct_quantity: stockDeductQuantity }
-        }
-      });
-      stockRestored = true;
-      await safeRecordBusinessEvent(tx, {
-        event_type: 'refund_stock_restored',
-        event_source: 'refund-service',
-        order_id: refund.order_id,
-        refund_id: refund.id,
-        payload: { sale_quantity: refund.order.quantity, stock_quantity: restoreStockQuantity, product_id: refund.order.group_buy.product_id }
-      });
-    } else {
-      stockRestoreSkippedReason = 'order_already_fulfilled';
-      await safeRecordBusinessEvent(tx, {
-        event_type: 'refund_stock_restore_skipped',
-        event_level: 'warning',
-        event_source: 'refund-service',
-        order_id: refund.order_id,
-        refund_id: refund.id,
-        payload: { reason: stockRestoreSkippedReason, order_status: refund.order.order_status }
-      });
-    }
-  } else if (!isFullRefund) {
-    stockRestoreSkippedReason = 'partial_refund_amount_only';
+  if (!isFullRefund) {
+    stockRestoreSkippedReason = refund.delivery_refund_amount_cents > 0 && refund.product_refund_amount_cents === 0 ? 'delivery_fee_refund_no_stock_restore' : 'partial_refund_amount_only';
     // 消费额度退款规则：L8 第一版仅在订单全额退款时退回全部平台消费额度；部分退款不自动退回消费额度。
     if (refund.order.credit_amount_cents > 0) {
       await safeRecordBusinessEvent(tx, {
@@ -214,11 +171,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
         order_id: refund.order_id,
         refund_id: refund.id,
         user_id: refund.order.user_id,
-        payload: {
-          rule: 'full_refund_only',
-          credit_amount_cents: refund.order.credit_amount_cents,
-          refund_amount_cents: refund.refund_amount_cents
-        }
+        payload: { rule: 'full_refund_only', credit_amount_cents: refund.order.credit_amount_cents, refund_amount_cents: refund.refund_amount_cents }
       });
     }
   }
@@ -244,6 +197,15 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
       order_status: isFullRefund ? 'refunded' : refund.order.order_status
     }
   });
+
+  if (isFullRefund && !stockRestored) {
+    const restoreResult = await restoreInventoryForRefund(tx, { refund_id: refund.id });
+    stockRestored = restoreResult.applied || restoreResult.idempotent;
+    if (!restoreResult.applied && !restoreResult.idempotent && restoreResult.quantity === 0) stockRestoreSkippedReason = 'no_remaining_inventory_to_restore';
+    if (restoreResult.applied) {
+      await safeRecordBusinessEvent(tx, { event_type: 'refund_stock_restored', event_source: 'refund-service', order_id: refund.order_id, refund_id: refund.id, payload: { stock_quantity: restoreResult.quantity, ledger_id: restoreResult.ledger_id } });
+    }
+  }
 
   if (isFullRefund && refund.order.credit_amount_cents > 0 && refund.order.credit_source_type === 'reward_conversion') {
     const existingCreditReturn = await tx.consumerCreditLedger.findFirst({
