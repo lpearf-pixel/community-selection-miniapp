@@ -40,17 +40,24 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       antd:
-        specifier: ^5.23.0
+        specifier: 5.23.0
         version: 5.23.0
       react:
-        specifier: ^19.0.0
-        version: 19.0.0
+        specifier: 18.3.1
+        version: 18.3.1
       react-dom:
-        specifier: ^19.0.0
-        version: 19.0.0(react@19.0.0)
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
       vite:
         specifier: ^6.0.7
         version: 6.0.7
+    devDependencies:
+      '@types/react':
+        specifier: 18.3.27
+        version: 18.3.27
+      '@types/react-dom':
+        specifier: 18.3.7
+        version: 18.3.7(@types/react@18.3.27)
 
   apps/api:
     dependencies:
@@ -117,6 +124,16 @@ packages:
   '@types/node@22.10.5':
     resolution: {}
 
+  '@types/react-dom@18.3.7':
+    resolution: {}
+    peerDependencies:
+      '@types/react': ^18.0.0
+
+  '@types/react@18.3.27':
+    resolution: {}
+    dependencies:
+      csstype: ^3.2.2
+
   antd@5.23.0:
     resolution: {}
 
@@ -127,6 +144,9 @@ packages:
   c12@3.1.0:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
+
+  csstype@3.2.3:
+    resolution: {}
 
   deepmerge-ts@7.1.5:
     resolution: {integrity: sha512-HOJkrhaYsweh+W+e74Yn7YStZOilkoPb6fycpwNLKzSPtruFs48nYis0zy5yJz1+ktUhHxoRDJ27RQAWLIJVJw==}
@@ -152,12 +172,22 @@ packages:
       typescript:
         optional: true
 
-  react-dom@19.0.0:
+  js-tokens@4.0.0:
+    resolution: {}
+
+  loose-envify@1.4.0:
+    resolution: {}
+    hasBin: true
+
+  react-dom@18.3.1:
     resolution: {}
     peerDependencies:
-      react: ^19.0.0
+      react: ^18.3.1
 
-  react@19.0.0:
+  react@18.3.1:
+    resolution: {}
+
+  scheduler@0.23.2:
     resolution: {}
 
   tsx@4.19.2:
@@ -213,11 +243,21 @@ snapshots:
 
   '@types/node@22.10.5': {}
 
+  '@types/react-dom@18.3.7(@types/react@18.3.27)':
+    dependencies:
+      '@types/react': 18.3.27
+
+  '@types/react@18.3.27':
+    dependencies:
+      csstype: 3.2.3
+
   antd@5.23.0: {}
 
   bcryptjs@2.4.3: {}
 
   c12@3.1.0: {}
+
+  csstype@3.2.3: {}
 
   deepmerge-ts@7.1.5: {}
 
@@ -234,11 +274,25 @@ snapshots:
     optionalDependencies:
       typescript: 5.7.3
 
-  react-dom@19.0.0(react@19.0.0):
-    dependencies:
-      react: 19.0.0
+  js-tokens@4.0.0: {}
 
-  react@19.0.0: {}
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
+
+  react-dom@18.3.1(react@18.3.1):
+    dependencies:
+      loose-envify: 1.4.0
+      react: 18.3.1
+      scheduler: 0.23.2
+
+  react@18.3.1:
+    dependencies:
+      loose-envify: 1.4.0
+
+  scheduler@0.23.2:
+    dependencies:
+      loose-envify: 1.4.0
 
   tsx@4.19.2: {}
 

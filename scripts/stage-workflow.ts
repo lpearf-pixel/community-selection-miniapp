@@ -135,6 +135,7 @@ function validateArgs(args: ParsedArgs): void {
   if (args.stage) assertRegisteredStage(args.stage);
 }
 
+
 function appendOutput(content: string): void {
   if (!content) return;
   appendFileSync(latestVerifyOutput, content);
