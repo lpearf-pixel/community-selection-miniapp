@@ -1,0 +1,114 @@
+# 阶段验收报告：L42
+
+## 1. 阶段结论
+
+- 阶段：L42
+- 业务稳定分支：未配置
+- 业务稳定 commit：未配置
+- 报告生成分支：codex/add-manual-closure-workflow-for-failed-group-buys
+- 报告生成 commit：76d83afe4c30f1e6bdd9479cdbdb7065e214ceab
+- 分支：codex/add-manual-closure-workflow-for-failed-group-buys（报告生成环境）
+- 生成时间：2026-07-12T21:36:40.490Z
+- 当前 commit：76d83afe4c30f1e6bdd9479cdbdb7065e214ceab（报告生成环境）
+- 本阶段目标：L42 阶段目标，需结合阶段说明人工确认
+- Codex 自评结论：partial
+
+## 2. 本阶段变更范围
+
+| 类型 | 文件 | 说明 |
+|---|---|---|
+| Service | apps/api/src/modules/group-buy/group-buy-expiry-service.ts | 领域模块服务或模块边界 |
+| API | apps/api/src/routes/group-buys.ts | API 路由或路由注册边界 |
+| Service | apps/api/src/modules/admin-access/admin-access-control.ts | 领域模块服务或模块边界 |
+| Admin | apps/admin/src/App.tsx | 后台页面或前端逻辑 |
+| Script | scripts/verify-l42-failed-group-buy-manual-closure-local.ts | 验收、检查或工具脚本 |
+| Script | scripts/verify-docker-api-e2e-local.ts | 验收、检查或工具脚本 |
+| Script | scripts/verify-all-local.sh | 验收、检查或工具脚本 |
+| Script | scripts/stage-workflow.ts | 验收、检查或工具脚本 |
+| Script | scripts/generate-stage-report.ts | 验收、检查或工具脚本 |
+| Docs | docs/reviews/l42-failed-group-buy-manual-closure.md | 文档或 review 说明 |
+
+## 3. API 变化
+
+| 方法 | 路径 | 权限 | 用途 | 是否有验收 |
+|---|---|---|---|---|
+| GET | /api/admin/group-buys/:id/closure-summary | order.view + order.manage | 失败团购关闭摘要 | yes |
+| POST | /api/admin/group-buys/:id/mark-failed | order.manage | 人工标记团购失败 | yes |
+| POST | /api/admin/group-buys/:id/close-unpaid-orders | order.manage | 关闭未支付订单且不退款 | yes |
+| GET | /api/admin/group-buys/:id/manual-refund-orders | refund.view + refund.manage | 列出已支付待人工退款订单 | yes |
+| POST | /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund | refund.manage | 确认已成功退款并复用 L41 回补库存 | yes |
+| POST | /api/admin/group-buys/:id/close | order.manage | 最终关闭失败团购 | yes |
+
+## 4. 数据库变化
+
+| Model | 新增/修改 | 说明 |
+|---|---|---|
+| 无新增表 | L42 manifest | 复用既有失败团购收口相关模型 |
+| 无新增字段 | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 GroupBuy | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 Order | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 Refund | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 StockLedger | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 OrderTimelineLog | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 BusinessEventLog | L42 manifest | 复用既有失败团购收口相关模型 |
+| 复用 AdminAuditLog | L42 manifest | 复用既有失败团购收口相关模型 |
+
+## 5. 核心业务验收点
+
+- [x] 团购失败由人工确认，标记失败不自动退款、不直接回补库存。（L42 verifier）
+- [x] 未支付订单批量关闭保持 pay_status=unpaid，且不产生 refund 或库存回补流水。（L42 verifier）
+- [x] 已支付订单进入待人工退款列表且不泄露敏感字段。（L42 verifier）
+- [x] 退款成功后才允许确认处理完成，库存回补复用 L41 且幂等。（L42 verifier）
+- [x] 存在 pending refund 或阻塞项时不能最终关闭，全部收口后可 closed。（L42 verifier）
+- [x] Admin 权限、active AdminUser 与 data scope 校验保留。（L42 verifier）
+- [x] 不开发 L43，不修改依赖和类型基线。（raw compliance scan）
+
+## 6. 验收脚本
+
+| 脚本 | 是否存在 | 是否已加入 verify-all | 说明 |
+|---|---|---|---|
+| scripts/verify-l42-failed-group-buy-manual-closure-local.ts | yes | yes | L42 阶段报告质量门禁验收脚本 |
+| scripts/verify-docker-api-e2e-local.ts | yes | no | L42 阶段报告质量门禁验收脚本 |
+| scripts/stage-workflow.ts --stage=L42 --verify --scope=chain | yes | yes | L42 阶段报告质量门禁验收脚本 |
+
+## 7. 阶段验证执行结果
+
+| 命令 | 结果 |
+|---|---|
+| L42 verifier | failed |
+| L24-L42 chain regression | failed |
+| Docker API E2E | failed |
+| Admin typecheck config | failed |
+| Admin full typecheck | passed |
+| raw compliance scan | failed |
+| Stage workflow | failed |
+
+## 8. 合规边界检查
+
+- [x] 没有新增多级分销
+- [x] 没有新增团队收益
+- [x] 没有新增代理收益
+- [x] 没有新增 parent_leader_id / upline_id / downline / team_id / level
+- [x] 开团服务奖励仍只来自开团人自己的真实有效团购订单
+- [x] 用户可见文案仍为“开团服务奖励”
+- [x] 没有接真实打款
+- [x] 没有自动报税
+- [x] 没有新增优惠券/会员/营销玩法，除非当前阶段明确要求
+
+## 9. 风险点
+
+- 高风险：暂无自动发现，需人工 review
+- 中风险：本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。
+- 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
+
+## 10. 未完成项
+
+- scripts/generate-stage-report.ts:1113 — const keywords = /(TODO:|FIXME:|TBD:|NOT_IMPLEMENTED|throw new Error\([`'"]Not implemented[`'"]\)|待实现|功能占位)/i;
+- scripts/generate-stage-report.ts:1238 — - 中风险：${todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : '暂无自动发现，需人工 review'}
+
+## 11. Codex 给人工 reviewer 的说明
+
+- 本阶段做了什么：根据 L42 的最近一次提交 diff 生成验收报告，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
+- 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
+- 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。

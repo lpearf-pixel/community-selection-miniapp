@@ -1,0 +1,9 @@
+{
+  "stage": "L42",
+  "source_branch": "codex/add-manual-closure-workflow-for-failed-group-buys",
+  "source_commit": "76d83afe4c30f1e6bdd9479cdbdb7065e214ceab",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-12T21:36:43.029Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
