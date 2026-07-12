@@ -454,6 +454,48 @@ async function main() {
     await request('GET', `/api/me/orders/${groupOrderId}`, { label: 'GET /api/me/orders/:groupOrderId', headers: userHeaders });
   }
 
+
+  const l42Prefix = `docker-l42-${Date.now()}`;
+  const l42Product = await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } });
+  const l42Leader = await prisma.user.upsert({ where: { openid: `${l42Prefix}-leader` }, update: {}, create: { openid: `${l42Prefix}-leader`, nickname: 'Docker L42 leader', role: 'leader', status: 'active' } });
+  const l42User = await prisma.user.upsert({ where: { openid: `${l42Prefix}-user` }, update: {}, create: { openid: `${l42Prefix}-user`, nickname: 'Docker L42 user', role: 'customer', status: 'active' } });
+  const l42GroupBuy = await prisma.groupBuy.create({ data: { product_id: DOCKER_E2E_PRODUCT_ID, leader_user_id: l42Leader.id, community_id: DOCKER_E2E_COMMUNITY_ID, min_people: 3, min_quantity: 3, price_cents: l42Product.price_cents, start_time: new Date(Date.now() - 7200_000), end_time: new Date(Date.now() - 3600_000), pickup_time: new Date(Date.now() + 86400_000), status: 'pending' } });
+  const l42PaidOrder = await prisma.order.create({ data: { order_no: `${l42Prefix}-paid`, user_id: l42User.id, group_buy_id: l42GroupBuy.id, product_id: DOCKER_E2E_PRODUCT_ID, leader_user_id: l42Leader.id, community_id: DOCKER_E2E_COMMUNITY_ID, total_amount_cents: l42Product.price_cents, product_amount_cents: l42Product.price_cents, pay_amount_cents: l42Product.price_cents, quantity: 1, pay_status: 'paid', order_status: 'paid', refund_status: 'none', paid_at: new Date(), receiver_name: 'Docker L42', receiver_phone: '13800000000' } });
+  const l42UnpaidOrder = await prisma.order.create({ data: { order_no: `${l42Prefix}-unpaid`, user_id: l42User.id, group_buy_id: l42GroupBuy.id, product_id: DOCKER_E2E_PRODUCT_ID, leader_user_id: l42Leader.id, community_id: DOCKER_E2E_COMMUNITY_ID, total_amount_cents: l42Product.price_cents, product_amount_cents: l42Product.price_cents, pay_amount_cents: l42Product.price_cents, quantity: 1, pay_status: 'unpaid', order_status: 'unpaid', refund_status: 'none', receiver_name: 'Docker L42', receiver_phone: '13800000000' } });
+  const l42StockBefore = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
+  await prisma.product.update({ where: { id: DOCKER_E2E_PRODUCT_ID }, data: { stock: { decrement: 1 } } });
+  await prisma.stockLedger.create({ data: { product_id: DOCKER_E2E_PRODUCT_ID, source_type: 'order_payment', source_id: l42PaidOrder.id, idempotency_key: `docker-l42-paid-deduct:${l42PaidOrder.id}`, event_type: 'order_paid_deduct', quantity_delta: -1, order_id: l42PaidOrder.id, direction: 'out', quantity: 1, stock_before: l42StockBefore, stock_after: l42StockBefore - 1, operator_type: 'system', remark: 'Docker L42 paid deduction fixture' } });
+  const statusBefore = l42GroupBuy.status;
+  const failedResult = await request<{ status: string }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/mark-failed`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/mark-failed L42', body: { reason: 'Docker E2E L42 未达标人工失败' } }));
+  const stockAfterFailed = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
+  assert(failedResult.status === 'failed', 'L42 mark failed must return failed');
+  assert(stockAfterFailed === l42StockBefore - 1, 'L42 mark failed must not restore inventory');
+  assert(await prisma.refund.count({ where: { order_id: l42PaidOrder.id } }) === 0, 'L42 mark failed must not auto refund');
+  const closeUnpaidResult = await request<{ closed_count: number }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close-unpaid-orders`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close-unpaid-orders L42', body: { admin_note: 'Docker E2E L42 close unpaid' } }));
+  const l42UnpaidAfter = await prisma.order.findUniqueOrThrow({ where: { id: l42UnpaidOrder.id } });
+  assert(closeUnpaidResult.closed_count === 1 && l42UnpaidAfter.pay_status === 'unpaid' && l42UnpaidAfter.order_status === 'closed', 'L42 unpaid order closure must keep pay_status unpaid');
+  const pendingRefundList = await request<{ summary: { pending_refund_orders: number }; items: Array<{ order_id: string; latest_refund_id: string | null }> }>('GET', `/api/admin/group-buys/${l42GroupBuy.id}/manual-refund-orders`, withAdmin({ label: 'GET /api/admin/group-buys/:id/manual-refund-orders L42' }));
+  assert(pendingRefundList.summary.pending_refund_orders === 1, 'L42 paid order must be pending manual refund');
+  const blockedClose = await request<{ applied: boolean; blockers?: Array<{ type: string; count: number }> }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 blocked', body: { admin_note: 'should block' } }));
+  assert(!blockedClose.applied, 'L42 final close must block before refund success');
+  const l42Refund = await prisma.refund.create({ data: { order_id: l42PaidOrder.id, out_refund_no: `${l42Prefix}-success-refund`, client_refund_id: `${l42Prefix}-success-refund`, refund_amount_cents: l42PaidOrder.pay_amount_cents, product_refund_amount_cents: l42PaidOrder.product_amount_cents ?? l42PaidOrder.pay_amount_cents, delivery_refund_amount_cents: 0, reason: 'Docker E2E L42 success refund fixture', status: 'success', processed_at: new Date() } });
+  await request('POST', `/api/admin/group-buys/${l42GroupBuy.id}/orders/${l42PaidOrder.id}/confirm-refund`, withAdminJson({ label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42', body: { refund_id: l42Refund.id, admin_note: 'Docker E2E L42 confirm success refund' } }));
+  await request('POST', `/api/admin/group-buys/${l42GroupBuy.id}/orders/${l42PaidOrder.id}/confirm-refund`, withAdminJson({ label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 repeat', body: { refund_id: l42Refund.id, admin_note: 'repeat' } }));
+  const stockAfterRefund = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
+  assert(stockAfterRefund === l42StockBefore, 'L42 refund confirmation must restore inventory once');
+  const finalClose = await request<{ status: string }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 final', body: { admin_note: 'Docker E2E L42 final close' } }));
+  await request('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 repeat final', body: { admin_note: 'repeat' } }));
+  console.log('Group buy closure:');
+  console.log(`group_buy_id=${l42GroupBuy.id}`);
+  console.log(`status_before=${statusBefore}`);
+  console.log(`status_after_failed=${failedResult.status}`);
+  console.log(`unpaid_closed_count=${closeUnpaidResult.closed_count}`);
+  console.log(`pending_refund_count=${pendingRefundList.summary.pending_refund_orders}`);
+  console.log('refunded_count=1');
+  console.log(`inventory_before=${l42StockBefore}`);
+  console.log(`inventory_after_refund=${stockAfterRefund}`);
+  console.log(`final_status=${finalClose.status}`);
+
   assertNoRiskFindings();
   console.log('Docker API E2E verification passed.');
 }
@@ -465,10 +507,11 @@ main().catch((error) => {
   await prisma.$disconnect();
 });
 
-// L41 Docker API E2E scenarios are registered for deterministic container verification:
+// L41/L42 Docker API E2E scenarios are registered for deterministic container verification:
 // Scenario A normal paid order deducts stock 20 -> 14 and duplicate payment remains 14.
 // Scenario B insufficient stock keeps order unpaid and writes no deduct ledger.
 // Scenario C full product refund restores inventory once and duplicate handling is idempotent.
 // Scenario D partial amount refund without restore_quantity does not change stock.
 // Scenario E delivery fee refund does not change stock.
 // Scenario F group failed marker itself does not restore stock; manual refund success restores once.
+// Scenario G L42 failed group buy manual closure uses admin APIs, manual refund success confirmation, final close idempotency.

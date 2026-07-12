@@ -24,6 +24,7 @@ type ViewKey =
   | "login"
   | "products"
   | "groupBuys"
+  | "failedGroupBuyClosure"
   | "orders"
   | "fulfillment"
   | "inventory"
@@ -81,6 +82,55 @@ type GroupBuy = {
   status: string;
   end_time: string;
   pickup_time: string;
+};
+
+type ClosureSummary = {
+  group_buy_id: string;
+  status: string;
+  expired: boolean;
+  target_count: number;
+  paid_quantity: number;
+  unpaid_order_count: number;
+  paid_pending_refund_count: number;
+  refund_success_count: number;
+  exception_order_count: number;
+  pending_refund_amount_cents: number;
+  total_refunded_amount_cents: number;
+  inventory_deducted_quantity: number;
+  inventory_restored_quantity: number;
+  inventory_remaining_restorable_quantity: number;
+  closable: boolean;
+  blockers: Array<{ type: string; count: number; order_ids?: string[] }>;
+};
+
+type ManualRefundOrder = {
+  order_id: string;
+  order_no: string;
+  user_id: string;
+  product_id: string;
+  quantity: number;
+  pay_amount_cents: number;
+  product_amount_cents: number;
+  delivery_fee_cents: number;
+  refund_amount_cents: number;
+  refund_status: string;
+  latest_refund_id: string | null;
+  closure_status: string;
+  created_at: string;
+  paid_at: string | null;
+};
+
+type ManualRefundOrderResponse = {
+  group_buy_id: string;
+  group_buy_status: string;
+  summary: {
+    total_paid_orders: number;
+    pending_refund_orders: number;
+    refund_success_orders: number;
+    exception_orders: number;
+    pending_refund_amount_cents: number;
+  };
+  items: ManualRefundOrder[];
 };
 
 type Order = {
@@ -410,6 +460,9 @@ export function App() {
     useState<AiContext | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product>(emptyProduct);
   const [message, setMessage] = useState("");
+  const [selectedClosureGroupBuyId, setSelectedClosureGroupBuyId] = useState("");
+  const [closureSummary, setClosureSummary] = useState<ClosureSummary | null>(null);
+  const [manualRefundOrders, setManualRefundOrders] = useState<ManualRefundOrder[]>([]);
 
   function refresh() {
     void Promise.all([
@@ -939,6 +992,43 @@ export function App() {
     refresh();
   }
 
+  async function loadClosureWorkbench(groupBuyId: string) {
+    if (!groupBuyId) return;
+    const [summary, refundOrders] = await Promise.all([
+      fetchJson<ClosureSummary>(`/api/admin/group-buys/${groupBuyId}/closure-summary`),
+      fetchJson<ManualRefundOrderResponse>(`/api/admin/group-buys/${groupBuyId}/manual-refund-orders`),
+    ]);
+    setClosureSummary(summary);
+    setManualRefundOrders(refundOrders.items);
+  }
+
+  async function markSelectedGroupBuyFailed() {
+    if (!selectedClosureGroupBuyId) return;
+    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/mark-failed`, { method: "POST", body: JSON.stringify({ reason: "Admin 人工确认团购失败", admin_note: "标记失败不等于退款完成" }) });
+    await loadClosureWorkbench(selectedClosureGroupBuyId);
+  }
+
+  async function closeSelectedUnpaidOrders() {
+    if (!selectedClosureGroupBuyId) return;
+    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/close-unpaid-orders`, { method: "POST", body: JSON.stringify({ admin_note: "关闭未支付订单不会触发退款" }) });
+    await loadClosureWorkbench(selectedClosureGroupBuyId);
+  }
+
+  async function closeSelectedGroupBuyFinally() {
+    if (!selectedClosureGroupBuyId) return;
+    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/close`, { method: "POST", body: JSON.stringify({ admin_note: "最终关闭要求所有待办已完成" }) });
+    await loadClosureWorkbench(selectedClosureGroupBuyId);
+  }
+
+  async function confirmRefundHandled(order: ManualRefundOrder) {
+    if (!selectedClosureGroupBuyId || !order.latest_refund_id) {
+      setMessage("确认退款已完成必须基于成功退款记录");
+      return;
+    }
+    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/orders/${order.order_id}/confirm-refund`, { method: "POST", body: JSON.stringify({ refund_id: order.latest_refund_id, admin_note: "确认退款已完成必须基于成功退款记录" }) });
+    await loadClosureWorkbench(selectedClosureGroupBuyId);
+  }
+
   async function cloneGroupBuy(groupBuy: GroupBuy) {
     const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const pickupTime = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
@@ -1000,6 +1090,7 @@ export function App() {
             <Space>
               <Button onClick={() => setView("products")}>商品管理</Button>
               <Button onClick={() => setView("groupBuys")}>团购管理</Button>
+              <Button onClick={() => setView("failedGroupBuyClosure")}>失败团购人工关闭</Button>
               <Button onClick={() => setView("orders")}>订单管理</Button>
               <Button onClick={() => setView("fulfillment")}>履约看板</Button>
               <Button onClick={() => setView("inventory")}>库存管理</Button>
@@ -1385,6 +1476,59 @@ export function App() {
                     </Button>
                   ),
                 },
+              ]}
+            />
+          </Card>
+        ) : null}
+
+
+
+        {view === "failedGroupBuyClosure" ? (
+          <Card title="失败团购人工关闭工作台">
+            <Typography.Paragraph>
+              “标记失败”不等于退款完成；“关闭未支付订单”不会触发退款；“确认退款已完成”必须基于成功退款记录；“最终关闭”要求所有待办已完成。
+            </Typography.Paragraph>
+            <Space wrap>
+              <Select
+                style={{ width: 360 }}
+                placeholder="选择团购"
+                value={selectedClosureGroupBuyId || undefined}
+                onChange={(value: string) => {
+                  setSelectedClosureGroupBuyId(value);
+                  void loadClosureWorkbench(value);
+                }}
+                options={groupBuys.map((groupBuy) => ({ label: `${groupBuy.product?.name ?? "团购"} / ${groupBuy.status} / ${new Date(groupBuy.end_time).toLocaleString()}`, value: groupBuy.id }))}
+              />
+              <Button onClick={() => selectedClosureGroupBuyId && loadClosureWorkbench(selectedClosureGroupBuyId)}>查看关闭摘要</Button>
+              <Button onClick={markSelectedGroupBuyFailed}>标记失败</Button>
+              <Button onClick={closeSelectedUnpaidOrders}>关闭未支付订单</Button>
+              <Button type="primary" danger onClick={closeSelectedGroupBuyFinally}>最终关闭</Button>
+            </Space>
+            {closureSummary ? (
+              <Card title="团购关闭摘要" style={{ marginTop: 16 }}>
+                <Typography.Paragraph>
+                  状态：{closureSummary.status}；目标：{closureSummary.target_count}；有效已支付数量：{closureSummary.paid_quantity}；未支付待关闭：{closureSummary.unpaid_order_count}；待人工退款：{closureSummary.paid_pending_refund_count}；退款成功：{closureSummary.refund_success_count}；待退金额：¥{formatYuan(closureSummary.pending_refund_amount_cents)}；已退金额：¥{formatYuan(closureSummary.total_refunded_amount_cents)}；库存扣减/回补/剩余：{closureSummary.inventory_deducted_quantity}/{closureSummary.inventory_restored_quantity}/{closureSummary.inventory_remaining_restorable_quantity}；可关闭：{closureSummary.closable ? "是" : "否"}
+                </Typography.Paragraph>
+                {closureSummary.blockers.length > 0 ? (
+                  <Typography.Paragraph type="danger">
+                    阻塞原因：{closureSummary.blockers.map((blocker) => `${blocker.type}(${blocker.count})`).join("，")}
+                  </Typography.Paragraph>
+                ) : null}
+              </Card>
+            ) : null}
+            <Table
+              rowKey="order_id"
+              dataSource={manualRefundOrders}
+              columns={[
+                { title: "订单号", dataIndex: "order_no" },
+                { title: "用户", dataIndex: "user_id" },
+                { title: "数量", dataIndex: "quantity" },
+                { title: "实付", render: (_: unknown, order: ManualRefundOrder) => `¥${formatYuan(order.pay_amount_cents)}` },
+                { title: "已退", render: (_: unknown, order: ManualRefundOrder) => `¥${formatYuan(order.refund_amount_cents)}` },
+                { title: "退款状态", dataIndex: "refund_status" },
+                { title: "关闭状态", dataIndex: "closure_status" },
+                { title: "最新退款单", dataIndex: "latest_refund_id" },
+                { title: "操作", render: (_: unknown, order: ManualRefundOrder) => <Button onClick={() => confirmRefundHandled(order)}>确认退款已完成</Button> },
               ]}
             />
           </Card>

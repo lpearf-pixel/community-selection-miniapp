@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { fail } from '@community-selection/shared';
+import { prisma } from '../../db.js';
 
 export type AdminRole = 'super_admin' | 'store_manager' | 'clerk' | 'finance' | 'aftersales' | 'operator';
 
@@ -135,6 +136,11 @@ export function requireAdminPermission(permission: AdminPermission | AdminPermis
     const context = resolveAdminAccessContext(request);
     if (!context) {
       reply.code(401).send(fail('ADMIN_UNAUTHORIZED: Admin identity required'));
+      return;
+    }
+    const adminUser = await prisma.adminUser.findUnique({ where: { id: context.admin_user_id }, select: { status: true } });
+    if (!adminUser || adminUser.status !== 'active') {
+      reply.code(401).send(fail('ADMIN_UNAUTHORIZED: Active AdminUser required'));
       return;
     }
     const required = Array.isArray(permission) ? permission : [permission];
