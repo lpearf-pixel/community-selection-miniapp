@@ -1,10 +1,8 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { emptyVerificationResult, isVerificationBlocking, type VerificationIssueKind } from './lib/verification-result.js';
 
 type Scope = 'stage' | 'chain' | 'all';
-type TypecheckMode = 'full' | 'baseline' | 'off';
 type CommandSpec = {
   title: string;
   command: string;
@@ -21,7 +19,6 @@ type ParsedArgs = {
   debug: boolean;
   scope?: Scope;
   skipSourceSyncCheck: boolean;
-  typecheckMode?: TypecheckMode;
 };
 
 const reportsDir = join(process.cwd(), 'reports');
@@ -78,12 +75,6 @@ const adminTypecheck: CommandSpec = {
   args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false']
 };
 
-const adminTypeBaseline: CommandSpec = {
-  title: 'Admin type baseline diff',
-  command: 'pnpm',
-  args: ['exec', 'tsx', 'scripts/verify-admin-type-baseline-local.ts']
-};
-
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = { verify: false, publish: false, push: false, all: false, debug: false, skipSourceSyncCheck: true };
   for (const arg of argv) {
@@ -96,7 +87,6 @@ function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--skip-source-sync-check=false') parsed.skipSourceSyncCheck = false;
     else if (arg.startsWith('--stage=')) parsed.stage = normalizeStage(arg.slice('--stage='.length));
     else if (arg.startsWith('--scope=')) parsed.scope = parseScope(arg.slice('--scope='.length));
-    else if (arg.startsWith('--typecheck-mode=')) parsed.typecheckMode = parseTypecheckMode(arg.slice('--typecheck-mode='.length));
     else throw new Error(`Unknown argument: ${arg}`);
   }
   if (parsed.all) parsed.verify = true;
@@ -108,42 +98,33 @@ function parseScope(value: string): Scope {
   throw new Error(`Unsupported scope: ${value}`);
 }
 
-function parseTypecheckMode(value: string): TypecheckMode {
-  if (value === 'full' || value === 'baseline' || value === 'off') return value;
-  throw new Error(`Unsupported typecheck mode: ${value}`);
-}
-
 function normalizeStage(value: string): string {
   return value.trim().toUpperCase();
+}
+
+function latestRegisteredStage(): string {
+  return Object.keys(stageVerifiers)
+    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+    .at(-1)!;
+}
+
+function assertRegisteredStage(stage: string): void {
+  const verifier = stageVerifiers[stage];
+  const chain = regressionChains[stage];
+  if (!verifier || !chain) {
+    throw new Error(`Stage ${stage} is not registered on this branch.\nCurrent latest registered stage: ${latestRegisteredStage()}.`);
+  }
+  const verifierScript = verifier.args.at(-1);
+  if (!verifierScript || !existsSync(join(process.cwd(), verifierScript))) {
+    throw new Error(`Stage ${stage} verifier file is missing: ${verifierScript ?? 'unknown'}\nCurrent latest registered stage: ${latestRegisteredStage()}.`);
+  }
 }
 
 function validateArgs(args: ParsedArgs): void {
   if (args.all && args.stage) throw new Error('Do not pass --all and --stage together; choose one to avoid ambiguity.');
   if (args.publish && !args.stage) throw new Error('--publish requires --stage=Lxx.');
   if (!args.verify && !args.publish) throw new Error('Nothing to do. Pass --verify, --publish, or --all.');
-  if (args.stage && !stageVerifiers[args.stage]) throw new Error(`No verifier registered for stage: ${args.stage}`);
-  if (args.stage && !regressionChains[args.stage]) throw new Error(`No regression chain registered for stage: ${args.stage}`);
-  if (args.publish && args.typecheckMode === 'off') throw new Error('--typecheck-mode=off is forbidden during publish.');
-}
-
-function stageNumber(stage?: string): number | undefined {
-  const match = stage?.match(/^L(\d+)$/);
-  return match ? Number(match[1]) : undefined;
-}
-
-function resolveTypecheckMode(args: ParsedArgs): TypecheckMode {
-  if (args.typecheckMode) return args.typecheckMode;
-  const number = stageNumber(args.stage);
-  if (number !== undefined && number >= 50) return 'full';
-  if (number !== undefined && number >= 40 && number <= 49) return 'baseline';
-  return 'baseline';
-}
-
-function classifyCommandFailure(title: string): VerificationIssueKind {
-  if (/compliance|security|raw compliance/i.test(title)) return 'security';
-  if (/Admin type/i.test(title)) return 'new-type-error';
-  if (/Docker|E2E/i.test(title)) return 'environment';
-  return 'stage';
+  if (args.stage) assertRegisteredStage(args.stage);
 }
 
 
@@ -172,36 +153,15 @@ function runCommand(spec: CommandSpec): void {
     appendOutput(result.stderr);
   }
   if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const kind = classifyCommandFailure(spec.title);
-    const verification = emptyVerificationResult();
-    const issue = { kind, code: 'COMMAND_FAILED', message: `${spec.title} failed with exit code ${result.status ?? 'unknown'}`, blocking: true };
-    if (kind === 'security') verification.securityErrors.push(issue);
-    else if (kind === 'new-type-error') verification.newTypeErrors.push(issue);
-    else if (kind === 'environment') verification.environmentErrors.push(issue);
-    else verification.stageErrors.push(issue);
-    if (isVerificationBlocking(verification)) throw new Error(issue.message);
-  }
-}
-
-
-function resolveAdminTypecheckCommand(args: ParsedArgs): CommandSpec | undefined {
-  const mode = resolveTypecheckMode(args);
-  if (mode === 'off') return undefined;
-  return mode === 'full' ? adminTypecheck : adminTypeBaseline;
+  if (result.status !== 0) throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
 }
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
-  const adminCommand = resolveAdminTypecheckCommand(args);
-  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, ...(adminCommand ? [adminCommand] : [])];
+  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypecheck];
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
   if (scope === 'stage') return [stageVerifiers[args.stage]];
-  const chainCommands = regressionChains[args.stage].flatMap((stage) => {
-    if (stage === 'DOCKER_API_E2E') return [dockerApiE2E];
-    if (stage === 'ADMIN_TYPECHECK') return adminCommand ? [adminCommand] : [];
-    return [stageVerifiers[stage]];
-  });
+  const chainCommands = regressionChains[args.stage].map((stage) => stage === 'DOCKER_API_E2E' ? dockerApiE2E : stage === 'ADMIN_TYPECHECK' ? adminTypecheck : stageVerifiers[stage]);
   return chainCommands;
 }
 
