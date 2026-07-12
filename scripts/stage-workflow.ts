@@ -42,7 +42,8 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L37: { title: 'L37 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts'] },
   L38: { title: 'L38 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts'] },
   L39: { title: 'L39 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts'] },
-  L40: { title: 'L40 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts'] }
+  L40: { title: 'L40 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts'] },
+  L41: { title: 'L41 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l41-inventory-deduct-restore-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
@@ -62,7 +63,8 @@ const regressionChains: Record<string, string[]> = {
   L37: ['L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
   L38: ['L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
   L39: ['L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L40: ['L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
+  L40: ['L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
+  L41: ['L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
 };
 
 const dockerApiE2E: CommandSpec = {

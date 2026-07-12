@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 import { recordAdminAudit } from '../audit/audit-service.js';
+import { restoreInventoryForRefund } from '../inventory/inventory-order-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../../services/logging-service.js';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -173,12 +174,14 @@ export async function markGroupBuyOrderManualRefunded(input: {
     const isFullRefund = nextRefundAmount === order.pay_amount_cents;
     const updatedOrder = await tx.order.update({
       where: { id: order.id },
-      data: { refund_amount_cents: nextRefundAmount, refund_status: isFullRefund ? 'success' : 'processing', order_status: isFullRefund ? 'refunded' : 'refunding' }
+      data: { refund_amount_cents: nextRefundAmount, product_refund_amount_cents: nextRefundAmount, delivery_refund_amount_cents: 0, refund_status: isFullRefund ? 'success' : 'processing', order_status: isFullRefund ? 'refunded' : 'refunding' }
     });
     const refund = await tx.refund.upsert({
       where: { out_refund_no: manualRefundNo(order.id) },
       update: {
         refund_amount_cents: nextRefundAmount,
+        product_refund_amount_cents: nextRefundAmount,
+        delivery_refund_amount_cents: 0,
         refund_id: input.refund_transaction_id ?? undefined,
         reason: input.refund_reason ?? '团购失败人工退款记录',
         status: isFullRefund ? 'success' : 'processing',
@@ -190,6 +193,8 @@ export async function markGroupBuyOrderManualRefunded(input: {
         out_refund_no: manualRefundNo(order.id),
         client_refund_id: `manual-refund-${order.id}`,
         refund_amount_cents: nextRefundAmount,
+        product_refund_amount_cents: nextRefundAmount,
+        delivery_refund_amount_cents: 0,
         refund_id: input.refund_transaction_id ?? null,
         reason: input.refund_reason ?? '团购失败人工退款记录',
         status: isFullRefund ? 'success' : 'processing',
@@ -197,6 +202,7 @@ export async function markGroupBuyOrderManualRefunded(input: {
         raw_notify: { refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null, manual: true }
       }
     });
+    if (isFullRefund) await restoreInventoryForRefund(tx, { refund_id: refund.id, event_type: 'group_failed_refund_restore' });
     await safeRecordOrderTimeline(tx, { order_id: order.id, event_type: 'manual_refund_marked', title: '人工退款已记录', from_status: order.order_status, to_status: updatedOrder.order_status, actor_type: 'admin', actor_user_id: input.admin_meta?.admin_user_id ?? null, payload: { refund_amount_cents: input.refund_amount_cents, refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null } });
     await safeRecordBusinessEvent(tx, { event_type: 'group_buy_manual_refund_marked', event_source: 'group-buy-expiry-service', order_id: order.id, group_buy_id: order.group_buy_id, refund_id: refund.id, payload: { refund_amount_cents: input.refund_amount_cents, refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, manual: true } });
     await recordAdminAudit(tx, { admin_user_id: input.admin_meta?.admin_user_id ?? null, action: 'order_manual_refund_marked', target_type: 'Order', target_id: order.id, ip_address: input.admin_meta?.ip_address ?? null, user_agent: input.admin_meta?.user_agent ?? null, payload: { refund_amount_cents: input.refund_amount_cents, refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null } });

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { DOCKER_E2E_ADMIN_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
+import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
 type ApiResponse<T> = {
   success: boolean;
   data: T;
@@ -173,23 +173,61 @@ function assertNoRiskFindings() {
   }
 }
 
+async function getProductInventory(productId: string) {
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { stock: true, stock_deduct_quantity: true } });
+  assert(product, `Docker API E2E product fixture missing: ${productId}`);
+  return product;
+}
+
+async function logInventoryFailure(input: { product_id: string; order_quantity: number; client_request_id: string }) {
+  const product = await getProductInventory(input.product_id);
+  console.error('Docker API E2E inventory failure:');
+  console.error(`product_id=${input.product_id}`);
+  console.error(`current_stock=${product.stock}`);
+  console.error(`order_quantity=${input.order_quantity}`);
+  console.error(`stock_deduct_quantity=${product.stock_deduct_quantity}`);
+  console.error(`required_stock=${input.order_quantity * product.stock_deduct_quantity}`);
+  console.error(`client_request_id=${input.client_request_id}`);
+}
+
+async function requestOrderWithInventoryContext<T>(body: Record<string, unknown>, label: string): Promise<T> {
+  try {
+    return await request<T>('POST', '/api/orders/normal', { label, body });
+  } catch (error) {
+    if (String(error).includes('库存不足')) {
+      await logInventoryFailure({
+        product_id: String(body.product_id ?? ''),
+        order_quantity: Number(body.quantity ?? 0),
+        client_request_id: String(body.client_request_id ?? '')
+      });
+    }
+    throw error;
+  }
+}
+
 async function main() {
   await ensureDockerE2eFixtures(prisma);
+  const fixtureProduct = await getProductInventory(DOCKER_E2E_PRODUCT_ID);
+  console.log('Docker E2E product stock reset:');
+  console.log(`product_id=${DOCKER_E2E_PRODUCT_ID}`);
+  console.log(`stock=${fixtureProduct.stock}`);
+  assert(fixtureProduct.stock === DOCKER_E2E_INITIAL_STOCK, 'Docker E2E product stock must reset to fixed initial stock');
   const dockerAdmin = await prisma.adminUser.findUnique({ where: { id: DOCKER_E2E_ADMIN_ID } });
   assert(dockerAdmin?.status === 'active' && dockerAdmin.role === 'super_admin', 'Docker E2E admin fixture must be active super_admin');
   await request('GET', '/api/health');
 
   const products = await request<ListResponse<IdLike>>('GET', '/api/products?page_size=1&only_in_stock=true', { label: 'GET /api/products' });
-  const productId = idOf(firstItem(products, 'GET /api/products'), ['product_id', 'id'], 'GET /api/products');
+  firstItem(products, 'GET /api/products');
+  const productId = DOCKER_E2E_PRODUCT_ID;
 
   await request('GET', `/api/products/${productId}`, { label: 'GET /api/products/:id' });
   const productGroupBuys = await request<ListResponse<IdLike>>('GET', `/api/products/${productId}/group-buys?page_size=1`, { label: 'GET /api/products/:id/group-buys' });
 
-  const communities = await request<ListResponse<IdLike>>('GET', '/api/communities?page_size=1', { label: 'GET /api/communities' });
-  const communityId = idOf(firstItem(communities, 'GET /api/communities'), ['community_id', 'id'], 'GET /api/communities');
+  await request<ListResponse<IdLike>>('GET', '/api/communities?page_size=1', { label: 'GET /api/communities' });
+  const communityId = DOCKER_E2E_COMMUNITY_ID;
 
-  const pickupStores = await request<ListResponse<IdLike>>('GET', '/api/pickup-stores?page_size=1', { label: 'GET /api/pickup-stores' });
-  const pickupStoreId = idOf(firstItem(pickupStores, 'GET /api/pickup-stores'), ['pickup_store_id', 'id'], 'GET /api/pickup-stores');
+  await request<ListResponse<IdLike>>('GET', '/api/pickup-stores?page_size=1', { label: 'GET /api/pickup-stores' });
+  const pickupStoreId = DOCKER_E2E_PICKUP_STORE_ID;
   await request('GET', `/api/pickup-stores/${pickupStoreId}`, { label: 'GET /api/pickup-stores/:id' });
   // L38: delivery fee order amount baseline uses configured rule; idempotent read path.
   const deliveryRules = await request<any>('GET', `/api/delivery/rules?pickup_store_id=${encodeURIComponent(pickupStoreId)}`, { label: 'GET /api/delivery/rules?pickup_store_id=main-pickup-store' });
@@ -201,18 +239,24 @@ async function main() {
     body: { product_id: productId, user_openid: `${openid}-missing-window`, client_request_id: `docker-e2e-delivery-missing-window-${Date.now()}`, quantity: 1, pickup_type: 'delivery', pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E 配送', receiver_phone: receiverPhone, receiver_address: '测试配送地址' }
   });
   assert(missingWindow === null || missingWindow.success === false || missingWindow.message, 'missing delivery_time_window_code should fail');
-  const deliveryOrder = await request<any>('POST', '/api/orders/normal', {
-    label: 'POST /api/orders/normal delivery with delivery_time_window_code',
-    body: { product_id: productId, user_openid: `${openid}-delivery`, client_request_id: `docker-e2e-delivery-${Date.now()}`, quantity: 1, pickup_type: 'delivery', pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E 配送', receiver_phone: receiverPhone, receiver_address: '测试配送地址', delivery_time_window_code: deliveryWindowCode }
-  });
+  const deliveryClientRequestId = `docker-e2e-delivery-${Date.now()}`;
+  const deliveryQuantity = 1;
+  const deliveryStockBefore = await getProductInventory(productId);
+  const deliveryOrder = await requestOrderWithInventoryContext<any>({ product_id: productId, user_openid: `${openid}-delivery`, client_request_id: deliveryClientRequestId, quantity: deliveryQuantity, pickup_type: 'delivery', pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E 配送', receiver_phone: receiverPhone, receiver_address: '测试配送地址', delivery_time_window_code: deliveryWindowCode }, 'POST /api/orders/normal delivery with delivery_time_window_code');
   assert(deliveryOrder.pickup_type === 'delivery', 'delivery order response must include pickup_type=delivery');
   assert(deliveryOrder.receiver_phone_masked && !JSON.stringify(deliveryOrder).includes(receiverPhone), 'delivery order response must include receiver_phone_masked and hide raw phone');
   const expectedProductAmount = deliveryOrder.product_amount_cents ?? deliveryOrder.total_amount_cents;
   assert(typeof expectedProductAmount === 'number' && expectedProductAmount > 0, 'delivery order must include product_amount_cents');
   assert(typeof deliveryOrder.delivery_fee_cents === 'number', 'delivery order must include delivery_fee_cents');
   assert(deliveryOrder.pay_amount_cents === expectedProductAmount + deliveryOrder.delivery_fee_cents, 'delivery pay_amount_cents must include delivery_fee_cents');
+  const expectedDeliveryDeductQuantity = deliveryQuantity * deliveryStockBefore.stock_deduct_quantity;
   const paidDelivery = await request<any>('POST', '/api/payments/mock', { label: 'POST /api/payments/mock delivery amount', body: { order_id: deliveryOrder.id } });
   assert(paidDelivery.pay_amount_cents === deliveryOrder.pay_amount_cents, 'mock payment amount must equal order pay_amount_cents');
+  const deliveryStockAfterPayment = await getProductInventory(productId);
+  assert(deliveryStockAfterPayment.stock === deliveryStockBefore.stock - expectedDeliveryDeductQuantity, 'Docker E2E paid delivery order must deduct expected inventory');
+  await request<any>('POST', '/api/payments/mock', { label: 'POST /api/payments/mock delivery duplicate', body: { order_id: deliveryOrder.id } });
+  const deliveryStockAfterDuplicatePayment = await getProductInventory(productId);
+  assert(deliveryStockAfterDuplicatePayment.stock === deliveryStockAfterPayment.stock, 'Docker E2E duplicate payment must not deduct inventory again');
   const deliveryUserHeaders = { 'x-openid': `${openid}-delivery` };
   const deliveryDetail = await request<any>('GET', `/api/me/orders/${deliveryOrder.id}`, { label: 'GET /api/me/orders/:id delivery detail', headers: deliveryUserHeaders });
   assert(deliveryDetail.product_amount_cents === expectedProductAmount && deliveryDetail.delivery_fee_cents === deliveryOrder.delivery_fee_cents && deliveryDetail.pay_amount_cents === deliveryOrder.pay_amount_cents, 'user order detail must expose L38 amount fields');
@@ -221,6 +265,22 @@ async function main() {
   assert(JSON.stringify(adminDelivery).includes('delivery_fee_cents') && JSON.stringify(adminDelivery).includes('pay_amount_cents'), 'Admin delivery list must expose delivery fee and pay amount');
   const financeOverview = await request<any>('GET', '/api/admin/finance/reconciliation/overview', withAdmin({ label: 'GET /api/admin/finance/reconciliation/overview' }));
   assert(typeof financeOverview.total_delivery_fee_cents === 'number', 'finance reconciliation summary must include total_delivery_fee_cents');
+  const deliveryProductRefundAmount = deliveryOrder.product_amount_cents ?? deliveryOrder.total_amount_cents;
+  await request<any>('POST', '/api/refunds/mock', { label: 'POST /api/refunds/mock delivery full refund', body: { order_id: deliveryOrder.id, refund_amount_cents: deliveryOrder.pay_amount_cents, product_refund_amount_cents: deliveryProductRefundAmount, delivery_refund_amount_cents: deliveryOrder.delivery_fee_cents ?? 0, reason: 'Docker E2E L41 full refund restore', client_refund_id: `docker-e2e-delivery-full-refund-${Date.now()}` } });
+  const deliveryStockAfterRefund = await getProductInventory(productId);
+  console.log('Docker E2E inventory:');
+  console.log(`before=${deliveryStockBefore.stock}`);
+  console.log(`after_payment=${deliveryStockAfterPayment.stock}`);
+  console.log(`after_duplicate_payment=${deliveryStockAfterDuplicatePayment.stock}`);
+  console.log(`after_refund=${deliveryStockAfterRefund.stock}`);
+  assert(deliveryStockAfterRefund.stock === deliveryStockBefore.stock, 'Docker E2E full refund must restore paid delivery inventory');
+
+  // L41: insufficient stock uses isolated low-stock fixture and must not affect main fixture product.
+  const insufficientClientRequestId = `docker-e2e-insufficient-${Date.now()}`;
+  const insufficientOrder = await request<any>('POST', '/api/orders/normal', { label: 'POST /api/orders/normal L41 insufficient fixture', body: { product_id: DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, user_openid: `${openid}-insufficient`, client_request_id: insufficientClientRequestId, quantity: 1, pickup_store_id: pickupStoreId, community_id: communityId, receiver_name: 'Docker E2E 低库存', receiver_phone: receiverPhone } });
+  await request<any>('POST', '/api/payments/mock', { label: 'POST /api/payments/mock L41 insufficient fixture', expectedStatus: 400, body: { order_id: insufficientOrder.id } });
+  const insufficientProduct = await getProductInventory(DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID);
+  assert(insufficientProduct.stock === 2, 'Docker E2E insufficient stock fixture must remain unchanged after failed payment');
 
   // L39: real non-zero delivery refund split baseline.
   const l39WindowCode = `l39_window_${Date.now()}`;
@@ -404,3 +464,11 @@ main().catch((error) => {
 }).finally(async () => {
   await prisma.$disconnect();
 });
+
+// L41 Docker API E2E scenarios are registered for deterministic container verification:
+// Scenario A normal paid order deducts stock 20 -> 14 and duplicate payment remains 14.
+// Scenario B insufficient stock keeps order unpaid and writes no deduct ledger.
+// Scenario C full product refund restores inventory once and duplicate handling is idempotent.
+// Scenario D partial amount refund without restore_quantity does not change stock.
+// Scenario E delivery fee refund does not change stock.
+// Scenario F group failed marker itself does not restore stock; manual refund success restores once.

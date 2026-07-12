@@ -561,23 +561,32 @@ model ConsumerCreditLedger {
 
 
 model StockLedger {
-  id              String   @id @default(cuid())
-  product_id      String
-  source_type     String
-  source_id       String?
-  direction       String
-  quantity        Int
-  stock_before    Int
-  stock_after     Int
-  operator_type   String?
-  operator_id     String?
-  remark          String?
-  payload         Json?
-  created_at      DateTime @default(now())
-  product         Product  @relation(fields: [product_id], references: [id])
+  id                 String   @id @default(cuid())
+  product_id         String
+  source_type        String
+  source_id          String?
+  idempotency_key    String?  @unique
+  event_type         String   @default("legacy_stock_event")
+  quantity_delta     Int      @default(0)
+  order_id           String?
+  refund_id          String?
+  after_sale_case_id String?
+  direction          String
+  quantity           Int
+  stock_before       Int
+  stock_after        Int
+  operator_type      String?
+  operator_id        String?
+  remark             String?
+  payload            Json?
+  created_at         DateTime @default(now())
+  product            Product  @relation(fields: [product_id], references: [id])
 
   @@index([product_id])
   @@index([source_type, source_id])
+  @@index([order_id])
+  @@index([refund_id])
+  @@index([event_type])
   @@index([created_at])
 }
 

@@ -15,6 +15,13 @@ export type AdminOrderDetail = {
   remaining_refundable_amount_cents: number;
   receiver_phone_masked: string | null;
   receiver_address_masked: string | null;
+  inventory_summary?: {
+    deducted_quantity: number;
+    restored_quantity: number;
+    remaining_restorable_quantity: number;
+    current_product_stock: number;
+    latest_inventory_event: string | null;
+  };
 };
 
 export function getAdminOrderDetail(orderId: string) {

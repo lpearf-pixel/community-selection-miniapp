@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../../db.js';
+import { getOrderInventorySummary } from '../../modules/inventory/inventory-order-service.js';
 import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, requireAdminPermission, resolveAdminAccessContext } from '../../modules/admin-access/admin-access-control.js';
 
 function maskPhone(phone?: string | null) { return phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : null; }
@@ -28,6 +29,7 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
     if (!order) { reply.code(404); return fail('订单不存在'); }
     if (!canAccessOrderDataScope(context, order)) { reply.code(403); return fail(ADMIN_SCOPE_FORBIDDEN); }
     const timeline = await prisma.orderTimelineLog.findMany({ where: { order_id: id }, orderBy: { created_at: 'asc' } });
+    const inventory_summary = await prisma.$transaction((tx) => getOrderInventorySummary(tx, id));
     const product = order.product ?? order.group_buy?.product ?? null;
     const productAmount = order.product_amount_cents ?? order.total_amount_cents;
     const remaining = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
@@ -45,8 +47,19 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
       receiver_name: order.receiver_name, receiver_phone_masked: maskPhone(order.receiver_phone), receiver_address_masked: maskAddress(order.receiver_address),
       after_sale_summary: { has_after_sale: order.after_sale_cases.length > 0, case_count: order.after_sale_cases.length, latest_status: order.after_sale_cases[0]?.status ?? null, requested_product_refund_cents: order.after_sale_cases.reduce((s, c) => s + (c.requested_product_refund_cents ?? 0), 0), requested_delivery_refund_cents: order.after_sale_cases.reduce((s, c) => s + (c.requested_delivery_refund_cents ?? 0), 0), approved_product_refund_cents: order.after_sale_cases.reduce((s, c) => s + (c.approved_product_refund_cents ?? 0), 0), approved_delivery_refund_cents: order.after_sale_cases.reduce((s, c) => s + (c.approved_delivery_refund_cents ?? 0), 0) },
       after_sales: order.after_sale_cases.map(publicAfterSale), refunds: order.refunds.map((r) => ({ id: r.id, refund_amount_cents: r.refund_amount_cents, product_refund_amount_cents: r.product_refund_amount_cents, delivery_refund_amount_cents: r.delivery_refund_amount_cents, status: r.status, created_at: r.created_at })),
+      inventory_summary,
       timeline: timeline.map((item) => ({ id: item.id, event_type: item.event_type, title: item.title, message: item.message, actor_type: item.actor_type, created_at: item.created_at })),
       created_at: order.created_at, paid_at: order.paid_at, completed_at: order.completed_at
     });
+  });
+
+  app.get('/api/admin/orders/:id/inventory-summary', { preHandler: requireAdminPermission('order.view') }, async (request, reply) => {
+    const context = resolveAdminAccessContext(request);
+    if (!context) { reply.code(401); return fail('ADMIN_UNAUTHORIZED: Admin identity required'); }
+    const { id } = request.params as { id: string };
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) { reply.code(404); return fail('订单不存在'); }
+    if (!canAccessOrderDataScope(context, order)) { reply.code(403); return fail(ADMIN_SCOPE_FORBIDDEN); }
+    return ok(await prisma.$transaction((tx) => getOrderInventorySummary(tx, id)));
   });
 }
