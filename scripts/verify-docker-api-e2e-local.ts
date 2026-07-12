@@ -1,3 +1,5 @@
+import { PrismaClient } from '@prisma/client';
+import { DOCKER_E2E_ADMIN_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
 type ApiResponse<T> = {
   success: boolean;
   data: T;
@@ -47,9 +49,10 @@ const receiverPhone = '13812345678';
 const groupReceiverPhone = '13912345678';
 const forbiddenValues = [receiverPhone, groupReceiverPhone];
 const openid = `docker-e2e-${Date.now()}`;
+const prisma = new PrismaClient();
 const adminHeaders = {
   'x-admin-role': 'super_admin',
-  'x-admin-user-id': 'docker-e2e-admin'
+  'x-admin-user-id': DOCKER_E2E_ADMIN_ID
 };
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -171,6 +174,9 @@ function assertNoRiskFindings() {
 }
 
 async function main() {
+  await ensureDockerE2eFixtures(prisma);
+  const dockerAdmin = await prisma.adminUser.findUnique({ where: { id: DOCKER_E2E_ADMIN_ID } });
+  assert(dockerAdmin?.status === 'active' && dockerAdmin.role === 'super_admin', 'Docker E2E admin fixture must be active super_admin');
   await request('GET', '/api/health');
 
   const products = await request<ListResponse<IdLike>>('GET', '/api/products?page_size=1&only_in_stock=true', { label: 'GET /api/products' });
@@ -248,14 +254,57 @@ async function main() {
     body: { type: 'missing_item', reason: 'Docker API E2E L39 拆分退款', description: 'L39 product/delivery refund split', requested_refund_cents: 300, requested_product_refund_cents: 100, requested_delivery_refund_cents: 200 }
   });
   const l39AfterSaleId = idOf(l39AfterSale, ['after_sale_case_id', 'id'], 'POST /api/me/orders/:id/after-sales L39 split request');
+  const missingAdminReview = await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+    label: 'POST /api/admin/after-sales/:id/review L40 missing admin fixture',
+    expectedStatus: 400,
+    headers: { 'content-type': 'application/json', 'x-admin-role': 'super_admin', 'x-admin-user-id': 'docker-e2e-missing-admin' },
+    body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'missing admin should fail' }
+  });
+  assert((missingAdminReview as any).message?.includes('管理员不存在或已停用'), 'Missing admin id must return business error before Prisma FK violation');
+  const inactiveAdminId = 'docker-e2e-inactive-admin';
+  await prisma.adminUser.upsert({
+    where: { id: inactiveAdminId },
+    update: { role: 'super_admin', status: 'inactive' },
+    create: { id: inactiveAdminId, username: 'docker-e2e-inactive-admin-user', password_hash: 'docker-e2e-placeholder-not-for-login', role: 'super_admin', status: 'inactive' }
+  });
+  const inactiveAdminReview = await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+    label: 'POST /api/admin/after-sales/:id/review L40 inactive admin',
+    expectedStatus: 400,
+    headers: { 'content-type': 'application/json', 'x-admin-role': 'super_admin', 'x-admin-user-id': inactiveAdminId },
+    body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'inactive admin should fail' }
+  });
+  assert((inactiveAdminReview as any).message?.includes('管理员不存在或已停用'), 'Inactive admin id must return business error before Prisma FK violation');
+  await ensureDockerE2eFixtures(prisma);
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/review L39 split approval',
     body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split approval' }
   }));
+
+  // L40: Admin order detail and after-sale workbench must expose split review data without triggering a refund automatically.
+  const l40AfterSaleList = await request<any[]>('GET', `/api/admin/after-sales?order_no=${encodeURIComponent(l39DeliveryOrder.order_no ?? '')}`, withAdmin({ label: 'GET /api/admin/after-sales L40 workbench list' }));
+  assert(Array.isArray(l40AfterSaleList) && l40AfterSaleList.some((item) => item.after_sale_case_id === l39AfterSaleId), 'L40 admin after-sale list must include reviewed case');
+  const l40AfterSaleDetail = await request<any>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, withAdmin({ label: 'GET /api/admin/after-sales/:id L40 detail' }));
+  assert(l40AfterSaleDetail.approved_product_refund_cents === 100, 'L40 after-sale detail must include approved_product_refund_cents=100');
+  assert(l40AfterSaleDetail.approved_delivery_refund_cents === 200, 'L40 after-sale detail must include approved_delivery_refund_cents=200');
+  assert(l40AfterSaleDetail.approved_refund_cents === 300, 'L40 after-sale detail must include approved_refund_cents=300');
+  assert(l40AfterSaleDetail.handler?.id === DOCKER_E2E_ADMIN_ID, 'L40 after-sale detail must show docker-e2e-admin reviewer');
+  assert(l40AfterSaleDetail.order.receiver_phone_masked && !JSON.stringify(l40AfterSaleDetail).includes(receiverPhone), 'L40 after-sale detail must only include masked receiver_phone');
+  const l40OrderDetailBeforeRefund = await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, withAdmin({ label: 'GET /api/admin/orders/:id L40 before manual refund' }));
+  assert(l40OrderDetailBeforeRefund.after_sale_summary.approved_product_refund_cents >= 100, 'L40 order detail must summarize approved product refund split');
+  assert(l40OrderDetailBeforeRefund.after_sale_summary.approved_delivery_refund_cents >= 200, 'L40 order detail must summarize approved delivery refund split');
+  assert(l40OrderDetailBeforeRefund.product_refund_amount_cents === 0 && l40OrderDetailBeforeRefund.delivery_refund_amount_cents === 0 && l40OrderDetailBeforeRefund.refund_amount_cents === 0, 'L40 review must not automatically create refund amounts before manual resolve');
+  assert(l40OrderDetailBeforeRefund.receiver_phone_masked && !JSON.stringify(l40OrderDetailBeforeRefund).includes(receiverPhone), 'L40 admin order detail must only include masked receiver_phone');
+  await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 insufficient permission', expectedStatus: 403 }), headers: { 'x-admin-role': 'operator', 'x-admin-user-id': 'docker-e2e-operator' } });
+  await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  await request<any>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, { ...withAdmin({ label: 'GET /api/admin/after-sales/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  await ensureDockerE2eFixtures(prisma);
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/resolve`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/resolve L39 split refund',
     body: { resolution_type: 'partial_refund', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split refund' }
   }));
+  const l40ResolvedCase = await prisma.afterSaleCase.findUnique({ where: { id: l39AfterSaleId } });
+  assert(l40ResolvedCase?.reviewed_by_admin_id === DOCKER_E2E_ADMIN_ID, 'reviewed_by_admin_id must equal docker-e2e-admin');
+  assert(l40ResolvedCase?.resolved_by_admin_id === DOCKER_E2E_ADMIN_ID, 'resolved_by_admin_id must equal docker-e2e-admin');
 
   const l39Detail = await request<any>('GET', `/api/me/orders/${l39DeliveryOrder.id}`, { label: 'GET /api/me/orders/:id L39 split detail', headers: l39DeliveryHeaders });
   assert(l39Detail.product_refund_amount_cents === 100, 'L39 detail must include product_refund_amount_cents=100');
@@ -351,5 +400,7 @@ async function main() {
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
+  process.exitCode = 1;
+}).finally(async () => {
+  await prisma.$disconnect();
 });
