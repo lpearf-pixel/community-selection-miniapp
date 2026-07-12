@@ -1,9 +1,9 @@
 {
   "stage": "L40",
-  "source_branch": "stable/l40-business-base",
-  "source_commit": "429fe77c104f26e8f0a886727e7ee09902bcca4b",
+  "source_branch": "codex/fix-quality-issues-in-l40-report",
+  "source_commit": "1d4416d728cf1a3789fcc0090a1c0dac4c0f518d",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-12T09:42:46.464Z",
+  "generated_at": "2026-07-12T11:11:04.246Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
