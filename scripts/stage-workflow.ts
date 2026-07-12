@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -69,6 +69,12 @@ const dockerApiE2E: CommandSpec = {
   env: { API_BASE_URL: 'http://127.0.0.1:13080' }
 };
 
+const adminTypeConfigCheck: CommandSpec = {
+  title: 'Admin typecheck config check',
+  command: 'pnpm',
+  args: ['exec', 'tsx', 'scripts/verify-admin-type-config-local.ts']
+};
+
 const adminTypecheck: CommandSpec = {
   title: 'Admin typecheck',
   command: 'pnpm',
@@ -102,13 +108,31 @@ function normalizeStage(value: string): string {
   return value.trim().toUpperCase();
 }
 
+function latestRegisteredStage(): string {
+  return Object.keys(stageVerifiers)
+    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+    .at(-1)!;
+}
+
+function assertRegisteredStage(stage: string): void {
+  const verifier = stageVerifiers[stage];
+  const chain = regressionChains[stage];
+  if (!verifier || !chain) {
+    throw new Error(`Stage ${stage} is not registered on this branch.\nCurrent latest registered stage: ${latestRegisteredStage()}.`);
+  }
+  const verifierScript = verifier.args.at(-1);
+  if (!verifierScript || !existsSync(join(process.cwd(), verifierScript))) {
+    throw new Error(`Stage ${stage} verifier file is missing: ${verifierScript ?? 'unknown'}\nCurrent latest registered stage: ${latestRegisteredStage()}.`);
+  }
+}
+
 function validateArgs(args: ParsedArgs): void {
   if (args.all && args.stage) throw new Error('Do not pass --all and --stage together; choose one to avoid ambiguity.');
   if (args.publish && !args.stage) throw new Error('--publish requires --stage=Lxx.');
   if (!args.verify && !args.publish) throw new Error('Nothing to do. Pass --verify, --publish, or --all.');
-  if (args.stage && !stageVerifiers[args.stage]) throw new Error(`No verifier registered for stage: ${args.stage}`);
-  if (args.stage && !regressionChains[args.stage]) throw new Error(`No regression chain registered for stage: ${args.stage}`);
+  if (args.stage) assertRegisteredStage(args.stage);
 }
+
 
 function appendOutput(content: string): void {
   if (!content) return;
@@ -140,10 +164,10 @@ function runCommand(spec: CommandSpec): void {
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
-  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypecheck];
+  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
   if (scope === 'stage') return [stageVerifiers[args.stage]];
-  const chainCommands = regressionChains[args.stage].map((stage) => stage === 'DOCKER_API_E2E' ? dockerApiE2E : stage === 'ADMIN_TYPECHECK' ? adminTypecheck : stageVerifiers[stage]);
+  const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
   return chainCommands;
 }
 
