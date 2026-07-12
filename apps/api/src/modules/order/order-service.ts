@@ -1,6 +1,5 @@
 import { OrderStatus, PickupType, type Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
-import { lockStockForOrder } from '../inventory/inventory-service.js';
 import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } from '../audit/audit-service.js';
 import { markCommissionPendingForCompletedOrder } from '../finance/finance-service.js';
 import { deliveryTimeWindowText, getDeliveryRule, validateDeliveryRuleForOrder } from '../delivery/delivery-rule-service.js';
@@ -236,9 +235,6 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
       include: { group_buy: { include: { product: true } }, pickup_store: true, community: true }
     });
 
-    const stockLock = await lockStockForOrder(tx, { product_id: groupBuy.product_id, sale_quantity: saleQuantity, user_id: userId, order_id: order.id, group_buy_id: groupBuy.id, client_request_id: clientRequestId });
-    await safeRecordBusinessEvent(tx, { event_type: 'order_stock_decremented', event_source: 'order-service', group_buy_id: groupBuy.id, idempotency_key: clientRequestId, payload: { product_id: groupBuy.product_id, sale_quantity: saleQuantity, stock_quantity: stockLock.stock_quantity } });
-
     if (creditAmount > 0) {
       await tx.consumerCreditLedger.create({ data: { user_id: userId, source_type: 'order_payment', source_id: order.id, direction: 'out', amount_cents: creditAmount, balance_after_cents: creditBalanceAfter ?? 0, usable_scope: 'platform_order', remark: '订单使用平台消费额度抵扣', payload: { credit_source_type: 'reward_conversion', credit_source_id: input.credit_source_id } } });
       await safeRecordBusinessEvent(tx, { event_type: 'order_credit_used', event_source: 'order-service', order_id: order.id, user_id: userId, payload: { credit_amount_cents: creditAmount, credit_source_id: input.credit_source_id, balance_after_cents: creditBalanceAfter } });
@@ -271,8 +267,6 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
     const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) throw new Error('商品不存在');
     if (product.status !== 'active') throw new Error('商品不可购买');
-    const stockDeductQuantity = Math.max(1, product.stock_deduct_quantity ?? 1);
-    if (product.stock < saleQuantity * stockDeductQuantity) throw new Error('库存不足');
     if (input.community_id) {
       const community = await tx.community.findUnique({ where: { id: input.community_id } });
       if (!community) throw new Error('社区不存在');

@@ -58,3 +58,10 @@
 - `ensureDockerE2eFixtures` 每次运行都会 upsert 并重置测试商品库存到 `100000`，同时维护独立测试分类、社区、自提点、配送规则、低库存商品和 AdminUser。
 - Docker API E2E 订单仍使用唯一 openid、client_request_id、client_refund_id 隔离当前运行；历史 StockLedger 可保留，但 L41 库存摘要按当前 order_id 聚合，不按 product_id 聚合旧流水。
 - 库存不足场景使用 `docker-e2e-insufficient-stock-product`，避免污染主测试商品库存。
+
+
+## 订单创建阶段库存校验修正
+
+- `createNormalOrder` 已移除创建未支付订单时的 `product.stock < quantity * stock_deduct_quantity` 拦截，保留商品存在、商品状态、数量、配送规则和金额计算校验。
+- `createGroupOrder` 已移除下单阶段 `lockStockForOrder` 调用，不再在参团/创建未支付订单时扣减库存或写库存流水。
+- L41 verifier 增加 0 库存商品场景：未支付普通订单可创建，支付确认时失败并保持 unpaid、库存为 0、无 `order_paid_deduct` 流水。

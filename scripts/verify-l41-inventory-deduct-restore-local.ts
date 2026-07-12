@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { prisma } from '../apps/api/src/db.js';
+import { createNormalOrder } from '../apps/api/src/modules/order/order-service.js';
 import { buildInventoryIdempotencyKey, deductInventoryForPaidOrder, getInventoryIdempotencyPrefix, getOrderInventorySummary, inventoryIdempotencyPrefixes, restoreInventoryForRefund } from '../apps/api/src/modules/inventory/inventory-order-service.js';
+import { markOrderPaid } from '../apps/api/src/services/payment-service.js';
 
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string) { return readFileSync(path, 'utf8'); }
@@ -42,6 +44,22 @@ async function main() {
   try { await prisma.$transaction((tx) => deductInventoryForPaidOrder(tx, { order: poorOrder })); } catch (error) { insufficient = String(error).includes('库存不足'); }
   assert(insufficient, 'insufficient stock must fail');
   assert((await prisma.product.findUniqueOrThrow({ where: { id: poorProduct.id } })).stock === 2, 'insufficient stock must remain unchanged');
+
+  const pickupStore = await prisma.pickupStore.create({ data: { name: `${prefix}-store`, address: 'L41 store address', phone: '13800000000', status: 'active' } });
+  const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'L41 community address', status: 'active' } });
+  const zeroProduct = await prisma.product.create({ data: { name: `${prefix}-zero-stock`, category_id: category.id, price_cents: 1200, cost_price_cents: 600, stock: 0, unit: '份', stock_unit: '份', sale_unit: '份', stock_deduct_quantity: 1, status: 'active' } });
+  const zeroOrderPublic = await createNormalOrder({ product_id: zeroProduct.id, user_openid: `${prefix}-zero-openid`, client_request_id: `${prefix}-zero-order`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L41 zero stock', receiver_phone: '13800000000' });
+  const zeroOrder = await prisma.order.findUniqueOrThrow({ where: { id: zeroOrderPublic.id } });
+  assert(zeroOrder.pay_status === 'unpaid' && zeroOrder.order_status === 'unpaid', 'zero-stock normal order must be created as unpaid');
+  assert((await prisma.product.findUniqueOrThrow({ where: { id: zeroProduct.id } })).stock === 0, 'zero-stock order creation must not change Product.stock');
+  assert(await prisma.stockLedger.count({ where: { order_id: zeroOrder.id, event_type: 'order_paid_deduct' } }) === 0, 'zero-stock order creation must not write paid deduct ledger');
+  let zeroPaymentFailed = false;
+  try { await markOrderPaid(zeroOrder.id); } catch (error) { zeroPaymentFailed = String(error).includes('库存不足'); }
+  assert(zeroPaymentFailed, 'zero-stock order payment must fail with insufficient stock');
+  const zeroOrderAfterPaymentAttempt = await prisma.order.findUniqueOrThrow({ where: { id: zeroOrder.id } });
+  assert(zeroOrderAfterPaymentAttempt.pay_status === 'unpaid' && zeroOrderAfterPaymentAttempt.order_status === 'unpaid', 'zero-stock order must remain unpaid after failed payment');
+  assert((await prisma.product.findUniqueOrThrow({ where: { id: zeroProduct.id } })).stock === 0, 'failed payment must not change zero-stock Product.stock');
+  assert(await prisma.stockLedger.count({ where: { order_id: zeroOrder.id, event_type: 'order_paid_deduct' } }) === 0, 'failed payment must not write paid deduct ledger');
 
   await prisma.order.update({ where: { id: order.id }, data: { pay_status: 'paid', order_status: 'paid', refund_amount_cents: 3000, product_refund_amount_cents: 3000, refund_status: 'success' } });
   const refundRow = await prisma.refund.create({ data: { order_id: order.id, out_refund_no: `${prefix}-refund`, client_refund_id: `${prefix}-refund`, refund_amount_cents: 3000, product_refund_amount_cents: 3000, delivery_refund_amount_cents: 0, reason: 'L41 full refund', status: 'success', processed_at: new Date() } });
