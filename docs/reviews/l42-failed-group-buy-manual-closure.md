@@ -42,3 +42,9 @@
 - `confirmFailedGroupBuyRefundHandled` 不再返回完整 Prisma `Order` / `Refund`，统一通过 `toSafeClosureOrder` 与 `toSafeClosureRefund` 输出安全字段。
 - L42 安全响应禁止原始 `receiver_phone`、`receiver_address`、`raw_notify`、成本价、密码摘要、奖励配置和库存扣减配置等内部字段；需要展示手机号时仅返回 `receiver_phone_masked`。
 - L42 verifier 和 Docker E2E 增加针对 mark-failed、closure-summary、close-unpaid、manual-refund-orders、confirm-refund、repeat confirm-refund、final-close、repeat final-close 响应的显式防泄露断言。
+
+## L42 data scope hardening follow-up
+
+- All L42 Admin group-buy closure routes now use the shared group-buy data-scope helper before calling service functions.
+- Confirm-refund additionally validates that the order belongs to the URL group buy and that the AdminUser can access the order community/pickup scope.
+- L27 verifier compatibility comments were removed; unpaid closure verification now checks the real rule: `order_status = closed` while `pay_status = unpaid`.

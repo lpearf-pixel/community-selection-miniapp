@@ -40,7 +40,10 @@ async function main() {
   assert(/paid_quantity >= progress\.target_count/.test(service), 'paid quantity reaching target must not become failed');
   assert(/pay_status !== 'paid'/.test(service), 'manual refund must require paid order');
   assert(/nextRefundAmount > order\.pay_amount_cents/.test(service), 'manual refund must cap amount by paid amount');
-  assert(/pay_status: 'unpaid'/.test(service) && /pay_status: 'closed'/.test(service), 'close unpaid orders must only target unpaid orders');
+  assert(/where: \{ group_buy_id: groupBuyId, pay_status: 'unpaid'/.test(service), 'close unpaid orders must query only unpaid orders');
+  assert(/data: \{ order_status: 'closed', pay_status: 'unpaid' \}/.test(service), 'close unpaid orders must set order_status closed while keeping pay_status unpaid');
+  assert(service.includes('unpaid close must not create refund') || !/tx\.refund\.create[\s\S]{0,500}closeUnpaid/.test(service), 'close unpaid orders must not create refund');
+  assert(!/restoreInventoryForRefund\(tx,[\s\S]{0,500}closeUnpaid/.test(service), 'close unpaid orders must not restore inventory');
 
   const alwaysForbidden = ['cost_price_cents', 'commission_value', 'commission_type', 'private_key', 'password_hash'];
   for (const keyword of alwaysForbidden) {

@@ -20,6 +20,12 @@ async function main() {
     'L42 group buy service must import L41 inventory summary and restore functions'
   );
   const routes = read('apps/api/src/routes/group-buys.ts');
+  assert(routes.includes('requireGroupBuyDataScope'), 'L42 routes must define unified group buy data scope helper');
+  assert(routes.includes('requireGroupBuyOrderDataScope'), 'L42 confirm-refund route must define order and group buy data scope helper');
+  assert(routes.includes('canAccessOrderDataScope'), 'L42 confirm-refund must validate order community/pickup data scope');
+  assert((routes.match(/requireGroupBuyDataScope\(request, reply/g) ?? []).length >= 5, 'All L42 group buy routes must call unified data scope helper before service calls');
+  assert(routes.includes('requireGroupBuyOrderDataScope(request, reply, groupBuyId, orderId)'), 'confirm-refund must validate both order and group buy scope before service call');
+  assert(routes.includes('failAdminRoute(reply, error'), 'L42 route catches must preserve 403 data scope errors');
   const adminUi = read('apps/admin/src/App.tsx');
   for (const keyword of ['getFailedGroupBuyClosureSummary', 'markGroupBuyFailed', 'closeFailedGroupBuyUnpaidOrders', 'listFailedGroupBuyPendingRefundOrders', 'confirmFailedGroupBuyRefundHandled', 'closeFailedGroupBuy']) assert(service.includes(keyword), `missing service keyword ${keyword}`);
   for (const keyword of ['toSafeClosureOrder', 'receiver_phone_masked', 'receiver_address_masked', 'toSafeClosureRefund']) assert(service.includes(keyword), `missing safe response mapper keyword ${keyword}`);
@@ -126,8 +132,32 @@ async function main() {
   assert(unauthorized.statusCode === 401, 'missing admin must be 401');
   const inactive = await app.inject({ method: 'POST', url: `/api/admin/group-buys/${groupBuy.id}/mark-failed`, headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': inactiveAdminId }, payload: { reason: 'inactive' } });
   assert(inactive.statusCode === 401 || inactive.statusCode === 403, 'inactive AdminUser must be rejected');
-  const scoped = await app.inject({ method: 'POST', url: `/api/admin/group-buys/${successGroup.id}/mark-failed`, headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': scopedAdminId, 'x-admin-community-id': `${prefix}-other-community` }, payload: { reason: 'scope denied' } });
-  assert(scoped.statusCode === 403, 'cross-community data scope must be 403');
+  const financeAdminId = `${prefix}-finance-admin`;
+  await prisma.adminUser.create({ data: { id: financeAdminId, username: `${prefix}-finance`, password_hash: 'placeholder', role: 'finance', status: 'active' } });
+  const storeScopeHeaders = { 'x-admin-role': 'store_manager', 'x-admin-user-id': scopedAdminId, 'x-admin-community-id': `${prefix}-other-community` };
+  const refundScopeHeaders = { 'x-admin-role': 'finance', 'x-admin-user-id': financeAdminId, 'x-admin-community-id': `${prefix}-other-community` };
+  const scoped = await app.inject({ method: 'POST', url: `/api/admin/group-buys/${successGroup.id}/mark-failed`, headers: storeScopeHeaders, payload: { reason: 'scope denied' } });
+  assert(scoped.statusCode === 403 && scoped.body.includes('ADMIN_SCOPE_FORBIDDEN'), 'cross-community mark-failed data scope must be 403');
+  const beforeScopeStatus = (await prisma.groupBuy.findUniqueOrThrow({ where: { id: groupBuy.id } })).status;
+  const beforeScopeUnpaidStatus = (await prisma.order.findUniqueOrThrow({ where: { id: unpaidOrder.id } })).order_status;
+  const beforeScopeStock = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock;
+  const beforeScopeAudit = await prisma.adminAuditLog.count({ where: { admin_user_id: scopedAdminId } });
+  const beforeScopeFinanceAudit = await prisma.adminAuditLog.count({ where: { admin_user_id: financeAdminId } });
+  const scopeResponses = [
+    await app.inject({ method: 'GET', url: `/api/admin/group-buys/${groupBuy.id}/closure-summary`, headers: storeScopeHeaders }),
+    await app.inject({ method: 'GET', url: `/api/admin/group-buys/${groupBuy.id}/manual-refund-orders`, headers: refundScopeHeaders }),
+    await app.inject({ method: 'POST', url: `/api/admin/group-buys/${groupBuy.id}/close-unpaid-orders`, headers: storeScopeHeaders, payload: { admin_note: 'scope denied' } }),
+    await app.inject({ method: 'POST', url: `/api/admin/group-buys/${groupBuy.id}/orders/${paidOrder.id}/confirm-refund`, headers: refundScopeHeaders, payload: { refund_id: successRefund.id, admin_note: 'scope denied' } }),
+    await app.inject({ method: 'POST', url: `/api/admin/group-buys/${groupBuy.id}/close`, headers: storeScopeHeaders, payload: { admin_note: 'scope denied' } })
+  ];
+  for (const response of scopeResponses) {
+    assert(response.statusCode === 403 && response.body.includes('ADMIN_SCOPE_FORBIDDEN'), 'every L42 cross-community route must return 403 scope denied');
+  }
+  assert((await prisma.groupBuy.findUniqueOrThrow({ where: { id: groupBuy.id } })).status === beforeScopeStatus, 'cross-scope calls must not change group buy status');
+  assert((await prisma.order.findUniqueOrThrow({ where: { id: unpaidOrder.id } })).order_status === beforeScopeUnpaidStatus, 'cross-scope calls must not change order status');
+  assert((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock === beforeScopeStock, 'cross-scope calls must not change inventory');
+  assert(await prisma.adminAuditLog.count({ where: { admin_user_id: scopedAdminId } }) === beforeScopeAudit, 'cross-scope store manager calls must not write audit logs');
+  assert(await prisma.adminAuditLog.count({ where: { admin_user_id: financeAdminId } }) === beforeScopeFinanceAudit, 'cross-scope finance calls must not write audit logs');
   await app.close();
   const auditLogs = await prisma.adminAuditLog.findMany({ where: { admin_user_id: admin.id } });
   assert(auditLogs.length > 0, 'L42 admin audit logs missing');

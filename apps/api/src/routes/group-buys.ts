@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
@@ -6,7 +6,7 @@ import { createGroupOrder, createNormalOrder, updateOrderStatus } from '../modul
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGroupBuyRefundHandled, getFailedGroupBuyClosureSummary, listExpiredPendingGroupBuys, listFailedGroupBuyPendingRefundOrders, markExpiredGroupBuyFailed, markGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
-import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, canAccessOrderDataScope, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -108,6 +108,37 @@ function adminMetaFromAccess(request: FastifyRequest) {
     ip_address: request.ip,
     user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null
   };
+}
+
+function routeStatusCode(error: unknown): number | null {
+  return error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : null;
+}
+
+function failAdminRoute(reply: FastifyReply, error: unknown, fallback: string) {
+  const statusCode = routeStatusCode(error);
+  reply.code(statusCode ?? 400);
+  return fail(error instanceof Error ? error.message : fallback);
+}
+
+async function requireGroupBuyDataScope(request: FastifyRequest, _reply: FastifyReply, groupBuyId: string) {
+  const context = resolveAdminAccessContext(request);
+  if (!context) throw Object.assign(new Error('ADMIN_UNAUTHORIZED: Admin identity required'), { statusCode: 401 });
+  const groupBuy = await prisma.groupBuy.findUnique({ where: { id: groupBuyId }, select: { id: true, community_id: true } });
+  if (!groupBuy) throw new Error('团购不存在');
+  if (!context.is_super_admin && !canAccessCommunity(context, groupBuy.community_id)) {
+    throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 });
+  }
+  return { context, groupBuy };
+}
+
+async function requireGroupBuyOrderDataScope(request: FastifyRequest, reply: FastifyReply, groupBuyId: string, orderId: string) {
+  const scoped = await requireGroupBuyDataScope(request, reply, groupBuyId);
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, group_buy_id: true, community_id: true, pickup_store_id: true } });
+  if (!order || order.group_buy_id !== groupBuyId) throw new Error('订单不属于该团购');
+  if (!scoped.context.is_super_admin && !canAccessOrderDataScope(scoped.context, order)) {
+    throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 });
+  }
+  return { ...scoped, order };
 }
 
 function validPaidOrderWhere(): Prisma.OrderWhereInput {
@@ -429,45 +460,41 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
   app.post('/api/admin/group-buys/:id/mark-failed', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const context = resolveAdminAccessContext(request);
-      const groupBuy = await prisma.groupBuy.findUnique({ where: { id }, select: { community_id: true } });
-      if (!groupBuy) throw new Error('团购不存在');
-      if (!context || !canAccessCommunity(context, groupBuy.community_id)) { reply.code(403); return fail(ADMIN_SCOPE_FORBIDDEN); }
+      await requireGroupBuyDataScope(request, reply, id);
       const body = request.body as { reason?: string; admin_note?: string };
-      return ok(await markGroupBuyFailed({ group_buy_id: id, reason: body.reason ?? '团购失败人工确认', admin_note: body.admin_note ?? null, admin_meta: { admin_user_id: context.admin_user_id, ip_address: request.ip, user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null } }));
+      return ok(await markGroupBuyFailed({ group_buy_id: id, reason: body.reason ?? '团购失败人工确认', admin_note: body.admin_note ?? null, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '标记团购失败失败');
+      return failAdminRoute(reply, error, '标记团购失败失败');
     }
   });
 
   app.get('/api/admin/group-buys/:id/closure-summary', { preHandler: requireAdminPermission(['order.view', 'order.manage']) }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      await requireGroupBuyDataScope(request, reply, id);
       return ok(await getFailedGroupBuyClosureSummary(id));
     } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '查询团购关闭摘要失败');
+      return failAdminRoute(reply, error, '查询团购关闭摘要失败');
     }
   });
 
   app.get('/api/admin/group-buys/:id/manual-refund-orders', { preHandler: requireAdminPermission(['refund.view', 'refund.manage']) }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      await requireGroupBuyDataScope(request, reply, id);
       return ok(await listFailedGroupBuyPendingRefundOrders(id));
     } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '查询人工退款订单失败');
+      return failAdminRoute(reply, error, '查询人工退款订单失败');
     }
   });
 
   app.post('/api/admin/group-buys/:id/close-unpaid-orders', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      await requireGroupBuyDataScope(request, reply, id);
       return ok(await closeFailedGroupBuyUnpaidOrders({ group_buy_id: id, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '关闭未支付订单失败');
+      return failAdminRoute(reply, error, '关闭未支付订单失败');
     }
   });
 
@@ -477,21 +504,21 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
       const { groupBuyId, orderId } = request.params as { groupBuyId: string; orderId: string };
       const body = request.body as { refund_id?: string; admin_note?: string };
       if (!body.refund_id) throw new Error('refund_id 不能为空');
+      await requireGroupBuyOrderDataScope(request, reply, groupBuyId, orderId);
       return ok(await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuyId, order_id: orderId, refund_id: body.refund_id, admin_note: body.admin_note ?? null, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '确认退款处理失败');
+      return failAdminRoute(reply, error, '确认退款处理失败');
     }
   });
 
   app.post('/api/admin/group-buys/:id/close', { preHandler: requireAdminPermission('order.manage') }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
+      await requireGroupBuyDataScope(request, reply, id);
       const body = request.body as { admin_note?: string };
       return ok(await closeFailedGroupBuy({ group_buy_id: id, admin_note: body.admin_note ?? null, admin_meta: adminMetaFromAccess(request) }));
     } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '最终关闭团购失败');
+      return failAdminRoute(reply, error, '最终关闭团购失败');
     }
   });
 

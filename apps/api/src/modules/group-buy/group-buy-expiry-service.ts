@@ -17,7 +17,6 @@ type AdminMeta = {
 
 const refundableOrderStatuses = ['paid', 'grouped', 'preparing', 'ready'] as const;
 const refundChannelValues = ['manual_wechat', 'manual_offline', 'manual_other'] as const;
-// L27 verifier compatibility keyword only: pay_status: 'closed'. L42 behavior keeps failed-group unpaid orders at pay_status='unpaid'.
 
 function maskPhone(phone?: string | null) {
   if (!phone) return null;

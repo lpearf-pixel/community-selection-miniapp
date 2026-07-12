@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_INACTIVE_ADMIN_ID, DOCKER_E2E_OPERATOR_ADMIN_ID, DOCKER_E2E_STORE_MANAGER_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
+import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_FINANCE_ADMIN_ID, DOCKER_E2E_INACTIVE_ADMIN_ID, DOCKER_E2E_OPERATOR_ADMIN_ID, DOCKER_E2E_STORE_MANAGER_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
 type ApiResponse<T> = {
   success: boolean;
   data: T;
@@ -501,6 +501,33 @@ async function main() {
   const l42StockBefore = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
   await prisma.product.update({ where: { id: DOCKER_E2E_PRODUCT_ID }, data: { stock: { decrement: 1 } } });
   await prisma.stockLedger.create({ data: { product_id: DOCKER_E2E_PRODUCT_ID, source_type: 'order_payment', source_id: l42PaidOrder.id, idempotency_key: `docker-l42-paid-deduct:${l42PaidOrder.id}`, event_type: 'order_paid_deduct', quantity_delta: -1, order_id: l42PaidOrder.id, direction: 'out', quantity: 1, stock_before: l42StockBefore, stock_after: l42StockBefore - 1, operator_type: 'system', remark: 'Docker L42 paid deduction fixture' } });
+
+  const scopePrefix = `${l42Prefix}-scope`;
+  const scopeGroupBuy = await prisma.groupBuy.create({ data: { product_id: DOCKER_E2E_PRODUCT_ID, leader_user_id: l42Leader.id, community_id: DOCKER_E2E_COMMUNITY_ID, min_people: 3, min_quantity: 3, price_cents: l42Product.price_cents, start_time: new Date(Date.now() - 7200_000), end_time: new Date(Date.now() - 3600_000), pickup_time: new Date(Date.now() + 86400_000), status: 'pending' } });
+  const scopePaidOrder = await prisma.order.create({ data: { order_no: `${scopePrefix}-paid`, user_id: l42User.id, group_buy_id: scopeGroupBuy.id, product_id: DOCKER_E2E_PRODUCT_ID, leader_user_id: l42Leader.id, community_id: DOCKER_E2E_COMMUNITY_ID, total_amount_cents: l42Product.price_cents, product_amount_cents: l42Product.price_cents, pay_amount_cents: l42Product.price_cents, quantity: 1, pay_status: 'paid', order_status: 'paid', refund_status: 'none', paid_at: new Date(), receiver_name: 'Docker L42 Scope', receiver_phone: '13800000000' } });
+  const scopeUnpaidOrder = await prisma.order.create({ data: { order_no: `${scopePrefix}-unpaid`, user_id: l42User.id, group_buy_id: scopeGroupBuy.id, product_id: DOCKER_E2E_PRODUCT_ID, leader_user_id: l42Leader.id, community_id: DOCKER_E2E_COMMUNITY_ID, total_amount_cents: l42Product.price_cents, product_amount_cents: l42Product.price_cents, pay_amount_cents: l42Product.price_cents, quantity: 1, pay_status: 'unpaid', order_status: 'unpaid', refund_status: 'none', receiver_name: 'Docker L42 Scope', receiver_phone: '13800000000' } });
+  const scopeRefund = await prisma.refund.create({ data: { order_id: scopePaidOrder.id, out_refund_no: `${scopePrefix}-refund`, client_refund_id: `${scopePrefix}-refund`, refund_amount_cents: scopePaidOrder.pay_amount_cents, product_refund_amount_cents: scopePaidOrder.product_amount_cents ?? scopePaidOrder.pay_amount_cents, delivery_refund_amount_cents: 0, reason: 'Docker E2E L42 scope denied refund fixture', status: 'success', processed_at: new Date() } });
+  const scopeAuditBefore = await prisma.adminAuditLog.count({ where: { admin_user_id: DOCKER_E2E_STORE_MANAGER_ADMIN_ID } });
+  const scopeFinanceAuditBefore = await prisma.adminAuditLog.count({ where: { admin_user_id: DOCKER_E2E_FINANCE_ADMIN_ID } });
+  const scopeStockBefore = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
+  const storeManagerWrongScopeHeaders = { 'content-type': 'application/json', 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID, 'x-admin-community-id': 'docker-e2e-other-community' };
+  const financeWrongScopeHeaders = { 'content-type': 'application/json', 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': 'docker-e2e-other-community' };
+  const l42ScopeSummary = await request<ErrorApiResponse>('GET', `/api/admin/group-buys/${scopeGroupBuy.id}/closure-summary`, { label: 'GET /api/admin/group-buys/:id/closure-summary L42 cross community scope', expectedStatus: 403, headers: storeManagerWrongScopeHeaders });
+  const l42ScopeManualRefundOrders = await request<ErrorApiResponse>('GET', `/api/admin/group-buys/${scopeGroupBuy.id}/manual-refund-orders`, { label: 'GET /api/admin/group-buys/:id/manual-refund-orders L42 cross community scope', expectedStatus: 403, headers: financeWrongScopeHeaders });
+  const l42ScopeMarkFailed = await request<ErrorApiResponse>('POST', `/api/admin/group-buys/${scopeGroupBuy.id}/mark-failed`, { label: 'POST /api/admin/group-buys/:id/mark-failed L42 cross community scope', expectedStatus: 403, headers: storeManagerWrongScopeHeaders, body: { reason: 'scope denied' } });
+  const l42ScopeCloseUnpaid = await request<ErrorApiResponse>('POST', `/api/admin/group-buys/${scopeGroupBuy.id}/close-unpaid-orders`, { label: 'POST /api/admin/group-buys/:id/close-unpaid-orders L42 cross community scope', expectedStatus: 403, headers: storeManagerWrongScopeHeaders, body: { admin_note: 'scope denied' } });
+  const l42ScopeConfirmRefund = await request<ErrorApiResponse>('POST', `/api/admin/group-buys/${scopeGroupBuy.id}/orders/${scopePaidOrder.id}/confirm-refund`, { label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 cross community scope', expectedStatus: 403, headers: financeWrongScopeHeaders, body: { refund_id: scopeRefund.id, admin_note: 'scope denied' } });
+  const l42ScopeFinalClose = await request<ErrorApiResponse>('POST', `/api/admin/group-buys/${scopeGroupBuy.id}/close`, { label: 'POST /api/admin/group-buys/:id/close L42 cross community scope', expectedStatus: 403, headers: storeManagerWrongScopeHeaders, body: { admin_note: 'scope denied' } });
+  for (const item of [l42ScopeSummary, l42ScopeManualRefundOrders, l42ScopeMarkFailed, l42ScopeCloseUnpaid, l42ScopeConfirmRefund, l42ScopeFinalClose]) {
+    assert(item.message.includes('ADMIN_SCOPE_FORBIDDEN: Data scope denied'), 'L42 cross-scope admin APIs must return ADMIN_SCOPE_FORBIDDEN');
+  }
+  assert((await prisma.groupBuy.findUniqueOrThrow({ where: { id: scopeGroupBuy.id } })).status === 'pending', 'L42 cross-scope calls must not change group buy status');
+  assert((await prisma.order.findUniqueOrThrow({ where: { id: scopeUnpaidOrder.id } })).order_status === 'unpaid', 'L42 cross-scope close-unpaid must not close orders');
+  assert((await prisma.refund.findUniqueOrThrow({ where: { id: scopeRefund.id } })).stock_restored === false, 'L42 cross-scope confirm-refund must not mark stock restored');
+  assert((await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock === scopeStockBefore, 'L42 cross-scope calls must not change inventory');
+  assert(await prisma.adminAuditLog.count({ where: { admin_user_id: DOCKER_E2E_STORE_MANAGER_ADMIN_ID } }) === scopeAuditBefore, 'L42 cross-scope store manager calls must not write audit logs');
+  assert(await prisma.adminAuditLog.count({ where: { admin_user_id: DOCKER_E2E_FINANCE_ADMIN_ID } }) === scopeFinanceAuditBefore, 'L42 cross-scope finance calls must not write audit logs');
+
   const statusBefore = l42GroupBuy.status;
   const failedResult = await request<{ status: string }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/mark-failed`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/mark-failed L42', body: { reason: 'Docker E2E L42 未达标人工失败' } }));
   assertSafeL42Response(failedResult, 'L42 mark-failed response');
