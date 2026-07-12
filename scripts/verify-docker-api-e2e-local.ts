@@ -1,8 +1,14 @@
 import { PrismaClient } from '@prisma/client';
-import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
+import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_INACTIVE_ADMIN_ID, DOCKER_E2E_OPERATOR_ADMIN_ID, DOCKER_E2E_STORE_MANAGER_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
 type ApiResponse<T> = {
   success: boolean;
   data: T;
+  message: string;
+};
+
+type ErrorApiResponse = {
+  success: false;
+  data: null;
   message: string;
 };
 
@@ -314,26 +320,46 @@ async function main() {
     body: { type: 'missing_item', reason: 'Docker API E2E L39 拆分退款', description: 'L39 product/delivery refund split', requested_refund_cents: 300, requested_product_refund_cents: 100, requested_delivery_refund_cents: 200 }
   });
   const l39AfterSaleId = idOf(l39AfterSale, ['after_sale_case_id', 'id'], 'POST /api/me/orders/:id/after-sales L39 split request');
-  const missingAdminReview = await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+  const noAdminReview = await request<ErrorApiResponse>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+    label: 'POST /api/admin/after-sales/:id/review L40 no admin identity',
+    expectedStatus: 401,
+    headers: { 'content-type': 'application/json' },
+    body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'no admin should fail' }
+  });
+  assert(noAdminReview.message.includes('ADMIN_UNAUTHORIZED: Admin identity required'), 'No Admin identity must return HTTP 401');
+
+  const roleWithoutUserReview = await request<ErrorApiResponse>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+    label: 'POST /api/admin/after-sales/:id/review L40 role without user id',
+    expectedStatus: 401,
+    headers: { 'content-type': 'application/json', 'x-admin-role': 'super_admin' },
+    body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'role without user id should fail' }
+  });
+  assert(roleWithoutUserReview.message.includes('ADMIN_UNAUTHORIZED: Admin identity required'), 'Admin role without user id must return HTTP 401');
+
+  const missingAdminReview = await request<ErrorApiResponse>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
     label: 'POST /api/admin/after-sales/:id/review L40 missing admin fixture',
-    expectedStatus: 400,
+    expectedStatus: 401,
     headers: { 'content-type': 'application/json', 'x-admin-role': 'super_admin', 'x-admin-user-id': 'docker-e2e-missing-admin' },
     body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'missing admin should fail' }
   });
-  assert((missingAdminReview as any).message?.includes('管理员不存在或已停用'), 'Missing admin id must return business error before Prisma FK violation');
-  const inactiveAdminId = 'docker-e2e-inactive-admin';
-  await prisma.adminUser.upsert({
-    where: { id: inactiveAdminId },
-    update: { role: 'super_admin', status: 'inactive' },
-    create: { id: inactiveAdminId, username: 'docker-e2e-inactive-admin-user', password_hash: 'docker-e2e-placeholder-not-for-login', role: 'super_admin', status: 'inactive' }
-  });
-  const inactiveAdminReview = await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+  assert(missingAdminReview.message.includes('ADMIN_UNAUTHORIZED: Active AdminUser required'), 'Missing AdminUser must return HTTP 401');
+
+  const inactiveAdminReview = await request<ErrorApiResponse>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
     label: 'POST /api/admin/after-sales/:id/review L40 inactive admin',
-    expectedStatus: 400,
-    headers: { 'content-type': 'application/json', 'x-admin-role': 'super_admin', 'x-admin-user-id': inactiveAdminId },
+    expectedStatus: 401,
+    headers: { 'content-type': 'application/json', 'x-admin-role': 'super_admin', 'x-admin-user-id': DOCKER_E2E_INACTIVE_ADMIN_ID },
     body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'inactive admin should fail' }
   });
-  assert((inactiveAdminReview as any).message?.includes('管理员不存在或已停用'), 'Inactive admin id must return business error before Prisma FK violation');
+  assert(inactiveAdminReview.message.includes('ADMIN_UNAUTHORIZED: Active AdminUser required'), 'Inactive AdminUser must return HTTP 401');
+
+  const operatorReview = await request<ErrorApiResponse>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, {
+    label: 'POST /api/admin/after-sales/:id/review L40 insufficient permission',
+    expectedStatus: 403,
+    headers: { 'content-type': 'application/json', 'x-admin-role': 'operator', 'x-admin-user-id': DOCKER_E2E_OPERATOR_ADMIN_ID },
+    body: { status: 'approved', resolution_type: 'partial_refund', responsibility: 'platform', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'operator should fail' }
+  });
+  assert(operatorReview.message.includes('ADMIN_FORBIDDEN: Permission denied'), 'Active AdminUser without permission must return HTTP 403');
+
   await ensureDockerE2eFixtures(prisma);
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/review`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/review L39 split approval',
@@ -354,9 +380,10 @@ async function main() {
   assert(l40OrderDetailBeforeRefund.after_sale_summary.approved_delivery_refund_cents >= 200, 'L40 order detail must summarize approved delivery refund split');
   assert(l40OrderDetailBeforeRefund.product_refund_amount_cents === 0 && l40OrderDetailBeforeRefund.delivery_refund_amount_cents === 0 && l40OrderDetailBeforeRefund.refund_amount_cents === 0, 'L40 review must not automatically create refund amounts before manual resolve');
   assert(l40OrderDetailBeforeRefund.receiver_phone_masked && !JSON.stringify(l40OrderDetailBeforeRefund).includes(receiverPhone), 'L40 admin order detail must only include masked receiver_phone');
-  await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 insufficient permission', expectedStatus: 403 }), headers: { 'x-admin-role': 'operator', 'x-admin-user-id': 'docker-e2e-operator' } });
-  await request<any>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
-  await request<any>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, { ...withAdmin({ label: 'GET /api/admin/after-sales/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': 'docker-e2e-store-manager', 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  const crossScopeOrder = await request<ErrorApiResponse>('GET', `/api/admin/orders/${l39DeliveryOrder.id}`, { ...withAdmin({ label: 'GET /api/admin/orders/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID, 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  assert(crossScopeOrder.message.includes('ADMIN_SCOPE_FORBIDDEN: Data scope denied'), 'Active scoped AdminUser must receive HTTP 403 for order scope mismatch');
+  const crossScopeAfterSale = await request<ErrorApiResponse>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, { ...withAdmin({ label: 'GET /api/admin/after-sales/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID, 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
+  assert(crossScopeAfterSale.message.includes('ADMIN_SCOPE_FORBIDDEN: Data scope denied'), 'Active scoped AdminUser must receive HTTP 403 for after-sale scope mismatch');
   await ensureDockerE2eFixtures(prisma);
   await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/resolve`, withAdminJson({
     label: 'POST /api/admin/after-sales/:id/resolve L39 split refund',

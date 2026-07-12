@@ -30,3 +30,9 @@
 - 失败团购人工关闭服务在写业务状态和审计日志前统一校验 active AdminUser；不存在或停用时返回 `管理员不存在或已停用`，不依赖 Prisma 外键错误作为业务校验。
 - verifier 覆盖 inactive AdminUser 被拒绝、状态不变、未写审计、未关闭订单、未产生退款确认、库存不变，并校验关键审计 action 均归属真实 admin id。
 - Docker E2E 继续复用 `DOCKER_E2E_ADMIN_ID`，在 L42 场景开始前断言该 Admin fixture 存在且 active。
+
+## Docker E2E Admin 鉴权语义修复
+
+- Docker E2E 统一通过 fixture 创建 active `super_admin`、active `operator`、active `store_manager` 与 inactive `super_admin`，避免用不存在的 AdminUser 测试 403 场景。
+- Admin 鉴权负向场景按语义区分：无身份 / 缺少 user id / 不存在 AdminUser / inactive AdminUser 返回 401；active 但权限不足返回 403；active 且权限足够但数据范围不匹配返回 403。
+- 权限不足改用 active operator 调用缺少权限的售后审核接口；数据范围不足改用 active store_manager 访问不属于其自提点范围的订单和售后。
