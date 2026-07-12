@@ -6,12 +6,22 @@ import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGrou
 
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string): string { return readFileSync(path, 'utf8'); }
+function assertSafeL42Payload(payload: unknown, label: string) {
+  const serialized = JSON.stringify(payload);
+  for (const forbidden of ['\"receiver_phone\"', '\"receiver_address\"', '\"cost_price_cents\"', '\"password_hash\"', '\"raw_notify\"', '\"commission_value\"', '\"commission_type\"', '\"stock_deduct_quantity\"']) {
+    assert(!serialized.includes(forbidden), `${label} leaked forbidden field ${forbidden}`);
+  }
+}
 
 async function main() {
   const service = read('apps/api/src/modules/group-buy/group-buy-expiry-service.ts');
   const routes = read('apps/api/src/routes/group-buys.ts');
   const adminUi = read('apps/admin/src/App.tsx');
   for (const keyword of ['getFailedGroupBuyClosureSummary', 'markGroupBuyFailed', 'closeFailedGroupBuyUnpaidOrders', 'listFailedGroupBuyPendingRefundOrders', 'confirmFailedGroupBuyRefundHandled', 'closeFailedGroupBuy']) assert(service.includes(keyword), `missing service keyword ${keyword}`);
+  for (const keyword of ['toSafeClosureOrder', 'receiver_phone_masked', 'receiver_address_masked', 'toSafeClosureRefund']) assert(service.includes(keyword), `missing safe response mapper keyword ${keyword}`);
+  const confirmFunction = service.slice(service.indexOf('export async function confirmFailedGroupBuyRefundHandled'), service.indexOf('export async function closeFailedGroupBuy'));
+  assert(!/order\s*:\s*updatedOrder/.test(confirmFunction), 'confirm-refund must not directly return Prisma Order');
+  assert(!/refund\s*(,|})/.test(confirmFunction.replace('toSafeClosureRefund(refund)', 'safeRefund')), 'confirm-refund must not directly return Prisma Refund');
   for (const path of ['/api/admin/group-buys/:id/closure-summary', '/api/admin/group-buys/:id/mark-failed', '/api/admin/group-buys/:id/close-unpaid-orders', '/api/admin/group-buys/:id/manual-refund-orders', '/api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund', '/api/admin/group-buys/:id/close']) assert(routes.includes(path), `missing route ${path}`);
   assert(adminUi.includes('失败团购人工关闭工作台'), 'Admin workbench copy missing');
   assert(!read('prisma/schema.prisma').includes(`parent_${'leader'}_id`) && !read('prisma/schema.prisma').includes(`up${'line'}_id`), 'must not add multilevel fields');
@@ -52,6 +62,7 @@ async function main() {
   assert(missingAdminRejected, 'missing AdminUser must be rejected with business error');
 
   const failed = await markGroupBuyFailed({ group_buy_id: groupBuy.id, reason: 'L42 人工确认未达成团条件', admin_meta: { admin_user_id: admin.id } });
+  assertSafeL42Payload(failed, 'mark failed response');
   assert(failed.status === 'failed' && failed.applied, 'pending group buy must become failed');
   const failedAgain = await markGroupBuyFailed({ group_buy_id: groupBuy.id, reason: 'L42 repeat', admin_meta: { admin_user_id: admin.id } });
   assert(failedAgain.idempotent, 'repeated mark failed must be idempotent');
@@ -64,6 +75,7 @@ async function main() {
   assert(successRejected, 'success group buy cannot be failed');
 
   const closeUnpaid = await closeFailedGroupBuyUnpaidOrders({ group_buy_id: groupBuy.id, admin_meta: { admin_user_id: admin.id } });
+  assertSafeL42Payload(closeUnpaid, 'close unpaid response');
   assert(closeUnpaid.closed_count === 1 && closeUnpaid.matched_count === 1, 'unpaid order must close once');
   const unpaidAfter = await prisma.order.findUniqueOrThrow({ where: { id: unpaidOrder.id } });
   assert(unpaidAfter.order_status === 'closed' && unpaidAfter.pay_status === 'unpaid', 'unpaid close must keep pay_status unpaid');
@@ -71,6 +83,7 @@ async function main() {
   assert(await prisma.stockLedger.count({ where: { order_id: unpaidOrder.id } }) === 0, 'unpaid close must not create stock ledger');
 
   const list = await listFailedGroupBuyPendingRefundOrders(groupBuy.id);
+  assertSafeL42Payload(list, 'manual refund orders response');
   assert(list.summary.pending_refund_orders === 1 && list.items[0]?.order_id === paidOrder.id, 'paid order must enter pending manual refund list');
   assert(!JSON.stringify(list).includes('13800000000') && !JSON.stringify(list).includes('password_hash') && !JSON.stringify(list).includes('cost_price'), 'manual refund list must not leak sensitive fields');
   const pendingRefund = await prisma.refund.create({ data: { order_id: paidOrder.id, out_refund_no: `${prefix}-pending-refund`, client_refund_id: `${prefix}-pending-refund`, refund_amount_cents: 1000, product_refund_amount_cents: 1000, delivery_refund_amount_cents: 0, reason: 'L42 pending', status: 'pending' } });
@@ -78,19 +91,27 @@ async function main() {
   try { await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuy.id, order_id: paidOrder.id, refund_id: pendingRefund.id, admin_meta: { admin_user_id: admin.id } }); } catch { pendingRejected = true; }
   assert(pendingRejected, 'pending refund cannot be confirmed');
   const blocked = await closeFailedGroupBuy({ group_buy_id: groupBuy.id, admin_meta: { admin_user_id: admin.id } });
+  assertSafeL42Payload(blocked, 'blocked final close response');
   assert(!blocked.applied && 'blockers' in blocked, 'pending refund must block final close');
 
   const successRefund = await prisma.refund.create({ data: { order_id: paidOrder.id, out_refund_no: `${prefix}-success-refund`, client_refund_id: `${prefix}-success-refund`, refund_amount_cents: 1000, product_refund_amount_cents: 1000, delivery_refund_amount_cents: 0, reason: 'L42 success', status: 'success', processed_at: new Date() } });
-  await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuy.id, order_id: paidOrder.id, refund_id: successRefund.id, admin_meta: { admin_user_id: admin.id } });
-  await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuy.id, order_id: paidOrder.id, refund_id: successRefund.id, admin_meta: { admin_user_id: admin.id } });
+  const confirmedRefund = await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuy.id, order_id: paidOrder.id, refund_id: successRefund.id, admin_meta: { admin_user_id: admin.id } });
+  const repeatedConfirmedRefund = await confirmFailedGroupBuyRefundHandled({ group_buy_id: groupBuy.id, order_id: paidOrder.id, refund_id: successRefund.id, admin_meta: { admin_user_id: admin.id } });
+  assertSafeL42Payload(confirmedRefund, 'confirm refund response');
+  assertSafeL42Payload(repeatedConfirmedRefund, 'repeat confirm refund response');
+  assert(confirmedRefund.order.order_id === paidOrder.id && confirmedRefund.refund.refund_id === successRefund.id && confirmedRefund.inventory, 'confirm refund response must include safe order/refund/inventory');
+  assert(repeatedConfirmedRefund.idempotent === true && repeatedConfirmedRefund.order.order_id === paidOrder.id && repeatedConfirmedRefund.refund.refund_id === successRefund.id && repeatedConfirmedRefund.inventory, 'repeat confirm refund response must be idempotent and safe');
   assert((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock === 10, 'refund success must restore inventory once through L41');
   assert(await prisma.stockLedger.count({ where: { refund_id: successRefund.id, event_type: 'group_failed_refund_restore' } }) === 1, 'duplicate confirm must not duplicate restore ledger');
   await prisma.refund.update({ where: { id: pendingRefund.id }, data: { status: 'failed' } });
   const summary = await getFailedGroupBuyClosureSummary(groupBuy.id);
+  assertSafeL42Payload(summary, 'closure summary response');
   assert(summary.closable && summary.pending_refund_amount_cents === 0 && summary.inventory_remaining_restorable_quantity === 0, 'closure summary must be closable after收口');
   const closed = await closeFailedGroupBuy({ group_buy_id: groupBuy.id, admin_meta: { admin_user_id: admin.id } });
+  assertSafeL42Payload(closed, 'final close response');
   assert(closed.applied && closed.status === 'closed', 'final close must set closed');
   const closedAgain = await closeFailedGroupBuy({ group_buy_id: groupBuy.id, admin_meta: { admin_user_id: admin.id } });
+  assertSafeL42Payload(closedAgain, 'repeat final close response');
   assert(closedAgain.idempotent && closedAgain.status === 'closed', 'repeat final close idempotent');
 
   const inactiveAdminId = inactiveAdmin.id;

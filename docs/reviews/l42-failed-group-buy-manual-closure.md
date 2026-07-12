@@ -36,3 +36,9 @@
 - Docker E2E 统一通过 fixture 创建 active `super_admin`、active `operator`、active `store_manager` 与 inactive `super_admin`，避免用不存在的 AdminUser 测试 403 场景。
 - Admin 鉴权负向场景按语义区分：无身份 / 缺少 user id / 不存在 AdminUser / inactive AdminUser 返回 401；active 但权限不足返回 403；active 且权限足够但数据范围不匹配返回 403。
 - 权限不足改用 active operator 调用缺少权限的售后审核接口；数据范围不足改用 active store_manager 访问不属于其自提点范围的订单和售后。
+
+## L42 响应安全修复
+
+- `confirmFailedGroupBuyRefundHandled` 不再返回完整 Prisma `Order` / `Refund`，统一通过 `toSafeClosureOrder` 与 `toSafeClosureRefund` 输出安全字段。
+- L42 安全响应禁止原始 `receiver_phone`、`receiver_address`、`raw_notify`、成本价、密码摘要、奖励配置和库存扣减配置等内部字段；需要展示手机号时仅返回 `receiver_phone_masked`。
+- L42 verifier 和 Docker E2E 增加针对 mark-failed、closure-summary、close-unpaid、manual-refund-orders、confirm-refund、repeat confirm-refund、final-close、repeat final-close 响应的显式防泄露断言。

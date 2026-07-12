@@ -179,6 +179,13 @@ function assertNoRiskFindings() {
   }
 }
 
+function assertSafeL42Response(payload: unknown, label: string) {
+  const serialized = JSON.stringify(payload);
+  for (const forbidden of ['"receiver_phone"', '"receiver_address"', '"cost_price_cents"', '"raw_notify"', '"password_hash"', '"commission_value"', '"commission_type"', '"stock_deduct_quantity"']) {
+    assert(!serialized.includes(forbidden), `${label} must not expose ${forbidden}`);
+  }
+}
+
 async function getProductInventory(productId: string) {
   const product = await prisma.product.findUnique({ where: { id: productId }, select: { stock: true, stock_deduct_quantity: true } });
   assert(product, `Docker API E2E product fixture missing: ${productId}`);
@@ -496,24 +503,36 @@ async function main() {
   await prisma.stockLedger.create({ data: { product_id: DOCKER_E2E_PRODUCT_ID, source_type: 'order_payment', source_id: l42PaidOrder.id, idempotency_key: `docker-l42-paid-deduct:${l42PaidOrder.id}`, event_type: 'order_paid_deduct', quantity_delta: -1, order_id: l42PaidOrder.id, direction: 'out', quantity: 1, stock_before: l42StockBefore, stock_after: l42StockBefore - 1, operator_type: 'system', remark: 'Docker L42 paid deduction fixture' } });
   const statusBefore = l42GroupBuy.status;
   const failedResult = await request<{ status: string }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/mark-failed`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/mark-failed L42', body: { reason: 'Docker E2E L42 未达标人工失败' } }));
+  assertSafeL42Response(failedResult, 'L42 mark-failed response');
   const stockAfterFailed = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
   assert(failedResult.status === 'failed', 'L42 mark failed must return failed');
   assert(stockAfterFailed === l42StockBefore - 1, 'L42 mark failed must not restore inventory');
   assert(await prisma.refund.count({ where: { order_id: l42PaidOrder.id } }) === 0, 'L42 mark failed must not auto refund');
   const closeUnpaidResult = await request<{ closed_count: number }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close-unpaid-orders`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close-unpaid-orders L42', body: { admin_note: 'Docker E2E L42 close unpaid' } }));
+  assertSafeL42Response(closeUnpaidResult, 'L42 close-unpaid response');
   const l42UnpaidAfter = await prisma.order.findUniqueOrThrow({ where: { id: l42UnpaidOrder.id } });
   assert(closeUnpaidResult.closed_count === 1 && l42UnpaidAfter.pay_status === 'unpaid' && l42UnpaidAfter.order_status === 'closed', 'L42 unpaid order closure must keep pay_status unpaid');
   const pendingRefundList = await request<{ summary: { pending_refund_orders: number }; items: Array<{ order_id: string; latest_refund_id: string | null }> }>('GET', `/api/admin/group-buys/${l42GroupBuy.id}/manual-refund-orders`, withAdmin({ label: 'GET /api/admin/group-buys/:id/manual-refund-orders L42' }));
+  assertSafeL42Response(pendingRefundList, 'L42 manual-refund-orders response');
   assert(pendingRefundList.summary.pending_refund_orders === 1, 'L42 paid order must be pending manual refund');
   const blockedClose = await request<{ applied: boolean; blockers?: Array<{ type: string; count: number }> }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 blocked', body: { admin_note: 'should block' } }));
+  assertSafeL42Response(blockedClose, 'L42 blocked close response');
   assert(!blockedClose.applied, 'L42 final close must block before refund success');
   const l42Refund = await prisma.refund.create({ data: { order_id: l42PaidOrder.id, out_refund_no: `${l42Prefix}-success-refund`, client_refund_id: `${l42Prefix}-success-refund`, refund_amount_cents: l42PaidOrder.pay_amount_cents, product_refund_amount_cents: l42PaidOrder.product_amount_cents ?? l42PaidOrder.pay_amount_cents, delivery_refund_amount_cents: 0, reason: 'Docker E2E L42 success refund fixture', status: 'success', processed_at: new Date() } });
-  await request('POST', `/api/admin/group-buys/${l42GroupBuy.id}/orders/${l42PaidOrder.id}/confirm-refund`, withAdminJson({ label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42', body: { refund_id: l42Refund.id, admin_note: 'Docker E2E L42 confirm success refund' } }));
-  await request('POST', `/api/admin/group-buys/${l42GroupBuy.id}/orders/${l42PaidOrder.id}/confirm-refund`, withAdminJson({ label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 repeat', body: { refund_id: l42Refund.id, admin_note: 'repeat' } }));
+  const confirmRefundResponse = await request<{ applied: boolean; idempotent: boolean; order: { order_id: string; receiver_phone_masked?: string | null }; refund: { refund_id: string }; inventory: unknown }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/orders/${l42PaidOrder.id}/confirm-refund`, withAdminJson({ label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42', body: { refund_id: l42Refund.id, admin_note: 'Docker E2E L42 confirm success refund' } }));
+  const repeatConfirmRefundResponse = await request<{ applied: boolean; idempotent: boolean; order: { order_id: string; receiver_phone_masked?: string | null }; refund: { refund_id: string }; inventory: unknown }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/orders/${l42PaidOrder.id}/confirm-refund`, withAdminJson({ label: 'POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 repeat', body: { refund_id: l42Refund.id, admin_note: 'repeat' } }));
+  assertSafeL42Response(confirmRefundResponse, 'L42 confirm-refund response');
+  assertSafeL42Response(repeatConfirmRefundResponse, 'L42 repeat confirm-refund response');
+  assert(confirmRefundResponse.order.order_id === l42PaidOrder.id && confirmRefundResponse.refund.refund_id === l42Refund.id && confirmRefundResponse.inventory, 'L42 confirm-refund response must include safe order/refund/inventory');
+  assert(typeof confirmRefundResponse.order.receiver_phone_masked === 'string' && confirmRefundResponse.order.receiver_phone_masked.includes('****'), 'L42 confirm-refund response must include masked phone');
+  assert(repeatConfirmRefundResponse.idempotent === true && repeatConfirmRefundResponse.order.order_id === l42PaidOrder.id && repeatConfirmRefundResponse.refund.refund_id === l42Refund.id && repeatConfirmRefundResponse.inventory, 'L42 repeat confirm-refund response must be idempotent and safe');
   const stockAfterRefund = (await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } })).stock;
   assert(stockAfterRefund === l42StockBefore, 'L42 refund confirmation must restore inventory once');
   const finalClose = await request<{ status: string }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 final', body: { admin_note: 'Docker E2E L42 final close' } }));
-  await request('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 repeat final', body: { admin_note: 'repeat' } }));
+  assertSafeL42Response(finalClose, 'L42 final close response');
+  const repeatFinalClose = await request<{ status: string; idempotent: boolean }>('POST', `/api/admin/group-buys/${l42GroupBuy.id}/close`, withAdminJson({ label: 'POST /api/admin/group-buys/:id/close L42 repeat final', body: { admin_note: 'repeat' } }));
+  assertSafeL42Response(repeatFinalClose, 'L42 repeat final close response');
+  assert(repeatFinalClose.idempotent === true, 'L42 repeat final close must be idempotent');
   console.log('Group buy closure:');
   console.log(`group_buy_id=${l42GroupBuy.id}`);
   console.log(`status_before=${statusBefore}`);

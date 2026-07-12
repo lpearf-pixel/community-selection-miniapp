@@ -17,8 +17,103 @@ const refundChannelValues = ['manual_wechat', 'manual_offline', 'manual_other'] 
 // L27 verifier compatibility keyword only: pay_status: 'closed'. L42 behavior keeps failed-group unpaid orders at pay_status='unpaid'.
 
 function maskPhone(phone?: string | null) {
-  if (!phone) return '';
-  return phone.replace(/(\d{3})\d+(\d{4})/, '$1****$2');
+  if (!phone) return null;
+  return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+}
+
+function maskAddress(address?: string | null) {
+  if (!address) return null;
+  return `${address.slice(0, 6)}***`;
+}
+
+type ClosureOrderInput = {
+  id: string;
+  order_no: string;
+  user_id: string;
+  group_buy_id: string | null;
+  product_id: string | null;
+  quantity: number;
+  product_amount_cents: number | null;
+  delivery_fee_cents: number;
+  pay_amount_cents: number;
+  refund_amount_cents: number;
+  product_refund_amount_cents: number;
+  delivery_refund_amount_cents: number;
+  pay_status: string;
+  order_status: string;
+  refund_status: string;
+  pickup_store_id: string | null;
+  community_id: string | null;
+  receiver_name: string | null;
+  receiver_phone: string | null;
+  receiver_address: string | null;
+  created_at: Date;
+  paid_at: Date | null;
+};
+
+function toSafeClosureOrder(order: ClosureOrderInput) {
+  return {
+    order_id: order.id,
+    order_no: order.order_no,
+    user_id: order.user_id,
+    group_buy_id: order.group_buy_id,
+    product_id: order.product_id,
+    quantity: order.quantity,
+    product_amount_cents: order.product_amount_cents,
+    delivery_fee_cents: order.delivery_fee_cents,
+    pay_amount_cents: order.pay_amount_cents,
+    refund_amount_cents: order.refund_amount_cents,
+    product_refund_amount_cents: order.product_refund_amount_cents,
+    delivery_refund_amount_cents: order.delivery_refund_amount_cents,
+    pay_status: order.pay_status,
+    order_status: order.order_status,
+    refund_status: order.refund_status,
+    pickup_store_id: order.pickup_store_id,
+    community_id: order.community_id,
+    receiver_name: order.receiver_name,
+    receiver_phone_masked: maskPhone(order.receiver_phone),
+    receiver_address_masked: maskAddress(order.receiver_address),
+    created_at: order.created_at.toISOString(),
+    paid_at: order.paid_at?.toISOString() ?? null
+  };
+}
+
+type ClosureRefundInput = {
+  id: string;
+  order_id: string;
+  refund_amount_cents: number;
+  product_refund_amount_cents: number;
+  delivery_refund_amount_cents: number;
+  status: string;
+  reason: string | null;
+  processed_at: Date | null;
+  created_at: Date;
+};
+
+function toSafeClosureRefund(refund: ClosureRefundInput) {
+  return {
+    refund_id: refund.id,
+    order_id: refund.order_id,
+    refund_amount_cents: refund.refund_amount_cents,
+    product_refund_amount_cents: refund.product_refund_amount_cents,
+    delivery_refund_amount_cents: refund.delivery_refund_amount_cents,
+    status: refund.status,
+    reason: refund.reason,
+    processed_at: refund.processed_at?.toISOString() ?? null,
+    created_at: refund.created_at.toISOString()
+  };
+}
+
+function toSafeGroupBuyFailureResult(input: { applied: boolean; idempotent: boolean; group_buy_id: string; previous_status: string; status: string; reason: string; failed_at: Date }) {
+  return {
+    applied: input.applied,
+    idempotent: input.idempotent,
+    group_buy_id: input.group_buy_id,
+    previous_status: input.previous_status,
+    status: input.status,
+    reason: input.reason,
+    failed_at: input.failed_at.toISOString()
+  };
 }
 
 function targetCountOf(groupBuy: { min_quantity: number }) {
@@ -316,15 +411,15 @@ export async function markGroupBuyFailed(input: { group_buy_id: string; reason: 
     const progress = await getGroupBuyPaidProgress(input.group_buy_id, tx);
     const groupBuy = progress.groupBuy;
     if (groupBuy.status === 'success') throw new Error('已成团团购不能标记失败');
-    if (groupBuy.status === 'closed') return { applied: false, idempotent: true, status: 'closed', group_buy: groupBuy };
-    if (groupBuy.status === 'failed') return { applied: false, idempotent: true, status: 'failed', group_buy: groupBuy };
+    if (groupBuy.status === 'closed') return toSafeGroupBuyFailureResult({ applied: false, idempotent: true, group_buy_id: groupBuy.id, previous_status: groupBuy.status, status: groupBuy.status, reason: input.reason, failed_at: groupBuy.updated_at });
+    if (groupBuy.status === 'failed') return toSafeGroupBuyFailureResult({ applied: false, idempotent: true, group_buy_id: groupBuy.id, previous_status: groupBuy.status, status: groupBuy.status, reason: input.reason, failed_at: groupBuy.updated_at });
     if (groupBuy.status !== 'pending') throw new Error('当前团购状态不能标记失败');
     if (groupBuy.end_time.getTime() > Date.now() && input.reason.trim().length < 4) throw new Error('未过期团购人工终止必须填写明确原因');
     if (progress.paid_quantity >= progress.target_count) throw new Error('已支付有效份数达到目标，不能标记失败');
     const updated = await tx.groupBuy.update({ where: { id: groupBuy.id }, data: { status: 'failed', current_quantity: progress.paid_quantity, current_people: progress.paid_people } });
     await safeRecordBusinessEvent(tx, { event_type: 'group_buy_mark_failed_manual_l42', event_source: 'group-buy-expiry-service', group_buy_id: groupBuy.id, payload: { previous_status: groupBuy.status, new_status: 'failed', reason: input.reason, admin_note: input.admin_note ?? null } });
     await recordAdminAudit(tx, { admin_user_id: input.admin_meta?.admin_user_id ?? null, action: 'group_buy_mark_failed_manual_l42', target_type: 'GroupBuy', target_id: groupBuy.id, ip_address: input.admin_meta?.ip_address ?? null, user_agent: input.admin_meta?.user_agent ?? null, payload: { previous_status: groupBuy.status, new_status: 'failed', reason: input.reason, admin_note: input.admin_note ?? null, idempotency_key: `group-buy-mark-failed:${groupBuy.id}` } });
-    return { applied: true, idempotent: false, status: updated.status, group_buy: updated };
+    return toSafeGroupBuyFailureResult({ applied: true, idempotent: false, group_buy_id: updated.id, previous_status: groupBuy.status, status: updated.status, reason: input.reason, failed_at: updated.updated_at });
   });
 }
 
@@ -417,7 +512,7 @@ export async function confirmFailedGroupBuyRefundHandled(input: { group_buy_id: 
       await safeRecordBusinessEvent(tx, { event_type: 'group_buy_refund_confirmed_l42', event_source: 'group-buy-expiry-service', order_id: order.id, group_buy_id: input.group_buy_id, refund_id: refund.id, payload: { inventory } });
       await recordAdminAudit(tx, { admin_user_id: input.admin_meta?.admin_user_id ?? null, action: 'group_buy_refund_confirmed_l42', target_type: 'Refund', target_id: refund.id, ip_address: input.admin_meta?.ip_address ?? null, user_agent: input.admin_meta?.user_agent ?? null, payload: { order_id: order.id, group_buy_id: input.group_buy_id, admin_note: input.admin_note ?? null, idempotency_key: `group-buy-refund-confirm:${refund.id}` } });
     }
-    return { applied: inventory.applied, idempotent: inventory.idempotent || !inventory.applied, order: updatedOrder, refund, inventory };
+    return { applied: inventory.applied, idempotent: inventory.idempotent || !inventory.applied, order: toSafeClosureOrder(updatedOrder), refund: toSafeClosureRefund(refund), inventory };
   });
 }
 
