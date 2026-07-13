@@ -9,6 +9,7 @@ const commissions = read('apps/api/src/routes/commissions.ts');
 const rewards = read('apps/api/src/routes/rewards.ts');
 const adminPage = read('apps/admin/src/pages/rewards/RewardLedgerPage.tsx');
 const migration = read('prisma/migrations/202607130001_l43_reward_ledger_t7_refund_deduct/migration.sql');
+const idempotencyMigration = read('prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql');
 const docker = read('scripts/verify-docker-api-e2e-local.ts');
 
 function functionSlice(source: string, functionName: string) {
@@ -30,6 +31,8 @@ const calculationSurface = [
   'review_status','last_adjusted_at','idempotency_key','event_type','affects_available_balance','amount_before_cents','amount_after_cents','@@unique([order_id, leader_user_id])'
 ].forEach((needle) => assert(schema.includes(needle), `schema missing ${needle}`));
 assert(migration.includes('Rollback') && migration.includes('DEFAULT'), 'migration must include defaults and rollback notes');
+assert(idempotencyMigration.includes('ROW_NUMBER() OVER') && idempotencyMigration.includes("ledger.idempotency_key || ':legacy:' || ledger.id"), 'L43 idempotency migration must deterministically rewrite duplicate historical keys');
+assert(idempotencyMigration.includes('DROP INDEX IF EXISTS "RewardLedger_idempotency_key_key"') && idempotencyMigration.includes('CREATE UNIQUE INDEX "RewardLedger_idempotency_key_key" ON "RewardLedger"("idempotency_key")'), 'L43 idempotency migration must create Prisma-compatible nullable unique index');
 [
   'product_refund_amount_cents','calculateCommissionAmount','getAvailableRewardBalance','releaseDueCommissions','commission-available:${item.id}','commission_refund_deduct','commission_review_required','commission_refund_adjustment_pending','backfillAvailableRewardLedgers'
 ].forEach((needle) => assert(service.includes(needle), `service missing ${needle}`));

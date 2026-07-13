@@ -22,3 +22,9 @@
 ## 职责划分
 
 `Commission` 保存当前聚合状态、计算基数、预估、扣减、最终金额、T+7 可用时间和人工复核字段。`RewardLedger` 是不可变事件账本，使用幂等键记录 available 入账、退款扣减、转换消费额度扣减和人工复核事件。
+
+## L43 migration follow-up
+
+- `202607130001_l43_reward_ledger_t7_refund_deduct` adds nullable/defaulted L43 fields for `Commission` and `RewardLedger`.
+- `202607130002_l43_reward_ledger_t3_refund_deduct` finalizes `RewardLedger.idempotency_key String? @unique` by rewriting only duplicate non-null historical keys to `original_key:legacy:{ledger.id}`, dropping the earlier partial index, and creating the Prisma-compatible nullable unique index `RewardLedger_idempotency_key_key`.
+- The duplicate-key migration does not delete RewardLedger rows and does not modify amount, direction, balance, commission, order, or entry-type ledger facts.
