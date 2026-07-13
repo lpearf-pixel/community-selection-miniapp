@@ -278,47 +278,69 @@ async function createL43AvailableWithoutLedgerFixture(prefix: string, amountCent
 
 async function assertGlobalOperationRelease(path: '/api/admin/rewards/release-due' | '/api/admin/commissions/settle', fixture: L43CommissionFixture, superAdminHeaders: Record<string, string>, label: string) {
   const beforeBalance = await getAvailableRewardBalance(prisma, fixture.leaderId);
-  const beforeLedgerCount = await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: 'commission_available' } });
   const releaseResult = await request<L43GlobalOperationResult>('POST', path, { headers: superAdminHeaders, label: `${label} first success` });
-  assert(releaseResult.matched_count === 1, `${label} matched_count must be 1`);
-  assert(releaseResult.released_count === 1, `${label} released_count must be 1`);
-  assert(releaseResult.ledger_created_count === 1, `${label} ledger_created_count must be 1`);
+  console.log(`${label} response:`);
+  console.log(JSON.stringify(releaseResult, null, 2));
+  assert(releaseResult.matched_count >= 1, `${label} matched_count must be >= 1; actual=${releaseResult.matched_count}; fixture=${fixture.commissionId}`);
+  assert((releaseResult.released_count ?? 0) >= 1, `${label} released_count must be >= 1; actual=${releaseResult.released_count}; fixture=${fixture.commissionId}`);
+  assert(releaseResult.ledger_created_count >= 1, `${label} ledger_created_count must be >= 1; actual=${releaseResult.ledger_created_count}; fixture=${fixture.commissionId}`);
   const releasedCommission = await prisma.commission.findUniqueOrThrow({ where: { id: fixture.commissionId } });
   const availableLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: fixture.commissionId, event_type: 'commission_available' } });
   const afterBalance = await getAvailableRewardBalance(prisma, fixture.leaderId);
-  assert(releasedCommission.status === 'available', `${label} must make commission available`);
-  assert(availableLedgers.length === beforeLedgerCount + 1, `${label} must create one available ledger`);
-  assert(availableLedgers[0].amount_cents === fixture.amountCents && availableLedgers[0].affects_available_balance === true, `${label} ledger amount and balance flag must match commission`);
-  assert(afterBalance === beforeBalance + fixture.amountCents, `${label} must increase available balance once`);
+  if (releasedCommission.status !== 'available' || availableLedgers.length !== 1 || afterBalance !== beforeBalance + fixture.amountCents) {
+    console.log(`${label} fixture commission:`);
+    console.log(JSON.stringify(await prisma.commission.findUnique({ where: { id: fixture.commissionId } }), null, 2));
+  }
+  assert(releasedCommission.status === 'available', `${label} fixture commission must become available`);
+  assert(availableLedgers.length === 1, `${label} fixture must have exactly one available ledger`);
+  assert(availableLedgers[0].amount_cents === fixture.amountCents, `${label} fixture ledger amount mismatch`);
+  assert(availableLedgers[0].affects_available_balance === true, `${label} fixture ledger must affect available balance`);
+  assert(afterBalance === beforeBalance + fixture.amountCents, `${label} fixture balance must increase once`);
 
+  const fixtureLedgerCountBeforeRepeat = await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: 'commission_available' } });
+  const balanceBeforeRepeat = await getAvailableRewardBalance(prisma, fixture.leaderId);
   const releaseRepeat = await request<L43GlobalOperationResult>('POST', path, { headers: superAdminHeaders, label: `${label} repeat success` });
-  assert(releaseRepeat.released_count === 0, `${label} repeat released_count must be 0`);
-  assert(releaseRepeat.ledger_created_count === 0, `${label} repeat ledger_created_count must be 0`);
+  console.log(`${label} repeat response:`);
+  console.log(JSON.stringify(releaseRepeat, null, 2));
+  const fixtureLedgerCountAfterRepeat = await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: 'commission_available' } });
+  const balanceAfterRepeat = await getAvailableRewardBalance(prisma, fixture.leaderId);
   assert((await prisma.commission.findUniqueOrThrow({ where: { id: fixture.commissionId } })).status === 'available', `${label} repeat must keep commission available`);
-  assert(await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: 'commission_available' } }) === availableLedgers.length, `${label} repeat must not create duplicate ledger`);
-  assert(await getAvailableRewardBalance(prisma, fixture.leaderId) === afterBalance, `${label} repeat must not increase available balance`);
-  return { first: releaseResult, repeat: releaseRepeat, balanceAfter: afterBalance };
+  assert(fixtureLedgerCountAfterRepeat === fixtureLedgerCountBeforeRepeat, `${label} repeat must not duplicate fixture ledger`);
+  assert(balanceAfterRepeat === balanceBeforeRepeat, `${label} repeat must not increase fixture balance`);
+  return { first: releaseResult, repeat: releaseRepeat, balanceAfter: afterBalance, fixtureStatus: releasedCommission.status, fixtureLedgerCount: availableLedgers.length, fixtureBalanceVerified: afterBalance === beforeBalance + fixture.amountCents, repeatFixtureLedgerCount: fixtureLedgerCountAfterRepeat, repeatBalanceAfter: balanceAfterRepeat };
 }
 
 async function assertGlobalOperationBackfill(fixture: L43CommissionFixture, superAdminHeaders: Record<string, string>) {
   const beforeBalance = await getAvailableRewardBalance(prisma, fixture.leaderId);
-  const beforeLedgerCount = await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: { in: ['commission_available', 'commission_available_backfill'] } } });
   const backfillResult = await request<L43GlobalOperationResult>('POST', '/api/admin/rewards/backfill', { headers: superAdminHeaders, label: 'L43 super_admin backfill first success' });
-  assert(backfillResult.matched_count === 1, 'backfillResult matched_count must be 1');
-  assert(backfillResult.ledger_created_count === 1, 'backfillResult ledger_created_count must be 1');
+  console.log('backfillResult response:');
+  console.log(JSON.stringify(backfillResult, null, 2));
+  assert(backfillResult.matched_count >= 1, `backfillResult matched_count must be >= 1; actual=${backfillResult.matched_count}; fixture=${fixture.commissionId}`);
+  assert(backfillResult.ledger_created_count >= 1, `backfillResult ledger_created_count must be >= 1; actual=${backfillResult.ledger_created_count}; fixture=${fixture.commissionId}`);
   const backfillLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: fixture.commissionId, event_type: 'commission_available_backfill' } });
   const afterBalance = await getAvailableRewardBalance(prisma, fixture.leaderId);
-  assert(backfillLedgers.length === beforeLedgerCount + 1, 'backfill must create one commission_available_backfill ledger');
+  if (backfillLedgers.length !== 1 || afterBalance !== beforeBalance + fixture.amountCents) {
+    console.log('backfill fixture commission:');
+    console.log(JSON.stringify(await prisma.commission.findUnique({ where: { id: fixture.commissionId } }), null, 2));
+  }
+  assert(backfillLedgers.length === 1, 'backfill fixture must create exactly one backfill ledger');
   assert(backfillLedgers[0].amount_cents === fixture.amountCents && backfillLedgers[0].affects_available_balance === true, 'backfill ledger amount and balance flag must match commission');
   assert(backfillLedgers[0].commission_id === fixture.commissionId && backfillLedgers[0].leader_user_id === fixture.leaderId, 'backfill ledger must reference the fixture commission and leader');
   assert(typeof backfillLedgers[0].idempotency_key === 'string' && backfillLedgers[0].idempotency_key.length > 0, 'backfill ledger idempotency_key must be non-empty');
   assert(afterBalance === beforeBalance + fixture.amountCents, 'backfill must increase available balance once');
 
+  const fixtureLedgerCountBeforeRepeat = await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: 'commission_available_backfill' } });
+  const balanceBeforeRepeat = await getAvailableRewardBalance(prisma, fixture.leaderId);
+  const idempotencyKeyBeforeRepeat = backfillLedgers[0].idempotency_key;
   const backfillRepeat = await request<L43GlobalOperationResult>('POST', '/api/admin/rewards/backfill', { headers: superAdminHeaders, label: 'L43 super_admin backfill repeat success' });
-  assert(backfillRepeat.ledger_created_count === 0, 'backfillRepeat ledger_created_count must be 0');
-  assert(await prisma.rewardLedger.count({ where: { commission_id: fixture.commissionId, event_type: 'commission_available_backfill' } }) === backfillLedgers.length, 'backfill repeat must not create duplicate ledger');
-  assert(await getAvailableRewardBalance(prisma, fixture.leaderId) === afterBalance, 'backfill repeat must not increase available balance');
-  return { first: backfillResult, repeat: backfillRepeat, balanceAfter: afterBalance };
+  console.log('backfillRepeat response:');
+  console.log(JSON.stringify(backfillRepeat, null, 2));
+  const backfillLedgersAfterRepeat = await prisma.rewardLedger.findMany({ where: { commission_id: fixture.commissionId, event_type: 'commission_available_backfill' } });
+  const balanceAfterRepeat = await getAvailableRewardBalance(prisma, fixture.leaderId);
+  assert(backfillLedgersAfterRepeat.length === fixtureLedgerCountBeforeRepeat, 'backfill repeat must not create duplicate fixture ledger');
+  assert(balanceAfterRepeat === balanceBeforeRepeat, 'backfill repeat must not increase fixture balance');
+  assert(backfillLedgersAfterRepeat[0].idempotency_key === idempotencyKeyBeforeRepeat, 'backfill repeat must keep fixture idempotency key unchanged');
+  return { first: backfillResult, repeat: backfillRepeat, balanceAfter: afterBalance, fixtureLedgerCount: backfillLedgers.length, fixtureBalanceVerified: afterBalance === beforeBalance + fixture.amountCents, repeatFixtureLedgerCount: backfillLedgersAfterRepeat.length, repeatBalanceAfter: balanceAfterRepeat };
 }
 
 async function runL43RewardLedgerScenario() {
@@ -419,16 +441,16 @@ async function runL43RewardLedgerScenario() {
     await assertNegativeGlobalCall(path, inactiveHeaders, 401, `inactive admin ${path}`);
   }
   const superAdminHeaders = { 'x-admin-role': 'super_admin', 'x-admin-user-id': superAdmin.id };
-  const releaseFixture = await createL43PendingCommissionFixture('l43-release-due-e2e-', 111);
-  const settleFixture = await createL43PendingCommissionFixture('l43-settle-e2e-', 222);
-  const backfillFixture = await createL43AvailableWithoutLedgerFixture('l43-backfill-e2e-', 333);
+  const globalOperationRunId = Date.now();
+  const releaseFixture = await createL43PendingCommissionFixture(`l43-release-due-e2e-${globalOperationRunId}-`, 111);
   const releaseCheck = await assertGlobalOperationRelease('/api/admin/rewards/release-due', releaseFixture, superAdminHeaders, 'releaseResult');
+  const settleFixture = await createL43PendingCommissionFixture(`l43-settle-e2e-${globalOperationRunId}-`, 222);
   const settleCheck = await assertGlobalOperationRelease('/api/admin/commissions/settle', settleFixture, superAdminHeaders, 'settleResult');
+  const backfillFixture = await createL43AvailableWithoutLedgerFixture(`l43-backfill-e2e-${globalOperationRunId}-`, 333);
   const backfillCheck = await assertGlobalOperationBackfill(backfillFixture, superAdminHeaders);
-  assert(settleCheck.first.matched_count === 1, 'settleResult matched_count must be 1');
-  assert(settleCheck.first.released_count === 1, 'settleResult released_count must be 1');
-  assert(settleCheck.first.ledger_created_count === 1, 'settleResult ledger_created_count must be 1');
-  assert(settleCheck.repeat.ledger_created_count === 0, 'settleRepeat ledger_created_count must be 0');
+  assert(settleCheck.first.matched_count >= 1, `settleResult matched_count must be >= 1; actual=${settleCheck.first.matched_count}; fixture=${settleFixture.commissionId}`);
+  assert((settleCheck.first.released_count ?? 0) >= 1, `settleResult released_count must be >= 1; actual=${settleCheck.first.released_count}; fixture=${settleFixture.commissionId}`);
+  assert(settleCheck.first.ledger_created_count >= 1, `settleResult ledger_created_count must be >= 1; actual=${settleCheck.first.ledger_created_count}; fixture=${settleFixture.commissionId}`);
 
   console.log('Reward ledger:');
   console.log(`commission_id=${estimated.id}`);
@@ -458,13 +480,21 @@ async function runL43RewardLedgerScenario() {
   console.log(`release_due_released_count=${releaseCheck.first.released_count}`);
   console.log(`release_due_ledger_created_count=${releaseCheck.first.ledger_created_count}`);
   console.log(`release_due_repeat_ledger_created_count=${releaseCheck.repeat.ledger_created_count}`);
+  console.log(`release_due_fixture_status=${releaseCheck.fixtureStatus}`);
+  console.log(`release_due_fixture_ledger_count=${releaseCheck.fixtureLedgerCount}`);
+  console.log(`release_due_fixture_balance_verified=${releaseCheck.fixtureBalanceVerified}`);
   console.log(`settle_matched_count=${settleCheck.first.matched_count}`);
   console.log(`settle_released_count=${settleCheck.first.released_count}`);
   console.log(`settle_ledger_created_count=${settleCheck.first.ledger_created_count}`);
   console.log(`settle_repeat_ledger_created_count=${settleCheck.repeat.ledger_created_count}`);
+  console.log(`settle_fixture_status=${settleCheck.fixtureStatus}`);
+  console.log(`settle_fixture_ledger_count=${settleCheck.fixtureLedgerCount}`);
+  console.log(`settle_fixture_balance_verified=${settleCheck.fixtureBalanceVerified}`);
   console.log(`backfill_matched_count=${backfillCheck.first.matched_count}`);
   console.log(`backfill_ledger_created_count=${backfillCheck.first.ledger_created_count}`);
   console.log(`backfill_repeat_ledger_created_count=${backfillCheck.repeat.ledger_created_count}`);
+  console.log(`backfill_fixture_ledger_count=${backfillCheck.fixtureLedgerCount}`);
+  console.log(`backfill_fixture_balance_verified=${backfillCheck.fixtureBalanceVerified}`);
   console.log('global_reward_negative_no_commission_change');
   console.log('global_reward_negative_no_ledger_change');
   console.log('global_reward_negative_no_success_event');

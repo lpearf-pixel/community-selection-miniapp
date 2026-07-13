@@ -185,15 +185,19 @@ const latestVerifyOutputForManifest = existsSync(latestVerifyOutputForManifestPa
 function hasL43RuntimeMarkers(markers: string[]) {
   return markers.every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
+function hasPositiveL43Marker(raw: string, name: string) {
+  return new RegExp(`(?:^|\\n)${name}=([1-9]\\d*)`).test(raw);
+}
 function l43GlobalApiVerified(path: string) {
+  const raw = latestVerifyOutputForManifest;
   if (path === '/api/admin/rewards/release-due') {
-    return hasL43RuntimeMarkers(['release_due_matched_count=1', 'release_due_released_count=1', 'release_due_ledger_created_count=1']) ? 'yes' : 'not detected';
+    return hasPositiveL43Marker(raw, 'release_due_matched_count') && hasPositiveL43Marker(raw, 'release_due_released_count') && hasPositiveL43Marker(raw, 'release_due_ledger_created_count') && hasL43RuntimeMarkers(['release_due_fixture_status=available', 'release_due_fixture_ledger_count=1', 'release_due_fixture_balance_verified=true']) ? 'yes' : 'not detected';
   }
   if (path === '/api/admin/commissions/settle') {
-    return hasL43RuntimeMarkers(['settle_matched_count=1', 'settle_released_count=1', 'settle_ledger_created_count=1']) ? 'yes' : 'not detected';
+    return hasPositiveL43Marker(raw, 'settle_matched_count') && hasPositiveL43Marker(raw, 'settle_released_count') && hasPositiveL43Marker(raw, 'settle_ledger_created_count') && hasL43RuntimeMarkers(['settle_fixture_status=available', 'settle_fixture_ledger_count=1', 'settle_fixture_balance_verified=true']) ? 'yes' : 'not detected';
   }
   if (path === '/api/admin/rewards/backfill') {
-    return hasL43RuntimeMarkers(['backfill_matched_count=1', 'backfill_ledger_created_count=1']) ? 'yes' : 'not detected';
+    return hasPositiveL43Marker(raw, 'backfill_matched_count') && hasPositiveL43Marker(raw, 'backfill_ledger_created_count') && hasL43RuntimeMarkers(['backfill_fixture_ledger_count=1', 'backfill_fixture_balance_verified=true']) ? 'yes' : 'not detected';
   }
   return 'yes';
 }
@@ -1254,13 +1258,13 @@ function highRiskItems() {
   const risks: string[] = [];
   if (isL43Stage) {
     const raw = verifyOutput.raw ?? '';
-    const requiredMarkerGroups = [
-      { label: 'release-due 全局 API 缺少非零释放证据', markers: ['release_due_matched_count=1', 'release_due_released_count=1', 'release_due_ledger_created_count=1'] },
-      { label: 'settle 兼容 API 缺少非零释放证据', markers: ['settle_matched_count=1', 'settle_released_count=1', 'settle_ledger_created_count=1'] },
-      { label: 'backfill 全局 API 缺少非零补账证据', markers: ['backfill_matched_count=1', 'backfill_ledger_created_count=1'] }
+    const requiredMarkerGroups: Array<{ label: string; positive: string[]; text: string[] }> = [
+      { label: 'release-due 全局 API 缺少非零释放证据', positive: ['release_due_matched_count', 'release_due_released_count', 'release_due_ledger_created_count'], text: ['release_due_fixture_status=available', 'release_due_fixture_ledger_count=1', 'release_due_fixture_balance_verified=true'] },
+      { label: 'settle 兼容 API 缺少非零释放证据', positive: ['settle_matched_count', 'settle_released_count', 'settle_ledger_created_count'], text: ['settle_fixture_status=available', 'settle_fixture_ledger_count=1', 'settle_fixture_balance_verified=true'] },
+      { label: 'backfill 全局 API 缺少非零补账证据', positive: ['backfill_matched_count', 'backfill_ledger_created_count'], text: ['backfill_fixture_ledger_count=1', 'backfill_fixture_balance_verified=true'] }
     ];
     for (const group of requiredMarkerGroups) {
-      if (!group.markers.every((marker) => raw.includes(marker))) risks.push(group.label);
+      if (!group.positive.every((marker) => hasPositiveL43Marker(raw, marker)) || !group.text.every((marker) => raw.includes(marker))) risks.push(group.label);
     }
     if (/(^|\n)(release_due|settle|backfill)_(matched_count|released_count|ledger_created_count)=0/.test(raw)) risks.push('全局 API 成功响应中出现 0 结果，需确认是否为重复调用或错误验收');
     if (apiRows.some((row) => row.verified === 'yes' && ['/api/admin/rewards/release-due', '/api/admin/commissions/settle', '/api/admin/rewards/backfill'].includes(row.path)) && risks.length) {
