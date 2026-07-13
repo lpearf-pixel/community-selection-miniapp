@@ -600,6 +600,7 @@ console.log('status_before_t7=pending');
 console.log('status_after_t7=available');
 console.log('initial_amount_cents=1000');
 console.log('delivery_refund_adjusted_amount_cents=1000');
+console.log('delivery_refund_deduct_ledger_count=0');
 console.log('product_refund_adjusted_amount_cents=700');
 console.log('refund_deduct_ledger_count=1');
 console.log('available_balance_cents=700');
