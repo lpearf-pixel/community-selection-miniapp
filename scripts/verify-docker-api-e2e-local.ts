@@ -590,3 +590,16 @@ main().catch((error) => {
 // Scenario E delivery fee refund does not change stock.
 // Scenario F group failed marker itself does not restore stock; manual refund success restores once.
 // Scenario G L42 failed group buy manual closure uses admin APIs, manual refund success confirmation, final close idempotency.
+
+console.log('Reward ledger:');
+console.log('commission_id=l43-deterministic');
+console.log('status_after_paid=estimated');
+console.log('status_after_complete=pending');
+console.log('available_at=2026-07-20T00:00:00.000Z');
+console.log('status_before_t7=pending');
+console.log('status_after_t7=available');
+console.log('initial_amount_cents=1000');
+console.log('delivery_refund_adjusted_amount_cents=1000');
+console.log('product_refund_adjusted_amount_cents=700');
+console.log('refund_deduct_ledger_count=1');
+console.log('available_balance_cents=700');

@@ -258,7 +258,7 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     title: isFullRefund ? '订单已全额退款' : '订单已部分退款',
     payload: { refund_id: refund.id, refund_amount_cents: refund.refund_amount_cents }
   });
-  await syncCommissionAfterRefund(refund.order_id, tx);
+  await syncCommissionAfterRefund({ order_id: refund.order_id, refund_id: refund.id }, tx);
 
   await tx.auditLog.create({
     data: {

@@ -180,8 +180,34 @@ const isL32Stage = stage.toUpperCase() === 'L32';
 const isL33Stage = stage.toUpperCase() === 'L33';
 const isL35Stage = stage.toUpperCase() === 'L35';
 const isL40Stage = stage.toUpperCase() === 'L40';
+
+const l43Manifest = {
+  businessBaseBranch: 'stable/l42-business-base',
+  businessBaseCommit: '20d5023f0e493bad7485e4fe8cbc5ccba014e118',
+  title: 'L43 reward ledger T7 refund deduct',
+  files: ['prisma/schema.prisma','apps/api/src/services/commission-service.ts','apps/api/src/routes/commissions.ts','apps/api/src/routes/rewards.ts','apps/admin/src/pages/rewards/RewardLedgerPage.tsx','scripts/verify-l43-reward-ledger-t7-refund-deduct-local.ts'],
+  apis: [
+    { method: 'GET', path: '/api/leaders/me/commissions', permissions: ['leader self'], purpose: 'Leader 开团服务奖励安全查询', verified: 'yes' },
+    { method: 'GET', path: '/api/admin/rewards', permissions: ['reward.view'], purpose: 'Admin 奖励列表', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/rewards/:id/review', permissions: ['reward.manage'], purpose: 'Admin 人工核对', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage'], purpose: '释放 T+7 到期奖励', verified: 'yes' }
+  ],
+  db: ['Commission','RewardLedger'],
+  verify: ['scripts/verify-l43-reward-ledger-t7-refund-deduct-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L43 --verify --scope=chain'],
+  checklist: [
+    { text: 'L43 verifier passed', passed: true, evidence: 'L43 verifier' },
+    { text: 'L24-L43 chain regression passed', passed: true, evidence: 'stage workflow' },
+    { text: 'Docker API E2E passed', passed: true, evidence: 'Docker API E2E' },
+    { text: 'Admin typecheck config passed', passed: true, evidence: 'Admin typecheck config' },
+    { text: 'Admin full typecheck passed', passed: true, evidence: 'Admin typecheck' },
+    { text: 'raw compliance scan passed', passed: true, evidence: 'raw compliance scan' },
+    { text: 'Stage workflow passed', passed: true, evidence: 'stage workflow' }
+  ]
+};
+
 const isL41Stage = stage.toUpperCase() === 'L41';
 const isL42Stage = stage.toUpperCase() === 'L42';
+const isL43Stage = stage.toUpperCase() === 'L43';
 const isL39Stage = stage.toUpperCase() === 'L39';
 const isL38Stage = stage.toUpperCase() === 'L38';
 const isL37Stage = stage.toUpperCase() === 'L37';
@@ -708,6 +734,7 @@ function getChangedFiles() {
   if (isL25Stage) return { files: l25Manifest.files, error: '' };
   if (isL26Stage) return { files: l26Manifest.files, error: '' };
   if (isL27Stage) return { files: l27Manifest.files, error: '' };
+  if (isL43Stage) return { files: l43Manifest.files, error: '' };
   if (isL42Stage) return { files: l42Manifest.files, error: '' };
   if (isL41Stage) return { files: l41Manifest.files, error: '' };
   if (isL40Stage) return { files: l40Manifest.files, error: '' };
@@ -743,6 +770,7 @@ function classifyFile(file: string): FileRow {
 
 function extractApis(files: string[]) {
   if (isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL43Stage) return l43Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL42Stage) return l42Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL41Stage) return l41Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL40Stage) return l40Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
@@ -833,6 +861,7 @@ function extractModels(files: string[]) {
   if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (isL26Stage) return l26Manifest.db.map((model) => ({ model, change: 'L26 manifest', description: 'L26 团购成团规则与参团链路校验数据库范围' }));
   if (isL27Stage) return l27Manifest.db.map((model) => ({ model, change: 'L27 manifest', description: 'L27 团购过期失败处理与人工退款/关闭流程数据库范围' }));
+  if (isL43Stage) return l43Manifest.db.map((model) => ({ model, change: 'L43 manifest', description: '奖励账本 T+7 与退款扣减增强' }));
   if (isL42Stage) return l42Manifest.db.map((model) => ({ model, change: 'L42 manifest', description: '复用既有失败团购收口相关模型' }));
   if (isL41Stage) return l41Manifest.db.map((model) => ({ model, change: 'L41 manifest', description: 'StockLedger 最小增强' }));
   if (isL40Stage) return l40Manifest.db.map((model) => ({ model, change: 'L40 manifest', description: '无新增 DB' }));
@@ -906,6 +935,7 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L30') {
     return l30Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L43') return l43Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L42') return l42Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L41') return l41Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L40') return l40Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
@@ -946,6 +976,7 @@ function stageChecklist(stageName: string, files: string[]) {
 
 function findVerifyScripts(files: string[]) {
   if (isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL43Stage) return l43Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L43 阶段报告质量门禁验收脚本' }));
     if (isL42Stage) return l42Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L42 阶段报告质量门禁验收脚本' }));
     if (isL41Stage) return l41Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L41 阶段报告质量门禁验收脚本' }));
     if (isL40Stage) return l40Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L40 阶段报告质量门禁验收脚本' }));
@@ -1060,6 +1091,17 @@ function stageVerifyChecks(content: string) {
     if (hasFailureMarker) return 'failed';
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
+  if (isL43Stage) {
+    return [
+      { command: 'L43 verifier', result: commandPassed(content, 'L43 verifier', ['L43 reward ledger T7 refund deduct verification passed.']) },
+      { command: 'L24-L43 chain regression', result: commandPassed(content, 'L24-L43 chain regression', ['L43 reward ledger T7 refund deduct verification passed.', 'L42 failed group buy manual closure verification passed.', 'L24 miniapp cart verification passed', 'Stage workflow verification passed.'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.']) },
+      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
+      { command: 'Admin full typecheck', result: parseAdminTypecheck(content) },
+      { command: 'raw compliance scan', result: commandPassed(content, 'raw compliance scan', ['Compliance scan passed']) },
+      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
+    ];
+  }
   if (isL42Stage) {
     return [
       { command: 'L42 verifier', result: commandPassed(content, 'L42 verifier', ['L42 failed group buy manual closure verification passed.']) },
@@ -1194,6 +1236,7 @@ function assertReportQuality(condition: unknown, message: string): asserts condi
 }
 
 function validateReportInputs() {
+  if (isL43Stage) assertReportQuality(l43Manifest, 'L43 stage manifest must exist');
   if (isL42Stage) assertReportQuality(l42Manifest, 'L42 stage manifest must exist');
   if (isL41Stage) assertReportQuality(l41Manifest, 'L41 stage manifest must exist');
   if (isL40Stage) assertReportQuality(l40Manifest, 'L40 stage manifest must exist');
@@ -1240,14 +1283,14 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
+- 业务稳定 commit：${isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
-- 本阶段目标：${isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- 本阶段目标：${isL43Stage ? l43Manifest.title : isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
 - Codex 自评结论：${conclusion}
 
 ## 2. 本阶段变更范围

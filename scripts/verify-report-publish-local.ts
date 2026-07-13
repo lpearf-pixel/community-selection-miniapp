@@ -39,6 +39,7 @@ for (const required of [
   'L40 verifier',
   'L41 verifier',
   'L42 verifier',
+  'L43 verifier',
   'L24-L40 chain regression',
   'L24-L41 chain regression',
   'L24-L42 chain regression',
