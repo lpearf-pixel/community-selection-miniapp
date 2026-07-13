@@ -32,6 +32,10 @@ assert(dockerCompose.includes('postgres-data:/var/lib/postgresql/data') && docke
 assert(dockerCompose.includes('curl -fsS http://localhost:13080/api/health'), 'API healthcheck must remain on port 13080');
 for (const permissionText of ['leader self','reward.view','reward.manage', 'super_admin global']) { assert(reportGenerator.includes(permissionText), `L43 report manifest missing ${permissionText}`); }
 for (const forbiddenReportPermission of ['public', 'admin session', 'unknown']) { assert(!reportGenerator.includes(`permission: '${forbiddenReportPermission}'`) && !reportGenerator.includes(`permissions: ['${forbiddenReportPermission}']`), `L43 report must not emit ${forbiddenReportPermission} permission`); }
+for (const reportMarker of ['release_due_matched_count=1', 'release_due_released_count=1', 'release_due_ledger_created_count=1', 'settle_matched_count=1', 'settle_released_count=1', 'settle_ledger_created_count=1', 'backfill_matched_count=1', 'backfill_ledger_created_count=1', 'via stage-workflow', 'not detected']) {
+  assert(reportGenerator.includes(reportMarker), `L43 report generator missing runtime evidence marker ${reportMarker}`);
+}
+assert(reportGenerator.includes('全局 API 成功响应中出现 0 结果') && reportGenerator.includes('报告声称全局 API 已验收但缺少完整非零运行时证据'), 'L43 report must flag missing or zero global API runtime evidence as high risk');
 
 const mainEnd = docker.indexOf('main().catch');
 assert(mainEnd > 0, 'Docker E2E must call main().catch');
@@ -40,11 +44,27 @@ for (const marker of ['status_after_t3=available', 'scoped_finance_release_due_4
   assert(!afterMain.includes(marker), `${marker} must not be printed outside runtime assertions`);
 }
 for (const requiredRuntimeSnippet of [
-  "request('POST', '/api/admin/rewards/release-due'",
-  "request('POST', '/api/admin/commissions/settle'",
-  "request('POST', '/api/admin/rewards/backfill'",
+  "request('POST', path",
+  "'/api/admin/rewards/release-due'",
+  "'/api/admin/commissions/settle'",
+  "request<L43GlobalOperationResult>('POST', '/api/admin/rewards/backfill'",
   'prisma.commission.findUniqueOrThrow',
   'prisma.rewardLedger.count',
+  'prisma.rewardLedger.findMany',
+  'assert(releaseResult.matched_count === 1',
+  'assert(releaseResult.released_count === 1',
+  'assert(releaseResult.ledger_created_count === 1',
+  'assert(settleCheck.first.matched_count === 1',
+  'assert(settleCheck.first.released_count === 1',
+  'assert(settleCheck.first.ledger_created_count === 1',
+  'assert(backfillResult.matched_count === 1',
+  'assert(backfillResult.ledger_created_count === 1',
+  'assert(releaseRepeat.ledger_created_count === 0',
+  'assert(settleCheck.repeat.ledger_created_count === 0',
+  'assert(backfillRepeat.ledger_created_count === 0',
+  'createL43PendingCommissionFixture',
+  'createL43AvailableWithoutLedgerFixture',
+  'cleanupL43GlobalOperationFixtures',
   'available_at must equal completed_at plus 72 hours',
   'delivery-fee-only refund must not change reward',
   'repeated partial refund sync must not duplicate deduct ledger',
@@ -105,6 +125,9 @@ assert(commissions.includes('/api/admin/rewards/release-due') && commissions.inc
 assert(rewards.includes('getAvailableRewardBalance') && rewards.includes('affects_available_balance') && rewards.includes('convert-credit:${body.client_request_id}'), 'convert credit ledger compatibility missing');
 ['开团服务奖励','待可用','已可用','退款扣减','待人工复核','完成后第 3 天可用'].forEach((needle) => assert(adminPage.includes(needle), `admin page missing ${needle}`));
 assert(docker.includes('Reward ledger:') && docker.includes('initial_amount_cents=1000') && docker.includes('delivery_refund_adjusted_amount_cents=1000') && docker.includes('delivery_refund_deduct_ledger_count=0') && docker.includes('product_refund_adjusted_amount_cents=700') && docker.includes('refund_deduct_ledger_count=1'), 'Docker API E2E L43 reward markers missing');
+for (const nonzeroMarker of ['available_balance_after_release_cents=','available_balance_after_delivery_refund_cents=','available_balance_after_partial_product_refund_cents=','available_balance_after_full_product_refund_cents=','release_due_matched_count=','release_due_released_count=','release_due_ledger_created_count=','release_due_repeat_ledger_created_count=','settle_matched_count=','settle_released_count=','settle_ledger_created_count=','settle_repeat_ledger_created_count=','backfill_matched_count=','backfill_ledger_created_count=','backfill_repeat_ledger_created_count=']) {
+  assert(docker.includes(nonzeroMarker), `Docker API E2E missing nonzero L43 marker ${nonzeroMarker}`);
+}
 assert(service.includes('rewardAvailabilityDelayDays = 3'), 'T+3 release rule must be 72 hours');
 assert(!service.includes('settlementDelayDays = ' + '7'), 'legacy seven-day reward delay must not remain');
 console.log('L43 reward ledger T3 refund deduct verification passed.');

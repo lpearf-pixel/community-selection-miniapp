@@ -180,6 +180,23 @@ const isL32Stage = stage.toUpperCase() === 'L32';
 const isL33Stage = stage.toUpperCase() === 'L33';
 const isL35Stage = stage.toUpperCase() === 'L35';
 const isL40Stage = stage.toUpperCase() === 'L40';
+const latestVerifyOutputForManifestPath = join(repoRoot, 'reports/latest-verify-output.txt');
+const latestVerifyOutputForManifest = existsSync(latestVerifyOutputForManifestPath) ? readFileSync(latestVerifyOutputForManifestPath, 'utf8') : '';
+function hasL43RuntimeMarkers(markers: string[]) {
+  return markers.every((marker) => latestVerifyOutputForManifest.includes(marker));
+}
+function l43GlobalApiVerified(path: string) {
+  if (path === '/api/admin/rewards/release-due') {
+    return hasL43RuntimeMarkers(['release_due_matched_count=1', 'release_due_released_count=1', 'release_due_ledger_created_count=1']) ? 'yes' : 'not detected';
+  }
+  if (path === '/api/admin/commissions/settle') {
+    return hasL43RuntimeMarkers(['settle_matched_count=1', 'settle_released_count=1', 'settle_ledger_created_count=1']) ? 'yes' : 'not detected';
+  }
+  if (path === '/api/admin/rewards/backfill') {
+    return hasL43RuntimeMarkers(['backfill_matched_count=1', 'backfill_ledger_created_count=1']) ? 'yes' : 'not detected';
+  }
+  return 'yes';
+}
 
 const l43Manifest = {
   businessBaseBranch: 'stable/l42-business-base',
@@ -191,9 +208,9 @@ const l43Manifest = {
     { method: 'GET', path: '/api/admin/rewards', permissions: ['reward.view'], purpose: 'Admin 奖励列表', verified: 'yes' },
     { method: 'GET', path: '/api/admin/rewards/:id', permissions: ['reward.view'], purpose: 'Admin 奖励详情', verified: 'yes' },
     { method: 'POST', path: '/api/admin/rewards/:id/review', permissions: ['reward.manage'], purpose: 'Admin 人工核对', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage', 'super_admin global'], purpose: '释放 T+3 到期奖励', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/rewards/backfill', permissions: ['reward.manage', 'super_admin global'], purpose: '历史可用奖励账本补录', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/commissions/settle', permissions: ['reward.manage', 'super_admin global'], purpose: '兼容释放到期奖励', verified: 'yes' }
+    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage', 'super_admin global'], purpose: '释放 T+3 到期奖励', verified: l43GlobalApiVerified('/api/admin/rewards/release-due') },
+    { method: 'POST', path: '/api/admin/rewards/backfill', permissions: ['reward.manage', 'super_admin global'], purpose: '历史可用奖励账本补录', verified: l43GlobalApiVerified('/api/admin/rewards/backfill') },
+    { method: 'POST', path: '/api/admin/commissions/settle', permissions: ['reward.manage', 'super_admin global'], purpose: '兼容释放到期奖励', verified: l43GlobalApiVerified('/api/admin/commissions/settle') }
   ],
   db: ['Commission','RewardLedger'],
   verify: ['scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L43 --verify --scope=chain'],
@@ -979,7 +996,7 @@ function stageChecklist(stageName: string, files: string[]) {
 
 function findVerifyScripts(files: string[]) {
   if (isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
-    if (isL43Stage) return l43Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L43 阶段报告质量门禁验收脚本' }));
+    if (isL43Stage) return l43Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : script.includes('verify-docker-api-e2e-local.ts') ? 'via stage-workflow' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L43 阶段报告质量门禁验收脚本' }));
     if (isL42Stage) return l42Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L42 阶段报告质量门禁验收脚本' }));
     if (isL41Stage) return l41Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L41 阶段报告质量门禁验收脚本' }));
     if (isL40Stage) return l40Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L40 阶段报告质量门禁验收脚本' }));
@@ -1233,6 +1250,26 @@ mkdirSync(dirname(reportPath), { recursive: true });
 const checklistPassed = checklist.length > 0 && checklist.every((item) => item.checked);
 const conclusion = verifyOutput.passed && checklistPassed ? 'passed' : 'partial';
 const generatedAt = new Date().toISOString();
+function highRiskItems() {
+  const risks: string[] = [];
+  if (isL43Stage) {
+    const raw = verifyOutput.raw ?? '';
+    const requiredMarkerGroups = [
+      { label: 'release-due 全局 API 缺少非零释放证据', markers: ['release_due_matched_count=1', 'release_due_released_count=1', 'release_due_ledger_created_count=1'] },
+      { label: 'settle 兼容 API 缺少非零释放证据', markers: ['settle_matched_count=1', 'settle_released_count=1', 'settle_ledger_created_count=1'] },
+      { label: 'backfill 全局 API 缺少非零补账证据', markers: ['backfill_matched_count=1', 'backfill_ledger_created_count=1'] }
+    ];
+    for (const group of requiredMarkerGroups) {
+      if (!group.markers.every((marker) => raw.includes(marker))) risks.push(group.label);
+    }
+    if (/(^|\n)(release_due|settle|backfill)_(matched_count|released_count|ledger_created_count)=0/.test(raw)) risks.push('全局 API 成功响应中出现 0 结果，需确认是否为重复调用或错误验收');
+    if (apiRows.some((row) => row.verified === 'yes' && ['/api/admin/rewards/release-due', '/api/admin/commissions/settle', '/api/admin/rewards/backfill'].includes(row.path)) && risks.length) {
+      risks.push('报告声称全局 API 已验收但缺少完整非零运行时证据');
+    }
+  }
+  return risks;
+}
+const highRisks = highRiskItems();
 
 function assertReportQuality(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -1333,7 +1370,7 @@ ${complianceItems(verifyOutput).join('\n')}
 
 ## 9. 风险点
 
-- 高风险：暂无自动发现，需人工 review
+- 高风险：${highRisks.length ? highRisks.join('；') : '暂无自动发现，需人工 review'}
 - 中风险：${todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : '暂无自动发现，需人工 review'}
 - 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
 
