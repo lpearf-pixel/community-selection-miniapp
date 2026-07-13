@@ -12,6 +12,7 @@ const migration = read('prisma/migrations/202607130001_l43_reward_ledger_t7_refu
 const idempotencyMigration = read('prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql');
 const docker = read('scripts/verify-docker-api-e2e-local.ts');
 const dockerCompose = read('docker-compose.yml');
+const reportGenerator = read('scripts/generate-stage-report.ts');
 
 function functionSlice(source: string, functionName: string) {
   const start = source.search(new RegExp(`(?:function|async function|export function|export async function)\\s+${functionName}\\b`));
@@ -29,6 +30,8 @@ assert(!apiCommand.includes('pnpm db:migrate'), 'API Docker startup must not use
 assert(!apiCommand.includes('prisma migrate dev'), 'API Docker startup must not use prisma migrate dev');
 assert(dockerCompose.includes('postgres-data:/var/lib/postgresql/data') && dockerCompose.includes('postgres-data:'), 'Postgres data volume must remain configured');
 assert(dockerCompose.includes('curl -fsS http://localhost:13080/api/health'), 'API healthcheck must remain on port 13080');
+for (const permissionText of ['leader self','reward.view','reward.manage', 'global scope']) { assert(reportGenerator.includes(permissionText), `L43 report manifest missing ${permissionText}`); }
+for (const forbiddenReportPermission of ['public', 'admin session', 'unknown']) { assert(!reportGenerator.includes(`permission: '${forbiddenReportPermission}'`) && !reportGenerator.includes(`permissions: ['${forbiddenReportPermission}']`), `L43 report must not emit ${forbiddenReportPermission} permission`); }
 
 const calculationSurface = [
   functionSlice(service, 'productOriginal'),
@@ -68,6 +71,15 @@ assert(rewardAmount({ ...base, product_refund_amount_cents: 10000, refund_amount
 
 assert(commissions.includes('/api/leaders/me/commissions') && commissions.includes('x-openid') && commissions.includes('禁止查看其他开团人的开团服务奖励'), 'leader API ownership missing');
 assert(commissions.includes("requireAdminPermission('reward.view')") && commissions.includes("requireAdminPermission('reward.manage')") && commissions.includes('ADMIN_SCOPE_FORBIDDEN'), 'admin reward permission/scope missing');
+assert(commissions.includes('function requireGlobalRewardOperationAccess') && commissions.includes("context.role === 'finance'") && commissions.includes('hasAllCommunityScope(context)') && commissions.includes('hasAllPickupStoreScope(context)'), 'global reward operation helper must require super_admin or global finance scope');
+for (const route of ["/api/admin/rewards/release-due", "/api/admin/commissions/settle", "/api/admin/rewards/backfill"]) {
+  const routeIndex = commissions.indexOf(route);
+  assert(routeIndex >= 0, `${route} must exist`);
+  assert(commissions.slice(routeIndex, routeIndex + 650).includes('requireGlobalRewardOperationAccess(request, reply)'), `${route} must call the unified global reward operation helper`);
+}
+for (const marker of ['scoped_finance_release_due_403','scoped_finance_settle_403','scoped_finance_backfill_403','store_manager_global_reward_ops_403','operator_global_reward_ops_403','inactive_admin_global_reward_ops_401','super_admin_global_reward_ops_success','global_finance_global_reward_ops_success','global_reward_negative_no_commission_change','global_reward_negative_no_ledger_change','global_reward_negative_no_success_event']) {
+  assert(docker.includes(marker), `Docker API E2E missing global reward auth marker ${marker}`);
+}
 assert(commissions.includes('/api/admin/rewards/release-due') && commissions.includes('/api/admin/rewards/:id/review'), 'admin rewards endpoints missing');
 assert(rewards.includes('getAvailableRewardBalance') && rewards.includes('affects_available_balance') && rewards.includes('convert-credit:${body.client_request_id}'), 'convert credit ledger compatibility missing');
 ['开团服务奖励','待可用','已可用','退款扣减','待人工复核','完成后第 3 天可用'].forEach((needle) => assert(adminPage.includes(needle), `admin page missing ${needle}`));

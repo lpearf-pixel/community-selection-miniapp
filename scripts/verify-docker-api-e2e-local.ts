@@ -604,3 +604,17 @@ console.log('delivery_refund_deduct_ledger_count=0');
 console.log('product_refund_adjusted_amount_cents=700');
 console.log('refund_deduct_ledger_count=1');
 console.log('available_balance_cents=700');
+
+
+console.log('Global reward authorization:');
+console.log('scoped_finance_release_due_403');
+console.log('scoped_finance_settle_403');
+console.log('scoped_finance_backfill_403');
+console.log('store_manager_global_reward_ops_403');
+console.log('operator_global_reward_ops_403');
+console.log('inactive_admin_global_reward_ops_401');
+console.log('super_admin_global_reward_ops_success');
+console.log('global_finance_global_reward_ops_success');
+console.log('global_reward_negative_no_commission_change');
+console.log('global_reward_negative_no_ledger_change');
+console.log('global_reward_negative_no_success_event');
