@@ -3,7 +3,7 @@ import { prisma } from '../db.js';
 type DbClient = Prisma.TransactionClient | typeof prisma;
 import { safeRaiseOpsAlert, safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
-const settlementDelayDays = 7;
+const rewardAvailabilityDelayDays = 3;
 const reviewStates = new Set(['converted', 'withdrawing', 'withdrawn']);
 
 function addDays(date: Date, days: number) { return new Date(date.getTime() + days * 24 * 60 * 60 * 1000); }
@@ -60,7 +60,7 @@ export async function markCommissionPendingForCompletedOrder(orderId: string, tx
   if (!order || order.order_status !== 'completed' || !order.completed_at) return null;
   const commission = order.commissions.find((item) => item.leader_user_id === order.leader_user_id);
   if (!commission || commission.status !== 'estimated') return commission ?? null;
-  const updated = await client.commission.update({ where: { id: commission.id }, data: { status: 'pending', available_at: addDays(order.completed_at, settlementDelayDays) } });
+  const updated = await client.commission.update({ where: { id: commission.id }, data: { status: 'pending', available_at: addDays(order.completed_at, rewardAvailabilityDelayDays) } });
   await safeRecordBusinessEvent(client, { event_type: 'commission_pending', event_source: 'commission-service', order_id: order.id, commission_id: commission.id, before_snapshot: commission, after_snapshot: updated });
   await safeRecordOrderTimeline(client, { order_id: order.id, event_type: 'commission_pending', title: '开团服务奖励进入待可用', from_status: commission.status, to_status: updated.status, payload: { commission_id: commission.id, available_at: updated.available_at?.toISOString() ?? null } });
   return updated;
@@ -117,5 +117,5 @@ export async function backfillAvailableRewardLedgers(now = new Date()) {
 }
 
 export function toLeaderCommissionDto(item: Commission & { order?: { order_no: string } | null; group_buy?: { community_id: string; product?: { name: string } | null; community?: { name: string } | null } | null }) {
-  return { commission_id: item.id, order_id: item.order_id, order_no: item.order?.order_no ?? '', group_buy_id: item.group_buy_id, product_name: item.group_buy?.product?.name ?? '', community_name: item.group_buy?.community?.name ?? '', base_amount_cents: item.base_amount_cents, estimated_amount_cents: item.estimated_amount_cents, deduct_amount_cents: item.deduct_amount_cents, final_amount_cents: item.final_amount_cents, status: item.status, available_at: item.available_at, created_at: item.created_at, updated_at: item.updated_at, review_status: item.review_status, user_status_text: item.status === 'pending' ? '完成后第 7 天可用' : item.status === 'available' ? '已可用' : item.status === 'cancelled' ? '已取消' : '开团服务奖励' };
+  return { commission_id: item.id, order_id: item.order_id, order_no: item.order?.order_no ?? '', group_buy_id: item.group_buy_id, product_name: item.group_buy?.product?.name ?? '', community_name: item.group_buy?.community?.name ?? '', base_amount_cents: item.base_amount_cents, estimated_amount_cents: item.estimated_amount_cents, deduct_amount_cents: item.deduct_amount_cents, final_amount_cents: item.final_amount_cents, status: item.status, available_at: item.available_at, created_at: item.created_at, updated_at: item.updated_at, review_status: item.review_status, user_status_text: item.status === 'pending' ? '完成后第 3 天可用' : item.status === 'available' ? '已可用' : item.status === 'cancelled' ? '已取消' : '开团服务奖励' };
 }

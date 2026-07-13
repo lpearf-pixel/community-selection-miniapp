@@ -184,16 +184,16 @@ const isL40Stage = stage.toUpperCase() === 'L40';
 const l43Manifest = {
   businessBaseBranch: 'stable/l42-business-base',
   businessBaseCommit: '20d5023f0e493bad7485e4fe8cbc5ccba014e118',
-  title: 'L43 reward ledger T7 refund deduct',
-  files: ['prisma/schema.prisma','apps/api/src/services/commission-service.ts','apps/api/src/routes/commissions.ts','apps/api/src/routes/rewards.ts','apps/admin/src/pages/rewards/RewardLedgerPage.tsx','scripts/verify-l43-reward-ledger-t7-refund-deduct-local.ts'],
+  title: 'L43 reward ledger T3 refund deduct',
+  files: ['prisma/schema.prisma','apps/api/src/services/commission-service.ts','apps/api/src/routes/commissions.ts','apps/api/src/routes/rewards.ts','apps/admin/src/pages/rewards/RewardLedgerPage.tsx','scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'],
   apis: [
     { method: 'GET', path: '/api/leaders/me/commissions', permissions: ['leader self'], purpose: 'Leader 开团服务奖励安全查询', verified: 'yes' },
     { method: 'GET', path: '/api/admin/rewards', permissions: ['reward.view'], purpose: 'Admin 奖励列表', verified: 'yes' },
     { method: 'POST', path: '/api/admin/rewards/:id/review', permissions: ['reward.manage'], purpose: 'Admin 人工核对', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage'], purpose: '释放 T+7 到期奖励', verified: 'yes' }
+    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage'], purpose: '释放 T+3 到期奖励', verified: 'yes' }
   ],
   db: ['Commission','RewardLedger'],
-  verify: ['scripts/verify-l43-reward-ledger-t7-refund-deduct-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L43 --verify --scope=chain'],
+  verify: ['scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L43 --verify --scope=chain'],
   checklist: [
     { text: 'L43 verifier passed', passed: true, evidence: 'L43 verifier' },
     { text: 'L24-L43 chain regression passed', passed: true, evidence: 'stage workflow' },
@@ -861,7 +861,7 @@ function extractModels(files: string[]) {
   if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (isL26Stage) return l26Manifest.db.map((model) => ({ model, change: 'L26 manifest', description: 'L26 团购成团规则与参团链路校验数据库范围' }));
   if (isL27Stage) return l27Manifest.db.map((model) => ({ model, change: 'L27 manifest', description: 'L27 团购过期失败处理与人工退款/关闭流程数据库范围' }));
-  if (isL43Stage) return l43Manifest.db.map((model) => ({ model, change: 'L43 manifest', description: '奖励账本 T+7 与退款扣减增强' }));
+  if (isL43Stage) return l43Manifest.db.map((model) => ({ model, change: 'L43 manifest', description: '奖励账本 T+3 与退款扣减增强' }));
   if (isL42Stage) return l42Manifest.db.map((model) => ({ model, change: 'L42 manifest', description: '复用既有失败团购收口相关模型' }));
   if (isL41Stage) return l41Manifest.db.map((model) => ({ model, change: 'L41 manifest', description: 'StockLedger 最小增强' }));
   if (isL40Stage) return l40Manifest.db.map((model) => ({ model, change: 'L40 manifest', description: '无新增 DB' }));
@@ -1093,8 +1093,8 @@ function stageVerifyChecks(content: string) {
   };
   if (isL43Stage) {
     return [
-      { command: 'L43 verifier', result: commandPassed(content, 'L43 verifier', ['L43 reward ledger T7 refund deduct verification passed.']) },
-      { command: 'L24-L43 chain regression', result: commandPassed(content, 'L24-L43 chain regression', ['L43 reward ledger T7 refund deduct verification passed.', 'L42 failed group buy manual closure verification passed.', 'L24 miniapp cart verification passed', 'Stage workflow verification passed.'], true) },
+      { command: 'L43 verifier', result: commandPassed(content, 'L43 verifier', ['L43 reward ledger T3 refund deduct verification passed.']) },
+      { command: 'L24-L43 chain regression', result: commandPassed(content, 'L24-L43 chain regression', ['L43 reward ledger T3 refund deduct verification passed.', 'L42 failed group buy manual closure verification passed.', 'L24 miniapp cart verification passed', 'Stage workflow verification passed.'], true) },
       { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.']) },
       { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
       { command: 'Admin full typecheck', result: parseAdminTypecheck(content) },

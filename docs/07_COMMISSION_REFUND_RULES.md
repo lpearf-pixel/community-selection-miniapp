@@ -100,7 +100,7 @@ estimated/pending/available → deducted
 estimated/pending → cancelled
 ```
 
-## T+7 结算
+## T+3 结算
 
 订单完成后进入待结算：
 
@@ -191,6 +191,6 @@ Commission.status = frozen
 - 部分退款扣减奖励
 - 全额退款取消奖励
 - 开团失败取消奖励
-- T+7 后奖励变可提现
+- T+3 后奖励变可提现
 - 冻结奖励不能提现
 - 禁止多级关系字段

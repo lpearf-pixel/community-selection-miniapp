@@ -70,7 +70,8 @@ assert(commissions.includes('/api/leaders/me/commissions') && commissions.includ
 assert(commissions.includes("requireAdminPermission('reward.view')") && commissions.includes("requireAdminPermission('reward.manage')") && commissions.includes('ADMIN_SCOPE_FORBIDDEN'), 'admin reward permission/scope missing');
 assert(commissions.includes('/api/admin/rewards/release-due') && commissions.includes('/api/admin/rewards/:id/review'), 'admin rewards endpoints missing');
 assert(rewards.includes('getAvailableRewardBalance') && rewards.includes('affects_available_balance') && rewards.includes('convert-credit:${body.client_request_id}'), 'convert credit ledger compatibility missing');
-['开团服务奖励','待可用','已可用','退款扣减','待人工复核','完成后第 7 天可用'].forEach((needle) => assert(adminPage.includes(needle), `admin page missing ${needle}`));
+['开团服务奖励','待可用','已可用','退款扣减','待人工复核','完成后第 3 天可用'].forEach((needle) => assert(adminPage.includes(needle), `admin page missing ${needle}`));
 assert(docker.includes('Reward ledger:') && docker.includes('initial_amount_cents=1000') && docker.includes('delivery_refund_adjusted_amount_cents=1000') && docker.includes('delivery_refund_deduct_ledger_count=0') && docker.includes('product_refund_adjusted_amount_cents=700') && docker.includes('refund_deduct_ledger_count=1'), 'Docker API E2E L43 reward markers missing');
-assert(service.includes('settlementDelayDays = 7'), 'T+7 release rule must remain unchanged');
+assert(service.includes('rewardAvailabilityDelayDays = 3'), 'T+3 release rule must be 72 hours');
+assert(!service.includes('settlementDelayDays = ' + '7'), 'legacy seven-day reward delay must not remain');
 console.log('L43 reward ledger T3 refund deduct verification passed.');

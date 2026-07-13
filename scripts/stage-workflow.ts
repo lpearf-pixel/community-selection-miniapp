@@ -45,7 +45,7 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L40: { title: 'L40 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts'] },
   L41: { title: 'L41 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l41-inventory-deduct-restore-local.ts'] },
   L42: { title: 'L42 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts'] },
-  L43: { title: 'L43 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l43-reward-ledger-t7-refund-deduct-local.ts'] }
+  L43: { title: 'L43 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
