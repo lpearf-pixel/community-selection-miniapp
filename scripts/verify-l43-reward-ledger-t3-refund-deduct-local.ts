@@ -11,6 +11,7 @@ const adminPage = read('apps/admin/src/pages/rewards/RewardLedgerPage.tsx');
 const migration = read('prisma/migrations/202607130001_l43_reward_ledger_t7_refund_deduct/migration.sql');
 const idempotencyMigration = read('prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql');
 const docker = read('scripts/verify-docker-api-e2e-local.ts');
+const dockerCompose = read('docker-compose.yml');
 
 function functionSlice(source: string, functionName: string) {
   const start = source.search(new RegExp(`(?:function|async function|export function|export async function)\\s+${functionName}\\b`));
@@ -18,6 +19,16 @@ function functionSlice(source: string, functionName: string) {
   const next = source.slice(start + 1).search(/\n(?:function|async function|export function|export async function)\s+\w+\b/);
   return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
 }
+
+
+const apiCommandMatch = dockerCompose.match(/api:[\s\S]*?command: ([^\n]+)/);
+assert(apiCommandMatch, 'docker-compose api command must exist');
+const apiCommand = apiCommandMatch[1];
+assert(apiCommand.includes('pnpm exec prisma migrate deploy --schema prisma/schema.prisma'), 'API Docker startup must use prisma migrate deploy');
+assert(!apiCommand.includes('pnpm db:migrate'), 'API Docker startup must not use pnpm db:migrate');
+assert(!apiCommand.includes('prisma migrate dev'), 'API Docker startup must not use prisma migrate dev');
+assert(dockerCompose.includes('postgres-data:/var/lib/postgresql/data') && dockerCompose.includes('postgres-data:'), 'Postgres data volume must remain configured');
+assert(dockerCompose.includes('curl -fsS http://localhost:13080/api/health'), 'API healthcheck must remain on port 13080');
 
 const calculationSurface = [
   functionSlice(service, 'productOriginal'),
