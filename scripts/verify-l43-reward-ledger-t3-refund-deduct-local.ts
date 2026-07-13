@@ -30,8 +30,29 @@ assert(!apiCommand.includes('pnpm db:migrate'), 'API Docker startup must not use
 assert(!apiCommand.includes('prisma migrate dev'), 'API Docker startup must not use prisma migrate dev');
 assert(dockerCompose.includes('postgres-data:/var/lib/postgresql/data') && dockerCompose.includes('postgres-data:'), 'Postgres data volume must remain configured');
 assert(dockerCompose.includes('curl -fsS http://localhost:13080/api/health'), 'API healthcheck must remain on port 13080');
-for (const permissionText of ['leader self','reward.view','reward.manage', 'global scope']) { assert(reportGenerator.includes(permissionText), `L43 report manifest missing ${permissionText}`); }
+for (const permissionText of ['leader self','reward.view','reward.manage', 'super_admin global']) { assert(reportGenerator.includes(permissionText), `L43 report manifest missing ${permissionText}`); }
 for (const forbiddenReportPermission of ['public', 'admin session', 'unknown']) { assert(!reportGenerator.includes(`permission: '${forbiddenReportPermission}'`) && !reportGenerator.includes(`permissions: ['${forbiddenReportPermission}']`), `L43 report must not emit ${forbiddenReportPermission} permission`); }
+
+const mainEnd = docker.indexOf('main().catch');
+assert(mainEnd > 0, 'Docker E2E must call main().catch');
+const afterMain = docker.slice(mainEnd);
+for (const marker of ['status_after_t3=available', 'scoped_finance_release_due_403', 'super_admin_global_reward_ops_success']) {
+  assert(!afterMain.includes(marker), `${marker} must not be printed outside runtime assertions`);
+}
+for (const requiredRuntimeSnippet of [
+  "request('POST', '/api/admin/rewards/release-due'",
+  "request('POST', '/api/admin/commissions/settle'",
+  "request('POST', '/api/admin/rewards/backfill'",
+  'prisma.commission.findUniqueOrThrow',
+  'prisma.rewardLedger.count',
+  'available_at must equal completed_at plus 72 hours',
+  'delivery-fee-only refund must not change reward',
+  'repeated partial refund sync must not duplicate deduct ledger',
+  'must not mutate commission, ledger, admin audit, or success events'
+]) {
+  assert(docker.includes(requiredRuntimeSnippet), `Docker E2E missing runtime assertion snippet: ${requiredRuntimeSnippet}`);
+}
+
 
 const calculationSurface = [
   functionSlice(service, 'productOriginal'),
@@ -71,13 +92,13 @@ assert(rewardAmount({ ...base, product_refund_amount_cents: 10000, refund_amount
 
 assert(commissions.includes('/api/leaders/me/commissions') && commissions.includes('x-openid') && commissions.includes('禁止查看其他开团人的开团服务奖励'), 'leader API ownership missing');
 assert(commissions.includes("requireAdminPermission('reward.view')") && commissions.includes("requireAdminPermission('reward.manage')") && commissions.includes('ADMIN_SCOPE_FORBIDDEN'), 'admin reward permission/scope missing');
-assert(commissions.includes('function requireGlobalRewardOperationAccess') && commissions.includes("context.role === 'finance'") && commissions.includes('hasAllCommunityScope(context)') && commissions.includes('hasAllPickupStoreScope(context)'), 'global reward operation helper must require super_admin or global finance scope');
+assert(commissions.includes('function requireGlobalRewardOperationAccess') && commissions.includes('if (!context.is_super_admin)') && !commissions.includes("context.role === 'finance' && hasAllCommunityScope(context)"), 'global reward operation helper must be super_admin-only');
 for (const route of ["/api/admin/rewards/release-due", "/api/admin/commissions/settle", "/api/admin/rewards/backfill"]) {
   const routeIndex = commissions.indexOf(route);
   assert(routeIndex >= 0, `${route} must exist`);
   assert(commissions.slice(routeIndex, routeIndex + 650).includes('requireGlobalRewardOperationAccess(request, reply)'), `${route} must call the unified global reward operation helper`);
 }
-for (const marker of ['scoped_finance_release_due_403','scoped_finance_settle_403','scoped_finance_backfill_403','store_manager_global_reward_ops_403','operator_global_reward_ops_403','inactive_admin_global_reward_ops_401','super_admin_global_reward_ops_success','global_finance_global_reward_ops_success','global_reward_negative_no_commission_change','global_reward_negative_no_ledger_change','global_reward_negative_no_success_event']) {
+for (const marker of ['scoped_finance_release_due_403','scoped_finance_settle_403','scoped_finance_backfill_403','store_manager_global_reward_ops_403','operator_global_reward_ops_403','inactive_admin_global_reward_ops_401','super_admin_global_reward_ops_success','global_reward_negative_no_commission_change','global_reward_negative_no_ledger_change','global_reward_negative_no_success_event']) {
   assert(docker.includes(marker), `Docker API E2E missing global reward auth marker ${marker}`);
 }
 assert(commissions.includes('/api/admin/rewards/release-due') && commissions.includes('/api/admin/rewards/:id/review'), 'admin rewards endpoints missing');

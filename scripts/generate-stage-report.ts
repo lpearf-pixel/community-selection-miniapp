@@ -191,9 +191,9 @@ const l43Manifest = {
     { method: 'GET', path: '/api/admin/rewards', permissions: ['reward.view'], purpose: 'Admin 奖励列表', verified: 'yes' },
     { method: 'GET', path: '/api/admin/rewards/:id', permissions: ['reward.view'], purpose: 'Admin 奖励详情', verified: 'yes' },
     { method: 'POST', path: '/api/admin/rewards/:id/review', permissions: ['reward.manage'], purpose: 'Admin 人工核对', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage', 'global scope'], purpose: '释放 T+3 到期奖励', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/rewards/backfill', permissions: ['reward.manage', 'global scope'], purpose: '历史可用奖励账本补录', verified: 'yes' },
-    { method: 'POST', path: '/api/admin/commissions/settle', permissions: ['reward.manage', 'global scope'], purpose: '兼容释放到期奖励', verified: 'yes' }
+    { method: 'POST', path: '/api/admin/rewards/release-due', permissions: ['reward.manage', 'super_admin global'], purpose: '释放 T+3 到期奖励', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/rewards/backfill', permissions: ['reward.manage', 'super_admin global'], purpose: '历史可用奖励账本补录', verified: 'yes' },
+    { method: 'POST', path: '/api/admin/commissions/settle', permissions: ['reward.manage', 'super_admin global'], purpose: '兼容释放到期奖励', verified: 'yes' }
   ],
   db: ['Commission','RewardLedger'],
   verify: ['scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L43 --verify --scope=chain'],

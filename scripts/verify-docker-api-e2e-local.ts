@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ensureEstimatedCommission, getAvailableRewardBalance, markCommissionPendingForCompletedOrder, releaseDueCommissions, syncCommissionAfterRefund } from '../apps/api/src/services/commission-service.js';
 import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_FINANCE_ADMIN_ID, DOCKER_E2E_INACTIVE_ADMIN_ID, DOCKER_E2E_OPERATOR_ADMIN_ID, DOCKER_E2E_STORE_MANAGER_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
 type ApiResponse<T> = {
   success: boolean;
@@ -216,6 +217,142 @@ async function requestOrderWithInventoryContext<T>(body: Record<string, unknown>
     }
     throw error;
   }
+}
+
+
+async function cleanupL43RewardFixtures(prefix: string) {
+  await prisma.rewardLedger.deleteMany({ where: { OR: [{ idempotency_key: { startsWith: prefix } }, { order_id: { startsWith: prefix } }, { commission_id: { startsWith: prefix } }] } });
+  await prisma.commission.deleteMany({ where: { OR: [{ id: { startsWith: prefix } }, { order_id: { startsWith: prefix } }, { group_buy_id: { startsWith: prefix } }] } });
+  await prisma.refund.deleteMany({ where: { OR: [{ id: { startsWith: prefix } }, { order_id: { startsWith: prefix } }, { client_refund_id: { startsWith: prefix } }] } });
+  await prisma.order.deleteMany({ where: { id: { startsWith: prefix } } });
+  await prisma.groupBuy.deleteMany({ where: { id: { startsWith: prefix } } });
+  await prisma.product.deleteMany({ where: { id: { startsWith: prefix } } });
+  await prisma.category.deleteMany({ where: { id: { startsWith: prefix } } });
+  await prisma.community.deleteMany({ where: { id: { startsWith: prefix } } });
+  await prisma.user.deleteMany({ where: { id: { startsWith: prefix } } });
+  await prisma.adminUser.deleteMany({ where: { id: { startsWith: prefix } } });
+}
+
+async function runL43RewardLedgerScenario() {
+  const prefix = `l43-e2e-${Date.now()}`;
+  await cleanupL43RewardFixtures('l43-e2e-');
+  const now = new Date('2026-07-13T00:00:00.000Z');
+  const leader = await prisma.user.create({ data: { id: `${prefix}-leader`, openid: `${prefix}-leader-openid`, nickname: 'L43 Leader', role: 'leader' } });
+  const buyer = await prisma.user.create({ data: { id: `${prefix}-buyer`, openid: `${prefix}-buyer-openid`, nickname: 'L43 Buyer', role: 'customer' } });
+  const category = await prisma.category.create({ data: { id: `${prefix}-category`, name: `${prefix}-category`, sort_order: 1 } });
+  const product = await prisma.product.create({ data: { id: `${prefix}-product`, name: `${prefix}-product`, category_id: category.id, price_cents: 10000, cost_price_cents: 1000, stock: 100, unit: '份', stock_unit: 'piece', sale_unit: '份', is_group_enabled: true, commission_type: 'percent', commission_value: 10, status: 'active' } });
+  const community = await prisma.community.create({ data: { id: `${prefix}-community`, name: `${prefix}-community`, address: 'L43 community' } });
+  const groupBuy = await prisma.groupBuy.create({ data: { id: `${prefix}-group`, product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, current_people: 1, current_quantity: 1, price_cents: 10000, start_time: now, end_time: new Date(now.getTime() + 86400000), pickup_time: new Date(now.getTime() + 172800000), status: 'success' } });
+  const order = await prisma.order.create({ data: { id: `${prefix}-order`, order_no: `${prefix}-order-no`, user_id: buyer.id, group_buy_id: groupBuy.id, product_id: product.id, leader_user_id: leader.id, total_amount_cents: 10000, product_amount_cents: 10000, delivery_fee_cents: 500, pay_amount_cents: 10500, quantity: 1, pay_status: 'paid', order_status: 'paid', refund_status: 'none', pickup_type: 'delivery', community_id: community.id, receiver_name: 'L43 Buyer', receiver_phone: '13600000000', receiver_address: 'L43 address', paid_at: now } });
+
+  const estimated = await ensureEstimatedCommission(order.id);
+  assert(estimated?.status === 'estimated', 'L43 commission must be estimated after paid group-buy order');
+  assert(estimated.estimated_amount_cents === 1000 && estimated.final_amount_cents === 1000, 'L43 initial reward must be 1000 and exclude delivery fee');
+
+  const completedAt = new Date('2026-07-14T00:00:00.000Z');
+  await prisma.order.update({ where: { id: order.id }, data: { order_status: 'completed', completed_at: completedAt } });
+  const pending = await markCommissionPendingForCompletedOrder(order.id);
+  const expectedAvailableAt = new Date(completedAt.getTime() + 3 * 24 * 60 * 60 * 1000);
+  assert(pending?.status === 'pending', 'L43 commission must become pending after completed order');
+  assert(pending.available_at?.getTime() === expectedAvailableAt.getTime(), 'L43 available_at must equal completed_at plus 72 hours');
+
+  await releaseDueCommissions({ now: new Date(expectedAvailableAt.getTime() - 1000) });
+  let commission = await prisma.commission.findUniqueOrThrow({ where: { id: estimated.id } });
+  assert(commission.status === 'pending', 'L43 release before T+3 must keep commission pending');
+  assert(await prisma.rewardLedger.count({ where: { commission_id: estimated.id, event_type: 'commission_available' } }) === 0, 'L43 release before T+3 must not create available ledger');
+  assert(await getAvailableRewardBalance(prisma, leader.id) === 0, 'L43 available balance before T+3 must be zero');
+
+  await releaseDueCommissions({ now: expectedAvailableAt });
+  commission = await prisma.commission.findUniqueOrThrow({ where: { id: estimated.id } });
+  assert(commission.status === 'available', 'L43 release at T+3 must make commission available');
+  let availableLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: estimated.id, event_type: 'commission_available' } });
+  assert(availableLedgers.length === 1 && availableLedgers[0].amount_cents === 1000 && availableLedgers[0].affects_available_balance === true, 'L43 available release must create exactly one 1000-cent available ledger');
+  assert(await getAvailableRewardBalance(prisma, leader.id) === 1000, 'L43 available balance after release must be 1000');
+  await Promise.all([releaseDueCommissions({ now: expectedAvailableAt }), releaseDueCommissions({ now: expectedAvailableAt })]);
+  availableLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: estimated.id, event_type: 'commission_available' } });
+  assert(availableLedgers.length === 1 && await getAvailableRewardBalance(prisma, leader.id) === 1000, 'L43 repeated/concurrent release must not duplicate available ledger');
+
+  await prisma.order.update({ where: { id: order.id }, data: { delivery_refund_amount_cents: 500, refund_amount_cents: 500 } });
+  await syncCommissionAfterRefund({ order_id: order.id, refund_id: `${prefix}-delivery-refund` });
+  commission = await prisma.commission.findUniqueOrThrow({ where: { id: estimated.id } });
+  assert(commission.final_amount_cents === 1000, 'L43 delivery-fee-only refund must not change reward');
+  assert(await prisma.rewardLedger.count({ where: { commission_id: estimated.id, event_type: 'commission_refund_deduct' } }) === 0, 'L43 delivery-fee-only refund must not create deduct ledger');
+  assert(await getAvailableRewardBalance(prisma, leader.id) === 1000, 'L43 delivery-fee-only refund must keep available balance 1000');
+
+  await prisma.order.update({ where: { id: order.id }, data: { product_refund_amount_cents: 3000, delivery_refund_amount_cents: 500, refund_amount_cents: 3500 } });
+  await syncCommissionAfterRefund({ order_id: order.id, refund_id: `${prefix}-product-refund-3000` });
+  commission = await prisma.commission.findUniqueOrThrow({ where: { id: estimated.id } });
+  let deductLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: estimated.id, event_type: 'commission_refund_deduct' } });
+  assert(commission.final_amount_cents === 700 && commission.deduct_amount_cents === 300, 'L43 product partial refund must recalculate final reward to 700 and deduct 300');
+  assert(deductLedgers.length === 1 && deductLedgers[0].amount_cents === 300, 'L43 product partial refund must create one 300-cent deduct ledger');
+  assert(await getAvailableRewardBalance(prisma, leader.id) === 700, 'L43 balance after partial product refund must be 700');
+  await syncCommissionAfterRefund({ order_id: order.id, refund_id: `${prefix}-product-refund-3000-repeat` });
+  deductLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: estimated.id, event_type: 'commission_refund_deduct' } });
+  assert(deductLedgers.length === 1 && await getAvailableRewardBalance(prisma, leader.id) === 700, 'L43 repeated partial refund sync must not duplicate deduct ledger');
+
+  await prisma.order.update({ where: { id: order.id }, data: { product_refund_amount_cents: 10000, delivery_refund_amount_cents: 500, refund_amount_cents: 10500 } });
+  await syncCommissionAfterRefund({ order_id: order.id, refund_id: `${prefix}-product-refund-full` });
+  commission = await prisma.commission.findUniqueOrThrow({ where: { id: estimated.id } });
+  deductLedgers = await prisma.rewardLedger.findMany({ where: { commission_id: estimated.id, event_type: 'commission_refund_deduct' } });
+  assert(commission.status === 'cancelled' && commission.final_amount_cents === 0, 'L43 full product refund must cancel and zero commission');
+  assert(deductLedgers.reduce((sum, item) => sum + item.amount_cents, 0) === 1000, 'L43 full product refund must deduct remaining reward');
+  assert(await getAvailableRewardBalance(prisma, leader.id) === 0, 'L43 full product refund must zero available balance');
+  await syncCommissionAfterRefund({ order_id: order.id, refund_id: `${prefix}-product-refund-full-repeat` });
+  assert(await prisma.rewardLedger.count({ where: { commission_id: estimated.id, event_type: 'commission_refund_deduct' } }) === deductLedgers.length, 'L43 repeated full refund must not duplicate deduct ledger');
+
+  const scopedFinance = await prisma.adminUser.create({ data: { id: `${prefix}-finance`, username: `${prefix}-finance`, password_hash: 'x', role: 'finance', status: 'active' } });
+  const storeManager = await prisma.adminUser.create({ data: { id: `${prefix}-store-manager`, username: `${prefix}-store-manager`, password_hash: 'x', role: 'store_manager', status: 'active' } });
+  const operator = await prisma.adminUser.create({ data: { id: `${prefix}-operator`, username: `${prefix}-operator`, password_hash: 'x', role: 'operator', status: 'active' } });
+  const inactive = await prisma.adminUser.create({ data: { id: `${prefix}-inactive`, username: `${prefix}-inactive`, password_hash: 'x', role: 'super_admin', status: 'inactive' } });
+  const superAdmin = await prisma.adminUser.create({ data: { id: `${prefix}-super-admin`, username: `${prefix}-super-admin`, password_hash: 'x', role: 'super_admin', status: 'active' } });
+  const successEvents = ['commission_available', 'commission_available_backfill'];
+  async function snapshot() {
+    return { status: (await prisma.commission.findUniqueOrThrow({ where: { id: estimated.id } })).status, ledgerCount: await prisma.rewardLedger.count(), auditCount: await prisma.adminAuditLog.count(), successEventCount: await prisma.businessEventLog.count({ where: { event_type: { in: successEvents } } }) };
+  }
+  async function assertNegativeGlobalCall(path: string, headers: Record<string, string>, expectedStatus: number, label: string) {
+    const before = await snapshot();
+    await request('POST', path, { headers, expectedStatus, label });
+    const after = await snapshot();
+    assert(JSON.stringify(after) === JSON.stringify(before), `${label} must not mutate commission, ledger, admin audit, or success events`);
+  }
+  const scopedFinanceHeaders = { 'x-admin-role': 'finance', 'x-admin-user-id': scopedFinance.id, 'x-admin-community-id': community.id };
+  const storeHeaders = { 'x-admin-role': 'store_manager', 'x-admin-user-id': storeManager.id, 'x-admin-community-id': community.id };
+  const operatorHeaders = { 'x-admin-role': 'operator', 'x-admin-user-id': operator.id };
+  const inactiveHeaders = { 'x-admin-role': 'super_admin', 'x-admin-user-id': inactive.id };
+  for (const path of ['/api/admin/rewards/release-due', '/api/admin/commissions/settle', '/api/admin/rewards/backfill']) {
+    await assertNegativeGlobalCall(path, scopedFinanceHeaders, 403, `scoped finance ${path}`);
+    await assertNegativeGlobalCall(path, storeHeaders, 403, `store manager ${path}`);
+    await assertNegativeGlobalCall(path, operatorHeaders, 403, `operator ${path}`);
+    await assertNegativeGlobalCall(path, inactiveHeaders, 401, `inactive admin ${path}`);
+  }
+  await request('POST', '/api/admin/rewards/release-due', { headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': superAdmin.id }, label: 'L43 super_admin release-due success' });
+  await request('POST', '/api/admin/commissions/settle', { headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': superAdmin.id }, label: 'L43 super_admin settle success' });
+  await request('POST', '/api/admin/rewards/backfill', { headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': superAdmin.id }, label: 'L43 super_admin backfill success' });
+
+  console.log('Reward ledger:');
+  console.log(`commission_id=${estimated.id}`);
+  console.log('status_after_paid=estimated');
+  console.log('status_after_complete=pending');
+  console.log(`available_at=${expectedAvailableAt.toISOString()}`);
+  console.log('status_before_t3=pending');
+  console.log('status_after_t3=available');
+  console.log('initial_amount_cents=1000');
+  console.log('delivery_refund_adjusted_amount_cents=1000');
+  console.log('delivery_refund_deduct_ledger_count=0');
+  console.log('product_refund_adjusted_amount_cents=700');
+  console.log('refund_deduct_ledger_count=1');
+  console.log('available_balance_cents=700');
+  console.log('Global reward authorization:');
+  console.log('scoped_finance_release_due_403');
+  console.log('scoped_finance_settle_403');
+  console.log('scoped_finance_backfill_403');
+  console.log('store_manager_global_reward_ops_403');
+  console.log('operator_global_reward_ops_403');
+  console.log('inactive_admin_global_reward_ops_401');
+  console.log('super_admin_global_reward_ops_success');
+  console.log('global_reward_negative_no_commission_change');
+  console.log('global_reward_negative_no_ledger_change');
+  console.log('global_reward_negative_no_success_event');
 }
 
 async function main() {
@@ -571,6 +708,7 @@ async function main() {
   console.log(`inventory_after_refund=${stockAfterRefund}`);
   console.log(`final_status=${finalClose.status}`);
 
+  await runL43RewardLedgerScenario();
   assertNoRiskFindings();
   console.log('Docker API E2E verification passed.');
 }
@@ -590,31 +728,3 @@ main().catch((error) => {
 // Scenario E delivery fee refund does not change stock.
 // Scenario F group failed marker itself does not restore stock; manual refund success restores once.
 // Scenario G L42 failed group buy manual closure uses admin APIs, manual refund success confirmation, final close idempotency.
-
-console.log('Reward ledger:');
-console.log('commission_id=l43-deterministic');
-console.log('status_after_paid=estimated');
-console.log('status_after_complete=pending');
-console.log('available_at=2026-07-16T00:00:00.000Z');
-console.log('status_before_t3=pending');
-console.log('status_after_t3=available');
-console.log('initial_amount_cents=1000');
-console.log('delivery_refund_adjusted_amount_cents=1000');
-console.log('delivery_refund_deduct_ledger_count=0');
-console.log('product_refund_adjusted_amount_cents=700');
-console.log('refund_deduct_ledger_count=1');
-console.log('available_balance_cents=700');
-
-
-console.log('Global reward authorization:');
-console.log('scoped_finance_release_due_403');
-console.log('scoped_finance_settle_403');
-console.log('scoped_finance_backfill_403');
-console.log('store_manager_global_reward_ops_403');
-console.log('operator_global_reward_ops_403');
-console.log('inactive_admin_global_reward_ops_401');
-console.log('super_admin_global_reward_ops_success');
-console.log('global_finance_global_reward_ops_success');
-console.log('global_reward_negative_no_commission_change');
-console.log('global_reward_negative_no_ledger_change');
-console.log('global_reward_negative_no_success_event');

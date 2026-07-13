@@ -37,8 +37,7 @@ function requireGlobalRewardOperationAccess(request: FastifyRequest, reply: Fast
     reply.code(401);
     return null;
   }
-  const allowed = context.is_super_admin || (context.role === 'finance' && hasAllCommunityScope(context) && hasAllPickupStoreScope(context));
-  if (!allowed) {
+  if (!context.is_super_admin) {
     reply.code(403);
     return null;
   }

@@ -79,7 +79,7 @@ assert(!generateSource.includes("({ item, status: 'passed'"), 'L40 checklist mus
 assert(!generateSource.includes('/\\bfailed\\b/i.test'), 'stage report must not treat the business word failed as a failure marker');
 assert(generateSource.includes('detectAdminTypecheck(content)'), 'L43 report must use detectAdminTypecheck(content)');
 assert(!generateSource.includes('parseAdminTypecheck(content)'), 'generate-stage-report must not call undefined parseAdminTypecheck(content)');
-for (const permissionText of ['leader self', 'reward.view', 'reward.manage', 'global scope']) {
+for (const permissionText of ['leader self', 'reward.view', 'reward.manage', 'super_admin global']) {
   assert(generateSource.includes(permissionText), `L43 report permissions should include ${permissionText}`);
 }
 for (const forbiddenPermission of ['public', 'admin session', 'unknown']) {
