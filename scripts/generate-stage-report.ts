@@ -1097,7 +1097,7 @@ function stageVerifyChecks(content: string) {
       { command: 'L24-L43 chain regression', result: commandPassed(content, 'L24-L43 chain regression', ['L43 reward ledger T3 refund deduct verification passed.', 'L42 failed group buy manual closure verification passed.', 'L24 miniapp cart verification passed', 'Stage workflow verification passed.'], true) },
       { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.']) },
       { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
-      { command: 'Admin full typecheck', result: parseAdminTypecheck(content) },
+      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
       { command: 'raw compliance scan', result: commandPassed(content, 'raw compliance scan', ['Compliance scan passed']) },
       { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
     ];
