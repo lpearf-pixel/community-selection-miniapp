@@ -1,0 +1,103 @@
+# 阶段验收报告：L43
+
+## 1. 阶段结论
+
+- 阶段：L43
+- 业务稳定分支：stable/l42-business-base
+- 业务稳定 commit：20d5023f0e493bad7485e4fe8cbc5ccba014e118
+- 报告生成分支：codex/add-l43-reward-ledger-t7-refund-deduction
+- 报告生成 commit：fdc3ccfd7f03296f1185c41ad7d2edcfeae52640
+- 分支：codex/add-l43-reward-ledger-t7-refund-deduction（报告生成环境）
+- 生成时间：2026-07-13T10:40:34.264Z
+- 当前 commit：fdc3ccfd7f03296f1185c41ad7d2edcfeae52640（报告生成环境）
+- 本阶段目标：L43 reward ledger T3 refund deduct
+- Codex 自评结论：passed
+
+## 2. 本阶段变更范围
+
+| 类型 | 文件 | 说明 |
+|---|---|---|
+| Prisma | prisma/schema.prisma | 数据库 schema / migration / seed |
+| Service | apps/api/src/services/commission-service.ts | 后端业务服务 |
+| API | apps/api/src/routes/commissions.ts | API 路由或路由注册边界 |
+| API | apps/api/src/routes/rewards.ts | API 路由或路由注册边界 |
+| Admin | apps/admin/src/pages/rewards/RewardLedgerPage.tsx | 后台页面或前端逻辑 |
+| Script | scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts | 验收、检查或工具脚本 |
+
+## 3. API 变化
+
+| 方法 | 路径 | 权限 | 用途 | 是否有验收 |
+|---|---|---|---|---|
+| GET | /api/admin/commissions | admin session | unknown | unknown |
+| POST | /api/admin/commissions/settle | admin session | unknown | unknown |
+| GET | /api/admin/rewards | admin session | unknown | yes |
+| GET | /api/admin/rewards/:id | admin session | unknown | yes |
+| POST | /api/admin/rewards/:id/review | admin session | unknown | yes |
+| POST | /api/admin/rewards/backfill | admin session | unknown | unknown |
+| POST | /api/admin/rewards/release-due | admin session | unknown | yes |
+| GET | /api/leaders/me/commissions | public | unknown | yes |
+| POST | /api/leaders/me/rewards/convert-credit | public | unknown | unknown |
+
+## 4. 数据库变化
+
+| Model | 新增/修改 | 说明 |
+|---|---|---|
+| Commission | L43 manifest | 奖励账本 T+3 与退款扣减增强 |
+| RewardLedger | L43 manifest | 奖励账本 T+3 与退款扣减增强 |
+
+## 5. 核心业务验收点
+
+- [x] L43 verifier passed（L43 verifier）
+- [x] L24-L43 chain regression passed（stage workflow）
+- [x] Docker API E2E passed（Docker API E2E）
+- [x] Admin typecheck config passed（Admin typecheck config）
+- [x] Admin full typecheck passed（Admin typecheck）
+- [x] raw compliance scan passed（raw compliance scan）
+- [x] Stage workflow passed（stage workflow）
+
+## 6. 验收脚本
+
+| 脚本 | 是否存在 | 是否已加入 verify-all | 说明 |
+|---|---|---|---|
+| scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts | yes | yes | L43 阶段验收脚本 |
+
+## 7. 阶段验证执行结果
+
+| 命令 | 结果 |
+|---|---|
+| L43 verifier | passed |
+| L24-L43 chain regression | passed |
+| Docker API E2E | passed |
+| Admin typecheck config | passed |
+| Admin full typecheck | passed |
+| raw compliance scan | passed |
+| Stage workflow | passed |
+
+## 8. 合规边界检查
+
+- [x] 没有新增多级分销
+- [x] 没有新增团队收益
+- [x] 没有新增代理收益
+- [x] 没有新增 parent_leader_id / upline_id / downline / team_id / level
+- [x] 开团服务奖励仍只来自开团人自己的真实有效团购订单
+- [x] 用户可见文案仍为“开团服务奖励”
+- [x] 没有接真实打款
+- [x] 没有自动报税
+- [x] 没有新增优惠券/会员/营销玩法，除非当前阶段明确要求
+
+## 9. 风险点
+
+- 高风险：暂无自动发现，需人工 review
+- 中风险：暂无自动发现，需人工 review
+- 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
+
+## 10. 未完成项
+
+暂无自动发现，需人工 review
+
+## 11. Codex 给人工 reviewer 的说明
+
+- 本阶段做了什么：根据 L43 的最近一次提交 diff 生成验收报告，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
+- 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
+- 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
