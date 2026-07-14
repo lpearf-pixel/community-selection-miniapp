@@ -33,6 +33,38 @@ function extractMarkdownFilePaths(report: string) {
   return Array.from(new Set(files)).sort();
 }
 
+
+function isFixtureTodoScannerImplementationLine(file: string, lineNumber: number, sourceLines: string[]) {
+  if (file !== 'scripts/generate-stage-report.ts') return false;
+  const functionNames = ['isAllowedPlaceholderLine', 'isTodoScannerImplementationLine', 'isTodoScannerDefinition', 'isVerifierTodoTestString', 'findTodoItems'];
+  for (const functionName of functionNames) {
+    const start = sourceLines.findIndex((line) => line.includes(`function ${functionName}`));
+    if (start < 0) continue;
+    const nextFunction = sourceLines.findIndex((line, index) => index > start && /^function\s+\w+/.test(line.trim()));
+    const end = nextFunction >= 0 ? nextFunction : sourceLines.length;
+    if (lineNumber >= start && lineNumber < end) return true;
+  }
+  return false;
+}
+
+function fixtureTodoItems(file: string, source: string) {
+  const todoKeyword = 'TO' + 'DO';
+  const fixmeKeyword = 'FIX' + 'ME';
+  const tbdKeyword = 'T' + 'BD';
+  const notImplementedKeyword = 'NOT_' + 'IMPLEMENTED';
+  const pendingCn = '待' + '实现';
+  const placeholderCn = '功能' + '占位';
+  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\([\`'"]Not implemented[\`'"]\)|${pendingCn}|${placeholderCn})`, 'i');
+  const lines = source.split('\n');
+  const rows: string[] = [];
+  lines.forEach((line, index) => {
+    if (isFixtureTodoScannerImplementationLine(file, index, lines)) return;
+    if (/verify.*\.(ts|tsx|js)$/.test(file) && todoKeywords.test(line) && /assert|includes|keywords|forbidden|required/.test(line)) return;
+    if (todoKeywords.test(line)) rows.push(`${file}:${index + 1} — ${line.trim()}`);
+  });
+  return rows;
+}
+
 function assertSetEqual(expected: string[], actual: string[], label: string) {
   const missing = expected.filter((file) => !actual.includes(file));
   const extra = actual.filter((file) => !expected.includes(file));
@@ -83,6 +115,7 @@ for (const required of [
   'hasExplicitFailure',
   'commandPassed',
   'isTodoScannerDefinition',
+  'isTodoScannerImplementationLine',
   'L42 business base branch must be configured',
   'error TS',
   'raw compliance scan',
@@ -125,6 +158,8 @@ assert(generateSource.includes('git') && generateSource.includes('diff') && gene
 assert(generateSource.includes('Commission') && generateSource.includes('review_status') && generateSource.includes('last_adjusted_at'), 'L43 report must describe Commission concrete fields');
 assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
 assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
+assert(generateSource.includes('todos.length === 0'), 'passed report must require todos.length === 0');
+assert(generateSource.includes('passed report cannot contain unfinished items'), 'passed report must reject unfinished items');
 for (const permissionText of ['leader self', 'reward.view', 'reward.manage', 'super_admin global']) {
   assert(generateSource.includes(permissionText), `L43 report permissions should include ${permissionText}`);
 }
@@ -154,5 +189,30 @@ for (const required of ['prisma/migrations/202607130001_l43_reward_ledger_t7_ref
 }
 assert(!l43Report.includes('Commission | L43 manifest'), 'L43 report must not contain Commission manifest placeholder');
 assert(!l43Report.includes('RewardLedger | L43 manifest'), 'L43 report must not contain RewardLedger manifest placeholder');
+
+const scannerDefinitionFixture = `
+function isVerifierTodoTestString(
+  file: string,
+  line: string
+) {
+  return /${'TO' + 'DO'}|${'FIX' + 'ME'}|${'T' + 'BD'}|${'NOT_' + 'IMPLEMENTED'}/.test(line);
+}
+`;
+assert(fixtureTodoItems('scripts/generate-stage-report.ts', scannerDefinitionFixture).length === 0, 'TODO scanner implementation fixture must not be reported as unfinished');
+
+const realTodoFixture = `
+export function calculateReward() {
+  // ${'TO' + 'DO'}: implement reward calculation
+}
+`;
+assert(fixtureTodoItems('apps/api/src/services/reward-example.ts', realTodoFixture).length === 1, 'real business TODO fixture must be reported as unfinished');
+
+const verifierFixture = `
+assert(
+  !source.includes('${'TO' + 'DO'}'),
+  'runtime source must not contain ${'TO' + 'DO'}'
+);
+`;
+assert(fixtureTodoItems('scripts/verify-example-local.ts', verifierFixture).length === 0, 'verifier TODO assertion fixture must not be reported as unfinished');
 
 console.log('Report publish verification passed.');

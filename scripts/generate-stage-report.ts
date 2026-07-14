@@ -1250,12 +1250,22 @@ function isAllowedPlaceholderLine(file: string, line: string) {
   return false;
 }
 
+function isTodoScannerImplementationLine(file: string, lineNumber: number, sourceLines: string[]) {
+  if (file !== 'scripts/generate-stage-report.ts') return false;
+  const functionNames = ['isAllowedPlaceholderLine', 'isTodoScannerImplementationLine', 'isTodoScannerDefinition', 'isVerifierTodoTestString', 'findTodoItems'];
+  for (const functionName of functionNames) {
+    const start = sourceLines.findIndex((line) => line.includes(`function ${functionName}`));
+    if (start < 0) continue;
+    const nextFunction = sourceLines.findIndex((line, index) => index > start && /^function\s+\w+/.test(line.trim()));
+    const end = nextFunction >= 0 ? nextFunction : sourceLines.length;
+    if (lineNumber >= start && lineNumber < end) return true;
+  }
+  return false;
+}
+
 function isTodoScannerDefinition(file: string, line: string) {
-  return file === 'scripts/generate-stage-report.ts' && (
-    line.includes('const keywords =') ||
-    line.includes('本阶段改动文件存在 TODO') ||
-    line.includes('isTodoScannerDefinition')
-  );
+  if (file !== 'scripts/generate-stage-report.ts') return false;
+  return ['const keywords =', '本阶段改动文件存在 TODO', 'isTodoScannerDefinition', 'isVerifierTodoTestString', 'function findTodoItems', 'TODO|FIXME|TBD|NOT_IMPLEMENTED'].some((marker) => line.includes(marker));
 }
 
 function isVerifierTodoTestString(file: string, line: string) {
@@ -1271,6 +1281,7 @@ function findTodoItems(files: string[]) {
     const lines = safeRead(file).split('\n');
     lines.forEach((line, index) => {
       if (isL39Stage) return;
+      if (isTodoScannerImplementationLine(file, index, lines)) return;
       if (isAllowedPlaceholderLine(file, line)) return;
       if (isTodoScannerDefinition(file, line)) return;
       if (isVerifierTodoTestString(file, line)) return;
@@ -1300,7 +1311,7 @@ const reportPath = join(reportsDir, `stage-${normalizedStageForFile}-report.md`)
 mkdirSync(dirname(reportPath), { recursive: true });
 
 const checklistPassed = checklist.length > 0 && checklist.every((item) => item.checked);
-const conclusion = verifyOutput.passed && checklistPassed ? 'passed' : 'partial';
+const conclusion = verifyOutput.passed && checklistPassed && todos.length === 0 ? 'passed' : 'partial';
 const generatedAt = new Date().toISOString();
 function highRiskItems() {
   const risks: string[] = [];
@@ -1399,6 +1410,8 @@ function validateReportInputs() {
   });
   if (conclusion === 'passed') {
     assertReportQuality(checklistPassed, 'passed report requires all checklist items to be checked');
+    assertReportQuality(todos.length === 0, 'passed report cannot contain unfinished items');
+    assertReportQuality(!(conclusion === 'passed' && todos.length > 0), 'passed report cannot list unfinished items');
     for (const row of verifyOutput.rows) assertReportQuality(row.result === 'passed', `${row.command} marker must be passed before passed conclusion`);
     assertReportQuality(!(verifyOutput.raw ?? '').includes('ERR_PNPM'), 'passed report cannot contain ERR_PNPM');
     assertReportQuality(!(verifyOutput.raw ?? '').includes('MODULE_NOT_FOUND'), 'passed report cannot contain MODULE_NOT_FOUND');
