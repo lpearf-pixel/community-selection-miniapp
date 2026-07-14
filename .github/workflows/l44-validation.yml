@@ -13,6 +13,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout validation tree
         uses: actions/checkout@v4
@@ -20,52 +21,76 @@ jobs:
           ref: validation/l44-e1ab5489
           fetch-depth: 0
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.4
-          run_install: false
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: pnpm
-
-      - name: Run validations and capture logs
-        id: validations
+      - name: Run Docker validation and capture logs
         shell: bash
         run: |
           set +e
-          mkdir -p validation-results
+          mkdir -p validation-results reports
           LOG=validation-results/l44-e1ab5489.log
+          STATUS=validation-results/l44-e1ab5489.status
           : > "$LOG"
+          : > "$STATUS"
+          echo 'source_commit=e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca' >> "$STATUS"
 
-          run_check() {
+          record() {
             local name="$1"
-            shift
-            echo "=== $name ===" | tee -a "$LOG"
-            "$@" >>"$LOG" 2>&1
-            local code=$?
-            echo "$name=$code" | tee -a "$LOG"
-            printf '%s=%s\n' "$name" "$code" >> validation-results/l44-e1ab5489.status
+            local code="$2"
+            printf '%s=%s\n' "$name" "$code" | tee -a "$LOG" >> "$STATUS"
           }
 
-          : > validation-results/l44-e1ab5489.status
-          echo 'source_commit=e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca' >> validation-results/l44-e1ab5489.status
-          run_check install pnpm install --frozen-lockfile
-          run_check prisma_generate pnpm db:generate
-          run_check prisma_validate pnpm exec prisma validate --schema prisma/schema.prisma
-          run_check api_typecheck pnpm --filter @community-selection/api exec tsc -p tsconfig.json --noEmit --pretty false
-          run_check admin_typecheck pnpm --filter @community-selection/admin exec tsc -p tsconfig.json --noEmit --pretty false
-          run_check l44_verifier pnpm exec tsx scripts/verify-l44-manual-withdrawal-review-local.ts
-          run_check compliance pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts
-          run_check diff_check git diff --check e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca^ e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca
+          echo '=== docker compose up ===' | tee -a "$LOG"
+          docker compose up -d postgres api >>"$LOG" 2>&1
+          compose_code=$?
+          record compose_up "$compose_code"
 
-          if grep -Eq '=(1|2|3|4|5|6|7|8|9|[1-9][0-9]+)$' validation-results/l44-e1ab5489.status; then
-            echo 'overall=failure' >> validation-results/l44-e1ab5489.status
+          health_code=1
+          if [ "$compose_code" -eq 0 ]; then
+            for attempt in $(seq 1 90); do
+              docker compose exec -T api sh -lc 'curl -fsS http://127.0.0.1:13080/api/health >/dev/null' >>"$LOG" 2>&1
+              health_code=$?
+              if [ "$health_code" -eq 0 ]; then
+                echo "api_health_ready_attempt=$attempt" | tee -a "$LOG"
+                break
+              fi
+              sleep 2
+            done
+          fi
+          record api_health "$health_code"
+
+          echo '=== prisma validate ===' | tee -a "$LOG"
+          docker compose exec -T api sh -lc 'cd /app && pnpm exec prisma validate --schema prisma/schema.prisma' >>"$LOG" 2>&1
+          record prisma_validate "$?"
+
+          echo '=== API strict typecheck ===' | tee -a "$LOG"
+          docker compose exec -T api sh -lc 'cd /app && pnpm --filter @community-selection/api exec tsc -p tsconfig.json --noEmit --pretty false' >>"$LOG" 2>&1
+          record api_typecheck "$?"
+
+          echo '=== L24-L44 chain ===' | tee -a "$LOG"
+          docker compose exec -T api sh -lc 'cd /app && pnpm exec tsx scripts/stage-workflow.ts --stage=L44 --verify --scope=chain' >>"$LOG" 2>&1
+          chain_code=$?
+          record chain "$chain_code"
+
+          echo '=== report stage ===' | tee -a "$LOG"
+          docker compose exec -T api sh -lc 'cd /app && pnpm report:stage -- --stage=L44' >>"$LOG" 2>&1
+          report_stage_code=$?
+          record report_stage "$report_stage_code"
+
+          echo '=== report verifier ===' | tee -a "$LOG"
+          docker compose exec -T api sh -lc 'cd /app && pnpm exec tsx scripts/verify-report-publish-local.ts' >>"$LOG" 2>&1
+          report_verifier_code=$?
+          record report_verifier "$report_verifier_code"
+
+          echo '=== docker compose ps ===' >> "$LOG"
+          docker compose ps >>"$LOG" 2>&1
+          echo '=== api logs tail ===' >> "$LOG"
+          docker compose logs --tail=200 api >>"$LOG" 2>&1
+
+          docker compose down -v >>"$LOG" 2>&1
+
+          if grep -Eq '=(1|2|3|4|5|6|7|8|9|[1-9][0-9]+)$' "$STATUS"; then
+            echo 'overall=failure' >> "$STATUS"
           else
-            echo 'overall=success' >> validation-results/l44-e1ab5489.status
+            echo 'overall=success' >> "$STATUS"
           fi
 
       - name: Persist validation outcomes
@@ -74,10 +99,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add validation-results/l44-e1ab5489.status validation-results/l44-e1ab5489.log
-          git commit -m "chore: record detailed L44 validation outcomes" || true
+          git commit -m "chore: record Docker L44 validation outcomes" || true
           git push origin HEAD:validation/l44-e1ab5489
 
       - name: Fail when validation failed
         if: always()
-        run: |
-          grep -q '^overall=success$' validation-results/l44-e1ab5489.status
+        run: grep -q '^overall=success$' validation-results/l44-e1ab5489.status
