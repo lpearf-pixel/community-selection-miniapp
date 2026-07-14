@@ -57,3 +57,13 @@
 - [ ] 分页、筛选、scope、CSV 和并发分别有独立断言；
 - [ ] stage report 与当前 head、merge-base 和真实 diff 一致；
 - [ ] 完整 chain 与 report publish verifier 均通过。
+
+
+## 6. Docker API 就绪与网络诊断
+
+- `docker compose exec api ...` 只说明容器可执行命令，不代表 API 端口已经监听。
+- 仓库源码以 bind mount 挂载，`git switch`、`git reset` 和批量文件更新会触发 `tsx watch` 重启；Docker E2E 必须先轮询 `/api/health`，不得立即发起业务请求。
+- E2E 默认地址应与 Docker healthcheck 保持一致，并允许通过 `API_BASE_URL` 显式覆盖。
+- 所有 HTTP transport 错误必须输出 method、完整 URL、超时信息以及底层 cause（如 `ECONNREFUSED`、`ENOTFOUND`），禁止只打印 `fetch failed`。
+- 就绪超时后必须提示执行 `docker compose ps` 和 `docker compose logs --tail=200 api`。
+- API 就绪等待只能处理启动/重启竞态；若服务持续启动失败，验收仍应失败并保留真实日志，禁止通过跳过 E2E 放行。

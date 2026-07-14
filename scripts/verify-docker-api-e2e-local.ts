@@ -50,7 +50,7 @@ type L43CommissionFixture = {
   amountCents: number;
 };
 
-const API_BASE_URL = (process.env.API_BASE_URL ?? 'http://127.0.0.1:13080').replace(/\/$/, '');
+const API_BASE_URL = (process.env.API_BASE_URL ?? 'http://localhost:13080').replace(/\/$/, '');
 const debug = process.argv.includes('--debug');
 const auditCases: AuditCase[] = [];
 
@@ -87,6 +87,65 @@ function record(label: string, payload: unknown) {
     console.log(`\n--- ${label} ---`);
     console.log(JSON.stringify(payload, null, 2));
   }
+}
+
+function errorDetails(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (!cause) return `${error.name}: ${error.message}`;
+  if (cause instanceof Error) return `${error.name}: ${error.message}; cause=${cause.name}: ${cause.message}`;
+  if (typeof cause === 'object' && cause !== null) {
+    const fields = cause as Record<string, unknown>;
+    return `${error.name}: ${error.message}; cause=${JSON.stringify({ code: fields.code, errno: fields.errno, syscall: fields.syscall, address: fields.address, port: fields.port })}`;
+  }
+  return `${error.name}: ${error.message}; cause=${String(cause)}`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 30_000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchOrThrow(method: string, path: string, init: RequestInit = {}, timeoutMs = 30_000): Promise<Response> {
+  const url = `${API_BASE_URL}${path}`;
+  try {
+    return await fetchWithTimeout(url, { ...init, method }, timeoutMs);
+  } catch (error) {
+    throw new Error(`${method} ${url} transport failed: ${errorDetails(error)}. Check docker compose ps and docker compose logs --tail=200 api.`);
+  }
+}
+
+async function waitForApiReady(maxAttempts = 90, intervalMs = 1_000): Promise<void> {
+  const path = '/api/health';
+  let lastFailure = 'not attempted';
+  console.log(`Docker API E2E target: ${API_BASE_URL}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchOrThrow('GET', path, {}, 2_000);
+      const body = await response.text();
+      if (response.ok) {
+        console.log(`Docker API ready after ${attempt} attempt(s).`);
+        return;
+      }
+      lastFailure = `HTTP ${response.status}: ${body.slice(0, 300)}`;
+    } catch (error) {
+      lastFailure = errorDetails(error);
+    }
+    if (attempt === 1 || attempt % 10 === 0) {
+      console.log(`Waiting for Docker API (${attempt}/${maxAttempts}): ${lastFailure}`);
+    }
+    await sleep(intervalMs);
+  }
+  throw new Error(`Docker API did not become ready at ${API_BASE_URL}${path} after ${maxAttempts} attempts. Last failure: ${lastFailure}. Run docker compose ps and docker compose logs --tail=200 api.`);
 }
 
 function collectRiskFindings(label: string, value: unknown) {
@@ -130,8 +189,7 @@ function withAdminJson<T extends { headers?: Record<string, string> }>(init: T =
 
 async function request<T>(method: string, path: string, options: { body?: unknown; headers?: Record<string, string>; label?: string; expectedStatus?: number } = {}): Promise<T> {
   const label = options.label ?? `${method} ${path}`;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
+  const response = await fetchOrThrow(method, path, {
     headers: {
       ...(options.body ? { 'content-type': 'application/json' } : {}),
       ...options.headers
@@ -158,8 +216,7 @@ async function request<T>(method: string, path: string, options: { body?: unknow
 
 async function requestText(method: string, path: string, options: { body?: unknown; headers?: Record<string, string>; label?: string } = {}): Promise<string> {
   const label = options.label ?? `${method} ${path}`;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
+  const response = await fetchOrThrow(method, path, {
     headers: {
       ...(options.body ? { 'content-type': 'application/json' } : {}),
       ...options.headers
@@ -879,6 +936,7 @@ async function runL45TaxReviewScenario() {
 }
 
 async function main() {
+  await waitForApiReady();
   await ensureDockerE2eFixtures(prisma);
   const fixtureProduct = await getProductInventory(DOCKER_E2E_PRODUCT_ID);
   console.log('Docker E2E product stock reset:');

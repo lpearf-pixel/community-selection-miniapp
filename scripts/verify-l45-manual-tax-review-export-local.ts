@@ -23,5 +23,8 @@ assert(report.includes('const isL45Stage') && report.includes('l45Manifest') && 
 assert(reportVerifier.includes('L45 report changed files') && reportVerifier.includes('Report publish verification passed.') && reportVerifier.includes('L45 report verification row must pass'), 'L45 report verifier exists');
 assert(!route.includes('AUTO_TAX_FILING_ENABLED=true') && !route.includes('AUTO_PAYOUT_ENABLED=true'), 'no automatic tax/payout flag enabled');
 assert(existsSync('docs/dev/stage-verifier-compatibility.md'), 'global verifier compatibility guidance exists');
+for (const readinessMarker of ['waitForApiReady', "'/api/health'", 'fetchWithTimeout', 'fetchOrThrow', 'Docker API E2E target:', 'docker compose logs --tail=200 api']) {
+  assert(e2e.includes(readinessMarker), `Docker E2E readiness/diagnostics must include ${readinessMarker}`);
+}
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');
