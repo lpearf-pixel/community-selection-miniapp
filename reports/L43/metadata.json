@@ -1,9 +1,9 @@
 {
   "stage": "L43",
   "source_branch": "codex/add-l43-reward-ledger-t7-refund-deduction",
-  "source_commit": "262587954e5b0e45f12645089532cecd7b83660b",
+  "source_commit": "45c11a18b092a59276ed3509203cec49f4e0caff",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-13T16:03:55.537Z",
+  "generated_at": "2026-07-14T04:45:42.456Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
