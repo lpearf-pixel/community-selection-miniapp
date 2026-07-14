@@ -639,29 +639,60 @@ async function runL44WithdrawalScenario() {
     request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 race approve', body: { remark: `${runId}-approve` } })),
     request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/reject`, withAdminJson({ label: 'L44 race reject', body: { reason: `${runId}-reject-race` } }))
   ]);
-  const raceSuccessCount = raceResults.filter((item) => item.status === 'fulfilled').length;
+  const fulfilledResults = raceResults.filter((item) => item.status === 'fulfilled');
+  const rejectedResults = raceResults.filter((item) => item.status === 'rejected');
+  const raceSuccessCount = fulfilledResults.length;
   const raceFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: raceW.withdrawal_id } });
-  const approvedEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_approved' } });
-  const rejectedEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected' } });
-  const raceCommissionAfter = await prisma.commission.findUniqueOrThrow({ where: { id: raceA.commission.id } });
-  const raceRestoreLedgerCount = await prisma.rewardLedger.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected_restore' } });
-  const raceBalanceAfter = await getAvailableRewardBalance(prisma, leaderRace.id);
-  assert(raceSuccessCount === 1, `L44 approve/reject race success count expected=1 actual=${raceSuccessCount}`);
-  assert(['approved', 'rejected'].includes(raceFinal.status), `L44 approve/reject race final status invalid actual=${raceFinal.status}`);
-  assert(!(approvedEvents > 0 && rejectedEvents > 0), `L44 approve/reject race must not write both success events approved=${approvedEvents} rejected=${rejectedEvents}`);
+  const approvedRootEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_approved', order_id: null } });
+  const approvedOrderEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_approved', order_id: raceA.order.id } });
+  const rejectedRootEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected', order_id: null } });
+  const rejectedOrderEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected', order_id: raceA.order.id } });
+  const approvedAudits = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: raceW.withdrawal_id, action: 'withdrawal_approved' } });
+  const rejectedAudits = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: raceW.withdrawal_id, action: 'withdrawal_rejected' } });
+  const raceTimelines = await prisma.orderTimelineLog.findMany({ where: { order_id: raceA.order.id, event_type: { in: ['withdrawal_approved', 'withdrawal_rejected'] } }, orderBy: { created_at: 'asc' } });
+  assert(fulfilledResults.length === 1, ['race must have exactly one fulfilled request', `actual=${fulfilledResults.length}`, `results=${JSON.stringify(raceResults.map((item) => item.status === 'fulfilled' ? { status: item.status, value: item.value } : { status: item.status, reason: item.reason instanceof Error ? item.reason.message : String(item.reason) }))}`].join(' '));
+  assert(rejectedResults.length === 1, `race must have exactly one rejected request actual=${rejectedResults.length}`);
+  assert(raceFinal.status === 'approved' || raceFinal.status === 'rejected', `race final status invalid actual=${raceFinal.status}`);
+  assert(!((approvedRootEvents > 0 || approvedOrderEvents > 0) && (rejectedRootEvents > 0 || rejectedOrderEvents > 0)), ['L44 approve/reject race must not write both approved and rejected success events', `approved_root=${approvedRootEvents}`, `approved_order=${approvedOrderEvents}`, `rejected_root=${rejectedRootEvents}`, `rejected_order=${rejectedOrderEvents}`].join(' '));
   if (raceFinal.status === 'approved') {
-    assert(approvedEvents === 1, `approved race must write exactly one approved event actual=${approvedEvents}`);
-    assert(rejectedEvents === 0, `approved race must not write rejected event actual=${rejectedEvents}`);
-    assert(raceCommissionAfter.status === 'withdrawing' && raceCommissionAfter.withdrawal_id === raceW.withdrawal_id, `approved race commission state invalid ${JSON.stringify({ status: raceCommissionAfter.status, withdrawal_id: raceCommissionAfter.withdrawal_id })}`);
-    assert(raceRestoreLedgerCount === 0, `approved race must not write restore ledger actual=${raceRestoreLedgerCount}`);
-    assert(raceBalanceAfter === 0, `approved race balance expected=0 actual=${raceBalanceAfter}`);
-  } else {
-    assert(approvedEvents === 0, `rejected race must not write approved event actual=${approvedEvents}`);
-    assert(rejectedEvents === 1, `rejected race must write exactly one rejected event actual=${rejectedEvents}`);
-    assert(raceCommissionAfter.status === 'available' && raceCommissionAfter.withdrawal_id === null, `rejected race commission state invalid ${JSON.stringify({ status: raceCommissionAfter.status, withdrawal_id: raceCommissionAfter.withdrawal_id })}`);
-    assert(raceRestoreLedgerCount === 1, `rejected race must write one restore ledger actual=${raceRestoreLedgerCount}`);
-    assert(raceBalanceAfter === 111, `rejected race balance expected=111 actual=${raceBalanceAfter}`);
+    assert(approvedRootEvents === 1, `approved root event expected=1 actual=${approvedRootEvents}`);
+    assert(approvedOrderEvents === 1, `approved order event expected=1 actual=${approvedOrderEvents}`);
+    assert(rejectedRootEvents === 0, `approved winner must not write rejected root event actual=${rejectedRootEvents}`);
+    assert(rejectedOrderEvents === 0, `approved winner must not write rejected order event actual=${rejectedOrderEvents}`);
+    assert(approvedAudits === 1 && rejectedAudits === 0, ['approved winner audit mismatch', `approved=${approvedAudits}`, `rejected=${rejectedAudits}`].join(' '));
+    assert(raceTimelines.length === 1 && raceTimelines[0].event_type === 'withdrawal_approved', ['approved winner timeline mismatch', `count=${raceTimelines.length}`, `types=${raceTimelines.map((item) => item.event_type).join(',')}`].join(' '));
+    const raceCommission = await prisma.commission.findUniqueOrThrow({ where: { id: raceA.commission.id } });
+    assert(raceCommission.status === 'withdrawing' && raceCommission.withdrawal_id === raceW.withdrawal_id, ['approved winner must retain reserved commission', `status=${raceCommission.status}`, `withdrawal_id=${raceCommission.withdrawal_id}`].join(' '));
+    const restoreCount = await prisma.rewardLedger.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected_restore' } });
+    assert(restoreCount === 0, `approved winner restore ledger expected=0 actual=${restoreCount}`);
+    const balance = await getAvailableRewardBalance(prisma, leaderRace.id);
+    assert(balance === 0, `approved winner balance expected=0 actual=${balance}`);
   }
+  if (raceFinal.status === 'rejected') {
+    assert(rejectedRootEvents === 1, `rejected root event expected=1 actual=${rejectedRootEvents}`);
+    assert(rejectedOrderEvents === 1, `rejected order event expected=1 actual=${rejectedOrderEvents}`);
+    assert(approvedRootEvents === 0, `rejected winner must not write approved root event actual=${approvedRootEvents}`);
+    assert(approvedOrderEvents === 0, `rejected winner must not write approved order event actual=${approvedOrderEvents}`);
+    assert(rejectedAudits === 1 && approvedAudits === 0, ['rejected winner audit mismatch', `approved=${approvedAudits}`, `rejected=${rejectedAudits}`].join(' '));
+    assert(raceTimelines.length === 1 && raceTimelines[0].event_type === 'withdrawal_rejected', ['rejected winner timeline mismatch', `count=${raceTimelines.length}`, `types=${raceTimelines.map((item) => item.event_type).join(',')}`].join(' '));
+    const raceCommission = await prisma.commission.findUniqueOrThrow({ where: { id: raceA.commission.id } });
+    assert(raceCommission.status === 'available' && raceCommission.withdrawal_id === null, ['rejected winner must restore commission', `status=${raceCommission.status}`, `withdrawal_id=${raceCommission.withdrawal_id}`].join(' '));
+    const restoreCount = await prisma.rewardLedger.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected_restore' } });
+    assert(restoreCount === 1, `rejected winner restore ledger expected=1 actual=${restoreCount}`);
+    const balance = await getAvailableRewardBalance(prisma, leaderRace.id);
+    assert(balance === 111, `rejected winner balance expected=111 actual=${balance}`);
+  }
+  console.log('L44 approve/reject race diagnostics:');
+  console.log(`race_final_status=${raceFinal.status}`);
+  console.log(`race_fulfilled_count=${fulfilledResults.length}`);
+  console.log(`race_rejected_count=${rejectedResults.length}`);
+  console.log(`race_approved_root_events=${approvedRootEvents}`);
+  console.log(`race_approved_order_events=${approvedOrderEvents}`);
+  console.log(`race_rejected_root_events=${rejectedRootEvents}`);
+  console.log(`race_rejected_order_events=${rejectedOrderEvents}`);
+  console.log(`race_approved_audits=${approvedAudits}`);
+  console.log(`race_rejected_audits=${rejectedAudits}`);
+  console.log(`race_timeline_types=${raceTimelines.map((item) => item.event_type).join(',')}`);
   console.log('l44_approve_reject_race_passed');
 
   console.log('=== L44 paid scenario ===');
