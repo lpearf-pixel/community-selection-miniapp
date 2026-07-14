@@ -160,11 +160,17 @@ assert(generateSource.includes('Commission') && generateSource.includes('review_
 for (const required of ['L44 manual withdrawal review workbench','stable/l43-business-base','72a84e81218845c23872bd91ab58a03ccf4c0f33','WithdrawalCommission','GET', '/api/admin/withdrawals/:id', 'withdrawal.view + data scope', 'withdrawal.manage + data scope', 'hasL44RuntimeMarkers']) {
   assert(generateSource.includes(required), `L44 report generator should include ${required}`);
 }
+for (const required of ['isL45Stage', 'L45 manual tax review and internal CSV export', 'stable/l44-business-base', '3ae666ec0e26383a5b117b64dce30b86a2dee389', '/api/admin/tax-records/export.csv', 'finance.export + data scope', 'withdrawal.manage + data scope', '无新增表', '无新增字段', '复用 Withdrawal', '复用 WithdrawalCommission', '复用 TaxRecord', '复用 AdminAuditLog', '复用 BusinessEventLog', 'L24-L45 chain regression']) {
+  assert(generateSource.includes(required), `L45 report generator should include ${required}`);
+}
 assert(!generateSource.includes("permissions: ['public']"), 'L44 report permissions must not be public');
 const dockerE2eSource = read('scripts/verify-docker-api-e2e-local.ts');
 assert(!dockerE2eSource.includes('const l44RuntimeEvidence'), 'L44 Docker E2E must not use hardcoded evidence object');
 for (const required of ['=== L44 leader identity scenario ===','l44_creation_scenario_passed','Promise.allSettled','/api/leaders/me/withdrawals','/api/admin/withdrawals/','prisma.withdrawal','prisma.withdrawalCommission','prisma.rewardLedger','prisma.businessEventLog','getAvailableRewardBalance']) {
   assert(dockerE2eSource.includes(required), `L44 Docker E2E should include real runtime evidence: ${required}`);
+}
+for (const required of ['runL45TaxReviewScenario', 'POST /api/admin/withdrawals/:id/tax-review', 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeNoScopeHeaders', 'fixtureB', 'negative taxable', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2', 'l45_csv_formula_safe']) {
+  assert(dockerE2eSource.includes(required), `L45 Docker E2E should include real runtime evidence: ${required}`);
 }
 
 
@@ -275,6 +281,37 @@ for (const requiredQuality of ['高风险：暂无自动发现', '中风险：�
 }
 const unfinishedSection = l44Report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0] ?? '';
 assert(unfinishedSection.trim() === '暂无自动发现', `L44 report unfinished section must be empty; actual=${unfinishedSection.trim()}`);
+
+
+const l45BaseCommit = '3ae666ec0e26383a5b117b64dce30b86a2dee389';
+const l45Head = gitOutput(['rev-parse', 'HEAD']);
+execFileSync('git', ['merge-base', '--is-ancestor', l45BaseCommit, l45Head], { stdio: 'pipe' });
+const l45MergeBase = gitOutput(['merge-base', l45BaseCommit, l45Head]);
+assert(l45MergeBase === l45BaseCommit, ['L45 report source must actually descend from business base', `base=${l45BaseCommit}`, `head=${l45Head}`, `merge_base=${l45MergeBase}`].join(' '));
+execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L45'], { stdio: 'pipe' });
+const l45Report = read('reports/stage-L45-report.md');
+const l45ExpectedFiles = gitDiffFiles(l45BaseCommit, 'HEAD');
+const l45ReportFiles = extractMarkdownFilePaths(l45Report);
+assertSetEqual(l45ExpectedFiles, l45ReportFiles, 'L45 report changed files');
+assert(l45Report.includes('业务稳定分支：stable/l44-business-base'), 'L45 report must include stable/l44-business-base');
+assert(l45Report.includes(`业务稳定 commit：${l45BaseCommit}`), 'L45 report must include base commit');
+assert(l45Report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L45 report source commit must equal HEAD');
+assert(l45Report.includes('Codex 自评结论：passed'), 'L45 report conclusion must be passed');
+assert(!l45Report.includes('Codex 自评结论：partial'), 'L45 report must not be partial');
+for (const row of ['GET | /api/admin/tax-records | finance.view + data scope', 'GET | /api/admin/tax-records/:id | finance.view + data scope', 'GET | /api/admin/tax-records/export.csv | finance.export + data scope', 'POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope']) {
+  assert(l45Report.includes(row), `L45 report API row missing: ${row}`);
+}
+for (const requiredDb of ['无新增表', '无新增字段', '复用 Withdrawal', '复用 WithdrawalCommission', '复用 TaxRecord', '复用 AdminAuditLog', '复用 BusinessEventLog']) {
+  assert(l45Report.includes(requiredDb), `L45 report database section missing ${requiredDb}`);
+}
+for (const requiredVerify of ['L45 verifier', 'L24-L45 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow']) {
+  assert(l45Report.includes(requiredVerify) && l45Report.includes(`${requiredVerify} | passed`), `L45 report verification row must pass: ${requiredVerify}`);
+}
+for (const requiredQuality of ['高风险：暂无自动发现', '中风险：暂无自动发现']) {
+  assert(l45Report.includes(requiredQuality), `L45 report quality summary missing: ${requiredQuality}`);
+}
+const l45UnfinishedSection = l45Report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0] ?? '';
+assert(l45UnfinishedSection.trim() === '暂无自动发现', `L45 report unfinished section must be empty; actual=${l45UnfinishedSection.trim()}`);
 
 const stageWorkflowSource = read('scripts/stage-workflow.ts');
 const mainStart = stageWorkflowSource.indexOf('function main(): void {');

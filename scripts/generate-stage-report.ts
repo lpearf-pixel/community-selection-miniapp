@@ -209,6 +209,25 @@ function hasL44RuntimeMarkers() {
   const requiredMetrics = ['withdrawal_same_request_concurrent_count=1','withdrawal_competing_request_success_count=1','withdrawal_link_count=2','withdrawal_ledger_mismatch_event_count=1','withdrawal_approve_reject_success_count=1','scoped_finance_list_filtered'];
   return [...requiredSections, ...requiredPassMarkers, ...requiredMetrics].every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
+
+function hasL45RuntimeMarkers() {
+  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=','l45_concurrent_success_count=1','l45_csv_formula_safe=true','L45 manual tax review export runtime assertions passed.'];
+  return required.every((marker) => latestVerifyOutputForManifest.includes(marker));
+}
+const l45Manifest = {
+  businessBaseBranch: 'stable/l44-business-base',
+  businessBaseCommit: '3ae666ec0e26383a5b117b64dce30b86a2dee389',
+  title: 'L45 manual tax review and internal CSV export',
+  apis: [
+    { method: 'GET', path: '/api/admin/tax-records', permissions: ['finance.view + data scope'], purpose: '税务人工 Review 分页列表', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'GET', path: '/api/admin/tax-records/:id', permissions: ['finance.view + data scope'], purpose: '税务人工 Review 详情', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'GET', path: '/api/admin/tax-records/export.csv', permissions: ['finance.export + data scope'], purpose: '内部人工核对 CSV 导出', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'POST', path: '/api/admin/withdrawals/:id/tax-review', permissions: ['withdrawal.manage + data scope'], purpose: '人工税务 Review', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' }
+  ],
+  db: ['无新增表','无新增字段','复用 Withdrawal','复用 WithdrawalCommission','复用 TaxRecord','复用 AdminAuditLog','复用 BusinessEventLog'],
+  verify: ['scripts/verify-l45-manual-tax-review-export-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L45 --publish --scope=chain --push']
+};
+
 const l44Manifest = {
   businessBaseBranch: 'stable/l43-business-base',
   businessBaseCommit: '72a84e81218845c23872bd91ab58a03ccf4c0f33',
@@ -259,6 +278,7 @@ const l43Manifest = {
 const isL41Stage = stage.toUpperCase() === 'L41';
 const isL42Stage = stage.toUpperCase() === 'L42';
 const isL43Stage = stage.toUpperCase() === 'L43';
+const isL45Stage = stage.toUpperCase() === 'L45';
 const isL44Stage = stage.toUpperCase() === 'L44';
 const isL39Stage = stage.toUpperCase() === 'L39';
 const isL38Stage = stage.toUpperCase() === 'L38';
@@ -776,6 +796,7 @@ function safeRead(path: string) {
 }
 
 function getStageBaseRef() {
+  if (isL45Stage) return l45Manifest.businessBaseCommit || l45Manifest.businessBaseBranch;
   if (isL44Stage) return l44Manifest.businessBaseCommit || l44Manifest.businessBaseBranch;
   if (isL43Stage) return l43Manifest.businessBaseCommit || l43Manifest.businessBaseBranch;
   return '';
@@ -852,7 +873,8 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+  if (isL45Stage || isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL45Stage) return l45Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL44Stage) return l44Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL43Stage) return l43Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL42Stage) return l42Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
@@ -931,6 +953,7 @@ function inferVerified(path: string, files: string[]) {
 }
 
 function extractModels(files: string[]) {
+  if (isL45Stage) return l45Manifest.db.map((model) => ({ model, change: model.startsWith('无新增') ? 'No DB change' : 'Reuse existing model', description: 'L45 税务人工 Review 复用既有数据库结构，不新增表或字段。' }));
   if (isL44Stage) {
     return [
       { model: 'Withdrawal', change: 'client_request_id, reviewed_by_admin_id, reviewed_at, processed_by_admin_id, processed_at, rejected_at, manual_reference', description: '在既有提现主表上增加客户端幂等、审核人/审核时间、人工处理人/处理时间、拒绝时间和人工参考号字段。' },
@@ -1039,6 +1062,7 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L30') {
     return l30Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L45') return l45Manifest.verify.map((item): StageChecklistItem => ({ label: item, checked: hasL45RuntimeMarkers(), note: hasL45RuntimeMarkers() ? 'passed' : '缺少 L45 运行时证据' }));
   if (stageName.toUpperCase() === 'L44') return l44Manifest.verify.map((item): StageChecklistItem => ({ label: item, checked: hasL44RuntimeMarkers(), note: hasL44RuntimeMarkers() ? 'passed' : '缺少 L44 运行时证据' }));
   if (stageName.toUpperCase() === 'L43') return l43Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L42') return l42Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
@@ -1080,7 +1104,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+  if (isL45Stage || isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL45Stage) return l45Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : script.includes('verify-docker-api-e2e-local.ts') ? 'via stage-workflow' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L45 阶段报告质量门禁验收脚本' }));
     if (isL44Stage) return l44Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : script.includes('verify-docker-api-e2e-local.ts') ? 'via stage-workflow' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L44 阶段报告质量门禁验收脚本' }));
     if (isL43Stage) return l43Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : script.includes('verify-docker-api-e2e-local.ts') ? 'via stage-workflow' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L43 阶段报告质量门禁验收脚本' }));
     if (isL42Stage) return l42Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L42 阶段报告质量门禁验收脚本' }));
@@ -1207,6 +1232,17 @@ function stageVerifyChecks(content: string) {
     if (hasFailureMarker) return 'failed';
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
+  if (isL45Stage) {
+    return [
+      { command: 'L45 verifier', result: commandPassed(content, 'L45 verifier', ['L45 manual tax review export verifier passed.']) },
+      { command: 'L24-L45 chain regression', result: commandPassed(content, 'L24-L45 chain regression', ['L45 manual tax review export verifier passed.', 'L44 manual withdrawal review verifier passed.', 'L43 reward ledger T3 refund deduct verification passed.', 'L24 miniapp cart verification passed.', 'Stage workflow verification passed.'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', 'l45_concurrent_success_count=1', 'l45_csv_formula_safe=true'], true) },
+      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
+      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
+      { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },
+      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
+    ];
+  }
   if (isL44Stage) {
     return [
       { command: 'L44 verifier', result: commandPassed(content, 'L44 verifier', ['L44 manual withdrawal review verifier passed.']) },
@@ -1425,6 +1461,21 @@ function assertChangedFileCoverage(actualFiles: string[], reportRows: FileRow[])
 }
 
 function validateReportInputs() {
+  if (isL45Stage) {
+    assertReportQuality(l45Manifest, 'L45 stage manifest must exist');
+    assertReportQuality(isAncestor(l45Manifest.businessBaseCommit, 'HEAD'), ['L45 source branch must descend from business base commit', `base=${l45Manifest.businessBaseCommit}`, `head=${runGit(['rev-parse', 'HEAD']).output}`].join(' '));
+    const l45MergeBase = runGit(['merge-base', 'HEAD', l45Manifest.businessBaseCommit]);
+    assertReportQuality(l45MergeBase.ok && l45MergeBase.output.trim() === l45Manifest.businessBaseCommit, ['L45 merge-base must equal business base commit', `expected=${l45Manifest.businessBaseCommit}`, `actual=${l45MergeBase.output}`].join(' '));
+    assertReportQuality(!changed.error, changed.error || 'L45 changed-file diff must be available');
+    assertChangedFileCoverage(changed.files, fileRows);
+    assertReportQuality(apiRows.length === 4, 'L45 report must list four APIs');
+    assertReportQuality(apiRows.every((row) => row.permission.includes('data scope') && row.verified === 'yes'), 'L45 APIs must have precise permissions and runtime verification');
+    for (const requiredDb of l45Manifest.db) assertReportQuality(modelRows.some((row) => row.model === requiredDb), `L45 DB section missing ${requiredDb}`);
+    if (verifyOutput.exists) {
+      assertReportQuality(verifyOutput.rows.length === 7, 'L45 must track seven verification rows');
+      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), 'All L45 verification rows must pass');
+    }
+  }
   if (isL44Stage) {
     assertReportQuality(l44Manifest, 'L44 stage manifest must exist');
     assertReportQuality(isAncestor(l44Manifest.businessBaseCommit, 'HEAD'), ['L44 source branch must descend from business base commit', `base=${l44Manifest.businessBaseCommit}`, `head=${runGit(['rev-parse', 'HEAD']).output}`].join(' '));
@@ -1496,28 +1547,35 @@ function validateReportInputs() {
 
 validateReportInputs();
 
-const highRiskSummary = highRisks.length ? highRisks.join('；') : isL44Stage ? '暂无自动发现' : '暂无自动发现，需人工 review';
-const mediumRiskSummary = todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : isL44Stage ? '暂无自动发现' : '暂无自动发现，需人工 review';
-const unfinishedSummary = todos.length ? todos.join('\n') : isL44Stage ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const highRiskSummary = highRisks.length ? highRisks.join('；') : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const mediumRiskSummary = todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const unfinishedSummary = todos.length ? todos.join('\n') : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
 
 const report = `# 阶段验收报告：${stage}
 
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL44Stage ? l44Manifest.businessBaseBranch : isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL44Stage ? l44Manifest.businessBaseCommit : isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${isL45Stage ? l45Manifest.businessBaseBranch : isL44Stage ? l44Manifest.businessBaseBranch : isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
+- 业务稳定 commit：${isL45Stage ? l45Manifest.businessBaseCommit : isL44Stage ? l44Manifest.businessBaseCommit : isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
-- 本阶段目标：${isL44Stage ? l44Manifest.title : isL43Stage ? l43Manifest.title : isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- 本阶段目标：${isL45Stage ? l45Manifest.title : isL44Stage ? l44Manifest.title : isL43Stage ? l43Manifest.title : isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
 - Codex 自评结论：${conclusion}
 
 ## 2. 本阶段变更范围
 
-${isL44Stage ? `- Diff base：${l44Manifest.businessBaseBranch}
+${isL45Stage ? `- Diff base：${l45Manifest.businessBaseBranch}
+- Diff base commit：${l45Manifest.businessBaseCommit}
+- Source commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
+- Changed files count：${changed.files.length}
+
+${table(['类型', '数量'], fileTypeCounts.map(([type, count]) => [type, String(count)]))}
+
+` : isL44Stage ? `- Diff base：${l44Manifest.businessBaseBranch}
 - Diff base commit：${l44Manifest.businessBaseCommit}
 - Source commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - Changed files count：${changed.files.length}
