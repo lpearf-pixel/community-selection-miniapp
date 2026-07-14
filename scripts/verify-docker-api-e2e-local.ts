@@ -771,6 +771,110 @@ async function runL44WithdrawalScenario() {
   console.log('inactive_admin_withdrawal_401');
   console.log('withdrawal_negative_no_db_mutation');
 }
+async function runL45TaxReviewScenario() {
+  console.log('=== L45 manual tax review export scenario ===');
+  const runId = `l45-${Date.now()}`;
+  const product = await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } });
+  const leaderA = await prisma.user.create({ data: { openid: `${runId}-leader-a`, nickname: '=HYPERLINK("https://example.com")', phone: '13600000001', role: 'leader' } });
+  const leaderB = await prisma.user.create({ data: { openid: `${runId}-leader-b`, nickname: '+SUM(1,1)', phone: '13600000002', role: 'leader' } });
+  const userA = await prisma.user.create({ data: { openid: `${runId}-user-a`, nickname: 'L45 User A', phone: '13600000003' } });
+  const userB = await prisma.user.create({ data: { openid: `${runId}-user-b`, nickname: 'L45 User B', phone: '13600000004' } });
+  const communityA = await prisma.community.create({ data: { name: `@cmd-${runId}`, address: 'L45 scope A' } });
+  const communityB = await prisma.community.create({ data: { name: `-1+2-${runId}`, address: 'L45 scope B' } });
+  async function createWithdrawalFixture(scope: 'a' | 'b', suffix: string, amount = 1000) {
+    const leader = scope === 'a' ? leaderA : leaderB;
+    const user = scope === 'a' ? userA : userB;
+    const community = scope === 'a' ? communityA : communityB;
+    const groupBuy = await prisma.groupBuy.create({ data: { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, price_cents: product.price_cents, start_time: new Date(Date.now() - 3600_000), end_time: new Date(Date.now() + 3600_000), pickup_time: new Date(Date.now() + 86400_000), status: 'success' } });
+    const order = await prisma.order.create({ data: { order_no: `${runId}-${suffix}`, user_id: user.id, group_buy_id: groupBuy.id, product_id: product.id, leader_user_id: leader.id, community_id: community.id, total_amount_cents: amount, product_amount_cents: amount, pay_amount_cents: amount, quantity: 1, pay_status: 'paid', order_status: 'completed', refund_status: 'none', paid_at: new Date(Date.now() - 1200_000), completed_at: new Date(Date.now() - 600_000), receiver_name: 'L45', receiver_phone: '13600000005' } });
+    const commission = await prisma.commission.create({ data: { leader_user_id: leader.id, order_id: order.id, group_buy_id: groupBuy.id, base_amount_cents: amount, commission_type: 'fixed', commission_value: amount, estimated_amount_cents: amount, final_amount_cents: amount, status: 'withdrawing', available_at: new Date(Date.now() - 300_000), review_status: 'approved' } });
+    const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: amount, status: 'approved', client_request_id: suffix === 'danger-a' ? '\tclient-danger' : `${runId}-${suffix}-withdrawal`, tax_mode: 'pending_review', tax_status: 'pending', taxable_amount_cents: amount, tax_amount_cents: 0, payable_amount_cents: amount } });
+    await prisma.withdrawalCommission.create({ data: { withdrawal_id: withdrawal.id, commission_id: commission.id, amount_cents: amount } });
+    const taxRecord = await prisma.taxRecord.create({ data: { leader_user_id: leader.id, source_type: 'withdrawal', source_id: withdrawal.id, tax_mode: withdrawal.tax_mode, tax_status: withdrawal.tax_status, amount_cents: amount, payload: { tax_remark: '\r\nleading-newline', tax_rate_basis: '-1+2' } } });
+    return { withdrawal, taxRecord, order, community };
+  }
+  const fixtureA = await createWithdrawalFixture('a', 'danger-a', 1000);
+  const fixtureB = await createWithdrawalFixture('b', 'danger-b', 2000);
+  const fixtureC = await createWithdrawalFixture('a', 'concurrent', 1200);
+  const financeAHeaders = { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-community-id': communityA.id };
+  const financeNoScopeHeaders = { ...adminHeaders, 'x-admin-role': 'finance' };
+  const financeBHeaders = { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-community-id': communityB.id };
+
+  const financeList = await request<{ items: Array<{ withdrawal_id: string; leader_phone_masked?: string }>; total: number; page: number; page_size: number }>('GET', `/api/admin/tax-records?page=1&page_size=1&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 finance', headers: financeAHeaders });
+  assert(financeList.total >= 2 && financeList.items.length === 1 && financeList.page === 1, 'L45 finance list must return database count/skip/take page');
+  assert(financeList.items.every((item) => item.leader_phone_masked?.includes('****')), 'L45 list must mask leader phone');
+  const page2 = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?page=2&page_size=1&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 page 2', headers: financeAHeaders });
+  assert(page2.total === financeList.total && page2.items.length === 1 && page2.items[0].withdrawal_id !== financeList.items[0].withdrawal_id, 'L45 pagination must use database skip/take');
+  const filtered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?tax_status=pending&tax_mode=pending_review&invoice_status=not_required&from=${encodeURIComponent(new Date(Date.now() - 86400_000).toISOString())}&to=${encodeURIComponent(new Date(Date.now() + 86400_000).toISOString())}&keyword=${encodeURIComponent('danger-a')}`, { label: 'GET /api/admin/tax-records L45 filters', headers: financeAHeaders });
+  assert(filtered.items.some((item) => item.withdrawal_id === fixtureA.withdrawal.id) && filtered.items.every((item) => item.withdrawal_id !== fixtureB.withdrawal.id), 'L45 status/mode/invoice/date/keyword filters and scope must apply');
+  const scopeAAll = await request<{ items: Array<{ withdrawal_id: string }> }>('GET', `/api/admin/tax-records?page=1&page_size=20&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 scope A', headers: financeAHeaders });
+  assert(scopeAAll.items.some((item) => item.withdrawal_id === fixtureA.withdrawal.id) && !scopeAAll.items.some((item) => item.withdrawal_id === fixtureB.withdrawal.id), 'L45 scope A must only see scope A');
+  await request<ErrorApiResponse>('GET', `/api/admin/tax-records/${fixtureB.taxRecord.id}`, { label: 'GET /api/admin/tax-records/:id L45 cross scope', headers: financeAHeaders, expectedStatus: 403 });
+  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureB.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 cross scope', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 403, body: { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 0, client_request_id: `${runId}-cross-scope` } });
+  const noScope = await request<{ items: unknown[]; total: number }>('GET', `/api/admin/tax-records?keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 finance no scope', headers: financeNoScopeHeaders });
+  assert(noScope.total === 0 && noScope.items.length === 0, 'L45 no-scope finance must return empty list');
+  await request<ErrorApiResponse>('GET', '/api/admin/tax-records', { label: 'GET /api/admin/tax-records L45 store_manager', headers: { ...adminHeaders, 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID }, expectedStatus: 403 });
+  await request<ErrorApiResponse>('GET', '/api/admin/tax-records', { label: 'GET /api/admin/tax-records L45 operator', headers: { ...adminHeaders, 'x-admin-role': 'operator', 'x-admin-user-id': DOCKER_E2E_OPERATOR_ADMIN_ID }, expectedStatus: 403 });
+  await request<ErrorApiResponse>('GET', '/api/admin/tax-records', { label: 'GET /api/admin/tax-records L45 inactive admin', headers: { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_INACTIVE_ADMIN_ID }, expectedStatus: 401 });
+  const superAdmin = await request<{ items: Array<{ withdrawal_id: string }> }>('GET', `/api/admin/tax-records?page=1&page_size=20&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 super_admin', headers: adminHeaders });
+  assert(superAdmin.items.some((item) => item.withdrawal_id === fixtureA.withdrawal.id) && superAdmin.items.some((item) => item.withdrawal_id === fixtureB.withdrawal.id), 'L45 super_admin must see all scopes');
+
+  const beforeAudit = await prisma.adminAuditLog.count({ where: { target_id: fixtureA.withdrawal.id, action: 'withdrawal_tax_reviewed' } });
+  const beforeEvent = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: 'withdrawal_tax_reviewed', order_id: null } });
+  const reviewPayload = { tax_mode: 'withheld', tax_status: 'calculated', taxable_amount_cents: 1000, tax_amount_cents: 120, tax_rate_basis: '-1+2', invoice_required: false, invoice_status: 'not_required', tax_remark: '@cmd', client_request_id: `${runId}-review` };
+  await request('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 success', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reviewPayload });
+  const updatedA = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureA.withdrawal.id } });
+  const taxRecordA = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureA.withdrawal.id } } });
+  assert(updatedA.tax_mode === 'withheld' && updatedA.tax_status === 'calculated' && updatedA.taxable_amount_cents === 1000 && updatedA.tax_amount_cents === 120 && updatedA.payable_amount_cents === 880, 'L45 valid review must update Withdrawal tax fields');
+  assert(taxRecordA.tax_mode === 'withheld' && taxRecordA.tax_status === 'calculated' && taxRecordA.amount_cents === 1000, 'L45 valid review must upsert TaxRecord');
+  assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureA.withdrawal.id, action: 'withdrawal_tax_reviewed' } }) === beforeAudit + 1, 'L45 valid review must create exactly one AdminAuditLog');
+  assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: 'withdrawal_tax_reviewed', order_id: null } }) === beforeEvent + 1, 'L45 valid review must create exactly one root BusinessEventLog');
+  const repeat = await request<{ idempotent?: boolean }>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent repeat', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reviewPayload });
+  assert(repeat.idempotent === true, 'L45 same client_request_id and same payload must be idempotent');
+  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { ...reviewPayload, tax_amount_cents: 121 } });
+  const concurrent = await Promise.allSettled([
+    request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent A', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-a` } }),
+    request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent B', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'withheld', taxable_amount_cents: 1200, tax_amount_cents: 100, client_request_id: `${runId}-concurrent-b` } })
+  ]);
+  assert(concurrent.filter((result) => result.status === 'fulfilled').length === 1 && concurrent.filter((result) => result.status === 'rejected').length === 1, 'L45 concurrent different review results must allow only one success');
+  const invalidBefore = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureB.withdrawal.id } });
+  const invalidTaxBefore = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureB.withdrawal.id } } });
+  const invalidAuditBefore = await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } });
+  const invalidEventBefore = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } });
+  for (const [label, body] of [
+    ['negative taxable', { tax_mode: 'none', taxable_amount_cents: -1, tax_amount_cents: 0, client_request_id: `${runId}-negative-taxable` }],
+    ['negative tax', { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: -1, client_request_id: `${runId}-negative-tax` }],
+    ['tax gt taxable', { tax_mode: 'withheld', taxable_amount_cents: 100, tax_amount_cents: 101, client_request_id: `${runId}-tax-gt-taxable` }],
+    ['payable negative', { tax_mode: 'withheld', taxable_amount_cents: 3000, tax_amount_cents: 2500, client_request_id: `${runId}-payable-negative` }]
+  ] as const) {
+    await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureB.withdrawal.id}/tax-review`, { label: `POST tax-review L45 invalid ${label}`, headers: { ...financeBHeaders, 'content-type': 'application/json' }, expectedStatus: 400, body });
+  }
+  assert(JSON.stringify(await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureB.withdrawal.id } })) === JSON.stringify(invalidBefore), 'L45 rejected tax review must not mutate Withdrawal');
+  assert(JSON.stringify(await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureB.withdrawal.id } } })) === JSON.stringify(invalidTaxBefore), 'L45 rejected tax review must not mutate TaxRecord');
+  assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } }) === invalidAuditBefore, 'L45 rejected tax review must not create Audit');
+  assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } }) === invalidEventBefore, 'L45 rejected tax review must not create Event');
+
+  const csvResponse = await fetch(`${API_BASE_URL}/api/admin/tax-records/export.csv?keyword=${encodeURIComponent(runId)}`, { headers: financeAHeaders });
+  const csv = await csvResponse.text();
+  const disposition = csvResponse.headers.get('content-disposition') ?? '';
+  record('GET /api/admin/tax-records/export.csv L45 scoped', { status: csvResponse.status, disposition, raw: csv.slice(0, 1500) });
+  assert(csvResponse.ok && csv.charCodeAt(0) === 0xfeff, 'L45 CSV must be UTF-8 BOM text');
+  assert(/tax-review-\d{4}-\d{2}-\d{2}\.csv/.test(disposition), 'L45 CSV filename must include date');
+  assert(csv.includes('仅供内部人工核对，不构成税务申报结果。'), 'L45 CSV must include internal manual review notice');
+  assert(csv.includes("'\tclient-danger") && csv.includes("'=HYPERLINK") && csv.includes("'@cmd") && csv.includes("'-1+2"), 'L45 CSV must prefix dangerous text fields with a single quote');
+  assert(!csv.includes(fixtureB.withdrawal.id) && !csv.includes(communityB.name), 'L45 CSV must only include authorized scope');
+  const csvFiltered = await requestText('GET', `/api/admin/tax-records/export.csv?keyword=${encodeURIComponent('does-not-match-l45')}`, { label: 'GET /api/admin/tax-records/export.csv L45 filtered empty', headers: financeAHeaders });
+  assert(!csvFiltered.includes(fixtureA.withdrawal.id), 'L45 CSV filters must apply');
+  const executableFormula = csv.split(/\r?\n/).some((line) => line.split(',').some((cell) => /^"?[=+@]/.test(cell) || /^"?-\d/.test(cell)));
+  assert(!executableFormula, 'L45 CSV must not contain executable formula-leading cells');
+  const automaticEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: { in: ['auto_tax_filed', 'auto_payout_requested', 'automatic_tax_filing', 'automatic_payout'] } } });
+  assert(automaticEvents === 0, 'L45 must not create automatic tax filing or payout events');
+  console.log(`l45_finance_total=${financeList.total}`);
+  console.log(`l45_concurrent_success_count=${concurrent.filter((result) => result.status === 'fulfilled').length}`);
+  console.log(`l45_csv_formula_safe=${!executableFormula}`);
+  console.log('L45 manual tax review export runtime assertions passed.');
+}
+
 async function main() {
   await ensureDockerE2eFixtures(prisma);
   const fixtureProduct = await getProductInventory(DOCKER_E2E_PRODUCT_ID);
@@ -1124,6 +1228,7 @@ async function main() {
   console.log(`inventory_after_refund=${stockAfterRefund}`);
   console.log(`final_status=${finalClose.status}`);
 
+  await runL45TaxReviewScenario();
   await runL44WithdrawalScenario();
   await runL43RewardLedgerScenario();
   assertNoRiskFindings();

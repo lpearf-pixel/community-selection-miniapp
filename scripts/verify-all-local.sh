@@ -83,3 +83,4 @@ pnpm exec tsx scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts
 
 # L44 verifier registered via stage-workflow.ts
 pnpm exec tsx scripts/verify-l44-manual-withdrawal-review-local.ts
+pnpm exec tsx scripts/verify-l45-manual-tax-review-export-local.ts
