@@ -1,0 +1,35 @@
+name: L44 fix report order verifier once
+
+on:
+  push:
+    branches:
+      - codex/add-manual-withdrawal-review-workbench
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/add-manual-withdrawal-review-workbench
+          fetch-depth: 0
+      - name: Apply verifier fix
+        run: node .github/scripts/fix-l44-report-order-verifier.cjs
+      - name: Remove one-time files
+        run: |
+          rm -f .github/scripts/fix-l44-report-order-verifier.cjs
+          rm -f .github/workflows/l44-fix-report-order-verifier-once.yml
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix: validate L44 report publish order inside main"
+          git push origin HEAD:codex/add-manual-withdrawal-review-workbench
