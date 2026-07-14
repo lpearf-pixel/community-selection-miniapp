@@ -277,9 +277,12 @@ const unfinishedSection = l44Report.split('## 10. 未完成项')[1]?.split('## 1
 assert(unfinishedSection.trim() === '暂无自动发现', `L44 report unfinished section must be empty; actual=${unfinishedSection.trim()}`);
 
 const stageWorkflowSource = read('scripts/stage-workflow.ts');
-const reportStageIndex = stageWorkflowSource.indexOf('runReportStage(args.stage!)');
-const reportVerifierIndex = stageWorkflowSource.indexOf('runReportVerifier()');
-const reportPublishIndex = stageWorkflowSource.indexOf('runReportPublish(args)');
+const mainStart = stageWorkflowSource.indexOf('function main(): void {');
+assert(mainStart >= 0, 'stage workflow main function must exist');
+const mainSource = stageWorkflowSource.slice(mainStart);
+const reportStageIndex = mainSource.indexOf('runReportStage(args.stage!)');
+const reportVerifierIndex = mainSource.indexOf('runReportVerifier();');
+const reportPublishIndex = mainSource.indexOf('runReportPublish(args)');
 assert(reportStageIndex >= 0, 'stage workflow must run report:stage in publish flow');
 assert(reportVerifierIndex > reportStageIndex, 'stage workflow must run report verifier after report:stage');
 assert(reportPublishIndex > reportVerifierIndex, 'stage workflow must run report verifier before report publish');
