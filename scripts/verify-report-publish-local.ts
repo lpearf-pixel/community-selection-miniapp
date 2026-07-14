@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -6,6 +7,36 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function read(path: string) {
   return readFileSync(path, 'utf8');
+}
+
+
+function gitOutput(args: string[]) {
+  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+}
+
+function gitDiffFiles(base: string, head: string) {
+  const output = gitOutput(['diff', '--name-only', `${base}...${head}`]);
+  return Array.from(new Set(output.split('\n').map((line) => line.trim()).filter(Boolean))).sort();
+}
+
+function extractMarkdownFilePaths(report: string) {
+  const section = report.split('## 2. 本阶段变更范围')[1]?.split('## 3. API 变化')[0] ?? '';
+  const files: string[] = [];
+  for (const line of section.split('\n')) {
+    if (!line.startsWith('|')) continue;
+    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
+    if (cells.length < 3) continue;
+    const file = cells[1];
+    if (file === '文件' || file === '---') continue;
+    if (file.includes('/') || file === 'docker-compose.yml') files.push(file);
+  }
+  return Array.from(new Set(files)).sort();
+}
+
+function assertSetEqual(expected: string[], actual: string[], label: string) {
+  const missing = expected.filter((file) => !actual.includes(file));
+  const extra = actual.filter((file) => !expected.includes(file));
+  assert(missing.length === 0 && extra.length === 0, `${label} mismatch. missing=${missing.join(',')} extra=${extra.join(',')}`);
 }
 
 const generatePath = 'scripts/generate-stage-report.ts';
@@ -55,6 +86,16 @@ for (const required of [
   'L42 business base branch must be configured',
   'error TS',
   'raw compliance scan',
+  'raw compliance scan passed.',
+  'commandPassedInSectionOnly',
+  'assertChangedFileCoverage',
+  'expectedCoreFiles',
+  '--name-only',
+  'Stage report changed-file coverage mismatch',
+  '202607130001_l43_reward_ledger_t7_refund_deduct',
+  '202607130002_l43_reward_ledger_t3_refund_deduct',
+  'review_status, review_note, reviewed_by_admin_id, reviewed_at, last_adjusted_at',
+  'idempotency_key, event_type, affects_available_balance, effective_at, refund_id',
   'Stage workflow',
   'placeholder\\s*=',
   'placeholder-not-for-login',
@@ -79,6 +120,11 @@ assert(!generateSource.includes("({ item, status: 'passed'"), 'L40 checklist mus
 assert(!generateSource.includes('/\\bfailed\\b/i.test'), 'stage report must not treat the business word failed as a failure marker');
 assert(generateSource.includes('detectAdminTypecheck(content)'), 'L43 report must use detectAdminTypecheck(content)');
 assert(!generateSource.includes('parseAdminTypecheck(content)'), 'generate-stage-report must not call undefined parseAdminTypecheck(content)');
+assert(!generateSource.includes('l43Manifest.files'), 'L43 report generator must not use l43Manifest.files as changed-file source');
+assert(generateSource.includes('git') && generateSource.includes('diff') && generateSource.includes('--name-only') && generateSource.includes('...HEAD'), 'L43 report generator must use real git diff changed files');
+assert(generateSource.includes('Commission') && generateSource.includes('review_status') && generateSource.includes('last_adjusted_at'), 'L43 report must describe Commission concrete fields');
+assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
+assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
 for (const permissionText of ['leader self', 'reward.view', 'reward.manage', 'super_admin global']) {
   assert(generateSource.includes(permissionText), `L43 report permissions should include ${permissionText}`);
 }
@@ -94,5 +140,19 @@ for (const required of ['git fetch origin', 'git pull --ff-only', 'pnpm verify:a
 
 const verifyAll = read(verifyAllPath);
 assert(verifyAll.includes('pnpm exec tsx scripts/verify-report-publish-local.ts'), 'verify-all should include report publish verifier');
+
+const l43BaseCommit = '20d5023f0e493bad7485e4fe8cbc5ccba014e118';
+execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L43'], { stdio: 'pipe' });
+const l43Report = read('reports/stage-L43-report.md');
+const expectedFiles = gitDiffFiles(l43BaseCommit, 'HEAD');
+const reportFiles = extractMarkdownFilePaths(l43Report);
+assertSetEqual(expectedFiles, reportFiles, 'L43 report changed files');
+assert(l43Report.includes(`业务稳定 commit：${l43BaseCommit}`), 'L43 report must include base commit');
+assert(l43Report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L43 report source commit must equal HEAD');
+for (const required of ['prisma/migrations/202607130001_l43_reward_ledger_t7_refund_deduct/migration.sql', 'prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql', 'review_status', 'last_adjusted_at', 'idempotency_key', 'affects_available_balance', 'original_key:legacy:{ledger.id}']) {
+  assert(l43Report.includes(required), `L43 report should include ${required}`);
+}
+assert(!l43Report.includes('Commission | L43 manifest'), 'L43 report must not contain Commission manifest placeholder');
+assert(!l43Report.includes('RewardLedger | L43 manifest'), 'L43 report must not contain RewardLedger manifest placeholder');
 
 console.log('Report publish verification passed.');

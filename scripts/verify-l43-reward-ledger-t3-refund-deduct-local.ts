@@ -13,6 +13,7 @@ const idempotencyMigration = read('prisma/migrations/202607130002_l43_reward_led
 const docker = read('scripts/verify-docker-api-e2e-local.ts');
 const dockerCompose = read('docker-compose.yml');
 const reportGenerator = read('scripts/generate-stage-report.ts');
+const stageWorkflow = read('scripts/stage-workflow.ts');
 
 function functionSlice(source: string, functionName: string) {
   const start = source.search(new RegExp(`(?:function|async function|export function|export async function)\\s+${functionName}\\b`));
@@ -36,6 +37,26 @@ for (const reportMarker of ['hasPositiveL43Marker', 'release_due_fixture_status=
   assert(reportGenerator.includes(reportMarker), `L43 report generator missing runtime evidence marker ${reportMarker}`);
 }
 assert(reportGenerator.includes('全局 API 成功响应中出现 0 结果') && reportGenerator.includes('报告声称全局 API 已验收但缺少完整非零运行时证据'), 'L43 report must flag missing or zero global API runtime evidence as high risk');
+for (const reportQualitySnippet of [
+  'expectedCoreFiles',
+  'getStageBaseRef',
+  "'diff', '--name-only'",
+  'assertChangedFileCoverage',
+  'Stage report changed-file coverage mismatch',
+  'Diff base：',
+  'Changed files count：',
+  'commandPassedInSectionOnly',
+  "raw compliance scan passed.",
+  '202607130001_l43_reward_ledger_t7_refund_deduct',
+  '202607130002_l43_reward_ledger_t3_refund_deduct',
+  'review_status, review_note, reviewed_by_admin_id, reviewed_at, last_adjusted_at',
+  'idempotency_key, event_type, affects_available_balance, effective_at, refund_id',
+  'original_key:legacy:{ledger.id}'
+]) {
+  assert(reportGenerator.includes(reportQualitySnippet), `L43 report generator missing quality snippet: ${reportQualitySnippet}`);
+}
+assert(!reportGenerator.includes('l43Manifest.files'), 'L43 report generator must not use l43Manifest.files as changed-file source');
+assert(stageWorkflow.includes("title: 'raw compliance scan'") && stageWorkflow.includes('scripts/verify-no-raw-compliance-terms-local.ts') && stageWorkflow.includes('RAW_COMPLIANCE_SCAN'), 'L43 stage workflow must include independent raw compliance scan command');
 
 const mainEnd = docker.indexOf('main().catch');
 assert(mainEnd > 0, 'Docker E2E must call main().catch');

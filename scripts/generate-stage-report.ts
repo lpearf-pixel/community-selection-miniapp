@@ -206,7 +206,7 @@ const l43Manifest = {
   businessBaseBranch: 'stable/l42-business-base',
   businessBaseCommit: '20d5023f0e493bad7485e4fe8cbc5ccba014e118',
   title: 'L43 reward ledger T3 refund deduct',
-  files: ['prisma/schema.prisma','apps/api/src/services/commission-service.ts','apps/api/src/routes/commissions.ts','apps/api/src/routes/rewards.ts','apps/admin/src/pages/rewards/RewardLedgerPage.tsx','scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'],
+  expectedCoreFiles: ['prisma/schema.prisma','apps/api/src/services/commission-service.ts','apps/api/src/routes/commissions.ts','apps/api/src/routes/rewards.ts','apps/admin/src/pages/rewards/RewardLedgerPage.tsx','scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'],
   apis: [
     { method: 'GET', path: '/api/leaders/me/commissions', permissions: ['leader self'], purpose: 'Leader 开团服务奖励安全查询', verified: 'yes' },
     { method: 'GET', path: '/api/admin/rewards', permissions: ['reward.view'], purpose: 'Admin 奖励列表', verified: 'yes' },
@@ -743,7 +743,22 @@ function safeRead(path: string) {
   }
 }
 
+function getStageBaseRef() {
+  if (isL43Stage) return l43Manifest.businessBaseCommit || l43Manifest.businessBaseBranch;
+  return '';
+}
+
+function parseChangedFiles(output: string) {
+  return Array.from(new Set(output.split('\n').map((line) => line.trim()).filter(Boolean))).sort();
+}
+
 function getChangedFiles() {
+  const stageBaseRef = getStageBaseRef();
+  if (stageBaseRef) {
+    const diff = runGit(['diff', '--name-only', `${stageBaseRef}...HEAD`]);
+    if (!diff.ok) return { baseRef: stageBaseRef, files: [] as string[], error: `Failed to read stage diff from ${stageBaseRef}...HEAD: ${diff.output}` };
+    return { baseRef: stageBaseRef, files: parseChangedFiles(diff.output), error: '' };
+  }
   if (isL15Stage) return { files: l15Manifest.files, error: '' };
   if (isL16Stage) return { files: l16Manifest.files, error: '' };
   if (isL17Stage) return { files: l17Manifest.files, error: '' };
@@ -758,7 +773,6 @@ function getChangedFiles() {
   if (isL25Stage) return { files: l25Manifest.files, error: '' };
   if (isL26Stage) return { files: l26Manifest.files, error: '' };
   if (isL27Stage) return { files: l27Manifest.files, error: '' };
-  if (isL43Stage) return { files: l43Manifest.files, error: '' };
   if (isL42Stage) return { files: l42Manifest.files, error: '' };
   if (isL41Stage) return { files: l41Manifest.files, error: '' };
   if (isL40Stage) return { files: l40Manifest.files, error: '' };
@@ -775,19 +789,31 @@ function getChangedFiles() {
   if (isL29Stage) return { files: l29Manifest.files, error: '' };
   if (isL28Stage) return { files: l28Manifest.files, error: '' };
   const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
-  if (!diff.ok) return { files: [] as string[], error: diff.output };
-  const files = diff.output.split('\n').map((line) => line.trim()).filter(Boolean);
-  return { files, error: '' };
+  if (!diff.ok) return { baseRef: 'HEAD~1', files: [] as string[], error: diff.output };
+  return { baseRef: 'HEAD~1', files: parseChangedFiles(diff.output), error: '' };
 }
 
 function classifyFile(file: string): FileRow {
-  if (file.startsWith('apps/api/src/routes/')) return { type: 'API', file, description: 'API 路由或路由注册边界' };
-  if (file.startsWith('apps/api/src/modules/')) return { type: 'Service', file, description: '领域模块服务或模块边界' };
-  if (file.startsWith('apps/api/src/services/')) return { type: 'Service', file, description: '后端业务服务' };
-  if (file.startsWith('prisma/')) return { type: 'Prisma', file, description: '数据库 schema / migration / seed' };
+  if (file === 'apps/admin/src/App.tsx') return { type: 'Admin', file, description: 'Admin 应用入口与菜单注册' };
+  if (file.startsWith('apps/admin/src/api/')) return { type: 'Admin API Client', file, description: 'Admin 前端 API client' };
+  if (file.startsWith('apps/admin/src/pages/')) return { type: 'Admin Page', file, description: 'Admin 页面或交互逻辑' };
   if (file.startsWith('apps/admin/')) return { type: 'Admin', file, description: '后台页面或前端逻辑' };
+  if (file.startsWith('apps/api/src/routes/')) return { type: 'API Route', file, description: 'API 路由或路由注册边界' };
+  if (file.startsWith('apps/api/src/modules/')) return { type: 'API Module', file, description: 'API 领域模块服务或模块边界' };
+  if (file.startsWith('apps/api/src/services/')) return { type: 'Service', file, description: '后端业务服务' };
+  if (file === 'prisma/schema.prisma') return { type: 'Prisma Schema', file, description: 'Prisma schema 数据模型定义' };
+  if (file.startsWith('prisma/migrations/') && file.endsWith('/migration.sql')) return { type: 'Prisma Migration', file, description: 'Prisma migration SQL；需保持已应用文件 checksum 稳定' };
+  if (file.startsWith('prisma/')) return { type: 'Prisma', file, description: '数据库 schema / migration / seed' };
+  if (/^scripts\/verify-.*\.ts$/.test(file)) return { type: 'Verifier', file, description: '阶段验收或防回归 verifier' };
+  if (file === 'scripts/stage-workflow.ts') return { type: 'Stage Workflow', file, description: '阶段验证工作流编排' };
+  if (file === 'scripts/generate-stage-report.ts') return { type: 'Report Generator', file, description: '阶段报告生成器' };
+  if (file === 'scripts/verify-all-local.sh') return { type: 'Verify Entry', file, description: '本地总体验证入口' };
   if (file.startsWith('scripts/')) return { type: 'Script', file, description: '验收、检查或工具脚本' };
-  if (file.startsWith('docs/')) return { type: 'Docs', file, description: '文档或 review 说明' };
+  if (file === 'docker-compose.yml') return { type: 'Docker', file, description: 'Docker Compose 开发/验证环境配置' };
+  if (file.startsWith('docs/plans/')) return { type: 'Governance Document', file, description: '阶段治理与开发规范文档' };
+  if (file.startsWith('docs/reviews/')) return { type: 'Review Document', file, description: '阶段 review / audit 文档' };
+  if (file.startsWith('docs/architecture/')) return { type: 'Architecture Document', file, description: '架构说明文档' };
+  if (file.startsWith('docs/') && file.endsWith('.md')) return { type: 'Business Document', file, description: '业务说明或验收文档' };
   if (file === 'package.json') return { type: 'Config', file, description: '根项目脚本配置' };
   return { type: 'Other', file, description: '其他变更' };
 }
@@ -885,7 +911,19 @@ function extractModels(files: string[]) {
   if (isL25Stage) return l25Manifest.db.map((model) => ({ model, change: 'L25 manifest', description: 'L25 订单确认页体验与库存/数量前置校验数据库范围' }));
   if (isL26Stage) return l26Manifest.db.map((model) => ({ model, change: 'L26 manifest', description: 'L26 团购成团规则与参团链路校验数据库范围' }));
   if (isL27Stage) return l27Manifest.db.map((model) => ({ model, change: 'L27 manifest', description: 'L27 团购过期失败处理与人工退款/关闭流程数据库范围' }));
-  if (isL43Stage) return l43Manifest.db.map((model) => ({ model, change: 'L43 manifest', description: '奖励账本 T+3 与退款扣减增强' }));
+  if (isL43Stage) {
+    const migrations = files.filter((file) => file.startsWith('prisma/migrations/') && file.endsWith('/migration.sql'));
+    const rows = [
+      { model: 'Commission', change: 'review_status, review_note, reviewed_by_admin_id, reviewed_at, last_adjusted_at, available_at, deduct_amount_cents, final_amount_cents, status', description: '记录奖励当前聚合状态、T+3 可用时间、退款扣减和人工复核信息。' },
+      { model: 'RewardLedger', change: 'idempotency_key, event_type, affects_available_balance, effective_at, refund_id, amount_before_cents, amount_after_cents, balance_after_cents, commission_id, order_id', description: '不可变奖励事件账本，支持 available 入账、退款扣减、backfill 和幂等。' }
+    ];
+    for (const migration of migrations) {
+      if (migration.includes('202607130001_l43_reward_ledger_t7_refund_deduct')) rows.push({ model: migration, change: 'Migration 1', description: '增加 Commission 人工复核字段；增加 RewardLedger 幂等键、事件类型、余额影响标记、有效时间、退款来源和调整前后金额；增加相关索引；目录名保留历史 T7 名称，但最终业务规则已经是 T+3；不得修改已经应用的 migration。' });
+      else if (migration.includes('202607130002_l43_reward_ledger_t3_refund_deduct')) rows.push({ model: migration, change: 'Migration 2', description: '对历史重复的非空 idempotency_key 做确定性重写；保留第一条原始 key；后续重复 key 改为 original_key:legacy:{ledger.id}；不删除账本；不修改金额、方向、余额和业务归属；删除旧 partial unique index；创建 Prisma String? @unique 对应的普通 nullable unique index。' });
+      else rows.push({ model: migration, change: 'L43 migration', description: 'L43 数据库迁移文件' });
+    }
+    return rows;
+  }
   if (isL42Stage) return l42Manifest.db.map((model) => ({ model, change: 'L42 manifest', description: '复用既有失败团购收口相关模型' }));
   if (isL41Stage) return l41Manifest.db.map((model) => ({ model, change: 'L41 manifest', description: 'StockLedger 最小增强' }));
   if (isL40Stage) return l40Manifest.db.map((model) => ({ model, change: 'L40 manifest', description: '无新增 DB' }));
@@ -1107,6 +1145,16 @@ function commandPassed(content: string, title: string, successMarkers: string[],
   return matched ? 'passed' : 'not detected';
 }
 
+function commandPassedInSectionOnly(content: string, title: string, successMarkers: string[], requireAllMarkers = false): StageVerifyStatus {
+  const section = commandSection(content, title);
+  if (!section) return 'not detected';
+  if (hasExplicitFailure(section)) return 'failed';
+  const matched = requireAllMarkers
+    ? successMarkers.every((marker) => section.includes(marker))
+    : successMarkers.some((marker) => section.includes(marker));
+  return matched ? 'passed' : 'not detected';
+}
+
 function stageVerifyChecks(content: string) {
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code', 'exit code 1', 'exit code 2', 'MODULE_NOT_FOUND', 'TypeScript error TS'];
   const hasFailureMarker = hasExplicitFailure(content);
@@ -1122,7 +1170,7 @@ function stageVerifyChecks(content: string) {
       { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.']) },
       { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
       { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
-      { command: 'raw compliance scan', result: commandPassed(content, 'raw compliance scan', ['Compliance scan passed']) },
+      { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },
       { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
     ];
   }
@@ -1178,7 +1226,7 @@ function parseLatestVerifyOutput() {
 }
 
 function complianceItems(verifyOutput: ReturnType<typeof parseLatestVerifyOutput>) {
-  const passed = verifyOutput.exists && /compliance.*(pass|passed|通过)|合规.*(pass|passed|通过)/i.test(verifyOutput.raw ?? '');
+  const passed = verifyOutput.exists && (isL43Stage ? commandPassedInSectionOnly(verifyOutput.raw ?? '', 'raw compliance scan', ['raw compliance scan passed.']) === 'passed' : /compliance.*(pass|passed|通过)|合规.*(pass|passed|通过)/i.test(verifyOutput.raw ?? ''));
   const mark = passed ? 'x' : ' ';
   const suffix = passed ? '' : '（需人工 review）';
   return [
@@ -1274,13 +1322,52 @@ function highRiskItems() {
   return risks;
 }
 const highRisks = highRiskItems();
+const fileTypeCounts = fileTypeSummary(fileRows);
 
 function assertReportQuality(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+
+function fileTypeSummary(rows: FileRow[]) {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.type, (counts.get(row.type) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function assertChangedFileCoverage(actualFiles: string[], reportRows: FileRow[]) {
+  const actual = [...new Set(actualFiles)].sort();
+  const reported = [...new Set(reportRows.map((row) => row.file))].sort();
+  assertReportQuality(actual.length > 0, 'Stage report changed-file list must not be empty.');
+  assertReportQuality(actual.length === actualFiles.length, 'Stage report actual changed-file list contains duplicate paths.');
+  assertReportQuality(reported.length === reportRows.length, 'Stage report rows contain duplicate file paths.');
+  reportRows.forEach((row, index) => {
+    assertReportQuality(row.type.trim().length > 0, `Stage report file row ${index + 1} type must be non-empty`);
+    assertReportQuality(row.file.trim().length > 0, `Stage report file row ${index + 1} file must be non-empty`);
+    assertReportQuality(row.description.trim().length > 0, `Stage report file row ${index + 1} description must be non-empty`);
+  });
+  assertReportQuality(
+    JSON.stringify(actual) === JSON.stringify(reported),
+    [
+      'Stage report changed-file coverage mismatch.',
+      `actual=${actual.length}`,
+      `reported=${reported.length}`,
+      `missing=${actual.filter((file) => !reported.includes(file)).join(',')}`,
+      `extra=${reported.filter((file) => !actual.includes(file)).join(',')}`
+    ].join(' ')
+  );
+}
+
 function validateReportInputs() {
-  if (isL43Stage) assertReportQuality(l43Manifest, 'L43 stage manifest must exist');
+  if (isL43Stage) {
+    assertReportQuality(l43Manifest, 'L43 stage manifest must exist');
+    assertReportQuality(!changed.error, changed.error || 'L43 changed-file diff must be available');
+    assertChangedFileCoverage(changed.files, fileRows);
+    for (const file of l43Manifest.expectedCoreFiles) assertReportQuality(changed.files.includes(file), `L43 expected changed file missing: ${file}`);
+    assertReportQuality(modelRows.some((row) => row.model.includes('202607130001_l43_reward_ledger_t7_refund_deduct')), 'L43 report must include migration 202607130001');
+    assertReportQuality(modelRows.some((row) => row.model.includes('202607130002_l43_reward_ledger_t3_refund_deduct')), 'L43 report must include migration 202607130002');
+    assertReportQuality(!modelRows.some((row) => row.change === 'L43 manifest'), 'L43 database rows must not use L43 manifest placeholder descriptions');
+  }
   if (isL42Stage) assertReportQuality(l42Manifest, 'L42 stage manifest must exist');
   if (isL41Stage) assertReportQuality(l41Manifest, 'L41 stage manifest must exist');
   if (isL40Stage) assertReportQuality(l40Manifest, 'L40 stage manifest must exist');
@@ -1339,7 +1426,7 @@ const report = `# 阶段验收报告：${stage}
 
 ## 2. 本阶段变更范围
 
-${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL43Stage ? `- Diff base：${l43Manifest.businessBaseBranch}\n- Diff base commit：${l43Manifest.businessBaseCommit}\n- Source commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}\n- Changed files count：${changed.files.length}\n\n${table(['类型', '数量'], fileTypeCounts.map(([type, count]) => [type, String(count)]))}\n\n` : ''}${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 
