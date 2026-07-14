@@ -130,9 +130,13 @@ assert(route.includes('reply.code((error as { statusCode?: number }).statusCode 
 assert(route.includes('commission_links') && route.includes('linksInScope'), 'admin list/detail use persistent links for data scope');
 assert(route.includes('requireAdminPermission("finance.view")'), 'tax records keep finance.view semantics');
 const taxRecordsRoute = routeBlock(route, 'get', '/api/admin/tax-records');
-assert(taxRecordsRoute.includes('accessibleWithdrawalIds'), 'tax records must resolve accessible withdrawal ids before limiting results');
-assert(taxRecordsRoute.includes('withdrawalScopeWhere(context)'), 'tax records must apply withdrawal data scope in database');
-assert(taxRecordsRoute.includes('source_id: { in: accessibleWithdrawalIds }'), 'tax records must constrain withdrawal source ids before take');
+const taxWhereHelper = functionSlice(route, 'buildTaxRecordWhere');
+assert(taxRecordsRoute.includes('buildTaxRecordWhere(query, context)'), 'tax records must build scoped where before count and pagination');
+assert(taxRecordsRoute.includes('prisma.taxRecord.count({ where })'), 'tax records must count with the scoped database where');
+assert(taxRecordsRoute.includes('skip: (page - 1) * pageSize') && taxRecordsRoute.includes('take: pageSize'), 'tax records must paginate in the database after applying scope');
+assert(taxWhereHelper.includes('withdrawalScopeWhere(context)'), 'tax records helper must apply withdrawal data scope');
+assert(taxWhereHelper.includes('prisma.withdrawal.findMany') && taxWhereHelper.includes('select: { id: true }'), 'tax records helper must resolve authorized withdrawal ids');
+assert(taxWhereHelper.includes('source_id: { in:'), 'tax records helper must constrain source ids before count/take');
 assert(!taxRecordsRoute.includes('for (const record of records)'), 'tax records must not filter data scope after take');
 
 const l44Function = functionSlice(e2e, 'runL44WithdrawalScenario');
