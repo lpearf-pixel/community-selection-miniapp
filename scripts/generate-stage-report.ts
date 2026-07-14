@@ -488,6 +488,10 @@ function runGit(args: string[]): CommandResult {
 }
 
 
+function isAncestor(ancestor: string, descendant = 'HEAD') {
+  return runGit(['merge-base', '--is-ancestor', ancestor, descendant]).ok;
+}
+
 const l175Manifest = {
   files: [
     'apps/api/src/routes/group-buys.ts',
@@ -1423,6 +1427,9 @@ function assertChangedFileCoverage(actualFiles: string[], reportRows: FileRow[])
 function validateReportInputs() {
   if (isL44Stage) {
     assertReportQuality(l44Manifest, 'L44 stage manifest must exist');
+    assertReportQuality(isAncestor(l44Manifest.businessBaseCommit, 'HEAD'), ['L44 source branch must descend from business base commit', `base=${l44Manifest.businessBaseCommit}`, `head=${runGit(['rev-parse', 'HEAD']).output}`].join(' '));
+    const l44MergeBase = runGit(['merge-base', 'HEAD', l44Manifest.businessBaseCommit]);
+    assertReportQuality(l44MergeBase.ok && l44MergeBase.output.trim() === l44Manifest.businessBaseCommit, ['L44 merge-base must equal business base commit', `expected=${l44Manifest.businessBaseCommit}`, `actual=${l44MergeBase.output}`].join(' '));
     assertReportQuality(!changed.error, changed.error || 'L44 changed-file diff must be available');
     assertChangedFileCoverage(changed.files, fileRows);
     for (const file of l44Manifest.expectedCoreFiles) assertReportQuality(changed.files.includes(file), `L44 expected changed file missing: ${file}`);

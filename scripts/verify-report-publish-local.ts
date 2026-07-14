@@ -229,6 +229,10 @@ assert(fixtureTodoItems('scripts/verify-example-local.ts', verifierFixture).leng
 
 
 const l44BaseCommit = '72a84e81218845c23872bd91ab58a03ccf4c0f33';
+const l44Head = gitOutput(['rev-parse', 'HEAD']);
+execFileSync('git', ['merge-base', '--is-ancestor', l44BaseCommit, l44Head], { stdio: 'pipe' });
+const l44MergeBase = gitOutput(['merge-base', l44BaseCommit, l44Head]);
+assert(l44MergeBase === l44BaseCommit, ['L44 report source must actually descend from business base', `base=${l44BaseCommit}`, `head=${l44Head}`, `merge_base=${l44MergeBase}`].join(' '));
 const l44VerifyOutputPath = 'reports/latest-verify-output.txt';
 assert(existsSync(l44VerifyOutputPath), 'L44 report verifier requires reports/latest-verify-output.txt from the completed L44 chain');
 execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L44'], { stdio: 'pipe' });
