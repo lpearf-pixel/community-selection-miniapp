@@ -369,6 +369,13 @@ model Withdrawal {
   invoice_status       String           @default("not_required")
   tax_remark           String?
   admin_remark         String?
+  client_request_id    String?          @unique
+  reviewed_by_admin_id String?
+  reviewed_at          DateTime?
+  processed_by_admin_id String?
+  processed_at         DateTime?
+  rejected_at          DateTime?
+  manual_reference     String?
   created_at           DateTime         @default(now())
   updated_at           DateTime         @updatedAt
   leader_user          User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])

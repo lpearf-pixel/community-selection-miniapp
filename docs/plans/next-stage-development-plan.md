@@ -1,3 +1,10 @@
+# 下一阶段开发计划
+
+当前稳定基线：stable/l43-business-base
+L43 merge commit：72a84e81218845c23872bd91ab58a03ccf4c0f33
+
+L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台。L45 尚未开始。
+
 # 后续阶段开发总计划：L39 到 MVP/上线收口
 
 当前稳定基线：`stable/l38-business-base`
