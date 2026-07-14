@@ -1,0 +1,32 @@
+name: L44 report verifier fix once
+
+on:
+  push:
+    branches:
+      - codex/add-manual-withdrawal-review-workbench
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/add-manual-withdrawal-review-workbench
+          fetch-depth: 0
+      - name: Apply exact verifier fix
+        run: python3 scripts/_apply_report_verifier_fix.py
+      - name: Remove temporary patch files
+        run: |
+          rm -f scripts/_apply_report_verifier_fix.py
+          rm -f .github/workflows/l44-report-verifier-fix-once.yml
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/verify-report-publish-local.ts scripts/_apply_report_verifier_fix.py .github/workflows/l44-report-verifier-fix-once.yml
+          git commit -m 'fix: validate L44 unfinished report section format'
+          git push origin HEAD:codex/add-manual-withdrawal-review-workbench
