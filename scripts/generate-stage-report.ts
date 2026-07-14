@@ -204,7 +204,10 @@ function l43GlobalApiVerified(path: string) {
 
 
 function hasL44RuntimeMarkers() {
-  return ['withdrawal_same_request_concurrent_count=1','withdrawal_competing_request_success_count=1','withdrawal_link_count=2','withdrawal_ledger_mismatch_event_count=1','withdrawal_approve_reject_success_count=1','scoped_finance_list_filtered'].every((marker) => latestVerifyOutputForManifest.includes(marker));
+  const requiredSections = ['=== L44 leader identity scenario ===','=== L44 withdrawal creation scenario ===','=== L44 same request concurrency scenario ===','=== L44 competing claim scenario ===','=== L44 ledger mismatch scenario ===','=== L44 rejection restore scenario ===','=== L44 approve reject race scenario ===','=== L44 paid scenario ===','=== L44 withdrawal authorization scenario ==='];
+  const requiredPassMarkers = ['l44_identity_scenario_passed','l44_creation_scenario_passed','l44_same_request_concurrency_passed','l44_competing_claim_passed','l44_ledger_mismatch_passed','l44_rejection_restore_passed','l44_approve_reject_race_passed','l44_paid_scenario_passed','l44_authorization_scenario_passed'];
+  const requiredMetrics = ['withdrawal_same_request_concurrent_count=1','withdrawal_competing_request_success_count=1','withdrawal_link_count=2','withdrawal_ledger_mismatch_event_count=1','withdrawal_approve_reject_success_count=1','scoped_finance_list_filtered'];
+  return [...requiredSections, ...requiredPassMarkers, ...requiredMetrics].every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
 const l44Manifest = {
   businessBaseBranch: 'stable/l43-business-base',

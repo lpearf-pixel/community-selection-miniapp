@@ -7,9 +7,7 @@ L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台
 
 # 后续阶段开发总计划：L39 到 MVP/上线收口
 
-当前稳定基线：`stable/l38-business-base`
-
-L38 merge commit：`1d27be8bab675ba3ecd24a48358762cf433a3bc2`
+历史基线说明：L38 merge commit 为 `1d27be8bab675ba3ecd24a48358762cf433a3bc2`；当前稳定基线以上方 L43 信息为准。
 
 本计划用于约束 L39-L50 的后续阶段开发。后续每一阶段都必须只做本阶段范围内的工作，不能提前开发下一阶段；所有阶段都必须保留 L24-L当前阶段 chain regression，并按阶段发布 `reports/Lxx/latest.md` 与 `reports/Lxx/latest-verify-output.txt`，但业务 PR 不提交 `reports/` 目录。
 

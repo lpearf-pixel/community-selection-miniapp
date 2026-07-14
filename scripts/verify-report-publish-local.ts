@@ -161,6 +161,12 @@ for (const required of ['L44 manual withdrawal review workbench','stable/l43-bus
   assert(generateSource.includes(required), `L44 report generator should include ${required}`);
 }
 assert(!generateSource.includes("permissions: ['public']"), 'L44 report permissions must not be public');
+const dockerE2eSource = read('scripts/verify-docker-api-e2e-local.ts');
+assert(!dockerE2eSource.includes('const l44RuntimeEvidence'), 'L44 Docker E2E must not use hardcoded evidence object');
+for (const required of ['=== L44 leader identity scenario ===','l44_creation_scenario_passed','Promise.allSettled','/api/leaders/me/withdrawals','/api/admin/withdrawals/','prisma.withdrawal','prisma.withdrawalCommission','prisma.rewardLedger','prisma.businessEventLog','getAvailableRewardBalance']) {
+  assert(dockerE2eSource.includes(required), `L44 Docker E2E should include real runtime evidence: ${required}`);
+}
+
 
 assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
 assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');

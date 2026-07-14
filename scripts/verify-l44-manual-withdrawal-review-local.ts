@@ -39,6 +39,19 @@ function routeBlock(source: string, method: 'get' | 'post', path: string) {
   throw new Error(`route method must exist: ${method.toUpperCase()} ${path}`);
 }
 
+
+function functionSlice(source: string, functionName: string) {
+  const start = source.indexOf(`async function ${functionName}(`);
+  assert(start >= 0, `${functionName} must exist`);
+  const next = source.indexOf('\nasync function ', start + 1);
+  return source.slice(start, next >= 0 ? next : source.length);
+}
+
+function assertTemplateMarker(fn: string, marker: string) {
+  assert(!fn.includes(`console.log('${marker}`) && !fn.includes(`console.log("${marker}`), `${marker} must not be hardcoded`);
+  assert(fn.includes('`' + marker + '=${'), `${marker} must be emitted from a template variable`);
+}
+
 const schema = read('prisma/schema.prisma');
 const route = read('apps/api/src/routes/withdrawals.ts');
 const e2e = read('scripts/verify-docker-api-e2e-local.ts');
@@ -111,11 +124,14 @@ assert(route.includes('reply.code((error as { statusCode?: number }).statusCode 
 assert(route.includes('commission_links') && route.includes('linksInScope'), 'admin list/detail use persistent links for data scope');
 assert(route.includes('requireAdminPermission("finance.view")'), 'tax records keep finance.view semantics');
 
-for (const marker of ['withdrawal_same_request_concurrent_count=1','withdrawal_competing_request_success_count=1','withdrawal_link_count=2','withdrawal_ledger_mismatch_event_count=1','withdrawal_approve_reject_success_count=1','scoped_finance_list_filtered']) assert(e2e.includes(marker), `Docker E2E marker ${marker}`);
-assert(e2e.includes('l44-withdrawal-e2e-') && e2e.includes('WithdrawalCommission') && e2e.includes('withdrawal_negative_no_db_mutation'), 'Docker E2E has L44 fixture/db assertions');
-const l44MarkerIndex = e2e.indexOf('L44 manual withdrawal review:');
-const mainCatchIndex = e2e.indexOf('main().catch');
-assert(l44MarkerIndex >= 0 && mainCatchIndex >= 0 && l44MarkerIndex < mainCatchIndex, 'markers are emitted from main execution path before main catch');
+const l44Function = functionSlice(e2e, 'runL44WithdrawalScenario');
+assert(!l44Function.includes('const l44RuntimeEvidence'), 'L44 E2E must not use hardcoded evidence object');
+for (const required of ['/api/leaders/me/withdrawals','/api/leaders/me/withdrawable-commissions','/api/admin/withdrawals/','Promise.all','Promise.allSettled']) assert(l44Function.includes(required), `L44 E2E must issue real request/concurrency: ${required}`);
+for (const required of ['prisma.withdrawal','prisma.withdrawalCommission','prisma.commission','prisma.rewardLedger','prisma.adminAuditLog','prisma.businessEventLog','getAvailableRewardBalance']) assert(l44Function.includes(required), `L44 E2E must assert database state: ${required}`);
+for (const marker of ['withdrawal_initial_available_balance_cents','withdrawal_reserved_amount_cents','withdrawal_balance_after_request_cents','withdrawal_same_request_concurrent_count','withdrawal_competing_request_success_count','withdrawal_link_count','withdrawal_ledger_mismatch_event_count','withdrawal_rejected_restore_ledger_count','withdrawal_balance_after_reject_cents','withdrawal_approve_reject_success_count','withdrawal_paid_status','withdrawal_balance_after_paid_cents','withdrawal_paid_ledger_count','withdrawal_repeat_no_duplicate']) assertTemplateMarker(l44Function, marker);
+for (const section of ['=== L44 leader identity scenario ===','=== L44 withdrawal creation scenario ===','=== L44 same request concurrency scenario ===','=== L44 competing claim scenario ===','=== L44 ledger mismatch scenario ===','=== L44 rejection restore scenario ===','=== L44 approve reject race scenario ===','=== L44 paid scenario ===','=== L44 withdrawal authorization scenario ===']) assert(l44Function.includes(section), `L44 E2E must include section ${section}`);
+for (const passed of ['l44_identity_scenario_passed','l44_creation_scenario_passed','l44_same_request_concurrency_passed','l44_competing_claim_passed','l44_ledger_mismatch_passed','l44_rejection_restore_passed','l44_approve_reject_race_passed','l44_paid_scenario_passed','l44_authorization_scenario_passed']) assert(l44Function.includes(passed), `L44 E2E must include pass marker ${passed}`);
+assert(e2e.includes('await runL44WithdrawalScenario();'), 'main must await runL44WithdrawalScenario');
 assert(mini.includes('STORAGE_KEY') && mini.includes('wx.setStorageSync') && mini.includes('wx.removeStorageSync') && !mini.includes('commission_ids.join'), 'Miniapp request id is reusable and not based on full commission ids');
 assert(admin.includes('RangePicker') && admin.includes('Drawer') && admin.includes('系统不会自动打款'), 'Admin workbench has filters/detail/manual copy');
 const all = [route, admin, mini].join('\n');
