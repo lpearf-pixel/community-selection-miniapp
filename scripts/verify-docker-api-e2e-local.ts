@@ -643,7 +643,25 @@ async function runL44WithdrawalScenario() {
   const raceFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: raceW.withdrawal_id } });
   const approvedEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_approved' } });
   const rejectedEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected' } });
-  assert(raceSuccessCount === 1 && ['approved', 'rejected'].includes(raceFinal.status) && approvedEvents + rejectedEvents === 1, 'L44 approve/reject race must have one success event and valid final state');
+  const raceCommissionAfter = await prisma.commission.findUniqueOrThrow({ where: { id: raceA.commission.id } });
+  const raceRestoreLedgerCount = await prisma.rewardLedger.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected_restore' } });
+  const raceBalanceAfter = await getAvailableRewardBalance(prisma, leaderRace.id);
+  assert(raceSuccessCount === 1, `L44 approve/reject race success count expected=1 actual=${raceSuccessCount}`);
+  assert(['approved', 'rejected'].includes(raceFinal.status), `L44 approve/reject race final status invalid actual=${raceFinal.status}`);
+  assert(!(approvedEvents > 0 && rejectedEvents > 0), `L44 approve/reject race must not write both success events approved=${approvedEvents} rejected=${rejectedEvents}`);
+  if (raceFinal.status === 'approved') {
+    assert(approvedEvents === 1, `approved race must write exactly one approved event actual=${approvedEvents}`);
+    assert(rejectedEvents === 0, `approved race must not write rejected event actual=${rejectedEvents}`);
+    assert(raceCommissionAfter.status === 'withdrawing' && raceCommissionAfter.withdrawal_id === raceW.withdrawal_id, `approved race commission state invalid ${JSON.stringify({ status: raceCommissionAfter.status, withdrawal_id: raceCommissionAfter.withdrawal_id })}`);
+    assert(raceRestoreLedgerCount === 0, `approved race must not write restore ledger actual=${raceRestoreLedgerCount}`);
+    assert(raceBalanceAfter === 0, `approved race balance expected=0 actual=${raceBalanceAfter}`);
+  } else {
+    assert(approvedEvents === 0, `rejected race must not write approved event actual=${approvedEvents}`);
+    assert(rejectedEvents === 1, `rejected race must write exactly one rejected event actual=${rejectedEvents}`);
+    assert(raceCommissionAfter.status === 'available' && raceCommissionAfter.withdrawal_id === null, `rejected race commission state invalid ${JSON.stringify({ status: raceCommissionAfter.status, withdrawal_id: raceCommissionAfter.withdrawal_id })}`);
+    assert(raceRestoreLedgerCount === 1, `rejected race must write one restore ledger actual=${raceRestoreLedgerCount}`);
+    assert(raceBalanceAfter === 111, `rejected race balance expected=111 actual=${raceBalanceAfter}`);
+  }
   console.log('l44_approve_reject_race_passed');
 
   console.log('=== L44 paid scenario ===');
