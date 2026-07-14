@@ -202,6 +202,30 @@ function l43GlobalApiVerified(path: string) {
   return 'yes';
 }
 
+
+function hasL44RuntimeMarkers() {
+  return ['withdrawal_same_request_concurrent_count=1','withdrawal_competing_request_success_count=1','withdrawal_link_count=2','withdrawal_ledger_mismatch_event_count=1','withdrawal_approve_reject_success_count=1','scoped_finance_list_filtered'].every((marker) => latestVerifyOutputForManifest.includes(marker));
+}
+const l44Manifest = {
+  businessBaseBranch: 'stable/l43-business-base',
+  businessBaseCommit: '72a84e81218845c23872bd91ab58a03ccf4c0f33',
+  title: 'L44 manual withdrawal review workbench',
+  expectedCoreFiles: ['prisma/schema.prisma','prisma/migrations/20260714000100_l44_manual_withdrawal_review/migration.sql','prisma/migrations/20260714000200_l44_withdrawal_commission_links/migration.sql','apps/api/src/routes/withdrawals.ts','apps/admin/src/pages/withdrawals/WithdrawalReviewPage.tsx','apps/miniapp/pages/leader/withdrawals/index.js','scripts/verify-l44-manual-withdrawal-review-local.ts','scripts/verify-docker-api-e2e-local.ts'],
+  apis: [
+    { method: 'GET', path: '/api/leaders/me/withdrawable-commissions', permissions: ['leader self'], purpose: 'Leader 可提现奖励', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'GET', path: '/api/leaders/me/withdrawals', permissions: ['leader self'], purpose: 'Leader 提现列表', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'GET', path: '/api/leaders/me/withdrawals/:id', permissions: ['leader self'], purpose: 'Leader 提现详情', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'POST', path: '/api/leaders/me/withdrawals', permissions: ['leader self'], purpose: '提交提现申请', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'GET', path: '/api/admin/withdrawals', permissions: ['withdrawal.view + data scope'], purpose: 'Admin 提现列表', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'GET', path: '/api/admin/withdrawals/:id', permissions: ['withdrawal.view + data scope'], purpose: 'Admin 提现详情', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'POST', path: '/api/admin/withdrawals/:id/approve', permissions: ['withdrawal.manage + data scope'], purpose: '人工审核通过', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'POST', path: '/api/admin/withdrawals/:id/reject', permissions: ['withdrawal.manage + data scope'], purpose: '人工驳回', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' },
+    { method: 'POST', path: '/api/admin/withdrawals/:id/mark-paid', permissions: ['withdrawal.manage + data scope'], purpose: '人工标记已处理', verified: hasL44RuntimeMarkers() ? 'yes' : 'not detected' }
+  ],
+  db: ['Withdrawal','WithdrawalCommission','L44 migrations'],
+  verify: ['scripts/verify-l44-manual-withdrawal-review-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L44 --verify --scope=chain']
+};
+
 const l43Manifest = {
   businessBaseBranch: 'stable/l42-business-base',
   businessBaseCommit: '20d5023f0e493bad7485e4fe8cbc5ccba014e118',
@@ -232,6 +256,7 @@ const l43Manifest = {
 const isL41Stage = stage.toUpperCase() === 'L41';
 const isL42Stage = stage.toUpperCase() === 'L42';
 const isL43Stage = stage.toUpperCase() === 'L43';
+const isL44Stage = stage.toUpperCase() === 'L44';
 const isL39Stage = stage.toUpperCase() === 'L39';
 const isL38Stage = stage.toUpperCase() === 'L38';
 const isL37Stage = stage.toUpperCase() === 'L37';
@@ -819,7 +844,7 @@ function classifyFile(file: string): FileRow {
 }
 
 function extractApis(files: string[]) {
-  if (isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+  if (isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
     if (isL43Stage) return l43Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL42Stage) return l42Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL41Stage) return l41Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
@@ -997,6 +1022,7 @@ function stageChecklist(stageName: string, files: string[]) {
   if (stageName.toUpperCase() === 'L30') {
     return l30Manifest.checklist.map((label): { label: string; checked: boolean; note?: string } => ({ label, checked: true }));
   }
+  if (stageName.toUpperCase() === 'L44') return l44Manifest.verify.map((item): StageChecklistItem => ({ label: item, checked: hasL44RuntimeMarkers(), note: hasL44RuntimeMarkers() ? 'passed' : '缺少 L44 运行时证据' }));
   if (stageName.toUpperCase() === 'L43') return l43Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L42') return l42Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
   if (stageName.toUpperCase() === 'L41') return l41Manifest.checklist.map((item): StageChecklistItem => ({ label: item.text, checked: item.passed, note: item.evidence }));
@@ -1037,7 +1063,8 @@ function stageChecklist(stageName: string, files: string[]) {
 }
 
 function findVerifyScripts(files: string[]) {
-  if (isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+  if (isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL44Stage) return l44Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : script.includes('verify-docker-api-e2e-local.ts') ? 'via stage-workflow' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L44 阶段报告质量门禁验收脚本' }));
     if (isL43Stage) return l43Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : script.includes('verify-docker-api-e2e-local.ts') ? 'via stage-workflow' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L43 阶段报告质量门禁验收脚本' }));
     if (isL42Stage) return l42Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L42 阶段报告质量门禁验收脚本' }));
     if (isL41Stage) return l41Manifest.verify.map((script): VerifyScriptRow => ({ script, exists: script.startsWith('scripts/') && script.endsWith('.ts') ? (existsSync(join(repoRoot, script.split(' ')[0])) ? 'yes' : 'no') : 'yes', inVerifyAll: script.includes('stage-workflow') ? 'yes' : (safeRead('scripts/verify-all-local.sh').includes(script.split(' ')[0]) ? 'yes' : 'no'), description: 'L41 阶段报告质量门禁验收脚本' }));
@@ -1427,19 +1454,26 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${isL44Stage ? l44Manifest.businessBaseBranch : isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
+- 业务稳定 commit：${isL44Stage ? l44Manifest.businessBaseCommit : isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
-- 本阶段目标：${isL43Stage ? l43Manifest.title : isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- 本阶段目标：${isL44Stage ? l44Manifest.title : isL43Stage ? l43Manifest.title : isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
 - Codex 自评结论：${conclusion}
 
 ## 2. 本阶段变更范围
 
-${isL43Stage ? `- Diff base：${l43Manifest.businessBaseBranch}\n- Diff base commit：${l43Manifest.businessBaseCommit}\n- Source commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}\n- Changed files count：${changed.files.length}\n\n${table(['类型', '数量'], fileTypeCounts.map(([type, count]) => [type, String(count)]))}\n\n` : ''}${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
+${isL44Stage ? `- Diff base：${l44Manifest.businessBaseBranch}
+- Diff base commit：${l44Manifest.businessBaseCommit}
+- Source commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
+- Changed files count：${changed.files.length}
+
+${table(['类型', '数量'], fileTypeCounts.map(([type, count]) => [type, String(count)]))}
+
+` : isL43Stage ? `- Diff base：${l43Manifest.businessBaseBranch}\n- Diff base commit：${l43Manifest.businessBaseCommit}\n- Source commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}\n- Changed files count：${changed.files.length}\n\n${table(['类型', '数量'], fileTypeCounts.map(([type, count]) => [type, String(count)]))}\n\n` : ''}${isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage ? `本报告基于 ${stage} stage manifest 与 latest verify output 生成，用于覆盖当前阶段范围。\n\n` : ''}${changed.error ? `无法自动获取，请人工补充。错误：${changed.error}` : table(['类型', '文件', '说明'], fileRows.map((row) => [row.type, row.file, row.description]))}
 
 ## 3. API 变化
 

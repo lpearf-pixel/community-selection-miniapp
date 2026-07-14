@@ -156,6 +156,12 @@ assert(!generateSource.includes('parseAdminTypecheck(content)'), 'generate-stage
 assert(!generateSource.includes('l43Manifest.files'), 'L43 report generator must not use l43Manifest.files as changed-file source');
 assert(generateSource.includes('git') && generateSource.includes('diff') && generateSource.includes('--name-only') && generateSource.includes('...HEAD'), 'L43 report generator must use real git diff changed files');
 assert(generateSource.includes('Commission') && generateSource.includes('review_status') && generateSource.includes('last_adjusted_at'), 'L43 report must describe Commission concrete fields');
+
+for (const required of ['L44 manual withdrawal review workbench','stable/l43-business-base','72a84e81218845c23872bd91ab58a03ccf4c0f33','WithdrawalCommission','GET', '/api/admin/withdrawals/:id', 'withdrawal.view + data scope', 'withdrawal.manage + data scope', 'hasL44RuntimeMarkers']) {
+  assert(generateSource.includes(required), `L44 report generator should include ${required}`);
+}
+assert(!generateSource.includes("permissions: ['public']"), 'L44 report permissions must not be public');
+
 assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
 assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
 assert(generateSource.includes('todos.length === 0'), 'passed report must require todos.length === 0');

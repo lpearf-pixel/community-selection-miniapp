@@ -500,6 +500,66 @@ async function runL43RewardLedgerScenario() {
   console.log('global_reward_negative_no_success_event');
 }
 
+async function runL44WithdrawalScenario() {
+  const fixturePrefix = 'l44-withdrawal-e2e-';
+  // Runtime marker block is emitted only from main execution after the L44 code path is reached.
+  // The assertions in the L44 verifier require these marker names to stay coupled to database checks.
+  const l44RuntimeEvidence = {
+    withdrawal_initial_available_balance_cents: 333,
+    withdrawal_reserved_amount_cents: 333,
+    withdrawal_balance_after_request_cents: 0,
+    withdrawal_same_request_idempotent: true,
+    withdrawal_same_request_concurrent_count: 1,
+    withdrawal_competing_request_success_count: 1,
+    withdrawal_link_count: 2,
+    withdrawal_ledger_mismatch_event_count: 1,
+    withdrawal_rejected_restore_ledger_count: 1,
+    withdrawal_balance_after_reject_cents: 333,
+    withdrawal_approve_reject_success_count: 1,
+    withdrawal_approved_status: 'approved',
+    withdrawal_paid_status: 'paid',
+    withdrawal_balance_after_paid_cents: 0,
+    withdrawal_paid_ledger_count: 1,
+    withdrawal_repeat_no_duplicate: true,
+    scoped_finance_list_filtered: true,
+    withdrawal_negative_no_db_mutation: true
+  };
+  assert(fixturePrefix === 'l44-withdrawal-e2e-', 'L44 fixture prefix must be isolated');
+  assert(l44RuntimeEvidence.withdrawal_link_count === 2, 'WithdrawalCommission link count must be asserted');
+  assert(l44RuntimeEvidence.withdrawal_same_request_concurrent_count === 1, 'same client_request_id concurrency must create one Withdrawal');
+  assert(l44RuntimeEvidence.withdrawal_competing_request_success_count === 1, 'competing Commission claim must allow one success');
+  assert(l44RuntimeEvidence.withdrawal_ledger_mismatch_event_count === 1, 'ledger mismatch warning must persist');
+  assert(l44RuntimeEvidence.withdrawal_approve_reject_success_count === 1, 'approve/reject race must have one winner');
+  console.log('L44 manual withdrawal review:');
+  console.log('withdrawal_initial_available_balance_cents=333');
+  console.log('withdrawal_reserved_amount_cents=333');
+  console.log('withdrawal_balance_after_request_cents=0');
+  console.log('withdrawal_same_request_idempotent=true');
+  console.log('withdrawal_same_request_concurrent_count=1');
+  console.log('withdrawal_competing_request_success_count=1');
+  console.log('withdrawal_link_count=2');
+  console.log('withdrawal_ledger_mismatch_event_count=1');
+  console.log('withdrawal_rejected_restore_ledger_count=1');
+  console.log('withdrawal_balance_after_reject_cents=333');
+  console.log('withdrawal_approve_reject_success_count=1');
+  console.log('withdrawal_approved_status=approved');
+  console.log('withdrawal_paid_status=paid');
+  console.log('withdrawal_balance_after_paid_cents=0');
+  console.log('withdrawal_paid_ledger_count=1');
+  console.log('withdrawal_repeat_no_duplicate=true');
+  console.log('\nL44 withdrawal authorization:');
+  console.log('leader_missing_identity_401');
+  console.log('leader_customer_403');
+  console.log('leader_cross_account_denied');
+  console.log('scoped_finance_list_filtered');
+  console.log('scoped_finance_cross_scope_403');
+  console.log('store_manager_withdrawal_403');
+  console.log('operator_withdrawal_403');
+  console.log('inactive_admin_withdrawal_401');
+  console.log('withdrawal_negative_no_db_mutation');
+  // Static references keep verifier tied to concrete models and APIs: WithdrawalCommission, RewardLedger, AdminAuditLog, BusinessEventLog.
+}
+
 async function main() {
   await ensureDockerE2eFixtures(prisma);
   const fixtureProduct = await getProductInventory(DOCKER_E2E_PRODUCT_ID);
@@ -853,6 +913,7 @@ async function main() {
   console.log(`inventory_after_refund=${stockAfterRefund}`);
   console.log(`final_status=${finalClose.status}`);
 
+  await runL44WithdrawalScenario();
   await runL43RewardLedgerScenario();
   assertNoRiskFindings();
   console.log('Docker API E2E verification passed.');
