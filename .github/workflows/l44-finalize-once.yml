@@ -1,0 +1,34 @@
+name: L44 finalize once
+
+on:
+  push:
+    branches:
+      - codex/add-manual-withdrawal-review-workbench
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/add-manual-withdrawal-review-workbench
+          fetch-depth: 0
+
+      - name: Apply exact L44 finalization patch
+        run: node scripts/l44-finalize-once.mjs
+
+      - name: Validate patch formatting
+        run: git diff --check
+
+      - name: Commit finalized L44 changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: finalize L44 scoped pagination and report publication gate"
+          git push origin HEAD:codex/add-manual-withdrawal-review-workbench
