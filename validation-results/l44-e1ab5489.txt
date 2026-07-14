@@ -1,0 +1,9 @@
+source_commit=e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca
+install=skipped
+prisma_generate=skipped
+prisma_validate=skipped
+api_typecheck=skipped
+admin_typecheck=skipped
+l44_verifier=skipped
+compliance=skipped
+diff_check=skipped
