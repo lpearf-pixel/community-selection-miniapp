@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - validation/l44-e1ab5489
+    paths-ignore:
+      - validation-results/**
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -28,25 +30,74 @@ jobs:
         run: corepack enable
 
       - name: Install dependencies
+        id: install
+        continue-on-error: true
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
+        id: prisma_generate
+        continue-on-error: true
         run: pnpm db:generate
 
       - name: Validate Prisma schema
+        id: prisma_validate
+        continue-on-error: true
         run: pnpm exec prisma validate --schema prisma/schema.prisma
 
       - name: API strict typecheck
+        id: api_typecheck
+        continue-on-error: true
         run: pnpm --filter @community-selection/api exec tsc -p tsconfig.json --noEmit --pretty false
 
       - name: Admin strict typecheck
+        id: admin_typecheck
+        continue-on-error: true
         run: pnpm --filter @community-selection/admin exec tsc -p tsconfig.json --noEmit --pretty false
 
       - name: L44 verifier
+        id: l44_verifier
+        continue-on-error: true
         run: pnpm exec tsx scripts/verify-l44-manual-withdrawal-review-local.ts
 
       - name: Raw compliance scan
+        id: compliance
+        continue-on-error: true
         run: pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts
 
       - name: Git diff check
+        id: diff_check
+        continue-on-error: true
         run: git diff --check e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca^ e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca
+
+      - name: Persist validation outcomes
+        if: always()
+        run: |
+          mkdir -p validation-results
+          cat > validation-results/l44-e1ab5489.txt <<'EOF'
+          source_commit=e1ab5489f9efe4a3f8b95be6824bcbba8dc8ebca
+          install=${{ steps.install.outcome }}
+          prisma_generate=${{ steps.prisma_generate.outcome }}
+          prisma_validate=${{ steps.prisma_validate.outcome }}
+          api_typecheck=${{ steps.api_typecheck.outcome }}
+          admin_typecheck=${{ steps.admin_typecheck.outcome }}
+          l44_verifier=${{ steps.l44_verifier.outcome }}
+          compliance=${{ steps.compliance.outcome }}
+          diff_check=${{ steps.diff_check.outcome }}
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation-results/l44-e1ab5489.txt
+          git commit -m "chore: record L44 validation outcomes" || true
+          git push origin HEAD:validation/l44-e1ab5489
+
+      - name: Fail when validation failed
+        if: >-
+          steps.install.outcome != 'success' ||
+          steps.prisma_generate.outcome != 'success' ||
+          steps.prisma_validate.outcome != 'success' ||
+          steps.api_typecheck.outcome != 'success' ||
+          steps.admin_typecheck.outcome != 'success' ||
+          steps.l44_verifier.outcome != 'success' ||
+          steps.compliance.outcome != 'success' ||
+          steps.diff_check.outcome != 'success'
+        run: exit 1
