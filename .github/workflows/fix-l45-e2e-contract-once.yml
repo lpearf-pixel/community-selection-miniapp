@@ -1,0 +1,29 @@
+name: Fix L45 E2E contract once
+
+on:
+  push:
+    branches:
+      - codex/add-manual-tax-review-and-export-system-qgtszl
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply deterministic patch
+        run: python3 scripts/.fix-l45-e2e-contract.py
+      - name: Remove one-time files
+        run: rm -f scripts/.fix-l45-e2e-contract.py .github/workflows/fix-l45-e2e-contract-once.yml
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/verify-docker-api-e2e-local.ts scripts/verify-l45-manual-tax-review-export-local.ts docs/dev/stage-verifier-compatibility.md docs/plans/next-stage-development-plan.md scripts/.fix-l45-e2e-contract.py .github/workflows/fix-l45-e2e-contract-once.yml
+          git commit -m "fix(L45): align E2E fixtures and verifier contracts"
+          git push
