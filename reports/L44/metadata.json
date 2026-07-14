@@ -1,9 +1,9 @@
 {
   "stage": "L44",
   "source_branch": "codex/add-manual-withdrawal-review-workbench",
-  "source_commit": "dee1850d624a1607383a4d39365b3bbc3a30246e",
+  "source_commit": "baadd3c7fb78b04841d060b05a19eb5ff2468410",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-14T07:01:25.066Z",
+  "generated_at": "2026-07-14T10:35:05.239Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
