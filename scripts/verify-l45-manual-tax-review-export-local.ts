@@ -22,5 +22,6 @@ for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenari
 assert(report.includes('const isL45Stage') && report.includes('l45Manifest') && report.includes('stable/l44-business-base') && report.includes('3ae666ec0e26383a5b117b64dce30b86a2dee389'), 'L45 report manifest exists');
 assert(reportVerifier.includes('L45 report changed files') && reportVerifier.includes('Report publish verification passed.') && reportVerifier.includes('L45 report verification row must pass'), 'L45 report verifier exists');
 assert(!route.includes('AUTO_TAX_FILING_ENABLED=true') && !route.includes('AUTO_PAYOUT_ENABLED=true'), 'no automatic tax/payout flag enabled');
+assert(existsSync('docs/dev/stage-verifier-compatibility.md'), 'global verifier compatibility guidance exists');
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');

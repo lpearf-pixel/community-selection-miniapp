@@ -800,14 +800,16 @@ async function runL45TaxReviewScenario() {
   const financeNoScopeHeaders = { ...adminHeaders, 'x-admin-role': 'finance' };
   const financeBHeaders = { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-community-id': communityB.id };
 
-  const financeList = await request<{ items: Array<{ withdrawal_id: string; leader_phone_masked?: string }>; total: number; page: number; page_size: number }>('GET', `/api/admin/tax-records?page=1&page_size=1&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 finance', headers: financeAHeaders });
-  assert(financeList.total >= 2 && financeList.items.length === 1 && financeList.page === 1, 'L45 finance list must return database count/skip/take page');
+  const financeList = await request<{ items: Array<{ withdrawal_id: string; leader_phone_masked?: string }>; total: number; page: number; page_size: number }>('GET', '/api/admin/tax-records?page=1&page_size=1', { label: 'GET /api/admin/tax-records L45 finance', headers: financeAHeaders });
+  assert(financeList.total === 2 && financeList.items.length === 1 && financeList.page === 1 && financeList.page_size === 1, 'L45 finance list must return the two scoped fixtures with database count/skip/take pagination');
   assert(financeList.items.every((item) => item.leader_phone_masked?.includes('****')), 'L45 list must mask leader phone');
-  const page2 = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?page=2&page_size=1&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 page 2', headers: financeAHeaders });
+  const page2 = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', '/api/admin/tax-records?page=2&page_size=1', { label: 'GET /api/admin/tax-records L45 page 2', headers: financeAHeaders });
   assert(page2.total === financeList.total && page2.items.length === 1 && page2.items[0].withdrawal_id !== financeList.items[0].withdrawal_id, 'L45 pagination must use database skip/take');
-  const filtered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?tax_status=pending&tax_mode=pending_review&invoice_status=not_required&from=${encodeURIComponent(new Date(Date.now() - 86400_000).toISOString())}&to=${encodeURIComponent(new Date(Date.now() + 86400_000).toISOString())}&keyword=${encodeURIComponent('danger-a')}`, { label: 'GET /api/admin/tax-records L45 filters', headers: financeAHeaders });
-  assert(filtered.items.some((item) => item.withdrawal_id === fixtureA.withdrawal.id) && filtered.items.every((item) => item.withdrawal_id !== fixtureB.withdrawal.id), 'L45 status/mode/invoice/date/keyword filters and scope must apply');
-  const scopeAAll = await request<{ items: Array<{ withdrawal_id: string }> }>('GET', `/api/admin/tax-records?page=1&page_size=20&keyword=${encodeURIComponent(runId)}`, { label: 'GET /api/admin/tax-records L45 scope A', headers: financeAHeaders });
+  const filtered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?tax_status=pending&tax_mode=pending_review&invoice_status=not_required&from=${encodeURIComponent(new Date(Date.now() - 86400_000).toISOString())}&to=${encodeURIComponent(new Date(Date.now() + 86400_000).toISOString())}&withdrawal_id=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 filters', headers: financeAHeaders });
+  assert(filtered.total === 1 && filtered.items.length === 1 && filtered.items[0].withdrawal_id === fixtureA.withdrawal.id, 'L45 status/mode/invoice/date/withdrawal filters and scope must apply');
+  const keywordFiltered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?keyword=${encodeURIComponent(leaderA.nickname ?? '')}`, { label: 'GET /api/admin/tax-records L45 keyword', headers: financeAHeaders });
+  assert(keywordFiltered.total === 1 && keywordFiltered.items[0]?.withdrawal_id === fixtureA.withdrawal.id, 'L45 keyword must match an explicitly searchable fixture field');
+  const scopeAAll = await request<{ items: Array<{ withdrawal_id: string }> }>('GET', '/api/admin/tax-records?page=1&page_size=20', { label: 'GET /api/admin/tax-records L45 scope A', headers: financeAHeaders });
   assert(scopeAAll.items.some((item) => item.withdrawal_id === fixtureA.withdrawal.id) && !scopeAAll.items.some((item) => item.withdrawal_id === fixtureB.withdrawal.id), 'L45 scope A must only see scope A');
   await request<ErrorApiResponse>('GET', `/api/admin/tax-records/${fixtureB.taxRecord.id}`, { label: 'GET /api/admin/tax-records/:id L45 cross scope', headers: financeAHeaders, expectedStatus: 403 });
   await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureB.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 cross scope', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 403, body: { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 0, client_request_id: `${runId}-cross-scope` } });
@@ -854,7 +856,7 @@ async function runL45TaxReviewScenario() {
   assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } }) === invalidAuditBefore, 'L45 rejected tax review must not create Audit');
   assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } }) === invalidEventBefore, 'L45 rejected tax review must not create Event');
 
-  const csvResponse = await fetch(`${API_BASE_URL}/api/admin/tax-records/export.csv?keyword=${encodeURIComponent(runId)}`, { headers: financeAHeaders });
+  const csvResponse = await fetch(`${API_BASE_URL}/api/admin/tax-records/export.csv`, { headers: financeAHeaders });
   const csv = await csvResponse.text();
   const disposition = csvResponse.headers.get('content-disposition') ?? '';
   record('GET /api/admin/tax-records/export.csv L45 scoped', { status: csvResponse.status, disposition, raw: csv.slice(0, 1500) });
@@ -863,7 +865,7 @@ async function runL45TaxReviewScenario() {
   assert(csv.includes('仅供内部人工核对，不构成税务申报结果。'), 'L45 CSV must include internal manual review notice');
   assert(csv.includes("'\tclient-danger") && csv.includes("'=HYPERLINK") && csv.includes("'@cmd") && csv.includes("'-1+2"), 'L45 CSV must prefix dangerous text fields with a single quote');
   assert(!csv.includes(fixtureB.withdrawal.id) && !csv.includes(communityB.name), 'L45 CSV must only include authorized scope');
-  const csvFiltered = await requestText('GET', `/api/admin/tax-records/export.csv?keyword=${encodeURIComponent('does-not-match-l45')}`, { label: 'GET /api/admin/tax-records/export.csv L45 filtered empty', headers: financeAHeaders });
+  const csvFiltered = await requestText('GET', `/api/admin/tax-records/export.csv?withdrawal_id=${encodeURIComponent('does-not-match-l45')}`, { label: 'GET /api/admin/tax-records/export.csv L45 filtered empty', headers: financeAHeaders });
   assert(!csvFiltered.includes(fixtureA.withdrawal.id), 'L45 CSV filters must apply');
   const executableFormula = csv.split(/\r?\n/).some((line) => line.split(',').some((cell) => /^"?[=+@]/.test(cell) || /^"?-\d/.test(cell)));
   assert(!executableFormula, 'L45 CSV must not contain executable formula-leading cells');
