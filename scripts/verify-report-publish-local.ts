@@ -227,4 +227,45 @@ assert(
 `;
 assert(fixtureTodoItems('scripts/verify-example-local.ts', verifierFixture).length === 0, 'verifier TODO assertion fixture must not be reported as unfinished');
 
+
+const l44BaseCommit = '72a84e81218845c23872bd91ab58a03ccf4c0f33';
+const l44VerifyOutputPath = 'reports/latest-verify-output.txt';
+assert(existsSync(l44VerifyOutputPath), 'L44 report verifier requires reports/latest-verify-output.txt from the completed L44 chain');
+execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L44'], { stdio: 'pipe' });
+const l44Report = read('reports/stage-L44-report.md');
+const l44ExpectedFiles = gitDiffFiles(l44BaseCommit, 'HEAD');
+const l44ReportFiles = extractMarkdownFilePaths(l44Report);
+assertSetEqual(l44ExpectedFiles, l44ReportFiles, 'L44 report changed files');
+assert(l44Report.includes(`业务稳定 commit：${l44BaseCommit}`), 'L44 report must include the L43 merge commit as business base');
+assert(l44Report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L44 report source commit must equal HEAD');
+assert(l44Report.includes('Codex 自评结论：passed'), 'L44 report conclusion must be passed');
+assert(!l44Report.includes('Codex 自评结论：partial'), 'L44 report must not be partial');
+assert(!l44Report.includes('数据库变化：无'), 'L44 report must not say database changes are empty');
+assert(l44ReportFiles.length === l44ExpectedFiles.length && l44ReportFiles.length > 8, 'L44 report must include the complete PR changed-file diff, not just verifier files');
+for (const requiredFile of ['prisma/schema.prisma','prisma/migrations/20260714000100_l44_manual_withdrawal_review/migration.sql','prisma/migrations/20260714000200_l44_withdrawal_commission_links/migration.sql','apps/api/src/routes/withdrawals.ts','apps/admin/src/pages/withdrawals/WithdrawalReviewPage.tsx','apps/miniapp/pages/leader/withdrawals/index.js','scripts/verify-l44-manual-withdrawal-review-local.ts','scripts/verify-docker-api-e2e-local.ts']) {
+  assert(l44ReportFiles.includes(requiredFile), `L44 report missing expected changed file ${requiredFile}`);
+}
+const l44ApiRows = [
+  'GET | /api/leaders/me/withdrawable-commissions | leader self',
+  'GET | /api/leaders/me/withdrawals | leader self',
+  'GET | /api/leaders/me/withdrawals/:id | leader self',
+  'POST | /api/leaders/me/withdrawals | leader self',
+  'GET | /api/admin/withdrawals | withdrawal.view + data scope',
+  'GET | /api/admin/withdrawals/:id | withdrawal.view + data scope',
+  'POST | /api/admin/withdrawals/:id/approve | withdrawal.manage + data scope',
+  'POST | /api/admin/withdrawals/:id/reject | withdrawal.manage + data scope',
+  'POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope'
+];
+for (const row of l44ApiRows) assert(l44Report.includes(row), `L44 report API row missing: ${row}`);
+assert(!l44Report.includes('/api/admin/finance/refund-ledger'), 'L44 report must not include L28 refund-ledger API');
+assert(!/\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|[^\n]*\|\s*public\s*\|/.test(l44Report), 'L44 API table must not show public permission');
+assert(!/\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|[^\n]*\|\s*admin session\s*\|/.test(l44Report), 'L44 API table must not show admin session permission');
+for (const requiredDb of ['Withdrawal', 'client_request_id', 'reviewed_by_admin_id', 'processed_by_admin_id', 'manual_reference', 'WithdrawalCommission', 'withdrawal_id', 'commission_id', 'amount_cents', 'unique(withdrawal_id, commission_id)', '20260714000100_l44_manual_withdrawal_review', '20260714000200_l44_withdrawal_commission_links']) {
+  assert(l44Report.includes(requiredDb), `L44 report database section missing ${requiredDb}`);
+}
+for (const requiredVerify of ['L44 verifier', 'L24-L44 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow']) {
+  assert(l44Report.includes(requiredVerify) && l44Report.includes(`${requiredVerify} | passed`), `L44 report verification row must pass: ${requiredVerify}`);
+}
+for (const requiredQuality of ['高风险：暂无自动发现', '中风险：暂无自动发现', '未完成项：暂无自动发现']) assert(l44Report.includes(requiredQuality), `L44 report quality summary missing: ${requiredQuality}`);
+
 console.log('Report publish verification passed.');

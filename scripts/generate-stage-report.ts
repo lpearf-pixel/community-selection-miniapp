@@ -772,6 +772,7 @@ function safeRead(path: string) {
 }
 
 function getStageBaseRef() {
+  if (isL44Stage) return l44Manifest.businessBaseCommit || l44Manifest.businessBaseBranch;
   if (isL43Stage) return l43Manifest.businessBaseCommit || l43Manifest.businessBaseBranch;
   return '';
 }
@@ -848,6 +849,7 @@ function classifyFile(file: string): FileRow {
 
 function extractApis(files: string[]) {
   if (isL44Stage || isL43Stage || isL42Stage || isL41Stage || isL40Stage || isL15Stage || isL16Stage || isL17Stage || isL175Stage || isL18Stage || isL19Stage || isL20Stage || isL21Stage || isL22Stage || isL23Stage || isL24Stage || isL25Stage || isL26Stage || isL27Stage || isL28Stage || isL29Stage || isL30Stage || isL31Stage || isL32Stage || isL33Stage || isL34Stage || isL35Stage || isL39Stage || isL38Stage || isL37Stage || isL36Stage) {
+    if (isL44Stage) return l44Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL43Stage) return l43Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL42Stage) return l42Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
     if (isL41Stage) return l41Manifest.apis.map((api) => ({ ...api, permission: api.permissions.join(' + ') }));
@@ -925,6 +927,14 @@ function inferVerified(path: string, files: string[]) {
 }
 
 function extractModels(files: string[]) {
+  if (isL44Stage) {
+    return [
+      { model: 'Withdrawal', change: 'client_request_id, reviewed_by_admin_id, reviewed_at, processed_by_admin_id, processed_at, rejected_at, manual_reference', description: '在既有提现主表上增加客户端幂等、审核人/审核时间、人工处理人/处理时间、拒绝时间和人工参考号字段。' },
+      { model: 'WithdrawalCommission', change: 'id, withdrawal_id, commission_id, amount_cents, created_at, unique(withdrawal_id, commission_id)', description: '新增提现与 Commission 的持久关联，驳回清空 Commission.withdrawal_id 后仍可审计提现组成和执行 data scope。' },
+      { model: '20260714000100_l44_manual_withdrawal_review', change: 'Migration', description: '新增 Withdrawal.client_request_id 唯一索引和审核/处理/拒绝/人工参考号字段，字段 nullable 以兼容历史数据。' },
+      { model: '20260714000200_l44_withdrawal_commission_links', change: 'Migration', description: '新增 WithdrawalCommission 关联表、唯一约束和索引，并幂等回填仍带 Commission.withdrawal_id 的历史关联。' }
+    ];
+  }
   if (isL15Stage) return l15Manifest.db.map((model) => ({ model, change: 'L15 manifest', description: 'L15 售后客服阶段数据库范围' }));
   if (isL16Stage) return l16Manifest.db.map((model) => ({ model, change: 'L16 manifest', description: 'L16 财务对账阶段数据库范围' }));
   if (isL17Stage) return l17Manifest.db.map((model) => ({ model, change: 'L17 manifest', description: 'L17 运营看板阶段数据库范围' }));
@@ -1193,6 +1203,17 @@ function stageVerifyChecks(content: string) {
     if (hasFailureMarker) return 'failed';
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
+  if (isL44Stage) {
+    return [
+      { command: 'L44 verifier', result: commandPassed(content, 'L44 verifier', ['L44 manual withdrawal review verifier passed.']) },
+      { command: 'L24-L44 chain regression', result: commandPassed(content, 'L24-L44 chain regression', ['L44 manual withdrawal review verifier passed.', 'L43 reward ledger T3 refund deduct verification passed.', 'L42 failed group buy manual closure verification passed.', 'L24 miniapp cart verification passed.', 'Stage workflow verification passed.'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'l44_identity_scenario_passed', 'l44_creation_scenario_passed', 'l44_same_request_concurrency_passed', 'l44_competing_claim_passed', 'l44_ledger_mismatch_passed', 'l44_rejection_restore_passed', 'l44_approve_reject_race_passed', 'l44_paid_scenario_passed', 'l44_authorization_scenario_passed'], true) },
+      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
+      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
+      { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },
+      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
+    ];
+  }
   if (isL43Stage) {
     return [
       { command: 'L43 verifier', result: commandPassed(content, 'L43 verifier', ['L43 reward ledger T3 refund deduct verification passed.']) },
@@ -1400,6 +1421,22 @@ function assertChangedFileCoverage(actualFiles: string[], reportRows: FileRow[])
 }
 
 function validateReportInputs() {
+  if (isL44Stage) {
+    assertReportQuality(l44Manifest, 'L44 stage manifest must exist');
+    assertReportQuality(!changed.error, changed.error || 'L44 changed-file diff must be available');
+    assertChangedFileCoverage(changed.files, fileRows);
+    for (const file of l44Manifest.expectedCoreFiles) assertReportQuality(changed.files.includes(file), `L44 expected changed file missing: ${file}`);
+    assertReportQuality(apiRows.length === 9, 'L44 report must list nine APIs');
+    assertReportQuality(apiRows.every((row) => row.permission !== 'public' && row.permission !== 'admin session' && row.verified === 'yes'), 'L44 APIs must have precise permissions and runtime verification');
+    assertReportQuality(modelRows.some((row) => row.model === 'Withdrawal'), 'L44 report must include Withdrawal changes');
+    assertReportQuality(modelRows.some((row) => row.model === 'WithdrawalCommission'), 'L44 report must include WithdrawalCommission');
+    assertReportQuality(modelRows.some((row) => row.model.includes('20260714000100')), 'L44 report must include first migration');
+    assertReportQuality(modelRows.some((row) => row.model.includes('20260714000200')), 'L44 report must include link migration');
+    if (verifyOutput.exists) {
+      assertReportQuality(verifyOutput.rows.length === 7, 'L44 must track seven verification rows');
+      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), 'All L44 verification rows must pass');
+    }
+  }
   if (isL43Stage) {
     assertReportQuality(l43Manifest, 'L43 stage manifest must exist');
     assertReportQuality(!changed.error, changed.error || 'L43 changed-file diff must be available');
@@ -1451,6 +1488,10 @@ function validateReportInputs() {
 }
 
 validateReportInputs();
+
+const highRiskSummary = highRisks.length ? highRisks.join('；') : isL44Stage ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const mediumRiskSummary = todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : isL44Stage ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const unfinishedSummary = todos.length ? todos.join('\n') : isL44Stage ? '暂无自动发现' : '暂无自动发现，需人工 review';
 
 const report = `# 阶段验收报告：${stage}
 
@@ -1511,13 +1552,13 @@ ${complianceItems(verifyOutput).join('\n')}
 
 ## 9. 风险点
 
-- 高风险：${highRisks.length ? highRisks.join('；') : '暂无自动发现，需人工 review'}
-- 中风险：${todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : '暂无自动发现，需人工 review'}
+- 高风险：${highRiskSummary}
+- 中风险：${mediumRiskSummary}
 - 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
 
 ## 10. 未完成项
 
-${todos.length ? todos.join('\n') : '暂无自动发现，需人工 review'}
+${unfinishedSummary}
 
 ## 11. Codex 给人工 reviewer 的说明
 
