@@ -75,10 +75,12 @@ const generatePath = 'scripts/generate-stage-report.ts';
 const publishPath = 'scripts/publish-stage-report.ts';
 const docsPath = 'docs/dev/reporting.md';
 const verifyAllPath = 'scripts/verify-all-local.sh';
+const stageWorkflowPath = 'scripts/stage-workflow.ts';
 
 assert(existsSync(generatePath), 'generate-stage-report.ts should exist');
 assert(existsSync(publishPath), 'publish-stage-report.ts should exist');
 assert(existsSync(docsPath), 'docs/dev/reporting.md should exist');
+assert(existsSync(stageWorkflowPath), 'stage-workflow.ts should exist');
 
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
 assert(packageJson.scripts?.['report:stage'] === 'tsx scripts/generate-stage-report.ts', 'package.json should expose report:stage');
@@ -156,6 +158,18 @@ assert(!generateSource.includes('parseAdminTypecheck(content)'), 'generate-stage
 assert(!generateSource.includes('l43Manifest.files'), 'L43 report generator must not use l43Manifest.files as changed-file source');
 assert(generateSource.includes('git') && generateSource.includes('diff') && generateSource.includes('--name-only') && generateSource.includes('...HEAD'), 'L43 report generator must use real git diff changed files');
 assert(generateSource.includes('Commission') && generateSource.includes('review_status') && generateSource.includes('last_adjusted_at'), 'L43 report must describe Commission concrete fields');
+
+for (const required of ['L44 manual withdrawal review workbench','stable/l43-business-base','72a84e81218845c23872bd91ab58a03ccf4c0f33','WithdrawalCommission','GET', '/api/admin/withdrawals/:id', 'withdrawal.view + data scope', 'withdrawal.manage + data scope', 'hasL44RuntimeMarkers']) {
+  assert(generateSource.includes(required), `L44 report generator should include ${required}`);
+}
+assert(!generateSource.includes("permissions: ['public']"), 'L44 report permissions must not be public');
+const dockerE2eSource = read('scripts/verify-docker-api-e2e-local.ts');
+assert(!dockerE2eSource.includes('const l44RuntimeEvidence'), 'L44 Docker E2E must not use hardcoded evidence object');
+for (const required of ['=== L44 leader identity scenario ===','l44_creation_scenario_passed','Promise.allSettled','/api/leaders/me/withdrawals','/api/admin/withdrawals/','prisma.withdrawal','prisma.withdrawalCommission','prisma.rewardLedger','prisma.businessEventLog','getAvailableRewardBalance']) {
+  assert(dockerE2eSource.includes(required), `L44 Docker E2E should include real runtime evidence: ${required}`);
+}
+
+
 assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
 assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
 assert(generateSource.includes('todos.length === 0'), 'passed report must require todos.length === 0');
@@ -175,6 +189,16 @@ for (const required of ['git fetch origin', 'git pull --ff-only', 'pnpm verify:a
 
 const verifyAll = read(verifyAllPath);
 assert(verifyAll.includes('pnpm exec tsx scripts/verify-report-publish-local.ts'), 'verify-all should include report publish verifier');
+
+const stageWorkflowSource = read(stageWorkflowPath);
+const reportStageIndex = stageWorkflowSource.indexOf('runReportStage(args.stage!)');
+const reportVerifierIndex = stageWorkflowSource.indexOf('runReportVerifier()');
+const reportPublishIndex = stageWorkflowSource.indexOf('runReportPublish(args)');
+assert(reportStageIndex >= 0, 'stage workflow must run report:stage in publish flow');
+assert(reportVerifierIndex > reportStageIndex, 'stage workflow must run verify-report-publish-local.ts after report:stage');
+assert(reportPublishIndex > reportVerifierIndex, 'stage workflow must run report:publish after report verifier');
+assert(stageWorkflowSource.includes("args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts']"), 'stage workflow must invoke verify-report-publish-local.ts through pnpm exec tsx');
+assert(stageWorkflowSource.includes('Report publish verification passed.'), 'stage workflow must require report verifier success marker before publish');
 
 const l43BaseCommit = '20d5023f0e493bad7485e4fe8cbc5ccba014e118';
 execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L43'], { stdio: 'pipe' });
@@ -214,5 +238,50 @@ assert(
 );
 `;
 assert(fixtureTodoItems('scripts/verify-example-local.ts', verifierFixture).length === 0, 'verifier TODO assertion fixture must not be reported as unfinished');
+
+
+const l44BaseCommit = '72a84e81218845c23872bd91ab58a03ccf4c0f33';
+const l44Head = gitOutput(['rev-parse', 'HEAD']);
+execFileSync('git', ['merge-base', '--is-ancestor', l44BaseCommit, l44Head], { stdio: 'pipe' });
+const l44MergeBase = gitOutput(['merge-base', l44BaseCommit, l44Head]);
+assert(l44MergeBase === l44BaseCommit, ['L44 report source must actually descend from business base', `base=${l44BaseCommit}`, `head=${l44Head}`, `merge_base=${l44MergeBase}`].join(' '));
+const l44VerifyOutputPath = 'reports/latest-verify-output.txt';
+assert(existsSync(l44VerifyOutputPath), 'L44 report verifier requires reports/latest-verify-output.txt from the completed L44 chain');
+execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L44'], { stdio: 'pipe' });
+const l44Report = read('reports/stage-L44-report.md');
+const l44ExpectedFiles = gitDiffFiles(l44BaseCommit, 'HEAD');
+const l44ReportFiles = extractMarkdownFilePaths(l44Report);
+assertSetEqual(l44ExpectedFiles, l44ReportFiles, 'L44 report changed files');
+assert(l44Report.includes(`业务稳定 commit：${l44BaseCommit}`), 'L44 report must include the L43 merge commit as business base');
+assert(l44Report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L44 report source commit must equal HEAD');
+assert(l44Report.includes('Codex 自评结论：passed'), 'L44 report conclusion must be passed');
+assert(!l44Report.includes('Codex 自评结论：partial'), 'L44 report must not be partial');
+assert(!l44Report.includes('数据库变化：无'), 'L44 report must not say database changes are empty');
+assert(l44ReportFiles.length === l44ExpectedFiles.length && l44ReportFiles.length > 8, 'L44 report must include the complete PR changed-file diff, not just verifier files');
+for (const requiredFile of ['prisma/schema.prisma','prisma/migrations/20260714000100_l44_manual_withdrawal_review/migration.sql','prisma/migrations/20260714000200_l44_withdrawal_commission_links/migration.sql','apps/api/src/routes/withdrawals.ts','apps/admin/src/pages/withdrawals/WithdrawalReviewPage.tsx','apps/miniapp/pages/leader/withdrawals/index.js','scripts/verify-l44-manual-withdrawal-review-local.ts','scripts/verify-docker-api-e2e-local.ts']) {
+  assert(l44ReportFiles.includes(requiredFile), `L44 report missing expected changed file ${requiredFile}`);
+}
+const l44ApiRows = [
+  'GET | /api/leaders/me/withdrawable-commissions | leader self',
+  'GET | /api/leaders/me/withdrawals | leader self',
+  'GET | /api/leaders/me/withdrawals/:id | leader self',
+  'POST | /api/leaders/me/withdrawals | leader self',
+  'GET | /api/admin/withdrawals | withdrawal.view + data scope',
+  'GET | /api/admin/withdrawals/:id | withdrawal.view + data scope',
+  'POST | /api/admin/withdrawals/:id/approve | withdrawal.manage + data scope',
+  'POST | /api/admin/withdrawals/:id/reject | withdrawal.manage + data scope',
+  'POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope'
+];
+for (const row of l44ApiRows) assert(l44Report.includes(row), `L44 report API row missing: ${row}`);
+assert(!l44Report.includes('/api/admin/finance/refund-ledger'), 'L44 report must not include L28 refund-ledger API');
+assert(!/\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|[^\n]*\|\s*public\s*\|/.test(l44Report), 'L44 API table must not show public permission');
+assert(!/\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|[^\n]*\|\s*admin session\s*\|/.test(l44Report), 'L44 API table must not show admin session permission');
+for (const requiredDb of ['Withdrawal', 'client_request_id', 'reviewed_by_admin_id', 'processed_by_admin_id', 'manual_reference', 'WithdrawalCommission', 'withdrawal_id', 'commission_id', 'amount_cents', 'unique(withdrawal_id, commission_id)', '20260714000100_l44_manual_withdrawal_review', '20260714000200_l44_withdrawal_commission_links']) {
+  assert(l44Report.includes(requiredDb), `L44 report database section missing ${requiredDb}`);
+}
+for (const requiredVerify of ['L44 verifier', 'L24-L44 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow']) {
+  assert(l44Report.includes(requiredVerify) && l44Report.includes(`${requiredVerify} | passed`), `L44 report verification row must pass: ${requiredVerify}`);
+}
+for (const requiredQuality of ['高风险：暂无自动发现', '中风险：暂无自动发现', '未完成项：暂无自动发现']) assert(l44Report.includes(requiredQuality), `L44 report quality summary missing: ${requiredQuality}`);
 
 console.log('Report publish verification passed.');
