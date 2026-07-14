@@ -771,6 +771,21 @@ async function runL44WithdrawalScenario() {
   console.log('inactive_admin_withdrawal_401');
   console.log('withdrawal_negative_no_db_mutation');
 }
+async function runL45TaxReviewScenario() {
+  console.log('=== L45 manual tax review export scenario ===');
+  const financeList = await request<{ items: unknown[]; total: number; page: number; page_size: number }>('GET', '/api/admin/tax-records?page=1&page_size=5', { label: 'GET /api/admin/tax-records L45', headers: { ...adminHeaders, 'x-admin-role': 'finance' } });
+  assert(Array.isArray(financeList.items) && typeof financeList.total === 'number' && financeList.page === 1, 'L45 finance list must return database paginated shape');
+  const csv = await requestText('GET', '/api/admin/tax-records/export.csv?keyword=%3DHYPERLINK', { label: 'GET /api/admin/tax-records/export.csv L45', headers: { ...adminHeaders, 'x-admin-role': 'finance' } });
+  assert(csv.includes('仅供内部人工核对，不构成税务申报结果。'), 'L45 CSV must include internal manual review notice');
+  assert(!csv.includes('AUTO_TAX_FILING_ENABLED=true') && !csv.includes('AUTO_PAYOUT_ENABLED=true'), 'L45 CSV/API must not enable automatic tax filing or payout');
+  const storeManagerExport = await request('GET', '/api/admin/tax-records/export.csv', { label: 'GET /api/admin/tax-records/export.csv L45 forbidden', headers: { ...adminHeaders, 'x-admin-role': 'store_manager' }, expectedStatus: 403 });
+  assert(storeManagerExport, 'L45 store_manager must not export finance CSV');
+  console.log(`l45_finance_total=${financeList.total}`);
+  console.log(`l45_csv_notice=${csv.includes('仅供内部人工核对，不构成税务申报结果。')}`);
+  console.log('L45 manual tax review export runtime assertions passed.');
+}
+
+
 async function main() {
   await ensureDockerE2eFixtures(prisma);
   const fixtureProduct = await getProductInventory(DOCKER_E2E_PRODUCT_ID);
@@ -1124,6 +1139,7 @@ async function main() {
   console.log(`inventory_after_refund=${stockAfterRefund}`);
   console.log(`final_status=${finalClose.status}`);
 
+  await runL45TaxReviewScenario();
   await runL44WithdrawalScenario();
   await runL43RewardLedgerScenario();
   assertNoRiskFindings();
