@@ -500,6 +500,277 @@ async function runL43RewardLedgerScenario() {
   console.log('global_reward_negative_no_success_event');
 }
 
+async function runL44WithdrawalScenario() {
+  const runId = `l44-withdrawal-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const financeAHeaders = { 'content-type': 'application/json', 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': `${runId}-community-a` };
+  const financeBHeaders = { 'content-type': 'application/json', 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': `${runId}-community-b` };
+  const storeManagerHeaders = { 'content-type': 'application/json', 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID, 'x-admin-community-id': `${runId}-community-a` };
+  const operatorHeaders = { 'content-type': 'application/json', 'x-admin-role': 'operator', 'x-admin-user-id': DOCKER_E2E_OPERATOR_ADMIN_ID, 'x-admin-community-id': `${runId}-community-a` };
+  const inactiveHeaders = { 'content-type': 'application/json', 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_INACTIVE_ADMIN_ID, 'x-admin-community-id': `${runId}-community-a` };
+  async function createLeader(label: string) {
+    return prisma.user.create({ data: { openid: `${runId}-${label}-openid`, nickname: `${runId}-${label}`, role: 'leader', status: 'active' } });
+  }
+  const leaderMain = await createLeader('main');
+  const leaderSameRequest = await createLeader('same-request');
+  const leaderCompeting = await createLeader('competing');
+  const leaderMismatch = await createLeader('mismatch');
+  const leaderRace = await createLeader('race');
+  const leaderPaid = await createLeader('paid');
+  const leaderScopeA = await createLeader('scope-a');
+  const leaderScopeB = await createLeader('scope-b');
+  const leaderB = await createLeader('leader-b');
+  const customer = await prisma.user.create({ data: { openid: `${runId}-customer`, nickname: `${runId}-Customer`, role: 'customer', status: 'active' } });
+  const communityA = await prisma.community.create({ data: { id: `${runId}-community-a`, name: `${runId} Community A`, address: `${runId} Address A` } });
+  const communityB = await prisma.community.create({ data: { id: `${runId}-community-b`, name: `${runId} Community B`, address: `${runId} Address B` } });
+  const category = await prisma.category.create({ data: { name: `${runId} Category`, status: 'active' } });
+  const product = await prisma.product.create({ data: { name: `${runId} Product`, category_id: category.id, price_cents: 1000, cost_price_cents: 500, stock: 100, unit: '份', stock_unit: '份', sale_unit: '份', status: 'active', is_group_enabled: true } });
+
+  async function createCommissionFixture(label: string, leaderId: string, communityId: string, amount: number) {
+    const groupBuy = await prisma.groupBuy.create({ data: { product_id: product.id, leader_user_id: leaderId, community_id: communityId, min_people: 1, min_quantity: 1, current_people: 1, current_quantity: 1, price_cents: product.price_cents, start_time: new Date(Date.now() - 3600_000), end_time: new Date(Date.now() + 3600_000), pickup_time: new Date(Date.now() + 86400_000), status: 'success' } });
+    const order = await prisma.order.create({ data: { order_no: `${runId}-${label}-order`, user_id: customer.id, group_buy_id: groupBuy.id, product_id: product.id, leader_user_id: leaderId, community_id: communityId, total_amount_cents: product.price_cents, product_amount_cents: product.price_cents, pay_amount_cents: product.price_cents, quantity: 1, pay_status: 'paid', order_status: 'completed', refund_status: 'none', paid_at: new Date(), completed_at: new Date(Date.now() - 4 * 86400_000), receiver_name: `${runId} Receiver`, receiver_phone: receiverPhone } });
+    const commission = await prisma.commission.create({ data: { leader_user_id: leaderId, order_id: order.id, group_buy_id: groupBuy.id, base_amount_cents: product.price_cents, commission_type: 'fixed', commission_value: amount, estimated_amount_cents: amount, final_amount_cents: amount, status: 'available', available_at: new Date(Date.now() - 3600_000) } });
+    await prisma.rewardLedger.create({ data: { leader_user_id: leaderId, commission_id: commission.id, order_id: order.id, idempotency_key: `${runId}-available-${commission.id}`, event_type: 'commission_available', entry_type: 'commission_available', direction: 'in', amount_cents: amount, affects_available_balance: true, balance_after_cents: await getAvailableRewardBalance(prisma, leaderId) + amount, effective_at: new Date(), payload: { runId } } });
+    return { groupBuy, order, commission };
+  }
+
+  async function createWithdrawalFromCommissions(leader: { id: string; openid: string }, client_request_id: string, commissions: Array<{ id: string }>) {
+    return request<{ withdrawal_id: string; amount_cents: number; status: string; idempotent?: boolean; applied?: boolean }>('POST', '/api/leaders/me/withdrawals', { label: `POST /api/leaders/me/withdrawals ${client_request_id}`, headers: { 'x-openid': leader.openid }, body: { client_request_id, commission_ids: commissions.map((item) => item.id), leader_user_id: leaderB.id } });
+  }
+
+  const main111 = await createCommissionFixture('main-111', leaderMain.id, communityA.id, 111);
+  const main222 = await createCommissionFixture('main-222', leaderMain.id, communityA.id, 222);
+  const initialBalance = await getAvailableRewardBalance(prisma, leaderMain.id);
+  assert(initialBalance === 333, `L44 initial balance must be 333, got ${initialBalance}`);
+
+  console.log('=== L44 leader identity scenario ===');
+  await request<ErrorApiResponse>('GET', '/api/leaders/me/withdrawals', { label: 'L44 missing x-openid withdrawals', expectedStatus: 401 });
+  await request<ErrorApiResponse>('GET', '/api/leaders/me/withdrawable-commissions', { label: 'L44 customer withdrawable commissions', expectedStatus: 403, headers: { 'x-openid': customer.openid } });
+  const leaderBCommission = await createCommissionFixture('leader-b-111', leaderB.id, communityB.id, 111);
+  const leaderBWithdrawal = await request<{ withdrawal_id: string }>('POST', '/api/leaders/me/withdrawals', { label: 'L44 leader B creates withdrawal', headers: { 'x-openid': leaderB.openid }, body: { client_request_id: `${runId}-leader-b-request`, commission_ids: [leaderBCommission.commission.id] } });
+  await request<ErrorApiResponse>('GET', `/api/leaders/me/withdrawals/${leaderBWithdrawal.withdrawal_id}`, { label: 'L44 leader A cannot read leader B withdrawal', expectedStatus: 404, headers: { 'x-openid': leaderMain.openid } });
+  console.log('l44_identity_scenario_passed');
+
+  console.log('=== L44 withdrawal creation scenario ===');
+  const created = await createWithdrawalFromCommissions(leaderMain, `${runId}-request-main`, [main111.commission, main222.commission]);
+  const withdrawalId = created.withdrawal_id;
+  const dbWithdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawalId } });
+  const linkCount = await prisma.withdrawalCommission.count({ where: { withdrawal_id: withdrawalId } });
+  const claimedCommissions = await prisma.commission.findMany({ where: { id: { in: [main111.commission.id, main222.commission.id] } } });
+  const reservedLedgers = await prisma.rewardLedger.findMany({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_reserved' } });
+  const balanceAfterRequest = await getAvailableRewardBalance(prisma, leaderMain.id);
+  assert(dbWithdrawal.status === 'pending' && dbWithdrawal.amount_cents === 333 && dbWithdrawal.leader_user_id === leaderMain.id, 'L44 created withdrawal database state must be pending/333/LeaderA');
+  assert(linkCount === 2, `L44 WithdrawalCommission count must be 2, got ${linkCount}`);
+  assert(claimedCommissions.every((item) => item.status === 'withdrawing' && item.withdrawal_id === withdrawalId), 'L44 commissions must be claimed by withdrawal');
+  assert(reservedLedgers.length === 1 && reservedLedgers[0].amount_cents === 333 && reservedLedgers[0].direction === 'out' && reservedLedgers[0].affects_available_balance === true, 'L44 reserve ledger must be exactly one out/333 available-affecting entry');
+  assert(balanceAfterRequest === 0, `L44 balance after request must be 0, got ${balanceAfterRequest}`);
+  console.log('l44_creation_scenario_passed');
+
+  console.log('=== L44 same request concurrency scenario ===');
+  const idemA = await createCommissionFixture('idem-111', leaderSameRequest.id, communityA.id, 111);
+  const idemB = await createCommissionFixture('idem-222', leaderSameRequest.id, communityA.id, 222);
+  const sameInitialBalance = await getAvailableRewardBalance(prisma, leaderSameRequest.id);
+  assert(sameInitialBalance === 333, `same-request initial balance expected=333 actual=${sameInitialBalance}`);
+  const sameClientRequestId = `${runId}-same-request`;
+  const sameResults = await Promise.allSettled([createWithdrawalFromCommissions(leaderSameRequest, sameClientRequestId, [idemA.commission, idemB.commission]), createWithdrawalFromCommissions(leaderSameRequest, sameClientRequestId, [idemA.commission, idemB.commission])]);
+  const sameFulfilled = sameResults.filter((item): item is PromiseFulfilledResult<{ withdrawal_id: string }> => item.status === 'fulfilled');
+  assert(sameFulfilled.length === 2, 'L44 same client_request_id concurrent requests must both resolve');
+  const sameWithdrawalIds = Array.from(new Set(sameFulfilled.map((item) => item.value.withdrawal_id)));
+  const sameWithdrawalCount = await prisma.withdrawal.count({ where: { client_request_id: sameClientRequestId } });
+  const sameReservedCount = await prisma.rewardLedger.count({ where: { withdrawal_id: sameWithdrawalIds[0], event_type: 'withdrawal_reserved' } });
+  const sameBalanceAfter = await getAvailableRewardBalance(prisma, leaderSameRequest.id);
+  assert(sameWithdrawalIds.length === 1 && sameWithdrawalCount === 1 && sameReservedCount === 1, 'L44 same client_request_id concurrency must create one withdrawal/reserved ledger');
+  assert(sameBalanceAfter === 0, `same-request balance after concurrency expected=0 actual=${sameBalanceAfter}`);
+  console.log('l44_same_request_concurrency_passed');
+
+  console.log('=== L44 competing claim scenario ===');
+  const competeA = await createCommissionFixture('compete-111', leaderCompeting.id, communityA.id, 111);
+  const competeB = await createCommissionFixture('compete-222', leaderCompeting.id, communityA.id, 222);
+  const competing = await Promise.allSettled([createWithdrawalFromCommissions(leaderCompeting, `${runId}-compete-a`, [competeA.commission, competeB.commission]), createWithdrawalFromCommissions(leaderCompeting, `${runId}-compete-b`, [competeA.commission, competeB.commission])]);
+  const competingSuccesses = competing.filter((item) => item.status === 'fulfilled') as Array<PromiseFulfilledResult<{ withdrawal_id: string }>>;
+  const competingWithdrawalIds = Array.from(new Set(competingSuccesses.map((item) => item.value.withdrawal_id)));
+  const competingCommissionState = await prisma.commission.findMany({ where: { id: { in: [competeA.commission.id, competeB.commission.id] } } });
+  const competingReservedCount = await prisma.rewardLedger.count({ where: { withdrawal_id: { in: competingWithdrawalIds }, event_type: 'withdrawal_reserved' } });
+  assert(competingSuccesses.length === 1 && competingWithdrawalIds.length === 1 && competingReservedCount === 1, 'L44 competing claim must have exactly one success and one reserved ledger');
+  assert(new Set(competingCommissionState.map((item) => item.withdrawal_id)).size === 1, 'L44 competing commissions must belong to one withdrawal');
+  assert(await getAvailableRewardBalance(prisma, leaderCompeting.id) >= 0, 'L44 competing claim must not make balance negative');
+  console.log('l44_competing_claim_passed');
+
+  console.log('=== L44 ledger mismatch scenario ===');
+  const mismatch = await createCommissionFixture('mismatch-123', leaderMismatch.id, communityA.id, 123);
+  await prisma.rewardLedger.create({ data: { leader_user_id: leaderMismatch.id, commission_id: mismatch.commission.id, order_id: mismatch.order.id, idempotency_key: `${runId}-mismatch-extra-${mismatch.commission.id}`, event_type: 'commission_refund_deduct', entry_type: 'commission_refund_deduct', direction: 'out', amount_cents: 1, affects_available_balance: true, balance_after_cents: await getAvailableRewardBalance(prisma, leaderMismatch.id) - 1, effective_at: new Date(), payload: { runId } } });
+  const mismatchEventsBefore = await prisma.businessEventLog.count({ where: { leader_user_id: leaderMismatch.id, event_type: 'withdrawal_ledger_mismatch' } });
+  await request<ErrorApiResponse>('POST', '/api/leaders/me/withdrawals', { label: 'L44 mismatch withdrawal rejected', expectedStatus: 400, headers: { 'x-openid': leaderMismatch.openid }, body: { client_request_id: `${runId}-mismatch-request`, commission_ids: [mismatch.commission.id] } });
+  const mismatchEventsAfter = await prisma.businessEventLog.count({ where: { leader_user_id: leaderMismatch.id, event_type: 'withdrawal_ledger_mismatch' } });
+  const mismatchCommissionAfter = await prisma.commission.findUniqueOrThrow({ where: { id: mismatch.commission.id } });
+  assert(mismatchEventsAfter - mismatchEventsBefore === 1 && mismatchCommissionAfter.status === 'available' && mismatchCommissionAfter.withdrawal_id === null, 'L44 mismatch must persist warning and avoid claim');
+  console.log('l44_ledger_mismatch_passed');
+
+  console.log('=== L44 rejection restore scenario ===');
+  const balanceBeforeReject = await getAvailableRewardBalance(prisma, leaderMain.id);
+  await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${withdrawalId}/reject`, withAdminJson({ label: 'L44 reject main withdrawal', body: { reason: `${runId}-reject` } }));
+  const rejectedWithdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawalId } });
+  const rejectedLinks = await prisma.withdrawalCommission.count({ where: { withdrawal_id: withdrawalId } });
+  const restoredCommissions = await prisma.commission.findMany({ where: { id: { in: [main111.commission.id, main222.commission.id] } } });
+  const restoreLedgerCount = await prisma.rewardLedger.count({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_rejected_restore' } });
+  const balanceAfterReject = await getAvailableRewardBalance(prisma, leaderMain.id);
+  assert(rejectedWithdrawal.status === 'rejected', `reject status expected=rejected actual=${rejectedWithdrawal.status}`);
+  assert(rejectedLinks === 2, `reject persistent links expected=2 actual=${rejectedLinks}`);
+  const commissionsRestored = restoredCommissions.every((item) => item.status === 'available' && item.withdrawal_id === null);
+  assert(commissionsRestored, `reject commissions not restored: ${JSON.stringify(restoredCommissions.map((item) => ({ id: item.id, status: item.status, withdrawal_id: item.withdrawal_id })))}`);
+  assert(restoreLedgerCount === 1, `reject restore ledger expected=1 actual=${restoreLedgerCount}`);
+  assert(balanceAfterReject - balanceBeforeReject === 333, ['reject must restore exactly withdrawal amount', `before=${balanceBeforeReject}`, `after=${balanceAfterReject}`, `delta=${balanceAfterReject - balanceBeforeReject}`, 'expected_delta=333'].join(' '));
+  assert(balanceAfterReject === 333, `isolated main leader balance after reject expected=333 actual=${balanceAfterReject}`);
+  const balanceAfterFirstReject = balanceAfterReject;
+  const restoreLedgerAfterFirstReject = restoreLedgerCount;
+  const rejectAuditAfterFirstReject = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: withdrawalId, action: 'withdrawal_rejected' } });
+  const rejectEventAfterFirstReject = await prisma.businessEventLog.count({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_rejected' } });
+  const repeatReject = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${withdrawalId}/reject`, withAdminJson({ label: 'L44 repeat reject idempotent', body: { reason: `${runId}-reject-repeat` } }));
+  assert(repeatReject.idempotent === true, 'repeat reject must return idempotent=true');
+  assert(await getAvailableRewardBalance(prisma, leaderMain.id) === balanceAfterFirstReject, 'repeat reject must not change balance');
+  assert(await prisma.rewardLedger.count({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_rejected_restore' } }) === restoreLedgerAfterFirstReject, 'repeat reject must not duplicate restore ledger');
+  assert(await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: withdrawalId, action: 'withdrawal_rejected' } }) === rejectAuditAfterFirstReject, 'repeat reject must not duplicate success audit');
+  assert(await prisma.businessEventLog.count({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_rejected' } }) === rejectEventAfterFirstReject, 'repeat reject must not duplicate success event');
+  console.log('l44_rejection_restore_passed');
+
+  console.log('=== L44 approve reject race scenario ===');
+  const raceA = await createCommissionFixture('race-111', leaderRace.id, communityA.id, 111);
+  const raceW = await createWithdrawalFromCommissions(leaderRace, `${runId}-race-request`, [raceA.commission]);
+  const raceResults = await Promise.allSettled([
+    request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 race approve', body: { remark: `${runId}-approve` } })),
+    request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/reject`, withAdminJson({ label: 'L44 race reject', body: { reason: `${runId}-reject-race` } }))
+  ]);
+  const fulfilledResults = raceResults.filter((item) => item.status === 'fulfilled');
+  const rejectedResults = raceResults.filter((item) => item.status === 'rejected');
+  const raceSuccessCount = fulfilledResults.length;
+  const raceFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: raceW.withdrawal_id } });
+  const approvedRootEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_approved', order_id: null } });
+  const approvedOrderEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_approved', order_id: raceA.order.id } });
+  const rejectedRootEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected', order_id: null } });
+  const rejectedOrderEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected', order_id: raceA.order.id } });
+  const approvedAudits = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: raceW.withdrawal_id, action: 'withdrawal_approved' } });
+  const rejectedAudits = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: raceW.withdrawal_id, action: 'withdrawal_rejected' } });
+  const raceTimelines = await prisma.orderTimelineLog.findMany({ where: { order_id: raceA.order.id, event_type: { in: ['withdrawal_approved', 'withdrawal_rejected'] } }, orderBy: { created_at: 'asc' } });
+  assert(fulfilledResults.length === 1, ['race must have exactly one fulfilled request', `actual=${fulfilledResults.length}`, `results=${JSON.stringify(raceResults.map((item) => item.status === 'fulfilled' ? { status: item.status, value: item.value } : { status: item.status, reason: item.reason instanceof Error ? item.reason.message : String(item.reason) }))}`].join(' '));
+  assert(rejectedResults.length === 1, `race must have exactly one rejected request actual=${rejectedResults.length}`);
+  assert(raceFinal.status === 'approved' || raceFinal.status === 'rejected', `race final status invalid actual=${raceFinal.status}`);
+  assert(!((approvedRootEvents > 0 || approvedOrderEvents > 0) && (rejectedRootEvents > 0 || rejectedOrderEvents > 0)), ['L44 approve/reject race must not write both approved and rejected success events', `approved_root=${approvedRootEvents}`, `approved_order=${approvedOrderEvents}`, `rejected_root=${rejectedRootEvents}`, `rejected_order=${rejectedOrderEvents}`].join(' '));
+  if (raceFinal.status === 'approved') {
+    assert(approvedRootEvents === 1, `approved root event expected=1 actual=${approvedRootEvents}`);
+    assert(approvedOrderEvents === 1, `approved order event expected=1 actual=${approvedOrderEvents}`);
+    assert(rejectedRootEvents === 0, `approved winner must not write rejected root event actual=${rejectedRootEvents}`);
+    assert(rejectedOrderEvents === 0, `approved winner must not write rejected order event actual=${rejectedOrderEvents}`);
+    assert(approvedAudits === 1 && rejectedAudits === 0, ['approved winner audit mismatch', `approved=${approvedAudits}`, `rejected=${rejectedAudits}`].join(' '));
+    assert(raceTimelines.length === 1 && raceTimelines[0].event_type === 'withdrawal_approved', ['approved winner timeline mismatch', `count=${raceTimelines.length}`, `types=${raceTimelines.map((item) => item.event_type).join(',')}`].join(' '));
+    const raceCommission = await prisma.commission.findUniqueOrThrow({ where: { id: raceA.commission.id } });
+    assert(raceCommission.status === 'withdrawing' && raceCommission.withdrawal_id === raceW.withdrawal_id, ['approved winner must retain reserved commission', `status=${raceCommission.status}`, `withdrawal_id=${raceCommission.withdrawal_id}`].join(' '));
+    const restoreCount = await prisma.rewardLedger.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected_restore' } });
+    assert(restoreCount === 0, `approved winner restore ledger expected=0 actual=${restoreCount}`);
+    const balance = await getAvailableRewardBalance(prisma, leaderRace.id);
+    assert(balance === 0, `approved winner balance expected=0 actual=${balance}`);
+  }
+  if (raceFinal.status === 'rejected') {
+    assert(rejectedRootEvents === 1, `rejected root event expected=1 actual=${rejectedRootEvents}`);
+    assert(rejectedOrderEvents === 1, `rejected order event expected=1 actual=${rejectedOrderEvents}`);
+    assert(approvedRootEvents === 0, `rejected winner must not write approved root event actual=${approvedRootEvents}`);
+    assert(approvedOrderEvents === 0, `rejected winner must not write approved order event actual=${approvedOrderEvents}`);
+    assert(rejectedAudits === 1 && approvedAudits === 0, ['rejected winner audit mismatch', `approved=${approvedAudits}`, `rejected=${rejectedAudits}`].join(' '));
+    assert(raceTimelines.length === 1 && raceTimelines[0].event_type === 'withdrawal_rejected', ['rejected winner timeline mismatch', `count=${raceTimelines.length}`, `types=${raceTimelines.map((item) => item.event_type).join(',')}`].join(' '));
+    const raceCommission = await prisma.commission.findUniqueOrThrow({ where: { id: raceA.commission.id } });
+    assert(raceCommission.status === 'available' && raceCommission.withdrawal_id === null, ['rejected winner must restore commission', `status=${raceCommission.status}`, `withdrawal_id=${raceCommission.withdrawal_id}`].join(' '));
+    const restoreCount = await prisma.rewardLedger.count({ where: { withdrawal_id: raceW.withdrawal_id, event_type: 'withdrawal_rejected_restore' } });
+    assert(restoreCount === 1, `rejected winner restore ledger expected=1 actual=${restoreCount}`);
+    const balance = await getAvailableRewardBalance(prisma, leaderRace.id);
+    assert(balance === 111, `rejected winner balance expected=111 actual=${balance}`);
+  }
+  console.log('L44 approve/reject race diagnostics:');
+  console.log(`race_final_status=${raceFinal.status}`);
+  console.log(`race_fulfilled_count=${fulfilledResults.length}`);
+  console.log(`race_rejected_count=${rejectedResults.length}`);
+  console.log(`race_approved_root_events=${approvedRootEvents}`);
+  console.log(`race_approved_order_events=${approvedOrderEvents}`);
+  console.log(`race_rejected_root_events=${rejectedRootEvents}`);
+  console.log(`race_rejected_order_events=${rejectedOrderEvents}`);
+  console.log(`race_approved_audits=${approvedAudits}`);
+  console.log(`race_rejected_audits=${rejectedAudits}`);
+  console.log(`race_timeline_types=${raceTimelines.map((item) => item.event_type).join(',')}`);
+  console.log('l44_approve_reject_race_passed');
+
+  console.log('=== L44 paid scenario ===');
+  const paidA = await createCommissionFixture('paid-111', leaderPaid.id, communityA.id, 111);
+  const paidB = await createCommissionFixture('paid-222', leaderPaid.id, communityA.id, 222);
+  const paidW = await createWithdrawalFromCommissions(leaderPaid, `${runId}-paid-request`, [paidA.commission, paidB.commission]);
+  await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 approve paid withdrawal', body: { remark: `${runId}-approve-paid` } }));
+  await request('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/tax-review`, withAdminJson({ label: 'L44 tax compatibility none', body: { tax_mode: 'none', tax_amount_cents: 0 } }));
+  const markPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 mark paid', body: { manual_reference: `${runId}-manual-reference`, remark: `${runId}-paid` } }));
+  const paidFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
+  const paidCommissions = await prisma.commission.findMany({ where: { withdrawal_id: paidW.withdrawal_id } });
+  const paidLedgers = await prisma.rewardLedger.findMany({ where: { withdrawal_id: paidW.withdrawal_id, event_type: 'withdrawal_paid' } });
+  const balanceAfterPaid = await getAvailableRewardBalance(prisma, leaderPaid.id);
+  assert(markPaid.withdrawal.status === 'paid' && paidFinal.status === 'paid' && paidFinal.manual_reference === `${runId}-manual-reference` && paidFinal.processed_at && paidFinal.processed_by_admin_id === DOCKER_E2E_ADMIN_ID, 'L44 mark-paid must persist manual processing metadata');
+  assert(paidCommissions.every((item) => item.status === 'withdrawn') && paidLedgers.length === 1 && paidLedgers[0].affects_available_balance === false && balanceAfterPaid >= 0, 'L44 paid must withdraw commissions and not affect available balance again');
+  const paidAuditBefore = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: paidW.withdrawal_id, action: 'withdrawal_mark_paid' } });
+  const repeatPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 repeat mark paid', body: { manual_reference: `${runId}-manual-reference`, remark: `${runId}-paid-repeat` } }));
+  assert(repeatPaid.idempotent === true && await prisma.rewardLedger.count({ where: { withdrawal_id: paidW.withdrawal_id, event_type: 'withdrawal_paid' } }) === 1 && await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: paidW.withdrawal_id, action: 'withdrawal_mark_paid' } }) === paidAuditBefore, 'L44 repeat mark-paid must not duplicate ledger/audit');
+  console.log('l44_paid_scenario_passed');
+
+  console.log('=== L44 withdrawal authorization scenario ===');
+  const scopeA1 = await createCommissionFixture('scope-a-111', leaderScopeA.id, communityA.id, 111);
+  const scopeB1 = await createCommissionFixture('scope-b-111', leaderScopeB.id, communityB.id, 111);
+  const scopeAW = await createWithdrawalFromCommissions(leaderScopeA, `${runId}-scope-a`, [scopeA1.commission]);
+  assert(scopeAW.withdrawal_id, 'L44 scope A withdrawal must be created');
+  const scopeBW = await createWithdrawalFromCommissions(leaderScopeB, `${runId}-scope-b`, [scopeB1.commission]);
+  const financeAList = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/withdrawals?keyword=${encodeURIComponent(runId)}&page=1&page_size=1`, { label: 'L44 scoped finance A list page 1', headers: financeAHeaders });
+  const financeAListPage2 = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/withdrawals?keyword=${encodeURIComponent(runId)}&page=2&page_size=1`, { label: 'L44 scoped finance A list page 2', headers: financeAHeaders });
+  assert(financeAList.total >= 1 && financeAList.items.every((item) => item.withdrawal_id !== scopeBW.withdrawal_id) && financeAListPage2.items.every((item) => item.withdrawal_id !== scopeBW.withdrawal_id), 'L44 scoped finance A list must filter B withdrawals with correct total/pages');
+  const negativeBefore = { withdrawal: await prisma.withdrawal.findUnique({ where: { id: scopeBW.withdrawal_id } }), links: await prisma.withdrawalCommission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), commissions: await prisma.commission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), ledger: await prisma.rewardLedger.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), audit: await prisma.adminAuditLog.count({ where: { target_id: scopeBW.withdrawal_id } }), events: await prisma.businessEventLog.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }) };
+  await request<ErrorApiResponse>('GET', `/api/admin/withdrawals/${scopeBW.withdrawal_id}`, { label: 'L44 scoped finance A detail B denied', expectedStatus: 403, headers: financeAHeaders });
+  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${scopeBW.withdrawal_id}/approve`, { label: 'L44 scoped finance A approve B denied', expectedStatus: 403, headers: financeAHeaders, body: { remark: `${runId}-denied` } });
+  await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 store manager withdrawal forbidden', expectedStatus: 403, headers: storeManagerHeaders });
+  await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 operator withdrawal forbidden', expectedStatus: 403, headers: operatorHeaders });
+  await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 inactive admin withdrawal unauthorized', expectedStatus: 401, headers: inactiveHeaders });
+  await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 missing admin withdrawal unauthorized', expectedStatus: 401 });
+  const negativeAfter = { withdrawal: await prisma.withdrawal.findUnique({ where: { id: scopeBW.withdrawal_id } }), links: await prisma.withdrawalCommission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), commissions: await prisma.commission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), ledger: await prisma.rewardLedger.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), audit: await prisma.adminAuditLog.count({ where: { target_id: scopeBW.withdrawal_id } }), events: await prisma.businessEventLog.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }) };
+  assert(JSON.stringify(negativeBefore) === JSON.stringify(negativeAfter), 'L44 negative authorization calls must not mutate withdrawal/link/commission/ledger/audit/event snapshots');
+  const taxRecord = await prisma.taxRecord.create({ data: { leader_user_id: leaderScopeB.id, source_type: 'withdrawal', source_id: scopeBW.withdrawal_id, tax_mode: 'none', tax_status: 'completed', amount_cents: 111, payload: { runId } } });
+  const taxRecordsA = await request<Array<{ id: string }>>('GET', `/api/admin/tax-records?source_type=withdrawal&source_id=${scopeBW.withdrawal_id}`, { label: 'L44 tax records scoped finance A excludes B', headers: financeAHeaders });
+  const taxRecordsB = await request<Array<{ id: string }>>('GET', `/api/admin/tax-records?source_type=withdrawal&source_id=${scopeBW.withdrawal_id}`, { label: 'L44 tax records scoped finance B includes B', headers: financeBHeaders });
+  assert(!taxRecordsA.some((item) => item.id === taxRecord.id) && taxRecordsB.some((item) => item.id === taxRecord.id), 'L44 tax-records must apply withdrawal data scope');
+  console.log('l44_authorization_scenario_passed');
+
+  const withdrawalReservedAmount = reservedLedgers[0].amount_cents;
+  const sameRequestConcurrentCount = sameWithdrawalCount;
+  const competingSuccessCount = competingSuccesses.length;
+  const mismatchEventCount = mismatchEventsAfter - mismatchEventsBefore;
+  const paidLedgerCount = paidLedgers.length;
+  const repeatNoDuplicate = repeatPaid.idempotent === true;
+  console.log('L44 manual withdrawal review:');
+  console.log(`withdrawal_initial_available_balance_cents=${initialBalance}`);
+  console.log(`withdrawal_reserved_amount_cents=${withdrawalReservedAmount}`);
+  console.log(`withdrawal_balance_after_request_cents=${balanceAfterRequest}`);
+  console.log(`withdrawal_same_request_idempotent=${sameWithdrawalIds.length === 1}`);
+  console.log(`withdrawal_same_request_concurrent_count=${sameRequestConcurrentCount}`);
+  console.log(`withdrawal_competing_request_success_count=${competingSuccessCount}`);
+  console.log(`withdrawal_link_count=${linkCount}`);
+  console.log(`withdrawal_ledger_mismatch_event_count=${mismatchEventCount}`);
+  console.log(`withdrawal_rejected_restore_ledger_count=${restoreLedgerCount}`);
+  console.log(`withdrawal_balance_after_reject_cents=${balanceAfterReject}`);
+  console.log(`withdrawal_approve_reject_success_count=${raceSuccessCount}`);
+  console.log(`withdrawal_approved_status=${raceFinal.status === 'approved' ? 'approved' : 'rejected'}`);
+  console.log(`withdrawal_paid_status=${paidFinal.status}`);
+  console.log(`withdrawal_balance_after_paid_cents=${balanceAfterPaid}`);
+  console.log(`withdrawal_paid_ledger_count=${paidLedgerCount}`);
+  console.log(`withdrawal_repeat_no_duplicate=${repeatNoDuplicate}`);
+  console.log('\nL44 withdrawal authorization:');
+  console.log('leader_missing_identity_401');
+  console.log('leader_customer_403');
+  console.log('leader_cross_account_denied');
+  console.log('scoped_finance_list_filtered');
+  console.log('scoped_finance_cross_scope_403');
+  console.log('store_manager_withdrawal_403');
+  console.log('operator_withdrawal_403');
+  console.log('inactive_admin_withdrawal_401');
+  console.log('withdrawal_negative_no_db_mutation');
+}
 async function main() {
   await ensureDockerE2eFixtures(prisma);
   const fixtureProduct = await getProductInventory(DOCKER_E2E_PRODUCT_ID);
@@ -853,6 +1124,7 @@ async function main() {
   console.log(`inventory_after_refund=${stockAfterRefund}`);
   console.log(`final_status=${finalClose.status}`);
 
+  await runL44WithdrawalScenario();
   await runL43RewardLedgerScenario();
   assertNoRiskFindings();
   console.log('Docker API E2E verification passed.');

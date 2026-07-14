@@ -333,6 +333,7 @@ model Commission {
   leader_user            User             @relation("CommissionLeader", fields: [leader_user_id], references: [id])
   order                  Order            @relation(fields: [order_id], references: [id])
   group_buy              GroupBuy         @relation(fields: [group_buy_id], references: [id])
+  withdrawal_links       WithdrawalCommission[]
 
   @@index([leader_user_id])
   @@index([withdrawal_id])
@@ -369,9 +370,32 @@ model Withdrawal {
   invoice_status       String           @default("not_required")
   tax_remark           String?
   admin_remark         String?
+  client_request_id    String?          @unique
+  reviewed_by_admin_id String?
+  reviewed_at          DateTime?
+  processed_by_admin_id String?
+  processed_at         DateTime?
+  rejected_at          DateTime?
+  manual_reference     String?
   created_at           DateTime         @default(now())
   updated_at           DateTime         @updatedAt
   leader_user          User             @relation("WithdrawalLeader", fields: [leader_user_id], references: [id])
+  commission_links     WithdrawalCommission[]
+}
+
+model WithdrawalCommission {
+  id            String     @id @default(cuid())
+  withdrawal_id String
+  commission_id String
+  amount_cents  Int
+  created_at    DateTime   @default(now())
+
+  withdrawal    Withdrawal @relation(fields: [withdrawal_id], references: [id])
+  commission    Commission @relation(fields: [commission_id], references: [id])
+
+  @@unique([withdrawal_id, commission_id])
+  @@index([withdrawal_id])
+  @@index([commission_id])
 }
 
 model AuditLog {

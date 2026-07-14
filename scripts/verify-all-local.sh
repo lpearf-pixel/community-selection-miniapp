@@ -80,3 +80,6 @@ pnpm exec tsx scripts/verify-l40-admin-order-after-sale-workbench-local.ts
 pnpm exec tsx scripts/verify-l41-inventory-deduct-restore-local.ts
 pnpm exec tsx scripts/verify-l42-failed-group-buy-manual-closure-local.ts
 pnpm exec tsx scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts
+
+# L44 verifier registered via stage-workflow.ts
+pnpm exec tsx scripts/verify-l44-manual-withdrawal-review-local.ts
