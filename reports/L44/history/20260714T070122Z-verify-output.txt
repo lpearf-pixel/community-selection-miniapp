@@ -1,0 +1,3037 @@
+
+=== Running L44 verifier ===
+L44 manual withdrawal review verifier passed.
+
+=== Running L43 verifier ===
+L43 reward ledger T3 refund deduct verification passed.
+
+=== Running L42 verifier ===
+{"level":30,"time":1784012471573,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-1","req":{"method":"POST","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/mark-failed","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471575,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-1","res":{"statusCode":401},"responseTime":2.237124999999992,"msg":"request completed"}
+{"level":30,"time":1784012471576,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-2","req":{"method":"POST","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/mark-failed","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471577,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-2","res":{"statusCode":401},"responseTime":1.432292000000018,"msg":"request completed"}
+{"level":30,"time":1784012471578,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-3","req":{"method":"POST","url":"/api/admin/group-buys/cmrkayowi000ipbu8qd1zys6r/mark-failed","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471580,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-3","res":{"statusCode":403},"responseTime":1.5194999999999936,"msg":"request completed"}
+{"level":30,"time":1784012471582,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-4","req":{"method":"GET","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/closure-summary","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471583,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-4","res":{"statusCode":403},"responseTime":0.828207999999961,"msg":"request completed"}
+{"level":30,"time":1784012471583,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-5","req":{"method":"GET","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/manual-refund-orders","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471584,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-5","res":{"statusCode":403},"responseTime":0.8632499999999936,"msg":"request completed"}
+{"level":30,"time":1784012471584,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-6","req":{"method":"POST","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/close-unpaid-orders","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471585,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-6","res":{"statusCode":403},"responseTime":0.7789999999999964,"msg":"request completed"}
+{"level":30,"time":1784012471585,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-7","req":{"method":"POST","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/orders/cmrkayovq0009pbu8estr8aya/confirm-refund","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471586,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-7","res":{"statusCode":403},"responseTime":0.7917499999999791,"msg":"request completed"}
+{"level":30,"time":1784012471586,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-8","req":{"method":"POST","url":"/api/admin/group-buys/cmrkayovo0007pbu8yho7el5q/close","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1784012471587,"pid":4976,"hostname":"bc7e266223ed","reqId":"req-8","res":{"statusCode":403},"responseTime":1.3126249999999686,"msg":"request completed"}
+L42 failed group buy manual closure verification passed.
+
+=== Running L41 verifier ===
+L41 inventory deduct restore verification passed.
+
+=== Running L40 verifier ===
+L40 admin order after sale workbench verification passed.
+
+=== Running L39 verifier ===
+L39 delivery refund finance baseline verification passed.
+
+=== Running L38 verifier ===
+Compliance scan passed.
+L38 delivery fee order amount baseline verification passed.
+
+=== Running L37 verifier ===
+Compliance scan passed.
+L37 delivery rule config baseline verification passed.
+
+=== Running L36 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L36 delivery fee window range baseline verification passed.
+
+=== Running L35 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L35 user delivery option baseline verification passed.
+
+=== Running L34 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L34 admin data scope baseline verification passed.
+
+=== Running L33 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L33 pickup navigation delivery reservation verification passed.
+
+=== Running L32 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L32 clerk pickup workbench verification passed.
+(node:5515) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L31 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L31 admin access control baseline verification passed.
+(node:5561) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L30 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L30 refund payment risk idempotency verification passed.
+(node:5607) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L29 verifier ===
+No raw compliance-sensitive terms found in verify/docs files.
+Compliance scan passed.
+L29 admin refund ledger page verification passed.
+(node:5653) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///app/scripts/verify-no-raw-compliance-terms-local.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /app/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+=== Running L28 verifier ===
+Compliance scan passed.
+L28 refund ledger finance check verification passed.
+
+=== Running L27 verifier ===
+Compliance scan passed.
+L27 group buy expiry manual refund verification passed.
+
+=== Running L26 verifier ===
+Compliance scan passed.
+L26 group buy success rule verification passed.
+
+=== Running L25 verifier ===
+Compliance scan passed.
+L25 order confirm quantity guard verification passed.
+
+=== Running L24 verifier ===
+Compliance scan passed.
+L24 miniapp cart verification passed.
+
+=== Running raw compliance scan ===
+No raw compliance-sensitive terms found in verify/docs files.
+raw compliance scan passed.
+
+=== Running Docker API E2E ===
+Docker E2E product stock reset:
+product_id=docker-e2e-product
+stock=100000
+
+--- GET /api/health ---
+{
+  "success": true,
+  "data": {
+    "status": "ok"
+  },
+  "message": ""
+}
+
+--- GET /api/products ---
+{
+  "success": true,
+  "data": {
+    "total": 112,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "id": "cmrkaypbb0009pbvomvl38ow9",
+        "product_id": "cmrkaypbb0009pbvomvl38ow9",
+        "name": "l41-1784012471909-poor",
+        "category_id": "cmrkaypax0000pbvoa4vgzfec",
+        "category_name": "l41-1784012471909-category",
+        "category": {
+          "id": "cmrkaypax0000pbvoa4vgzfec",
+          "name": "l41-1784012471909-category"
+        },
+        "cover_image": null,
+        "price_cents": 1000,
+        "unit": "份",
+        "stock_unit": "份",
+        "sale_unit": "份",
+        "sale_spec_name": null,
+        "stock": 2,
+        "display_stock": "2 份",
+        "is_group_enabled": false,
+        "has_active_group_buy": false,
+        "active_group_buy_count": 0,
+        "min_group_price_cents": null,
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/products/:id ---
+{
+  "success": true,
+  "data": {
+    "id": "docker-e2e-product",
+    "product_id": "docker-e2e-product",
+    "name": "Docker E2E 测试商品",
+    "category": {
+      "category_id": "docker-e2e-category",
+      "name": "Docker E2E 测试分类"
+    },
+    "cover_image": null,
+    "images": [],
+    "description": null,
+    "price_cents": 4590,
+    "unit": "份",
+    "stock_unit": "份",
+    "sale_unit": "份",
+    "sale_spec_name": null,
+    "stock": 100000,
+    "display_stock": "100000 份",
+    "is_group_enabled": true,
+    "active_group_buys": [],
+    "can_normal_buy": true,
+    "can_join_group_buy": false
+  },
+  "message": ""
+}
+
+--- GET /api/products/:id/group-buys ---
+{
+  "success": true,
+  "data": {
+    "total": 0,
+    "page": 1,
+    "page_size": 1,
+    "items": []
+  },
+  "message": ""
+}
+
+--- GET /api/communities ---
+{
+  "success": true,
+  "data": {
+    "total": 72,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "community_id": "cmrkaypbf000dpbvolmv7mnkd",
+        "name": "l41-1784012471909-community",
+        "address": "L41 community address",
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/pickup-stores ---
+{
+  "success": true,
+  "data": {
+    "total": 34,
+    "page": 1,
+    "page_size": 1,
+    "items": [
+      {
+        "pickup_store_id": "cmrkaypbe000cpbvowjes5oom",
+        "name": "l41-1784012471909-store",
+        "address": "L41 store address",
+        "phone": "13800000000",
+        "community_id": null,
+        "community_name": null,
+        "status": "active"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/pickup-stores/:id ---
+{
+  "success": true,
+  "data": {
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "name": "Docker E2E 测试自提点",
+    "address": "Docker E2E 测试自提点地址",
+    "phone": "13800000000",
+    "community_id": null,
+    "community_name": null,
+    "status": "active"
+  },
+  "message": ""
+}
+
+--- GET /api/delivery/rules?pickup_store_id=main-pickup-store ---
+{
+  "success": true,
+  "data": {
+    "id": "docker-e2e-delivery-rule",
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "enabled": true,
+    "delivery_mode": "store_delivery",
+    "base_fee_cents": 300,
+    "free_threshold_cents": null,
+    "max_distance_km": null,
+    "service_radius_text": "Docker E2E 测试配送范围",
+    "available_time_windows": [
+      {
+        "code": "docker_e2e_window",
+        "label": "Docker E2E 时段",
+        "start_time": "10:00",
+        "end_time": "12:00"
+      }
+    ],
+    "notice": "Docker E2E 测试配送规则",
+    "source": "pickup_store",
+    "created_at": "2026-07-13T10:07:27.454Z",
+    "updated_at": "2026-07-14T07:01:18.376Z"
+  },
+  "message": ""
+}
+
+--- POST /api/orders/normal delivery missing delivery_time_window_code ---
+{
+  "success": false,
+  "data": null,
+  "message": "配送时段必填校验：请选择配送时段"
+}
+
+--- POST /api/orders/normal delivery with delivery_time_window_code ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayuba00a0pbe35f3esk8k",
+    "order_id": "cmrkayuba00a0pbe35f3esk8k",
+    "order_no": "O17840124784530177",
+    "client_request_id": "docker-e2e-delivery-1784012478446",
+    "user_id": "cmrkayub5009ypbe3b0ziatv9",
+    "group_buy_id": null,
+    "product_id": "docker-e2e-product",
+    "leader_user_id": null,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 300,
+    "pay_amount_cents": 4890,
+    "refund_amount_cents": 0,
+    "quantity": 1,
+    "pay_status": "unpaid",
+    "order_status": "unpaid",
+    "refund_status": "none",
+    "pickup_type": "delivery",
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "community_id": "docker-e2e-community",
+    "receiver_name": "Docker E2E 配送",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address": "测试配送地址",
+    "receiver_address_masked": "测试配送地址***",
+    "delivery_time_window_code": "docker_e2e_window",
+    "delivery_time_window_text": "Docker E2E 时段 10:00-12:00",
+    "service_radius_text": "Docker E2E 测试配送范围",
+    "created_at": "2026-07-14T07:01:18.454Z",
+    "paid_at": null,
+    "completed_at": null,
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "pickup_store": {
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "name": "Docker E2E 测试自提点",
+      "address": "Docker E2E 测试自提点地址",
+      "phone": "13800000000"
+    },
+    "community": {
+      "community_id": "docker-e2e-community",
+      "name": "Docker E2E 测试社区",
+      "address": "Docker E2E 测试社区地址"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock delivery amount ---
+{
+  "success": true,
+  "data": {
+    "payment_id": "cmrkayubj00a4pbe3jp3xcxzu",
+    "order_id": "cmrkayuba00a0pbe35f3esk8k",
+    "order_no": "O17840124784530177",
+    "pay_status": "paid",
+    "order_status": "paid",
+    "paid_at": "2026-07-14T07:01:18.469Z",
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 300,
+    "pay_amount_cents": 4890,
+    "transaction_id": "MOCKTXNPAYO17840124784530177",
+    "mock": true
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock delivery duplicate ---
+{
+  "success": true,
+  "data": {
+    "payment_id": "cmrkayubj00a4pbe3jp3xcxzu",
+    "order_id": "cmrkayuba00a0pbe35f3esk8k",
+    "order_no": "O17840124784530177",
+    "pay_status": "paid",
+    "order_status": "paid",
+    "paid_at": "2026-07-14T07:01:18.469Z",
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 300,
+    "pay_amount_cents": 4890,
+    "transaction_id": "MOCKTXNPAYO17840124784530177",
+    "mock": true
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id delivery detail ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmrkayuba00a0pbe35f3esk8k",
+    "order_no": "O17840124784530177",
+    "order_type": "normal",
+    "product_id": "docker-e2e-product",
+    "product_name": "Docker E2E 测试商品",
+    "product_cover_image": null,
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "quantity": 1,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 300,
+    "pay_amount_cents": 4890,
+    "refund_amount_cents": 0,
+    "product_refund_amount_cents": 0,
+    "delivery_refund_amount_cents": 0,
+    "remaining_refundable_amount_cents": 4890,
+    "pay_status": "paid",
+    "order_status": "paid",
+    "user_status_text": "已支付",
+    "refund_status": "none",
+    "group_buy_id": null,
+    "group_buy_status": null,
+    "pickup_type": "delivery",
+    "fulfillment_type_text": "门店配送",
+    "delivery_status_text": "待配送",
+    "delivery_time_window_code": "docker_e2e_window",
+    "delivery_time_window_text": "Docker E2E 时段 10:00-12:00",
+    "service_radius_text": "门店周边 3-5km，具体以门店确认为准",
+    "receiver_address": "测试配送地址",
+    "pickup_store_name": "Docker E2E 测试自提点",
+    "pickup": {
+      "pickup_type": "delivery",
+      "fulfillment_type_text": "门店配送",
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "pickup_store_name": "Docker E2E 测试自提点",
+      "pickup_store_address": "Docker E2E 测试自提点地址",
+      "pickup_store_phone": "13800000000",
+      "pickup_code": "PICK-530177"
+    },
+    "community_name": "Docker E2E 测试社区",
+    "created_at": "2026-07-14T07:01:18.454Z",
+    "paid_at": "2026-07-14T07:01:18.469Z",
+    "completed_at": null,
+    "after_sale_case_count": 0,
+    "latest_after_sale_status": null,
+    "after_sale_summary": {
+      "has_after_sale": false,
+      "latest_status": null
+    },
+    "group_buy": null,
+    "refund_split": {
+      "product_refund_amount_cents": 0,
+      "delivery_refund_amount_cents": 0,
+      "total_refund_amount_cents": 0,
+      "remaining_refundable_amount_cents": 4890
+    },
+    "delivery": {
+      "delivery_status_text": "待配送",
+      "delivery_fee_cents": 300,
+      "delivery_time_window_code": "docker_e2e_window",
+      "delivery_time_window_text": "Docker E2E 时段 10:00-12:00",
+      "service_radius_text": "门店周边 3-5km，具体以门店确认为准",
+      "notice": "当前为门店配送，暂不接第三方配送。配送范围与时段以门店确认为准。",
+      "receiver_address": "测试配送地址"
+    },
+    "receiver": {
+      "receiver_name": "Docker E2E 配送",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address": "测试配送地址"
+    },
+    "after_sales": [],
+    "timeline": [
+      {
+        "event_type": "order_created",
+        "title": "普通购买订单已创建",
+        "from_status": null,
+        "to_status": "unpaid",
+        "created_at": "2026-07-14T07:01:18.456Z"
+      },
+      {
+        "event_type": "payment_mark_order_paid",
+        "title": "订单已支付",
+        "from_status": "unpaid",
+        "to_status": "paid",
+        "created_at": "2026-07-14T07:01:18.473Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/admin/delivery/orders ---
+{
+  "success": true,
+  "data": {
+    "total": 31,
+    "page": 1,
+    "page_size": 50,
+    "items": [
+      {
+        "order_id": "cmrkayuba00a0pbe35f3esk8k",
+        "order_no": "O17840124784530177",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "测试配送地址",
+        "receiver_name": "Docker E2E 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 300,
+        "pay_amount_cents": 4890,
+        "delivery_time_window_text": "Docker E2E 时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T07:01:18.454Z",
+        "updated_at": "2026-07-14T07:01:18.470Z"
+      },
+      {
+        "order_id": "l43-e2e-1784012466275-order",
+        "order_no": "l43-e2e-1784012466275-order-no",
+        "provider": "self",
+        "delivery_status": "delivered",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": null,
+        "pickup_store_name": null,
+        "sender_address": null,
+        "receiver_address_masked": "L43 addres…",
+        "receiver_name": "L43 Buyer",
+        "receiver_phone_masked": "136****0000",
+        "estimated_distance_km": null,
+        "product_amount_cents": 10000,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 10500,
+        "delivery_time_window_text": null,
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T07:01:06.323Z",
+        "updated_at": "2026-07-14T07:01:06.428Z"
+      },
+      {
+        "order_id": "cmrkaykl6007rpbe3iduydmqf",
+        "order_no": "O17840124658504455",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T07:01:05.851Z",
+        "updated_at": "2026-07-14T07:01:05.983Z"
+      },
+      {
+        "order_id": "cmrkay2xj004gpbe3icks0ovs",
+        "order_no": "O17840124429676280",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T07:00:42.967Z",
+        "updated_at": "2026-07-14T07:00:43.084Z"
+      },
+      {
+        "order_id": "cmrkaxumu0015pbe3gnsrtgch",
+        "order_no": "O17840124322149266",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T07:00:32.215Z",
+        "updated_at": "2026-07-14T07:00:32.327Z"
+      },
+      {
+        "order_id": "cmrk8p13800ugpbl2367v1otc",
+        "order_no": "O17840086614449318",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T05:57:41.445Z",
+        "updated_at": "2026-07-14T05:57:41.554Z"
+      },
+      {
+        "order_id": "cmrk8ot1r00r5pbl2fj3htecf",
+        "order_no": "O17840086510239015",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T05:57:31.024Z",
+        "updated_at": "2026-07-14T05:57:31.132Z"
+      },
+      {
+        "order_id": "cmrk64bod00nupbl2ytkzzug4",
+        "order_no": "O17840043361576395",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T04:45:36.157Z",
+        "updated_at": "2026-07-14T04:45:36.277Z"
+      },
+      {
+        "order_id": "cmrk6431d00kjpbl2jtn5pbbu",
+        "order_no": "O17840043249603951",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-14T04:45:24.961Z",
+        "updated_at": "2026-07-14T04:45:25.076Z"
+      },
+      {
+        "order_id": "cmrjewo2900h8pbl2clld26z2",
+        "order_no": "O17839586293290273",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T16:03:49.330Z",
+        "updated_at": "2026-07-13T16:03:49.461Z"
+      },
+      {
+        "order_id": "cmrjewfx300dxpbl2vjg3lpwd",
+        "order_no": "O17839586187753189",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T16:03:38.776Z",
+        "updated_at": "2026-07-13T16:03:38.883Z"
+      },
+      {
+        "order_id": "cmrjeib4k00anpbl2hjcx1s6f",
+        "order_no": "O17839579593790453",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T15:52:39.380Z",
+        "updated_at": "2026-07-13T15:52:39.499Z"
+      },
+      {
+        "order_id": "cmrjehqr2007dpbl2gra4131h",
+        "order_no": "O17839579329742260",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T15:52:12.975Z",
+        "updated_at": "2026-07-13T15:52:13.119Z"
+      },
+      {
+        "order_id": "cmrjdk5fw0049pbl2s1c0r4zp",
+        "order_no": "O17839563657082329",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T15:26:05.709Z",
+        "updated_at": "2026-07-13T15:26:05.813Z"
+      },
+      {
+        "order_id": "cmrjdjvbe0015pbl271p543er",
+        "order_no": "O17839563525862553",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T15:25:52.587Z",
+        "updated_at": "2026-07-13T15:25:52.761Z"
+      },
+      {
+        "order_id": "cmrj540if00ahpbwm72bwjiqg",
+        "order_no": "O17839421758940359",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T11:29:35.895Z",
+        "updated_at": "2026-07-13T11:29:36.003Z"
+      },
+      {
+        "order_id": "cmrj53t7k007dpbwm1v7hc95f",
+        "order_no": "O17839421664312578",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T11:29:26.432Z",
+        "updated_at": "2026-07-13T11:29:26.548Z"
+      },
+      {
+        "order_id": "cmrj50tj40049pbwmmmtrc9jp",
+        "order_no": "O17839420268801254",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T11:27:06.881Z",
+        "updated_at": "2026-07-13T11:27:06.983Z"
+      },
+      {
+        "order_id": "cmrj50kgw0015pbwmqkg4s6sl",
+        "order_no": "O17839420151363354",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T11:26:55.136Z",
+        "updated_at": "2026-07-13T11:26:55.245Z"
+      },
+      {
+        "order_id": "cmrj3cw4300t5pbbktv8x0gkr",
+        "order_no": "O17839392308675452",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:40:30.868Z",
+        "updated_at": "2026-07-13T10:40:30.971Z"
+      },
+      {
+        "order_id": "cmrj3com400q1pbbk1yt1te3c",
+        "order_no": "O17839392211481117",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:40:21.149Z",
+        "updated_at": "2026-07-13T10:40:21.260Z"
+      },
+      {
+        "order_id": "cmrj3a3av00mxpbbk3ezxgcqp",
+        "order_no": "O17839391002148346",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:38:20.215Z",
+        "updated_at": "2026-07-13T10:38:20.318Z"
+      },
+      {
+        "order_id": "cmrj39vll00jtpbbkzigai3bq",
+        "order_no": "O17839390902330123",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:38:10.233Z",
+        "updated_at": "2026-07-13T10:38:10.341Z"
+      },
+      {
+        "order_id": "cmrj37vq900gppbbkr83g7xqn",
+        "order_no": "O17839389970894999",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:36:37.089Z",
+        "updated_at": "2026-07-13T10:36:37.193Z"
+      },
+      {
+        "order_id": "cmrj37og800dlpbbka3xlfm7y",
+        "order_no": "O17839389876563486",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:36:27.657Z",
+        "updated_at": "2026-07-13T10:36:27.754Z"
+      },
+      {
+        "order_id": "cmrj36ioc00ahpbbkntao2z0p",
+        "order_no": "O17839389335162821",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:35:33.517Z",
+        "updated_at": "2026-07-13T10:35:33.621Z"
+      },
+      {
+        "order_id": "cmrj36b8u007dpbbkf2doov1n",
+        "order_no": "O17839389238865699",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:35:23.886Z",
+        "updated_at": "2026-07-13T10:35:24.003Z"
+      },
+      {
+        "order_id": "cmrj2qfvn0049pbbkg35smh2f",
+        "order_no": "O17839381833954783",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:23:03.396Z",
+        "updated_at": "2026-07-13T10:23:03.519Z"
+      },
+      {
+        "order_id": "cmrj2q76c0015pbbkxlxgz2qx",
+        "order_no": "O17839381721162517",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:22:52.117Z",
+        "updated_at": "2026-07-13T10:22:52.250Z"
+      },
+      {
+        "order_id": "cmrj26lmk0049pbb4j7zvett1",
+        "order_no": "O17839372577248243",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:07:37.725Z",
+        "updated_at": "2026-07-13T10:07:37.824Z"
+      },
+      {
+        "order_id": "cmrj26dvw0015pbb430x0atu8",
+        "order_no": "O17839372476926372",
+        "provider": "self",
+        "delivery_status": "none",
+        "delivery_mode": "store_delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "sender_address": "Docker E2E 测试自提点地址",
+        "receiver_address_masked": "L39 配送地址",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "estimated_distance_km": null,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+        "third_party_provider": null,
+        "third_party_order_no": null,
+        "can_create_delivery": true,
+        "created_at": "2026-07-13T10:07:27.692Z",
+        "updated_at": "2026-07-13T10:07:27.851Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/admin/finance/reconciliation/overview ---
+{
+  "success": true,
+  "data": {
+    "total_product_amount_cents": 1212420,
+    "total_delivery_fee_cents": 24000,
+    "total_pay_amount_cents": 1236420,
+    "total_refund_amount_cents": 422120,
+    "total_product_refund_amount_cents": 407120,
+    "total_delivery_refund_amount_cents": 15000,
+    "remaining_refundable_amount_cents": 814300,
+    "order_count": 397,
+    "paid_order_count": 214,
+    "completed_order_count": 4,
+    "refunded_order_count": 152,
+    "gross_sales_amount": 1212420,
+    "paid_amount": 838800,
+    "refunded_amount": 422120,
+    "net_sales_amount": 416680,
+    "after_sale_case_count": 58,
+    "after_sale_refund_amount": 11600,
+    "inventory_loss_count": 0,
+    "inventory_loss_estimated_amount": 0,
+    "service_reward_estimated_amount": 666,
+    "withdrawal_requested_amount": 0,
+    "withdrawal_paid_amount": 0,
+    "tax_review_pending_count": 0
+  },
+  "message": ""
+}
+
+--- POST /api/refunds/mock delivery full refund ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayudv00aipbe3yw22ckhx",
+    "order_id": "cmrkayuba00a0pbe35f3esk8k",
+    "out_refund_no": "RFO17840124784530177docker-e2e-delivery-full-refund-",
+    "refund_id": null,
+    "client_refund_id": "docker-e2e-delivery-full-refund-1784012478542",
+    "refund_amount_cents": 4890,
+    "product_refund_amount_cents": 4590,
+    "delivery_refund_amount_cents": 300,
+    "stock_restored": false,
+    "processed_at": "2026-07-14T07:01:18.549Z",
+    "reason": "Docker E2E L41 full refund restore",
+    "status": "success",
+    "raw_notify": {
+      "source": "mock",
+      "client_refund_id": "docker-e2e-delivery-full-refund-1784012478542"
+    },
+    "created_at": "2026-07-14T07:01:18.548Z",
+    "updated_at": "2026-07-14T07:01:18.550Z"
+  },
+  "message": ""
+}
+Docker E2E inventory:
+before=100000
+after_payment=99999
+after_duplicate_payment=99999
+after_refund=100000
+
+--- POST /api/orders/normal L41 insufficient fixture ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayuef00aspbe34byw4101",
+    "order_id": "cmrkayuef00aspbe34byw4101",
+    "order_no": "O17840124785667033",
+    "client_request_id": "docker-e2e-insufficient-1784012478559",
+    "user_id": "cmrkayueb00aqpbe3weongaip",
+    "group_buy_id": null,
+    "product_id": "docker-e2e-insufficient-stock-product",
+    "leader_user_id": null,
+    "total_amount_cents": 1000,
+    "product_amount_cents": 1000,
+    "delivery_fee_cents": 0,
+    "pay_amount_cents": 1000,
+    "refund_amount_cents": 0,
+    "quantity": 1,
+    "pay_status": "unpaid",
+    "order_status": "unpaid",
+    "refund_status": "none",
+    "pickup_type": "store",
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "community_id": "docker-e2e-community",
+    "receiver_name": "Docker E2E 低库存",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address": null,
+    "receiver_address_masked": null,
+    "delivery_time_window_code": null,
+    "delivery_time_window_text": null,
+    "service_radius_text": null,
+    "created_at": "2026-07-14T07:01:18.567Z",
+    "paid_at": null,
+    "completed_at": null,
+    "product": {
+      "product_id": "docker-e2e-insufficient-stock-product",
+      "name": "Docker E2E 低库存测试商品",
+      "cover_image": null,
+      "price_cents": 1000,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "pickup_store": {
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "name": "Docker E2E 测试自提点",
+      "address": "Docker E2E 测试自提点地址",
+      "phone": "13800000000"
+    },
+    "community": {
+      "community_id": "docker-e2e-community",
+      "name": "Docker E2E 测试社区",
+      "address": "Docker E2E 测试社区地址"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock L41 insufficient fixture ---
+{
+  "success": false,
+  "data": null,
+  "message": "库存不足"
+}
+
+--- POST /api/admin/delivery/rule-configs L39 base fee 500 ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayues00azpbe3692jvxc9",
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "enabled": true,
+    "delivery_mode": "store_delivery",
+    "base_fee_cents": 500,
+    "free_threshold_cents": null,
+    "max_distance_km": null,
+    "service_radius_text": "Docker API E2E L39 配送范围",
+    "available_time_windows": [
+      {
+        "code": "l39_window_1784012478577",
+        "label": "L39 验证时段",
+        "start_time": "10:00",
+        "end_time": "12:00"
+      }
+    ],
+    "notice": "Docker API E2E L39 配送规则",
+    "source": "pickup_store",
+    "created_at": "2026-07-14T07:01:18.580Z",
+    "updated_at": "2026-07-14T07:01:18.580Z"
+  },
+  "message": ""
+}
+
+--- POST /api/orders/normal L39 delivery fee 500 ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_no": "O17840124785899858",
+    "client_request_id": "docker-e2e-l39-delivery-1784012478581",
+    "user_id": "cmrkayuew00b0pbe3aqjoug2r",
+    "group_buy_id": null,
+    "product_id": "docker-e2e-product",
+    "leader_user_id": null,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 500,
+    "pay_amount_cents": 5090,
+    "refund_amount_cents": 0,
+    "quantity": 1,
+    "pay_status": "unpaid",
+    "order_status": "unpaid",
+    "refund_status": "none",
+    "pickup_type": "delivery",
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "community_id": "docker-e2e-community",
+    "receiver_name": "Docker E2E L39 配送",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address": "L39 配送地址",
+    "receiver_address_masked": "L39 配送***",
+    "delivery_time_window_code": "l39_window_1784012478577",
+    "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+    "service_radius_text": "Docker API E2E L39 配送范围",
+    "created_at": "2026-07-14T07:01:18.590Z",
+    "paid_at": null,
+    "completed_at": null,
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "pickup_store": {
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "name": "Docker E2E 测试自提点",
+      "address": "Docker E2E 测试自提点地址",
+      "phone": "13800000000"
+    },
+    "community": {
+      "community_id": "docker-e2e-community",
+      "name": "Docker E2E 测试社区",
+      "address": "Docker E2E 测试社区地址"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock L39 delivery ---
+{
+  "success": true,
+  "data": {
+    "payment_id": "cmrkayufb00b6pbe35y5p8xnp",
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_no": "O17840124785899858",
+    "pay_status": "paid",
+    "order_status": "paid",
+    "paid_at": "2026-07-14T07:01:18.608Z",
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 500,
+    "pay_amount_cents": 5090,
+    "transaction_id": "MOCKTXNPAYO17840124785899858",
+    "mock": true
+  },
+  "message": ""
+}
+
+--- POST /api/me/orders/:id/after-sales L39 split request ---
+{
+  "success": true,
+  "data": {
+    "after_sale_case_id": "cmrkayufx00bepbe3dzqftl0p",
+    "id": "cmrkayufx00bepbe3dzqftl0p",
+    "type": "missing_item",
+    "status": "submitted",
+    "resolution_type": null,
+    "reason": "Docker API E2E L39 拆分退款",
+    "description": "L39 product/delivery refund split",
+    "requested_refund_cents": 300,
+    "requested_product_refund_cents": 100,
+    "requested_delivery_refund_cents": 200,
+    "approved_refund_cents": null,
+    "approved_product_refund_cents": null,
+    "approved_delivery_refund_cents": null,
+    "responsibility": null,
+    "created_at": "2026-07-14T07:01:18.621Z",
+    "resolved_at": null
+  },
+  "message": ""
+}
+
+--- POST /api/admin/after-sales/:id/review L40 no admin identity ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Admin identity required"
+}
+
+--- POST /api/admin/after-sales/:id/review L40 role without user id ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Admin identity required"
+}
+
+--- POST /api/admin/after-sales/:id/review L40 missing admin fixture ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Active AdminUser required"
+}
+
+--- POST /api/admin/after-sales/:id/review L40 inactive admin ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Active AdminUser required"
+}
+
+--- POST /api/admin/after-sales/:id/review L40 insufficient permission ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- POST /api/admin/after-sales/:id/review L39 split approval ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayufx00bepbe3dzqftl0p",
+    "after_sale_case_id": "cmrkayufx00bepbe3dzqftl0p",
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_no": "O17840124785899858",
+    "type": "missing_item",
+    "status": "approved",
+    "reason": "Docker API E2E L39 拆分退款",
+    "description": "L39 product/delivery refund split",
+    "requested_refund_cents": 300,
+    "requested_product_refund_cents": 100,
+    "requested_delivery_refund_cents": 200,
+    "approved_refund_cents": 300,
+    "approved_product_refund_cents": 100,
+    "approved_delivery_refund_cents": 200,
+    "responsibility": "platform",
+    "admin_note": "Docker API E2E L39 split approval",
+    "reviewed_at": "2026-07-14T07:01:18.650Z",
+    "resolved_at": null,
+    "created_at": "2026-07-14T07:01:18.621Z",
+    "handler": {
+      "id": "docker-e2e-admin",
+      "username": "docker-e2e-admin-user"
+    },
+    "order": {
+      "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+      "order_no": "O17840124785899858",
+      "product_amount_cents": 4590,
+      "delivery_fee_cents": 500,
+      "pay_amount_cents": 5090,
+      "refund_amount_cents": 0,
+      "product_refund_amount_cents": 0,
+      "delivery_refund_amount_cents": 0,
+      "remaining_refundable_amount_cents": 5090,
+      "pickup_type": "delivery",
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "community_id": "docker-e2e-community",
+      "receiver_name": "Docker E2E L39 配送",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address_masked": "L39 配送***",
+      "pay_status": "paid",
+      "order_status": "paid"
+    },
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "price_cents": 4590
+    },
+    "logs": [
+      {
+        "id": "cmrkayufx00bgpbe3ro861w3z",
+        "action": "after_sale_submitted",
+        "actor_type": "user",
+        "actor_id": "cmrkayuew00b0pbe3aqjoug2r",
+        "note": "Docker API E2E L39 拆分退款",
+        "created_at": "2026-07-14T07:01:18.622Z"
+      },
+      {
+        "id": "cmrkayugr00bkpbe3qdpcq4k3",
+        "action": "after_sale_approved",
+        "actor_type": "admin",
+        "actor_id": "docker-e2e-admin",
+        "note": "Docker API E2E L39 split approval",
+        "created_at": "2026-07-14T07:01:18.652Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/admin/after-sales L40 workbench list ---
+{
+  "success": true,
+  "data": [
+    {
+      "id": "cmrkayufx00bepbe3dzqftl0p",
+      "after_sale_case_id": "cmrkayufx00bepbe3dzqftl0p",
+      "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+      "order_no": "O17840124785899858",
+      "type": "missing_item",
+      "status": "approved",
+      "reason": "Docker API E2E L39 拆分退款",
+      "description": "L39 product/delivery refund split",
+      "requested_refund_cents": 300,
+      "requested_product_refund_cents": 100,
+      "requested_delivery_refund_cents": 200,
+      "approved_refund_cents": 300,
+      "approved_product_refund_cents": 100,
+      "approved_delivery_refund_cents": 200,
+      "responsibility": "platform",
+      "admin_note": "Docker API E2E L39 split approval",
+      "reviewed_at": "2026-07-14T07:01:18.650Z",
+      "resolved_at": null,
+      "created_at": "2026-07-14T07:01:18.621Z",
+      "handler": {
+        "id": "docker-e2e-admin",
+        "username": "docker-e2e-admin-user"
+      },
+      "order": {
+        "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+        "order_no": "O17840124785899858",
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 500,
+        "pay_amount_cents": 5090,
+        "refund_amount_cents": 0,
+        "product_refund_amount_cents": 0,
+        "delivery_refund_amount_cents": 0,
+        "remaining_refundable_amount_cents": 5090,
+        "pickup_type": "delivery",
+        "pickup_store_id": "docker-e2e-pickup-store",
+        "community_id": "docker-e2e-community",
+        "receiver_name": "Docker E2E L39 配送",
+        "receiver_phone_masked": "138****5678",
+        "receiver_address_masked": "L39 配送***",
+        "pay_status": "paid",
+        "order_status": "paid"
+      },
+      "product": {
+        "product_id": "docker-e2e-product",
+        "name": "Docker E2E 测试商品",
+        "price_cents": 4590
+      },
+      "logs": [
+        {
+          "id": "cmrkayufx00bgpbe3ro861w3z",
+          "action": "after_sale_submitted",
+          "actor_type": "user",
+          "actor_id": "cmrkayuew00b0pbe3aqjoug2r",
+          "note": "Docker API E2E L39 拆分退款",
+          "created_at": "2026-07-14T07:01:18.622Z"
+        },
+        {
+          "id": "cmrkayugr00bkpbe3qdpcq4k3",
+          "action": "after_sale_approved",
+          "actor_type": "admin",
+          "actor_id": "docker-e2e-admin",
+          "note": "Docker API E2E L39 split approval",
+          "created_at": "2026-07-14T07:01:18.652Z"
+        }
+      ]
+    }
+  ],
+  "message": ""
+}
+
+--- GET /api/admin/after-sales/:id L40 detail ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayufx00bepbe3dzqftl0p",
+    "after_sale_case_id": "cmrkayufx00bepbe3dzqftl0p",
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_no": "O17840124785899858",
+    "type": "missing_item",
+    "status": "approved",
+    "reason": "Docker API E2E L39 拆分退款",
+    "description": "L39 product/delivery refund split",
+    "requested_refund_cents": 300,
+    "requested_product_refund_cents": 100,
+    "requested_delivery_refund_cents": 200,
+    "approved_refund_cents": 300,
+    "approved_product_refund_cents": 100,
+    "approved_delivery_refund_cents": 200,
+    "responsibility": "platform",
+    "admin_note": "Docker API E2E L39 split approval",
+    "reviewed_at": "2026-07-14T07:01:18.650Z",
+    "resolved_at": null,
+    "created_at": "2026-07-14T07:01:18.621Z",
+    "handler": {
+      "id": "docker-e2e-admin",
+      "username": "docker-e2e-admin-user"
+    },
+    "order": {
+      "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+      "order_no": "O17840124785899858",
+      "product_amount_cents": 4590,
+      "delivery_fee_cents": 500,
+      "pay_amount_cents": 5090,
+      "refund_amount_cents": 0,
+      "product_refund_amount_cents": 0,
+      "delivery_refund_amount_cents": 0,
+      "remaining_refundable_amount_cents": 5090,
+      "pickup_type": "delivery",
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "community_id": "docker-e2e-community",
+      "receiver_name": "Docker E2E L39 配送",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address_masked": "L39 配送***",
+      "pay_status": "paid",
+      "order_status": "paid"
+    },
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "price_cents": 4590
+    },
+    "logs": [
+      {
+        "id": "cmrkayufx00bgpbe3ro861w3z",
+        "action": "after_sale_submitted",
+        "actor_type": "user",
+        "actor_id": "cmrkayuew00b0pbe3aqjoug2r",
+        "note": "Docker API E2E L39 拆分退款",
+        "created_at": "2026-07-14T07:01:18.622Z"
+      },
+      {
+        "id": "cmrkayugr00bkpbe3qdpcq4k3",
+        "action": "after_sale_approved",
+        "actor_type": "admin",
+        "actor_id": "docker-e2e-admin",
+        "note": "Docker API E2E L39 split approval",
+        "created_at": "2026-07-14T07:01:18.652Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/admin/orders/:id L40 before manual refund ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_no": "O17840124785899858",
+    "order_type": "normal",
+    "group_buy_id": null,
+    "product_id": "docker-e2e-product",
+    "user_id": "cmrkayuew00b0pbe3aqjoug2r",
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "quantity": 1,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 500,
+    "pay_amount_cents": 5090,
+    "product_refund_amount_cents": 0,
+    "delivery_refund_amount_cents": 0,
+    "refund_amount_cents": 0,
+    "remaining_refundable_amount_cents": 5090,
+    "pay_status": "paid",
+    "order_status": "paid",
+    "refund_status": "none",
+    "pickup_type": "delivery",
+    "delivery_method": "delivery",
+    "delivery_time_window_code": "l39_window_1784012478577",
+    "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+    "pickup_store": {
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "name": "Docker E2E 测试自提点",
+      "address": "Docker E2E 测试自提点地址"
+    },
+    "community": {
+      "community_id": "docker-e2e-community",
+      "name": "Docker E2E 测试社区"
+    },
+    "receiver_name": "Docker E2E L39 配送",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address_masked": "L39 配送***",
+    "after_sale_summary": {
+      "has_after_sale": true,
+      "case_count": 1,
+      "latest_status": "approved",
+      "requested_product_refund_cents": 100,
+      "requested_delivery_refund_cents": 200,
+      "approved_product_refund_cents": 100,
+      "approved_delivery_refund_cents": 200
+    },
+    "after_sales": [
+      {
+        "id": "cmrkayufx00bepbe3dzqftl0p",
+        "after_sale_case_id": "cmrkayufx00bepbe3dzqftl0p",
+        "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+        "type": "missing_item",
+        "status": "approved",
+        "reason": "Docker API E2E L39 拆分退款",
+        "requested_refund_cents": 300,
+        "requested_product_refund_cents": 100,
+        "requested_delivery_refund_cents": 200,
+        "approved_refund_cents": 300,
+        "approved_product_refund_cents": 100,
+        "approved_delivery_refund_cents": 200,
+        "responsibility": "platform",
+        "admin_note": "Docker API E2E L39 split approval",
+        "reviewed_at": "2026-07-14T07:01:18.650Z",
+        "resolved_at": null,
+        "reviewer": {
+          "id": "docker-e2e-admin",
+          "username": "docker-e2e-admin-user"
+        },
+        "logs": [
+          {
+            "id": "cmrkayufx00bgpbe3ro861w3z",
+            "action": "after_sale_submitted",
+            "actor_type": "user",
+            "actor_id": "cmrkayuew00b0pbe3aqjoug2r",
+            "note": "Docker API E2E L39 拆分退款",
+            "created_at": "2026-07-14T07:01:18.622Z"
+          },
+          {
+            "id": "cmrkayugr00bkpbe3qdpcq4k3",
+            "action": "after_sale_approved",
+            "actor_type": "admin",
+            "actor_id": "docker-e2e-admin",
+            "note": "Docker API E2E L39 split approval",
+            "created_at": "2026-07-14T07:01:18.652Z"
+          }
+        ]
+      }
+    ],
+    "refunds": [],
+    "inventory_summary": {
+      "deducted_quantity": 1,
+      "restored_quantity": 0,
+      "remaining_restorable_quantity": 1,
+      "current_product_stock": 100000,
+      "latest_inventory_event": "order_paid_deduct"
+    },
+    "timeline": [
+      {
+        "id": "cmrkayuf400b3pbe35fjh4z6h",
+        "event_type": "order_created",
+        "title": "普通购买订单已创建",
+        "message": null,
+        "actor_type": "user",
+        "created_at": "2026-07-14T07:01:18.592Z"
+      },
+      {
+        "id": "cmrkayufo00bbpbe3nh7nvg1h",
+        "event_type": "payment_mark_order_paid",
+        "title": "订单已支付",
+        "message": null,
+        "actor_type": "system",
+        "created_at": "2026-07-14T07:01:18.613Z"
+      },
+      {
+        "id": "cmrkayufy00bipbe35qf4k1fx",
+        "event_type": "after_sale_submitted",
+        "title": "用户提交售后申请",
+        "message": null,
+        "actor_type": "user",
+        "created_at": "2026-07-14T07:01:18.623Z"
+      },
+      {
+        "id": "cmrkayugs00bmpbe31e38yyek",
+        "event_type": "after_sale_approved",
+        "title": "售后客服状态更新",
+        "message": null,
+        "actor_type": "admin",
+        "created_at": "2026-07-14T07:01:18.653Z"
+      }
+    ],
+    "created_at": "2026-07-14T07:01:18.590Z",
+    "paid_at": "2026-07-14T07:01:18.608Z",
+    "completed_at": null
+  },
+  "message": ""
+}
+
+--- GET /api/admin/orders/:id L40 cross pickup scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- GET /api/admin/after-sales/:id L40 cross pickup scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- POST /api/admin/after-sales/:id/resolve L39 split refund ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayufx00bepbe3dzqftl0p",
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "user_id": "cmrkayuew00b0pbe3aqjoug2r",
+    "group_buy_id": null,
+    "product_id": "docker-e2e-product",
+    "type": "missing_item",
+    "status": "resolved",
+    "resolution_type": "partial_refund",
+    "reason": "Docker API E2E L39 拆分退款",
+    "description": "L39 product/delivery refund split",
+    "requested_refund_cents": 300,
+    "requested_product_refund_cents": 100,
+    "requested_delivery_refund_cents": 200,
+    "approved_refund_cents": 300,
+    "approved_product_refund_cents": 100,
+    "approved_delivery_refund_cents": 200,
+    "evidence_image_urls": null,
+    "responsibility": "platform",
+    "customer_note": "L39 product/delivery refund split",
+    "admin_note": "Docker API E2E L39 split refund",
+    "refund_id": "cmrkayuif00btpbe3o2i1wlcs",
+    "inventory_loss_id": null,
+    "reviewed_by_admin_id": "docker-e2e-admin",
+    "resolved_by_admin_id": "docker-e2e-admin",
+    "reviewed_at": "2026-07-14T07:01:18.650Z",
+    "resolved_at": "2026-07-14T07:01:18.718Z",
+    "cancelled_at": null,
+    "created_at": "2026-07-14T07:01:18.621Z",
+    "updated_at": "2026-07-14T07:01:18.719Z"
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id L39 split detail ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmrkayuf100b2pbe3ipqyrbwh",
+    "order_no": "O17840124785899858",
+    "order_type": "normal",
+    "product_id": "docker-e2e-product",
+    "product_name": "Docker E2E 测试商品",
+    "product_cover_image": null,
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "quantity": 1,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 500,
+    "pay_amount_cents": 5090,
+    "refund_amount_cents": 300,
+    "product_refund_amount_cents": 100,
+    "delivery_refund_amount_cents": 200,
+    "remaining_refundable_amount_cents": 4790,
+    "pay_status": "paid",
+    "order_status": "paid",
+    "user_status_text": "已退款",
+    "refund_status": "success",
+    "group_buy_id": null,
+    "group_buy_status": null,
+    "pickup_type": "delivery",
+    "fulfillment_type_text": "门店配送",
+    "delivery_status_text": "待配送",
+    "delivery_time_window_code": "l39_window_1784012478577",
+    "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+    "service_radius_text": "门店周边 3-5km，具体以门店确认为准",
+    "receiver_address": "L39 配送地址",
+    "pickup_store_name": "Docker E2E 测试自提点",
+    "pickup": {
+      "pickup_type": "delivery",
+      "fulfillment_type_text": "门店配送",
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "pickup_store_name": "Docker E2E 测试自提点",
+      "pickup_store_address": "Docker E2E 测试自提点地址",
+      "pickup_store_phone": "13800000000",
+      "pickup_code": "PICK-899858"
+    },
+    "community_name": "Docker E2E 测试社区",
+    "created_at": "2026-07-14T07:01:18.590Z",
+    "paid_at": "2026-07-14T07:01:18.608Z",
+    "completed_at": null,
+    "after_sale_case_count": 1,
+    "latest_after_sale_status": "resolved",
+    "after_sale_summary": {
+      "has_after_sale": true,
+      "latest_status": "resolved"
+    },
+    "group_buy": null,
+    "refund_split": {
+      "product_refund_amount_cents": 100,
+      "delivery_refund_amount_cents": 200,
+      "total_refund_amount_cents": 300,
+      "remaining_refundable_amount_cents": 4790
+    },
+    "delivery": {
+      "delivery_status_text": "待配送",
+      "delivery_fee_cents": 500,
+      "delivery_time_window_code": "l39_window_1784012478577",
+      "delivery_time_window_text": "L39 验证时段 10:00-12:00",
+      "service_radius_text": "门店周边 3-5km，具体以门店确认为准",
+      "notice": "当前为门店配送，暂不接第三方配送。配送范围与时段以门店确认为准。",
+      "receiver_address": "L39 配送地址"
+    },
+    "receiver": {
+      "receiver_name": "Docker E2E L39 配送",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address": "L39 配送地址"
+    },
+    "after_sales": [
+      {
+        "after_sale_case_id": "cmrkayufx00bepbe3dzqftl0p",
+        "id": "cmrkayufx00bepbe3dzqftl0p",
+        "type": "missing_item",
+        "status": "resolved",
+        "resolution_type": "partial_refund",
+        "reason": "Docker API E2E L39 拆分退款",
+        "description": "L39 product/delivery refund split",
+        "requested_refund_cents": 300,
+        "requested_product_refund_cents": 100,
+        "requested_delivery_refund_cents": 200,
+        "approved_refund_cents": 300,
+        "approved_product_refund_cents": 100,
+        "approved_delivery_refund_cents": 200,
+        "responsibility": "platform",
+        "created_at": "2026-07-14T07:01:18.621Z",
+        "resolved_at": "2026-07-14T07:01:18.718Z"
+      }
+    ],
+    "timeline": [
+      {
+        "event_type": "order_created",
+        "title": "普通购买订单已创建",
+        "from_status": null,
+        "to_status": "unpaid",
+        "created_at": "2026-07-14T07:01:18.592Z"
+      },
+      {
+        "event_type": "payment_mark_order_paid",
+        "title": "订单已支付",
+        "from_status": "unpaid",
+        "to_status": "paid",
+        "created_at": "2026-07-14T07:01:18.613Z"
+      },
+      {
+        "event_type": "after_sale_submitted",
+        "title": "用户提交售后申请",
+        "from_status": null,
+        "to_status": null,
+        "created_at": "2026-07-14T07:01:18.623Z"
+      },
+      {
+        "event_type": "after_sale_approved",
+        "title": "售后客服状态更新",
+        "from_status": null,
+        "to_status": null,
+        "created_at": "2026-07-14T07:01:18.653Z"
+      },
+      {
+        "event_type": "after_sale_resolved",
+        "title": "售后客服状态更新",
+        "from_status": null,
+        "to_status": null,
+        "created_at": "2026-07-14T07:01:18.706Z"
+      },
+      {
+        "event_type": "refund_success",
+        "title": "订单已部分退款",
+        "from_status": null,
+        "to_status": null,
+        "created_at": "2026-07-14T07:01:18.716Z"
+      },
+      {
+        "event_type": "after_sale_refund_created",
+        "title": "售后客服状态更新",
+        "from_status": null,
+        "to_status": null,
+        "created_at": "2026-07-14T07:01:18.721Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/admin/finance/reconciliation/overview L39 split refund ---
+{
+  "success": true,
+  "data": {
+    "total_product_amount_cents": 1218010,
+    "total_delivery_fee_cents": 24500,
+    "total_pay_amount_cents": 1242510,
+    "total_refund_amount_cents": 427310,
+    "total_product_refund_amount_cents": 411810,
+    "total_delivery_refund_amount_cents": 15500,
+    "remaining_refundable_amount_cents": 815200,
+    "order_count": 399,
+    "paid_order_count": 215,
+    "completed_order_count": 4,
+    "refunded_order_count": 154,
+    "gross_sales_amount": 1218010,
+    "paid_amount": 843890,
+    "refunded_amount": 427310,
+    "net_sales_amount": 416580,
+    "after_sale_case_count": 59,
+    "after_sale_refund_amount": 11900,
+    "inventory_loss_count": 0,
+    "inventory_loss_estimated_amount": 0,
+    "service_reward_estimated_amount": 666,
+    "withdrawal_requested_amount": 0,
+    "withdrawal_paid_amount": 0,
+    "tax_review_pending_count": 0
+  },
+  "message": ""
+}
+
+--- GET /api/admin/finance/refund-ledger/export.csv L39 split refund ---
+{
+  "status": 200,
+  "raw": "refund_id,order_id,order_no,group_buy_id,product_name,refund_status,refund_method,refund_amount_cents,product_refund_amount_cents,delivery_refund_amount_cents,remaining_refundable_amount_cents,refund_transaction_id,out_refund_no,manual_record_only,receiver_name,receiver_phone_masked,reason,admin_remark,created_at,processed_at\n\"cmrkayuif00btpbe3o2i1wlcs\",\"cmrkayuf100b2pbe3ipqyrbwh\",\"O17840124785899858\",\"\",\"\",\"success\",\"unknown\",\"300\",\"100\",\"200\",\"4790\",\"\",\"RFO17840124785899858after-sale-cmrkayufx00bepbe3dzqf\",\"false\",\"Docker E2E L39 配送\",\"138****5678\",\"售后处理：Docker API E2E L39 拆分退款\",\"\",\"Tue Jul 14 2026 07:01:18 GMT+0000 (Coordinated Universal Time)\",\"Tue Jul 14 2026 07:01:18 GMT+0000 (Coordinated Universal Time)\"\n\"cmrkayudv00aipbe3yw22ckhx\",\"cmrkayuba00a0pbe35f3esk8k\",\"O17840124784530177\",\"\",\"\",\"success\",\"unknown\",\"4890\",\"4590\",\"300\",\"0\",\"\",\"RFO17840124784530177docker-e2e-delivery-full-refund-\",\"false\",\"Docker E2E 配送\",\"138****5678\",\"Docker E2E L41 full refund restore\",\"\",\"Tue Jul 14 2026 "
+}
+
+--- POST /api/orders/normal ---
+{
+  "success": true,
+  "data": {
+    "id": "cmrkayujy00c4pbe32kj9gio0",
+    "order_id": "cmrkayujy00c4pbe32kj9gio0",
+    "order_no": "O17840124787665272",
+    "client_request_id": "docker-e2e-normal-1784012478759",
+    "user_id": "cmrkayuju00c2pbe3fhav4s85",
+    "group_buy_id": null,
+    "product_id": "docker-e2e-product",
+    "leader_user_id": null,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 0,
+    "pay_amount_cents": 4590,
+    "refund_amount_cents": 0,
+    "quantity": 1,
+    "pay_status": "unpaid",
+    "order_status": "unpaid",
+    "refund_status": "none",
+    "pickup_type": "store",
+    "pickup_store_id": "docker-e2e-pickup-store",
+    "community_id": "docker-e2e-community",
+    "receiver_name": "Docker E2E 用户",
+    "receiver_phone_masked": "138****5678",
+    "receiver_address": null,
+    "receiver_address_masked": null,
+    "delivery_time_window_code": null,
+    "delivery_time_window_text": null,
+    "service_radius_text": null,
+    "created_at": "2026-07-14T07:01:18.766Z",
+    "paid_at": null,
+    "completed_at": null,
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "pickup_store": {
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "name": "Docker E2E 测试自提点",
+      "address": "Docker E2E 测试自提点地址",
+      "phone": "13800000000"
+    },
+    "community": {
+      "community_id": "docker-e2e-community",
+      "name": "Docker E2E 测试社区",
+      "address": "Docker E2E 测试社区地址"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/payments/mock ---
+{
+  "success": true,
+  "data": {
+    "payment_id": "cmrkayuk500c8pbe3s5runqj7",
+    "order_id": "cmrkayujy00c4pbe32kj9gio0",
+    "order_no": "O17840124787665272",
+    "pay_status": "paid",
+    "order_status": "paid",
+    "paid_at": "2026-07-14T07:01:18.777Z",
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 0,
+    "pay_amount_cents": 4590,
+    "transaction_id": "MOCKTXNPAYO17840124787665272",
+    "mock": true
+  },
+  "message": ""
+}
+
+--- POST /api/me/orders/:id/after-sales store delivery refund must fail ---
+{
+  "success": false,
+  "data": null,
+  "message": "配送费退款金额超过配送费可退金额"
+}
+
+--- GET /api/me/orders ---
+{
+  "success": true,
+  "data": {
+    "total": 1,
+    "page": 1,
+    "page_size": 20,
+    "items": [
+      {
+        "order_id": "cmrkayujy00c4pbe32kj9gio0",
+        "order_no": "O17840124787665272",
+        "order_type": "normal",
+        "product_id": "docker-e2e-product",
+        "product_name": "Docker E2E 测试商品",
+        "product_cover_image": null,
+        "product": {
+          "product_id": "docker-e2e-product",
+          "name": "Docker E2E 测试商品",
+          "cover_image": null
+        },
+        "quantity": 1,
+        "total_amount_cents": 4590,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 0,
+        "pay_amount_cents": 4590,
+        "refund_amount_cents": 0,
+        "product_refund_amount_cents": 0,
+        "delivery_refund_amount_cents": 0,
+        "remaining_refundable_amount_cents": 4590,
+        "pay_status": "paid",
+        "order_status": "paid",
+        "user_status_text": "已支付",
+        "refund_status": "none",
+        "group_buy_id": null,
+        "group_buy_status": null,
+        "pickup_type": "store",
+        "fulfillment_type_text": "到店自提",
+        "delivery_status_text": "待配送",
+        "delivery_time_window_code": null,
+        "delivery_time_window_text": null,
+        "service_radius_text": null,
+        "receiver_address": null,
+        "pickup_store_name": "Docker E2E 测试自提点",
+        "pickup": {
+          "pickup_store_id": "docker-e2e-pickup-store",
+          "pickup_store_name": "Docker E2E 测试自提点",
+          "pickup_store_address": "Docker E2E 测试自提点地址",
+          "pickup_store_phone": "13800000000"
+        },
+        "community_name": "Docker E2E 测试社区",
+        "created_at": "2026-07-14T07:01:18.766Z",
+        "paid_at": "2026-07-14T07:01:18.777Z",
+        "completed_at": null,
+        "after_sale_case_count": 0,
+        "latest_after_sale_status": null,
+        "after_sale_summary": {
+          "has_after_sale": false,
+          "latest_status": null
+        }
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmrkayujy00c4pbe32kj9gio0",
+    "order_no": "O17840124787665272",
+    "order_type": "normal",
+    "product_id": "docker-e2e-product",
+    "product_name": "Docker E2E 测试商品",
+    "product_cover_image": null,
+    "product": {
+      "product_id": "docker-e2e-product",
+      "name": "Docker E2E 测试商品",
+      "cover_image": null,
+      "price_cents": 4590,
+      "sale_unit": "份",
+      "sale_spec_name": null
+    },
+    "quantity": 1,
+    "total_amount_cents": 4590,
+    "product_amount_cents": 4590,
+    "delivery_fee_cents": 0,
+    "pay_amount_cents": 4590,
+    "refund_amount_cents": 0,
+    "product_refund_amount_cents": 0,
+    "delivery_refund_amount_cents": 0,
+    "remaining_refundable_amount_cents": 4590,
+    "pay_status": "paid",
+    "order_status": "paid",
+    "user_status_text": "已支付",
+    "refund_status": "none",
+    "group_buy_id": null,
+    "group_buy_status": null,
+    "pickup_type": "store",
+    "fulfillment_type_text": "到店自提",
+    "delivery_status_text": "待配送",
+    "delivery_time_window_code": null,
+    "delivery_time_window_text": null,
+    "service_radius_text": null,
+    "receiver_address": null,
+    "pickup_store_name": "Docker E2E 测试自提点",
+    "pickup": {
+      "pickup_type": "store",
+      "fulfillment_type_text": "到店自提",
+      "pickup_store_id": "docker-e2e-pickup-store",
+      "pickup_store_name": "Docker E2E 测试自提点",
+      "pickup_store_address": "Docker E2E 测试自提点地址",
+      "pickup_store_phone": "13800000000",
+      "pickup_code": "PICK-665272"
+    },
+    "community_name": "Docker E2E 测试社区",
+    "created_at": "2026-07-14T07:01:18.766Z",
+    "paid_at": "2026-07-14T07:01:18.777Z",
+    "completed_at": null,
+    "after_sale_case_count": 0,
+    "latest_after_sale_status": null,
+    "after_sale_summary": {
+      "has_after_sale": false,
+      "latest_status": null
+    },
+    "group_buy": null,
+    "refund_split": {
+      "product_refund_amount_cents": 0,
+      "delivery_refund_amount_cents": 0,
+      "total_refund_amount_cents": 0,
+      "remaining_refundable_amount_cents": 4590
+    },
+    "delivery": {
+      "delivery_status_text": "待配送",
+      "delivery_fee_cents": 0,
+      "delivery_time_window_code": null,
+      "delivery_time_window_text": null,
+      "service_radius_text": null,
+      "notice": null,
+      "receiver_address": null
+    },
+    "receiver": {
+      "receiver_name": "Docker E2E 用户",
+      "receiver_phone_masked": "138****5678",
+      "receiver_address": null
+    },
+    "after_sales": [],
+    "timeline": [
+      {
+        "event_type": "order_created",
+        "title": "普通购买订单已创建",
+        "from_status": null,
+        "to_status": "unpaid",
+        "created_at": "2026-07-14T07:01:18.768Z"
+      },
+      {
+        "event_type": "payment_mark_order_paid",
+        "title": "订单已支付",
+        "from_status": "unpaid",
+        "to_status": "paid",
+        "created_at": "2026-07-14T07:01:18.780Z"
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id/pickup-code ---
+{
+  "success": true,
+  "data": {
+    "order_id": "cmrkayujy00c4pbe32kj9gio0",
+    "order_no": "O17840124787665272",
+    "pickup_code": "PICK-665272",
+    "pickup_status": "paid",
+    "pickup_store_name": "Docker E2E 测试自提点",
+    "pickup_store_address": "Docker E2E 测试自提点地址",
+    "pickup_store_phone": "13800000000",
+    "receiver_name": "Docker E2E 用户",
+    "receiver_phone_masked": "138****5678"
+  },
+  "message": ""
+}
+
+--- POST /api/me/orders/:id/after-sales ---
+{
+  "success": true,
+  "data": {
+    "after_sale_case_id": "cmrkayulc00cgpbe35lsyhzby",
+    "id": "cmrkayulc00cgpbe35lsyhzby",
+    "type": "bad_quality",
+    "status": "submitted",
+    "resolution_type": null,
+    "reason": "Docker API E2E 品质问题",
+    "description": "Docker API E2E 售后验证",
+    "requested_refund_cents": 100,
+    "requested_product_refund_cents": null,
+    "requested_delivery_refund_cents": null,
+    "approved_refund_cents": null,
+    "approved_product_refund_cents": null,
+    "approved_delivery_refund_cents": null,
+    "responsibility": null,
+    "created_at": "2026-07-14T07:01:18.816Z",
+    "resolved_at": null
+  },
+  "message": ""
+}
+
+--- GET /api/me/orders/:id/after-sales ---
+{
+  "success": true,
+  "data": [
+    {
+      "after_sale_case_id": "cmrkayulc00cgpbe35lsyhzby",
+      "id": "cmrkayulc00cgpbe35lsyhzby",
+      "type": "bad_quality",
+      "status": "submitted",
+      "resolution_type": null,
+      "reason": "Docker API E2E 品质问题",
+      "description": "Docker API E2E 售后验证",
+      "requested_refund_cents": 100,
+      "requested_product_refund_cents": null,
+      "requested_delivery_refund_cents": null,
+      "approved_refund_cents": null,
+      "approved_product_refund_cents": null,
+      "approved_delivery_refund_cents": null,
+      "responsibility": null,
+      "created_at": "2026-07-14T07:01:18.816Z",
+      "resolved_at": null
+    }
+  ],
+  "message": ""
+}
+
+--- GET /api/admin/group-buys/:id/closure-summary L42 cross community scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- GET /api/admin/group-buys/:id/manual-refund-orders L42 cross community scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- POST /api/admin/group-buys/:id/mark-failed L42 cross community scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- POST /api/admin/group-buys/:id/close-unpaid-orders L42 cross community scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 cross community scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- POST /api/admin/group-buys/:id/close L42 cross community scope ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- POST /api/admin/group-buys/:id/mark-failed L42 ---
+{
+  "success": true,
+  "data": {
+    "applied": true,
+    "idempotent": false,
+    "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+    "previous_status": "pending",
+    "status": "failed",
+    "reason": "Docker E2E L42 未达标人工失败",
+    "failed_at": "2026-07-14T07:01:18.868Z"
+  },
+  "message": ""
+}
+
+--- POST /api/admin/group-buys/:id/close-unpaid-orders L42 ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 1,
+    "closed_count": 1,
+    "already_closed_count": 0,
+    "skipped_count": 0
+  },
+  "message": ""
+}
+
+--- GET /api/admin/group-buys/:id/manual-refund-orders L42 ---
+{
+  "success": true,
+  "data": {
+    "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+    "group_buy_status": "failed",
+    "summary": {
+      "total_paid_orders": 1,
+      "pending_refund_orders": 1,
+      "refund_success_orders": 0,
+      "exception_orders": 0,
+      "pending_refund_amount_cents": 4590
+    },
+    "items": [
+      {
+        "order_id": "cmrkayulr0005pbkmglg7lcf7",
+        "order_no": "docker-l42-1784012478826-paid",
+        "user_id": "cmrkayulp0001pbkmxdg2evig",
+        "product_id": "docker-e2e-product",
+        "quantity": 1,
+        "pay_amount_cents": 4590,
+        "product_amount_cents": 4590,
+        "delivery_fee_cents": 0,
+        "refund_amount_cents": 0,
+        "refund_status": "none",
+        "inventory_summary": {
+          "deducted_quantity": 1,
+          "restored_quantity": 0,
+          "remaining_restorable_quantity": 1,
+          "current_product_stock": 99998,
+          "latest_inventory_event": "order_paid_deduct"
+        },
+        "latest_refund_id": null,
+        "closure_status": "pending_manual_refund",
+        "created_at": "2026-07-14T07:01:18.832Z",
+        "paid_at": "2026-07-14T07:01:18.831Z",
+        "pending_refund_amount_cents": 4590
+      }
+    ]
+  },
+  "message": ""
+}
+
+--- POST /api/admin/group-buys/:id/close L42 blocked ---
+{
+  "success": true,
+  "data": {
+    "applied": false,
+    "idempotent": false,
+    "status": "failed",
+    "closable": false,
+    "blockers": [
+      {
+        "type": "paid_orders_pending_refund",
+        "count": 1,
+        "order_ids": [
+          "cmrkayulr0005pbkmglg7lcf7"
+        ]
+      }
+    ],
+    "summary": {
+      "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+      "status": "failed",
+      "expired": true,
+      "target_count": 3,
+      "paid_quantity": 1,
+      "unpaid_order_count": 0,
+      "paid_pending_refund_count": 1,
+      "refund_success_count": 0,
+      "exception_order_count": 0,
+      "pending_refund_amount_cents": 4590,
+      "total_refunded_amount_cents": 0,
+      "inventory_deducted_quantity": 1,
+      "inventory_restored_quantity": 0,
+      "inventory_remaining_restorable_quantity": 1,
+      "closable": false,
+      "blockers": [
+        {
+          "type": "paid_orders_pending_refund",
+          "count": 1,
+          "order_ids": [
+            "cmrkayulr0005pbkmglg7lcf7"
+          ]
+        }
+      ]
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 ---
+{
+  "success": true,
+  "data": {
+    "applied": true,
+    "idempotent": false,
+    "order": {
+      "order_id": "cmrkayulr0005pbkmglg7lcf7",
+      "order_no": "docker-l42-1784012478826-paid",
+      "user_id": "cmrkayulp0001pbkmxdg2evig",
+      "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+      "product_id": "docker-e2e-product",
+      "quantity": 1,
+      "product_amount_cents": 4590,
+      "delivery_fee_cents": 0,
+      "pay_amount_cents": 4590,
+      "refund_amount_cents": 4590,
+      "product_refund_amount_cents": 4590,
+      "delivery_refund_amount_cents": 0,
+      "pay_status": "paid",
+      "order_status": "refunded",
+      "refund_status": "success",
+      "pickup_store_id": null,
+      "community_id": "docker-e2e-community",
+      "receiver_name": "Docker L42",
+      "receiver_phone_masked": "138****0000",
+      "receiver_address_masked": null,
+      "created_at": "2026-07-14T07:01:18.832Z",
+      "paid_at": "2026-07-14T07:01:18.831Z"
+    },
+    "refund": {
+      "refund_id": "cmrkayuns000jpbkmliaiao4n",
+      "order_id": "cmrkayulr0005pbkmglg7lcf7",
+      "refund_amount_cents": 4590,
+      "product_refund_amount_cents": 4590,
+      "delivery_refund_amount_cents": 0,
+      "status": "success",
+      "reason": "Docker E2E L42 success refund fixture",
+      "processed_at": "2026-07-14T07:01:18.904Z",
+      "created_at": "2026-07-14T07:01:18.904Z"
+    },
+    "inventory": {
+      "applied": true,
+      "idempotent": false,
+      "event_type": "group_failed_refund_restore",
+      "quantity": 1,
+      "before_stock": 99998,
+      "after_stock": 99999,
+      "ledger_id": "cmrkayuo600ctpbe30lg4cvdp"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund L42 repeat ---
+{
+  "success": true,
+  "data": {
+    "applied": false,
+    "idempotent": true,
+    "order": {
+      "order_id": "cmrkayulr0005pbkmglg7lcf7",
+      "order_no": "docker-l42-1784012478826-paid",
+      "user_id": "cmrkayulp0001pbkmxdg2evig",
+      "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+      "product_id": "docker-e2e-product",
+      "quantity": 1,
+      "product_amount_cents": 4590,
+      "delivery_fee_cents": 0,
+      "pay_amount_cents": 4590,
+      "refund_amount_cents": 4590,
+      "product_refund_amount_cents": 4590,
+      "delivery_refund_amount_cents": 0,
+      "pay_status": "paid",
+      "order_status": "refunded",
+      "refund_status": "success",
+      "pickup_store_id": null,
+      "community_id": "docker-e2e-community",
+      "receiver_name": "Docker L42",
+      "receiver_phone_masked": "138****0000",
+      "receiver_address_masked": null,
+      "created_at": "2026-07-14T07:01:18.832Z",
+      "paid_at": "2026-07-14T07:01:18.831Z"
+    },
+    "refund": {
+      "refund_id": "cmrkayuns000jpbkmliaiao4n",
+      "order_id": "cmrkayulr0005pbkmglg7lcf7",
+      "refund_amount_cents": 4590,
+      "product_refund_amount_cents": 4590,
+      "delivery_refund_amount_cents": 0,
+      "status": "success",
+      "reason": "Docker E2E L42 success refund fixture",
+      "processed_at": "2026-07-14T07:01:18.904Z",
+      "created_at": "2026-07-14T07:01:18.904Z"
+    },
+    "inventory": {
+      "applied": false,
+      "idempotent": true,
+      "event_type": "group_failed_refund_restore",
+      "quantity": 1,
+      "before_stock": 99998,
+      "after_stock": 99999,
+      "ledger_id": "cmrkayuo600ctpbe30lg4cvdp"
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/admin/group-buys/:id/close L42 final ---
+{
+  "success": true,
+  "data": {
+    "applied": true,
+    "idempotent": false,
+    "status": "closed",
+    "summary": {
+      "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+      "status": "closed",
+      "expired": true,
+      "target_count": 3,
+      "paid_quantity": 0,
+      "unpaid_order_count": 0,
+      "paid_pending_refund_count": 0,
+      "refund_success_count": 1,
+      "exception_order_count": 0,
+      "pending_refund_amount_cents": 0,
+      "total_refunded_amount_cents": 4590,
+      "inventory_deducted_quantity": 1,
+      "inventory_restored_quantity": 1,
+      "inventory_remaining_restorable_quantity": 0,
+      "closable": true,
+      "blockers": []
+    }
+  },
+  "message": ""
+}
+
+--- POST /api/admin/group-buys/:id/close L42 repeat final ---
+{
+  "success": true,
+  "data": {
+    "applied": false,
+    "idempotent": true,
+    "status": "closed",
+    "summary": {
+      "group_buy_id": "cmrkayulq0003pbkm59b97s8o",
+      "status": "closed",
+      "expired": true,
+      "target_count": 3,
+      "paid_quantity": 0,
+      "unpaid_order_count": 0,
+      "paid_pending_refund_count": 0,
+      "refund_success_count": 1,
+      "exception_order_count": 0,
+      "pending_refund_amount_cents": 0,
+      "total_refunded_amount_cents": 4590,
+      "inventory_deducted_quantity": 1,
+      "inventory_restored_quantity": 1,
+      "inventory_remaining_restorable_quantity": 0,
+      "closable": true,
+      "blockers": []
+    }
+  },
+  "message": ""
+}
+Group buy closure:
+group_buy_id=cmrkayulq0003pbkm59b97s8o
+status_before=pending
+status_after_failed=failed
+unpaid_closed_count=1
+pending_refund_count=1
+refunded_count=1
+inventory_before=99999
+inventory_after_refund=99999
+final_status=closed
+
+--- scoped finance /api/admin/rewards/release-due ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- store manager /api/admin/rewards/release-due ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- operator /api/admin/rewards/release-due ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- inactive admin /api/admin/rewards/release-due ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Active AdminUser required"
+}
+
+--- scoped finance /api/admin/commissions/settle ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- store manager /api/admin/commissions/settle ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- operator /api/admin/commissions/settle ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- inactive admin /api/admin/commissions/settle ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Active AdminUser required"
+}
+
+--- scoped finance /api/admin/rewards/backfill ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_SCOPE_FORBIDDEN: Data scope denied"
+}
+
+--- store manager /api/admin/rewards/backfill ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- operator /api/admin/rewards/backfill ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_FORBIDDEN: Permission denied"
+}
+
+--- inactive admin /api/admin/rewards/backfill ---
+{
+  "success": false,
+  "data": null,
+  "message": "ADMIN_UNAUTHORIZED: Active AdminUser required"
+}
+
+--- releaseResult first success ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 1,
+    "released_count": 1,
+    "already_released_count": 0,
+    "ledger_created_count": 1
+  },
+  "message": ""
+}
+releaseResult response:
+{
+  "matched_count": 1,
+  "released_count": 1,
+  "already_released_count": 0,
+  "ledger_created_count": 1
+}
+
+--- releaseResult repeat success ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 0,
+    "released_count": 0,
+    "already_released_count": 0,
+    "ledger_created_count": 0
+  },
+  "message": ""
+}
+releaseResult repeat response:
+{
+  "matched_count": 0,
+  "released_count": 0,
+  "already_released_count": 0,
+  "ledger_created_count": 0
+}
+
+--- settleResult first success ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 1,
+    "released_count": 1,
+    "already_released_count": 0,
+    "ledger_created_count": 1
+  },
+  "message": ""
+}
+settleResult response:
+{
+  "matched_count": 1,
+  "released_count": 1,
+  "already_released_count": 0,
+  "ledger_created_count": 1
+}
+
+--- settleResult repeat success ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 0,
+    "released_count": 0,
+    "already_released_count": 0,
+    "ledger_created_count": 0
+  },
+  "message": ""
+}
+settleResult repeat response:
+{
+  "matched_count": 0,
+  "released_count": 0,
+  "already_released_count": 0,
+  "ledger_created_count": 0
+}
+
+--- L43 super_admin backfill first success ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 3,
+    "ledger_created_count": 1
+  },
+  "message": ""
+}
+backfillResult response:
+{
+  "matched_count": 3,
+  "ledger_created_count": 1
+}
+
+--- L43 super_admin backfill repeat success ---
+{
+  "success": true,
+  "data": {
+    "matched_count": 3,
+    "ledger_created_count": 0
+  },
+  "message": ""
+}
+backfillRepeat response:
+{
+  "matched_count": 3,
+  "ledger_created_count": 0
+}
+Reward ledger:
+commission_id=cmrkayur8000lpbkmw612va9g
+status_after_paid=estimated
+status_after_complete=pending
+available_at=2026-07-17T00:00:00.000Z
+status_before_t3=pending
+status_after_t3=available
+initial_amount_cents=1000
+delivery_refund_adjusted_amount_cents=1000
+delivery_refund_deduct_ledger_count=0
+product_refund_adjusted_amount_cents=700
+refund_deduct_ledger_count=1
+available_balance_after_release_cents=1000
+available_balance_after_delivery_refund_cents=1000
+available_balance_after_partial_product_refund_cents=700
+available_balance_after_full_product_refund_cents=0
+Global reward authorization:
+scoped_finance_release_due_403
+scoped_finance_settle_403
+scoped_finance_backfill_403
+store_manager_global_reward_ops_403
+operator_global_reward_ops_403
+inactive_admin_global_reward_ops_401
+super_admin_global_reward_ops_success
+release_due_matched_count=1
+release_due_released_count=1
+release_due_ledger_created_count=1
+release_due_repeat_ledger_created_count=0
+release_due_fixture_status=available
+release_due_fixture_ledger_count=1
+release_due_fixture_balance_verified=true
+settle_matched_count=1
+settle_released_count=1
+settle_ledger_created_count=1
+settle_repeat_ledger_created_count=0
+settle_fixture_status=available
+settle_fixture_ledger_count=1
+settle_fixture_balance_verified=true
+backfill_matched_count=3
+backfill_ledger_created_count=1
+backfill_repeat_ledger_created_count=0
+backfill_fixture_ledger_count=1
+backfill_fixture_balance_verified=true
+global_reward_negative_no_commission_change
+global_reward_negative_no_ledger_change
+global_reward_negative_no_success_event
+Docker API E2E verification passed.
+
+=== Running Admin typecheck config check ===
+Admin typecheck config verified: strict=true, noImplicitAny is not false, skipLibCheck=true, jsx=react-jsx.
+Third-party declaration internals are excluded by skipLibCheck; project strict mode remains enabled.
+Admin typecheck config check passed.
+
+=== Running Admin typecheck ===
+Admin typecheck passed.
+
+Stage workflow verification passed.
+
+=== Running report:stage L44 ===
+
+> community-selection-miniapp@0.1.0 report:stage /app
+> tsx scripts/generate-stage-report.ts "--" "--stage=L44"
+
+Stage report generated: /app/reports/stage-L44-report.md
+
+=== Running report:publish L44 ===
