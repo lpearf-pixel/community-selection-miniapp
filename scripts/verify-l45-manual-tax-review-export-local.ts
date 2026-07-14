@@ -27,5 +27,8 @@ for (const readinessMarker of ['waitForApiReady', "'/api/health'", 'fetchWithTim
   assert(e2e.includes(readinessMarker), `Docker E2E readiness/diagnostics must include ${readinessMarker}`);
 }
 assert(!e2e.includes('await fetch(`${API_BASE_URL}'), 'Docker E2E API calls must go through fetchOrThrow for diagnostics');
+assert(e2e.includes("const runId = `l45-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`"), 'L45 E2E run token must be unique across reruns and concurrent processes');
+assert(e2e.includes("suffix === 'danger-a' ? `\tclient-danger-${runId}`"), 'L45 dangerous unique client_request_id fixture must include the run token');
+assert(!e2e.includes("suffix === 'danger-a' ? '\tclient-danger'"), 'L45 unique fields must not use fixed dangerous fixture values');
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');

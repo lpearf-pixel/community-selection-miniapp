@@ -710,4 +710,5 @@ L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台
 - 新阶段修改旧模块时，必须审计并运行所有受影响的旧阶段 verifier。
 - verifier 检查业务语义，禁止绑定局部变量名、固定排版和魔法数量。
 - Docker E2E 的 fixture、查询条件、可搜索字段和预期 ID/数量必须形成显式契约。
+- Docker E2E 的所有唯一字段 fixture 必须包含每次运行唯一的 run token，确保失败后可重跑且并发执行不碰撞。
 - Docker E2E 必须先等待 `/api/health`，transport 错误必须包含 URL、底层 cause 与容器日志排查命令。

@@ -830,7 +830,7 @@ async function runL44WithdrawalScenario() {
 }
 async function runL45TaxReviewScenario() {
   console.log('=== L45 manual tax review export scenario ===');
-  const runId = `l45-${Date.now()}`;
+  const runId = `l45-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
   const product = await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } });
   const leaderA = await prisma.user.create({ data: { openid: `${runId}-leader-a`, nickname: '=HYPERLINK("https://example.com")', phone: '13600000001', role: 'leader' } });
   const leaderB = await prisma.user.create({ data: { openid: `${runId}-leader-b`, nickname: '+SUM(1,1)', phone: '13600000002', role: 'leader' } });
@@ -845,7 +845,7 @@ async function runL45TaxReviewScenario() {
     const groupBuy = await prisma.groupBuy.create({ data: { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, price_cents: product.price_cents, start_time: new Date(Date.now() - 3600_000), end_time: new Date(Date.now() + 3600_000), pickup_time: new Date(Date.now() + 86400_000), status: 'success' } });
     const order = await prisma.order.create({ data: { order_no: `${runId}-${suffix}`, user_id: user.id, group_buy_id: groupBuy.id, product_id: product.id, leader_user_id: leader.id, community_id: community.id, total_amount_cents: amount, product_amount_cents: amount, pay_amount_cents: amount, quantity: 1, pay_status: 'paid', order_status: 'completed', refund_status: 'none', paid_at: new Date(Date.now() - 1200_000), completed_at: new Date(Date.now() - 600_000), receiver_name: 'L45', receiver_phone: '13600000005' } });
     const commission = await prisma.commission.create({ data: { leader_user_id: leader.id, order_id: order.id, group_buy_id: groupBuy.id, base_amount_cents: amount, commission_type: 'fixed', commission_value: amount, estimated_amount_cents: amount, final_amount_cents: amount, status: 'withdrawing', available_at: new Date(Date.now() - 300_000), review_status: 'approved' } });
-    const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: amount, status: 'approved', client_request_id: suffix === 'danger-a' ? '\tclient-danger' : `${runId}-${suffix}-withdrawal`, tax_mode: 'pending_review', tax_status: 'pending', taxable_amount_cents: amount, tax_amount_cents: 0, payable_amount_cents: amount } });
+    const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: amount, status: 'approved', client_request_id: suffix === 'danger-a' ? `\tclient-danger-${runId}` : `${runId}-${suffix}-withdrawal`, tax_mode: 'pending_review', tax_status: 'pending', taxable_amount_cents: amount, tax_amount_cents: 0, payable_amount_cents: amount } });
     await prisma.withdrawalCommission.create({ data: { withdrawal_id: withdrawal.id, commission_id: commission.id, amount_cents: amount } });
     const taxRecord = await prisma.taxRecord.create({ data: { leader_user_id: leader.id, source_type: 'withdrawal', source_id: withdrawal.id, tax_mode: withdrawal.tax_mode, tax_status: withdrawal.tax_status, amount_cents: amount, payload: { tax_remark: '\r\nleading-newline', tax_rate_basis: '-1+2' } } });
     return { withdrawal, taxRecord, order, community };

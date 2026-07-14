@@ -67,3 +67,14 @@
 - 所有 HTTP transport 错误必须输出 method、完整 URL、超时信息以及底层 cause（如 `ECONNREFUSED`、`ENOTFOUND`），禁止只打印 `fetch failed`。
 - 就绪超时后必须提示执行 `docker compose ps` 和 `docker compose logs --tail=200 api`。
 - API 就绪等待只能处理启动/重启竞态；若服务持续启动失败，验收仍应失败并保留真实日志，禁止通过跳过 E2E 放行。
+
+## 7. E2E 可重跑与唯一字段规范
+
+- 每次 E2E 运行必须生成独立 run token；token 至少组合时间、进程标识和随机片段，或使用等价的 UUID。
+- 所有带唯一约束的 fixture 字段都必须包含 run token，例如 `openid`、`order_no`、`client_request_id`、外部流水号和幂等键。
+- 安全测试需要以制表符、`=`、`+`、`-`、`@` 等危险字符开头时，必须保留危险前缀并在后面拼接 run token，禁止把固定危险值直接写入唯一字段。
+- 上一次运行中断或失败后留下的数据，不得阻塞下一次运行；E2E 必须能够直接重跑。
+- 并发执行两个 E2E 进程时，fixture 不得发生唯一键碰撞。
+- 可以增加 best-effort cleanup，但 cleanup 不能成为可重跑的唯一保障；核心保障必须是每次运行的唯一命名空间。
+- 出现唯一约束错误时，应先检查 fixture 唯一性契约，不得删除业务唯一索引或降低数据库约束来让测试通过。
+
