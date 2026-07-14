@@ -46,7 +46,8 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L41: { title: 'L41 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l41-inventory-deduct-restore-local.ts'] },
   L42: { title: 'L42 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts'] },
   L43: { title: 'L43 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'] },
-  L44: { title: 'L44 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l44-manual-withdrawal-review-local.ts'] }
+  L44: { title: 'L44 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l44-manual-withdrawal-review-local.ts'] },
+  L45: { title: 'L45 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l45-manual-tax-review-export-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
@@ -70,7 +71,8 @@ const regressionChains: Record<string, string[]> = {
   L41: ['L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
   L42: ['L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
   L43: ['L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L44: ['L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
+  L44: ['L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
+  L45: ['L45', 'L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
 };
 
 const dockerApiE2E: CommandSpec = {

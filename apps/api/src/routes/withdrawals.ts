@@ -32,19 +32,19 @@ type ReviewBody = {
 };
 type TaxReviewBody = {
   tax_mode?: "none" | "withheld" | "invoice";
+  tax_status?: string;
+  taxable_amount_cents?: number;
   tax_amount_cents?: number;
   tax_rate_basis?: string;
   invoice_required?: boolean;
   invoice_status?: string;
   tax_remark?: string;
+  client_request_id?: string;
 };
 type TaxRecordQuery = {
-  leader_user_id?: string;
-  source_type?: string;
-  source_id?: string;
-  tax_status?: string;
-  from?: string;
-  to?: string;
+  page?: string; page_size?: string; keyword?: string;
+  leader_user_id?: string; withdrawal_id?: string; source_type?: string; source_id?: string;
+  tax_status?: string; tax_mode?: string; invoice_status?: string; from?: string; to?: string;
 };
 
 async function resolveCurrentLeader(request: {
@@ -255,6 +255,82 @@ function resolveTaxStatus(body: TaxReviewBody) {
   if (body.tax_mode === "withheld") return "calculated";
   if (body.tax_mode === "none") return "completed";
   return body.invoice_status === "verified" ? "completed" : "pending_invoice";
+}
+
+
+function parsePage(query: { page?: string; page_size?: string }) {
+  const page = Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, Number.parseInt(query.page_size ?? "20", 10) || 20));
+  return { page, pageSize };
+}
+
+function taxPayload(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
+}
+
+function taxReviewSnapshot(input: { tax_mode: string; tax_status: string; taxable_amount_cents: number; tax_amount_cents: number; tax_rate_basis: string | null; invoice_required: boolean; invoice_status: string; tax_remark: string | null }) {
+  return input;
+}
+
+function csvSafe(value: unknown) {
+  const text = value == null ? "" : String(value);
+  const safe = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+function taxRecordDto(record: any, withdrawal?: any) {
+  const payload = taxPayload(record.payload);
+  const w = withdrawal ?? record.withdrawal;
+  const links = (w?.commission_links ?? []) as WithdrawalLinkWithOrder[];
+  const communities = Array.from(new Set(links.map((link) => link.commission.order.community?.name).filter(Boolean)));
+  return {
+    tax_record_id: record.id,
+    withdrawal_id: record.source_type === "withdrawal" ? record.source_id : null,
+    client_request_id: w?.client_request_id ?? payload.client_request_id ?? null,
+    leader_user_id: record.leader_user_id,
+    leader_nickname: w?.leader_user?.nickname ?? "",
+    leader_phone_masked: maskPhone(w?.leader_user?.phone),
+    gross_amount_cents: w?.amount_cents ?? record.amount_cents,
+    taxable_amount_cents: w?.taxable_amount_cents ?? payload.taxable_amount_cents ?? record.amount_cents,
+    tax_amount_cents: w?.tax_amount_cents ?? payload.tax_amount_cents ?? 0,
+    payable_amount_cents: w?.payable_amount_cents ?? payload.payable_amount_cents ?? record.amount_cents,
+    tax_mode: w?.tax_mode ?? record.tax_mode,
+    tax_status: w?.tax_status ?? record.tax_status,
+    tax_rate_basis: w?.tax_rate_basis ?? payload.tax_rate_basis ?? null,
+    invoice_required: w?.invoice_required ?? payload.invoice_required ?? false,
+    invoice_status: w?.invoice_status ?? payload.invoice_status ?? "not_required",
+    tax_remark: w?.tax_remark ?? payload.tax_remark ?? null,
+    reviewed_by_admin_id: w?.reviewed_by_admin_id ?? null,
+    reviewed_at: w?.reviewed_at ?? null,
+    withdrawal_status: w?.status ?? null,
+    community_names: communities,
+    created_at: record.created_at,
+    processed_at: w?.processed_at ?? null,
+  };
+}
+
+async function buildTaxRecordWhere(query: TaxRecordQuery, context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>): Promise<Prisma.TaxRecordWhereInput> {
+  const withdrawalWhere: Prisma.WithdrawalWhereInput = {
+    ...withdrawalScopeWhere(context),
+    ...(query.keyword ? { OR: [
+      { client_request_id: { contains: query.keyword, mode: "insensitive" } },
+      { id: { contains: query.keyword, mode: "insensitive" } },
+      { leader_user: { nickname: { contains: query.keyword, mode: "insensitive" } } },
+      { leader_user: { phone: { contains: query.keyword, mode: "insensitive" } } },
+    ] } : {}),
+    ...(query.tax_mode ? { tax_mode: query.tax_mode } : {}),
+    ...(query.tax_status ? { tax_status: query.tax_status } : {}),
+    ...(query.invoice_status ? { invoice_status: query.invoice_status } : {}),
+    ...(query.leader_user_id ? { leader_user_id: query.leader_user_id } : {}),
+    ...(query.withdrawal_id || query.source_id ? { id: query.withdrawal_id ?? query.source_id } : {}),
+  };
+  return {
+    source_type: "withdrawal",
+    ...(query.leader_user_id ? { leader_user_id: query.leader_user_id } : {}),
+    ...(query.tax_status ? { tax_status: query.tax_status } : {}),
+    ...(query.tax_mode ? { tax_mode: query.tax_mode } : {}),
+    ...parseDateRange(query),
+    source_id: { in: (await prisma.withdrawal.findMany({ where: withdrawalWhere, select: { id: true } })).map((item) => item.id) },
+  };
 }
 
 function uniqueOrderIds(orderIds: Array<string | null | undefined> = []) {
@@ -643,44 +719,72 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
       try {
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
-        const baseWhere: Prisma.TaxRecordWhereInput = {
-          ...(query.leader_user_id
-            ? { leader_user_id: query.leader_user_id }
-            : {}),
-          ...(query.source_type ? { source_type: query.source_type } : {}),
-          ...(query.source_id ? { source_id: query.source_id } : {}),
-          ...(query.tax_status ? { tax_status: query.tax_status } : {}),
-          ...parseDateRange(query),
-        };
-        const scopeFilters: Prisma.TaxRecordWhereInput[] = [];
-        if (!context.is_super_admin) {
-          const accessibleWithdrawalIds = (
-            await prisma.withdrawal.findMany({
-              where: withdrawalScopeWhere(context),
-              select: { id: true },
-            })
-          ).map((withdrawal) => withdrawal.id);
-          scopeFilters.push({
-            OR: [
-              { source_type: { not: "withdrawal" } },
-              {
-                source_type: "withdrawal",
-                source_id: { in: accessibleWithdrawalIds },
-              },
-            ],
-          });
-        }
-        const records = await prisma.taxRecord.findMany({
-          where: {
-            AND: [baseWhere, ...scopeFilters],
-          },
-          orderBy: { created_at: "desc" },
-          take: 200,
+        const { page, pageSize } = parsePage(query);
+        const where = await buildTaxRecordWhere(query, context);
+        const [total, records] = await prisma.$transaction([
+          prisma.taxRecord.count({ where }),
+          prisma.taxRecord.findMany({
+            where,
+            orderBy: { created_at: "desc" },
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+        ]);
+        const withdrawals = await prisma.withdrawal.findMany({
+          where: { id: { in: records.map((record) => record.source_id) } },
+          include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } },
         });
-        return ok(records);
+        const map = new Map(withdrawals.map((w) => [w.id, w]));
+        return ok({ items: records.map((record) => taxRecordDto(record, map.get(record.source_id))), total, page, page_size: pageSize });
       } catch (error) {
         reply.code((error as { statusCode?: number }).statusCode ?? 400);
         return fail(error instanceof Error ? error.message : "查询税务记录失败");
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/tax-records/export.csv",
+    { preHandler: requireAdminPermission("finance.export") },
+    async (request, reply) => {
+      try {
+        const query = request.query as TaxRecordQuery;
+        const context = resolveAdminAccessContext(request)!;
+        const where = await buildTaxRecordWhere(query, context);
+        const records = await prisma.taxRecord.findMany({ where, orderBy: { created_at: "desc" }, take: 10000 });
+        const withdrawals = await prisma.withdrawal.findMany({ where: { id: { in: records.map((record) => record.source_id) } }, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } } });
+        const map = new Map(withdrawals.map((w) => [w.id, w]));
+        const rows = records.map((record) => taxRecordDto(record, map.get(record.source_id)));
+        const header = ["说明","税务记录ID","提现ID","申请编号","Leader","手机号(脱敏)","总金额(分)","应税金额(分)","人工确认税额(分)","实际应付金额(分)","税务模式","税务状态","税率/依据","是否需发票","发票状态","备注","社区","创建时间"];
+        const notice = "仅供内部人工核对，不构成税务申报结果。系统不会自动报税，不会连接外部税务平台，不会自动发起打款。";
+        const csv = "\ufeff" + [header, ...rows.map((r) => [notice, r.tax_record_id, r.withdrawal_id, r.client_request_id, r.leader_nickname, r.leader_phone_masked, r.gross_amount_cents, r.taxable_amount_cents, r.tax_amount_cents, r.payable_amount_cents, r.tax_mode, r.tax_status, r.tax_rate_basis, r.invoice_required ? "是" : "否", r.invoice_status, r.tax_remark, r.community_names.join("、"), r.created_at])].map((row) => row.map(csvSafe).join(",")).join("\n");
+        const date = new Date().toISOString().slice(0, 10);
+        reply.header("content-type", "text/csv; charset=utf-8");
+        reply.header("content-disposition", `attachment; filename="tax-review-${date}.csv"`);
+        return reply.send(csv);
+      } catch (error) {
+        reply.code((error as { statusCode?: number }).statusCode ?? 400);
+        return fail(error instanceof Error ? error.message : "导出税务记录失败");
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/tax-records/:id",
+    { preHandler: requireAdminPermission("finance.view") },
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const record = await prisma.taxRecord.findUnique({ where: { id } });
+        if (!record || record.source_type !== "withdrawal") throw httpError("税务记录不存在", 404);
+        await requireWithdrawalDataScope(record.source_id, request);
+        const withdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: record.source_id }, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } } });
+        const audits = await prisma.adminAuditLog.findMany({ where: { target_type: "Withdrawal", target_id: withdrawal.id }, orderBy: { created_at: "desc" }, take: 20, select: { action: true, admin_user_id: true, created_at: true } });
+        const events = await prisma.businessEventLog.findMany({ where: { withdrawal_id: withdrawal.id }, orderBy: { created_at: "desc" }, take: 20, select: { event_type: true, event_level: true, created_at: true } });
+        return ok({ ...taxRecordDto(record, withdrawal), commissions: withdrawal.commission_links.map((link: any) => ({ commission_id: link.commission_id, order_no: link.commission.order.order_no, community_name: link.commission.order.community?.name ?? "", product_name: link.commission.order.product?.name ?? "", reward_amount_cents: link.amount_cents })), admin_audits: audits, business_events: events });
+      } catch (error) {
+        reply.code((error as { statusCode?: number }).statusCode ?? 400);
+        return fail(error instanceof Error ? error.message : "查询税务详情失败");
       }
     },
   );
@@ -729,123 +833,47 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         const reviewed = await prisma.$transaction(
           async (tx: Prisma.TransactionClient) => {
             await requireWithdrawalDataScope(id, request);
-            const withdrawal = await tx.withdrawal.findUnique({
-              where: { id },
-            });
+            const context = resolveAdminAccessContext(request)!;
+            const withdrawal = await tx.withdrawal.findUnique({ where: { id } });
             if (!withdrawal) throw new Error("提现申请不存在");
-            if (
-              withdrawal.status !== "pending" &&
-              withdrawal.status !== "approved"
-            )
-              throw new Error("当前提现申请不可做税务复核");
-            if (
-              body.tax_mode !== "none" &&
-              body.tax_mode !== "withheld" &&
-              body.tax_mode !== "invoice"
-            )
-              throw new Error("税务处理方式不合法");
+            if (withdrawal.status !== "pending" && withdrawal.status !== "approved") throw new Error("当前提现申请不可做税务复核");
+            if (body.tax_mode !== "none" && body.tax_mode !== "withheld" && body.tax_mode !== "invoice") throw new Error("税务处理方式不合法");
             const taxMode = body.tax_mode;
+            const taxableAmount = Number(body.taxable_amount_cents ?? withdrawal.amount_cents);
             const taxAmount = Number(body.tax_amount_cents ?? 0);
-            if (!Number.isInteger(taxAmount) || taxAmount < 0)
-              throw new Error("税务金额不能小于 0");
-            if (taxAmount > withdrawal.amount_cents)
-              throw new Error("税务金额不能超过提现金额");
-            const invoiceRequired =
-              taxMode === "invoice" ? true : (body.invoice_required ?? false);
-            const invoiceStatus =
-              taxMode === "invoice"
-                ? body.invoice_status && body.invoice_status !== "not_required"
-                  ? body.invoice_status
-                  : "pending"
-                : (body.invoice_status ?? "not_required");
-            const taxStatus = resolveTaxStatus({
-              ...body,
-              tax_mode: taxMode,
-              invoice_status: invoiceStatus,
+            if (!Number.isInteger(taxableAmount) || taxableAmount < 0) throw new Error("应税金额不能小于 0");
+            if (!Number.isInteger(taxAmount) || taxAmount < 0) throw new Error("税务金额不能小于 0");
+            if (taxAmount > taxableAmount) throw new Error("税务金额不能超过应税金额");
+            const payableAmount = withdrawal.amount_cents - taxAmount;
+            if (payableAmount < 0) throw new Error("实际应付金额不能小于 0");
+            const invoiceRequired = taxMode === "invoice" ? true : (body.invoice_required ?? false);
+            const invoiceStatus = taxMode === "invoice" ? (body.invoice_status && body.invoice_status !== "not_required" ? body.invoice_status : "pending") : (body.invoice_status ?? "not_required");
+            const taxStatus = body.tax_status ?? resolveTaxStatus({ ...body, tax_mode: taxMode, invoice_status: invoiceStatus });
+            const requested = taxReviewSnapshot({ tax_mode: taxMode, tax_status: taxStatus, taxable_amount_cents: taxableAmount, tax_amount_cents: taxAmount, tax_rate_basis: body.tax_rate_basis ?? null, invoice_required: invoiceRequired, invoice_status: invoiceStatus, tax_remark: body.tax_remark ?? null });
+            const existing = await tx.taxRecord.findUnique({ where: { source_type_source_id: { source_type: "withdrawal", source_id: withdrawal.id } } });
+            const existingPayload = taxPayload(existing?.payload);
+            const clientRequestId = String(body.client_request_id ?? "").trim();
+            if (clientRequestId && existingPayload.client_request_id === clientRequestId) {
+              const previous = existingPayload.review_snapshot;
+              if (JSON.stringify(previous) !== JSON.stringify(requested)) throw httpError("client_request_id 对应的税务复核内容不一致", 409);
+              return { withdrawal, tax_record: existing, idempotent: true };
+            }
+            const claimed = await tx.withdrawal.updateMany({
+              where: { id, updated_at: withdrawal.updated_at },
+              data: { tax_mode: taxMode, tax_status: taxStatus, taxable_amount_cents: taxableAmount, tax_amount_cents: taxAmount, payable_amount_cents: payableAmount, tax_rate_basis: body.tax_rate_basis ?? null, invoice_required: invoiceRequired, invoice_status: invoiceStatus, tax_remark: body.tax_remark ?? null, reviewed_by_admin_id: context.admin_user_id, reviewed_at: new Date() },
             });
-            const updated = await tx.withdrawal.update({
-              where: { id },
-              data: {
-                tax_mode: taxMode,
-                tax_status: taxStatus,
-                taxable_amount_cents: withdrawal.amount_cents,
-                tax_amount_cents: taxAmount,
-                payable_amount_cents: withdrawal.amount_cents - taxAmount,
-                tax_rate_basis: body.tax_rate_basis ?? null,
-                invoice_required: invoiceRequired,
-                invoice_status: invoiceStatus,
-                tax_remark: body.tax_remark ?? null,
-              },
-            });
+            if (claimed.count !== 1) throw httpError("提现税务状态已变化，请刷新后重试", 409);
+            const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
+            const recordPayload = { ...requested, client_request_id: clientRequestId || null, review_snapshot: requested, notice: "仅供内部人工核对，不构成税务申报结果。系统不会自动报税，不会连接外部税务平台，不会自动发起打款。" };
             const taxRecord = await tx.taxRecord.upsert({
-              where: {
-                source_type_source_id: {
-                  source_type: "withdrawal",
-                  source_id: withdrawal.id,
-                },
-              },
-              update: {
-                leader_user_id: withdrawal.leader_user_id,
-                tax_mode: taxMode,
-                tax_status: taxStatus,
-                amount_cents: withdrawal.amount_cents,
-                payload: {
-                  taxable_amount_cents: withdrawal.amount_cents,
-                  tax_amount_cents: taxAmount,
-                  payable_amount_cents: withdrawal.amount_cents - taxAmount,
-                  tax_rate_basis: body.tax_rate_basis ?? null,
-                  invoice_required: invoiceRequired,
-                  invoice_status: invoiceStatus,
-                  tax_remark: body.tax_remark ?? null,
-                },
-              },
-              create: {
-                leader_user_id: withdrawal.leader_user_id,
-                source_type: "withdrawal",
-                source_id: withdrawal.id,
-                tax_mode: taxMode,
-                tax_status: taxStatus,
-                amount_cents: withdrawal.amount_cents,
-                payload: {
-                  taxable_amount_cents: withdrawal.amount_cents,
-                  tax_amount_cents: taxAmount,
-                  payable_amount_cents: withdrawal.amount_cents - taxAmount,
-                  tax_rate_basis: body.tax_rate_basis ?? null,
-                  invoice_required: invoiceRequired,
-                  invoice_status: invoiceStatus,
-                  tax_remark: body.tax_remark ?? null,
-                },
-              },
+              where: { source_type_source_id: { source_type: "withdrawal", source_id: withdrawal.id } },
+              update: { leader_user_id: withdrawal.leader_user_id, tax_mode: taxMode, tax_status: taxStatus, amount_cents: withdrawal.amount_cents, payload: recordPayload },
+              create: { leader_user_id: withdrawal.leader_user_id, source_type: "withdrawal", source_id: withdrawal.id, tax_mode: taxMode, tax_status: taxStatus, amount_cents: withdrawal.amount_cents, payload: recordPayload },
             });
             const links = await getWithdrawalLinks(id, tx);
-            await writeAdminAuditLog(tx, request, {
-              action: "withdrawal_tax_reviewed",
-              target_id: id,
-              payload: {
-                tax_mode: taxMode,
-                tax_status: taxStatus,
-                tax_amount_cents: taxAmount,
-              },
-            });
-            await logWithdrawalEvent(tx, {
-              event_type: "withdrawal_tax_reviewed",
-              withdrawal: updated,
-              commissionIds: links.map((link) => link.commission_id),
-              orderIds: links.map((link) => link.commission.order_id),
-              before: withdrawal,
-              after: updated,
-              admin_user_id: resolveAdminAccessContext(request as any)?.admin_user_id ?? request.adminUser?.id ?? null,
-              extraPayload: {
-                tax_record_id: taxRecord.id,
-                tax_mode: taxMode,
-                tax_status: taxStatus,
-                tax_amount_cents: taxAmount,
-                payable_amount_cents: withdrawal.amount_cents - taxAmount,
-                invoice_required: invoiceRequired,
-                invoice_status: invoiceStatus,
-              },
-            });
-            return { withdrawal: updated, tax_record: taxRecord };
+            await writeAdminAuditLog(tx, request, { action: "withdrawal_tax_reviewed", target_id: id, payload: { before: taxReviewSnapshot({ tax_mode: withdrawal.tax_mode, tax_status: withdrawal.tax_status, taxable_amount_cents: withdrawal.taxable_amount_cents, tax_amount_cents: withdrawal.tax_amount_cents, tax_rate_basis: withdrawal.tax_rate_basis, invoice_required: withdrawal.invoice_required, invoice_status: withdrawal.invoice_status, tax_remark: withdrawal.tax_remark }), after: requested } });
+            await logWithdrawalEvent(tx, { event_type: "withdrawal_tax_reviewed", withdrawal: updated, commissionIds: links.map((link) => link.commission_id), orderIds: links.map((link) => link.commission.order_id), before: withdrawal, after: updated, admin_user_id: context.admin_user_id, extraPayload: { tax_record_id: taxRecord.id, ...requested } });
+            return { withdrawal: updated, tax_record: taxRecord, idempotent: false };
           },
         );
         return ok(reviewed);
