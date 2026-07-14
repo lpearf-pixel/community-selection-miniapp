@@ -17,6 +17,7 @@ import { FinanceRefundLedgerPage } from "./pages/finance/FinanceRefundLedgerPage
 import { PickupWorkbenchPage } from "./pages/pickup/PickupWorkbenchPage";
 import { DeliveryReservationPage } from "./pages/delivery/DeliveryReservationPage";
 import { DeliveryRuleConfigPage } from "./pages/delivery/DeliveryRuleConfigPage";
+import { RewardLedgerPage } from "./pages/rewards/RewardLedgerPage";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -39,6 +40,7 @@ type ViewKey =
   | "taxRecords"
   | "finance"
   | "refundLedger"
+  | "rewardLedger"
   | "operations"
   | "pickupWorkbench"
   | "deliveryReservation"
@@ -1105,6 +1107,7 @@ export function App() {
               <Button onClick={() => setView("taxRecords")}>税务记录</Button>
               <Button onClick={() => setView("finance")}>财务对账</Button>
               <Button onClick={() => setView("refundLedger")}>退款台账</Button>
+              <Button onClick={() => setView("rewardLedger")}>开团服务奖励</Button>
               <Button onClick={() => setView("operations")}>运营看板</Button>
               <Button onClick={() => setView("pickupWorkbench")}>自提工作台</Button>
               <Button onClick={() => setView("deliveryReservation")}>配送预留</Button>
@@ -1155,6 +1158,7 @@ export function App() {
         ) : null}
 
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
+        {view === "rewardLedger" ? <RewardLedgerPage /> : null}
         {view === "pickupWorkbench" ? <PickupWorkbenchPage /> : null}
         {view === "deliveryReservation" ? <DeliveryReservationPage /> : null}
         {view === "deliveryRuleConfig" ? <DeliveryRuleConfigPage /> : null}

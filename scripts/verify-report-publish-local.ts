@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -6,6 +7,68 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function read(path: string) {
   return readFileSync(path, 'utf8');
+}
+
+
+function gitOutput(args: string[]) {
+  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+}
+
+function gitDiffFiles(base: string, head: string) {
+  const output = gitOutput(['diff', '--name-only', `${base}...${head}`]);
+  return Array.from(new Set(output.split('\n').map((line) => line.trim()).filter(Boolean))).sort();
+}
+
+function extractMarkdownFilePaths(report: string) {
+  const section = report.split('## 2. 本阶段变更范围')[1]?.split('## 3. API 变化')[0] ?? '';
+  const files: string[] = [];
+  for (const line of section.split('\n')) {
+    if (!line.startsWith('|')) continue;
+    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
+    if (cells.length < 3) continue;
+    const file = cells[1];
+    if (file === '文件' || file === '---') continue;
+    if (file.includes('/') || file === 'docker-compose.yml') files.push(file);
+  }
+  return Array.from(new Set(files)).sort();
+}
+
+
+function isFixtureTodoScannerImplementationLine(file: string, lineNumber: number, sourceLines: string[]) {
+  if (file !== 'scripts/generate-stage-report.ts') return false;
+  const functionNames = ['isAllowedPlaceholderLine', 'isTodoScannerImplementationLine', 'isTodoScannerDefinition', 'isVerifierTodoTestString', 'findTodoItems'];
+  for (const functionName of functionNames) {
+    const start = sourceLines.findIndex((line) => line.includes(`function ${functionName}`));
+    if (start < 0) continue;
+    const nextFunction = sourceLines.findIndex((line, index) => index > start && /^function\s+\w+/.test(line.trim()));
+    const end = nextFunction >= 0 ? nextFunction : sourceLines.length;
+    if (lineNumber >= start && lineNumber < end) return true;
+  }
+  return false;
+}
+
+function fixtureTodoItems(file: string, source: string) {
+  const todoKeyword = 'TO' + 'DO';
+  const fixmeKeyword = 'FIX' + 'ME';
+  const tbdKeyword = 'T' + 'BD';
+  const notImplementedKeyword = 'NOT_' + 'IMPLEMENTED';
+  const pendingCn = '待' + '实现';
+  const placeholderCn = '功能' + '占位';
+  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\([\`'"]Not implemented[\`'"]\)|${pendingCn}|${placeholderCn})`, 'i');
+  const lines = source.split('\n');
+  const rows: string[] = [];
+  lines.forEach((line, index) => {
+    if (isFixtureTodoScannerImplementationLine(file, index, lines)) return;
+    if (/verify.*\.(ts|tsx|js)$/.test(file) && todoKeywords.test(line) && /assert|includes|keywords|forbidden|required/.test(line)) return;
+    if (todoKeywords.test(line)) rows.push(`${file}:${index + 1} — ${line.trim()}`);
+  });
+  return rows;
+}
+
+function assertSetEqual(expected: string[], actual: string[], label: string) {
+  const missing = expected.filter((file) => !actual.includes(file));
+  const extra = actual.filter((file) => !expected.includes(file));
+  assert(missing.length === 0 && extra.length === 0, `${label} mismatch. missing=${missing.join(',')} extra=${extra.join(',')}`);
 }
 
 const generatePath = 'scripts/generate-stage-report.ts';
@@ -39,6 +102,7 @@ for (const required of [
   'L40 verifier',
   'L41 verifier',
   'L42 verifier',
+  'L43 verifier',
   'L24-L40 chain regression',
   'L24-L41 chain regression',
   'L24-L42 chain regression',
@@ -51,9 +115,20 @@ for (const required of [
   'hasExplicitFailure',
   'commandPassed',
   'isTodoScannerDefinition',
+  'isTodoScannerImplementationLine',
   'L42 business base branch must be configured',
   'error TS',
   'raw compliance scan',
+  'raw compliance scan passed.',
+  'commandPassedInSectionOnly',
+  'assertChangedFileCoverage',
+  'expectedCoreFiles',
+  '--name-only',
+  'Stage report changed-file coverage mismatch',
+  '202607130001_l43_reward_ledger_t7_refund_deduct',
+  '202607130002_l43_reward_ledger_t3_refund_deduct',
+  'review_status, review_note, reviewed_by_admin_id, reviewed_at, last_adjusted_at',
+  'idempotency_key, event_type, affects_available_balance, effective_at, refund_id',
   'Stage workflow',
   'placeholder\\s*=',
   'placeholder-not-for-login',
@@ -76,6 +151,21 @@ for (const required of [
 assert(!generateSource.includes("permission: 'L40 admin permission'"), 'L40 report must not use generic admin permission text');
 assert(!generateSource.includes("({ item, status: 'passed'"), 'L40 checklist must not use item/status shape that renders undefined');
 assert(!generateSource.includes('/\\bfailed\\b/i.test'), 'stage report must not treat the business word failed as a failure marker');
+assert(generateSource.includes('detectAdminTypecheck(content)'), 'L43 report must use detectAdminTypecheck(content)');
+assert(!generateSource.includes('parseAdminTypecheck(content)'), 'generate-stage-report must not call undefined parseAdminTypecheck(content)');
+assert(!generateSource.includes('l43Manifest.files'), 'L43 report generator must not use l43Manifest.files as changed-file source');
+assert(generateSource.includes('git') && generateSource.includes('diff') && generateSource.includes('--name-only') && generateSource.includes('...HEAD'), 'L43 report generator must use real git diff changed files');
+assert(generateSource.includes('Commission') && generateSource.includes('review_status') && generateSource.includes('last_adjusted_at'), 'L43 report must describe Commission concrete fields');
+assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
+assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
+assert(generateSource.includes('todos.length === 0'), 'passed report must require todos.length === 0');
+assert(generateSource.includes('passed report cannot contain unfinished items'), 'passed report must reject unfinished items');
+for (const permissionText of ['leader self', 'reward.view', 'reward.manage', 'super_admin global']) {
+  assert(generateSource.includes(permissionText), `L43 report permissions should include ${permissionText}`);
+}
+for (const forbiddenPermission of ['public', 'admin session', 'unknown']) {
+  assert(!generateSource.includes(`permission: '${forbiddenPermission}'`) && !generateSource.includes(`permissions: ['${forbiddenPermission}']`), `L43 report permissions must not include ${forbiddenPermission}`);
+}
 assert(publishSource.includes('--orphan'), 'publish script may initialize the report branch through an orphan worktree');
 
 const reportingDocs = read(docsPath);
@@ -85,5 +175,44 @@ for (const required of ['git fetch origin', 'git pull --ff-only', 'pnpm verify:a
 
 const verifyAll = read(verifyAllPath);
 assert(verifyAll.includes('pnpm exec tsx scripts/verify-report-publish-local.ts'), 'verify-all should include report publish verifier');
+
+const l43BaseCommit = '20d5023f0e493bad7485e4fe8cbc5ccba014e118';
+execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L43'], { stdio: 'pipe' });
+const l43Report = read('reports/stage-L43-report.md');
+const expectedFiles = gitDiffFiles(l43BaseCommit, 'HEAD');
+const reportFiles = extractMarkdownFilePaths(l43Report);
+assertSetEqual(expectedFiles, reportFiles, 'L43 report changed files');
+assert(l43Report.includes(`业务稳定 commit：${l43BaseCommit}`), 'L43 report must include base commit');
+assert(l43Report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L43 report source commit must equal HEAD');
+for (const required of ['prisma/migrations/202607130001_l43_reward_ledger_t7_refund_deduct/migration.sql', 'prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql', 'review_status', 'last_adjusted_at', 'idempotency_key', 'affects_available_balance', 'original_key:legacy:{ledger.id}']) {
+  assert(l43Report.includes(required), `L43 report should include ${required}`);
+}
+assert(!l43Report.includes('Commission | L43 manifest'), 'L43 report must not contain Commission manifest placeholder');
+assert(!l43Report.includes('RewardLedger | L43 manifest'), 'L43 report must not contain RewardLedger manifest placeholder');
+
+const scannerDefinitionFixture = `
+function isVerifierTodoTestString(
+  file: string,
+  line: string
+) {
+  return /${'TO' + 'DO'}|${'FIX' + 'ME'}|${'T' + 'BD'}|${'NOT_' + 'IMPLEMENTED'}/.test(line);
+}
+`;
+assert(fixtureTodoItems('scripts/generate-stage-report.ts', scannerDefinitionFixture).length === 0, 'TODO scanner implementation fixture must not be reported as unfinished');
+
+const realTodoFixture = `
+export function calculateReward() {
+  // ${'TO' + 'DO'}: implement reward calculation
+}
+`;
+assert(fixtureTodoItems('apps/api/src/services/reward-example.ts', realTodoFixture).length === 1, 'real business TODO fixture must be reported as unfinished');
+
+const verifierFixture = `
+assert(
+  !source.includes('${'TO' + 'DO'}'),
+  'runtime source must not contain ${'TO' + 'DO'}'
+);
+`;
+assert(fixtureTodoItems('scripts/verify-example-local.ts', verifierFixture).length === 0, 'verifier TODO assertion fixture must not be reported as unfinished');
 
 console.log('Report publish verification passed.');

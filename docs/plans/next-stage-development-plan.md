@@ -11,7 +11,7 @@ L38 merge commit：`1d27be8bab675ba3ecd24a48358762cf433a3bc2`
 - 只允许一级开团服务奖励；奖励只基于真实有效订单。
 - 退款订单不计算奖励；部分退款按实际成交商品金额重新计算奖励。
 - 未成团自动退款后，开团人无奖励。
-- 奖励在订单完成后 T+7 变为可提现。
+- 奖励在订单完成后 T+3 变为可提现。
 - 第一版提现走后台人工审核，不做真实自动打款。
 - 不做多级<!-- split -->分销，不做团队<!-- split -->收益，不做代理<!-- split -->收益。
 - 不新增 `parent_<!-- split -->leader_id`、`up<!-- split -->line_id`、`down<!-- split -->line`、`team_<!-- split -->id`、`le<!-- split -->vel` 等多层级关系字段或语义。
@@ -249,11 +249,11 @@ L38 merge commit：`1d27be8bab675ba3ecd24a48358762cf433a3bc2`
 - 报告已生成并发布。
 - PR 已提交并等待人工 review 与 merge。
 
-## L43：开团服务奖励账本增强 / T+7 可用 / 退款扣减
+## L43：开团服务奖励账本增强 / T+3 可用 / 退款扣减
 
 ### 目标
 
-增强开团服务奖励账本，落实订单完成后 T+7 可用、退款扣减、部分退款按实际成交商品金额重算。
+增强开团服务奖励账本，落实订单完成后 T+3 可用、退款扣减、部分退款按实际成交商品金额重算。
 
 ### 允许范围
 
@@ -277,7 +277,7 @@ L38 merge commit：`1d27be8bab675ba3ecd24a48358762cf433a3bc2`
 - `apps/api/src/modules/rewards/**`
 - `apps/api/src/routes/admin/rewards.ts`
 - `apps/admin/src/pages/rewards/**`
-- `scripts/verify-l43-reward-ledger-t7-refund-deduct-local.ts`
+- `scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts`
 
 ### API 变化
 

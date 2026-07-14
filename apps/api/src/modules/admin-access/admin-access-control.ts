@@ -16,6 +16,8 @@ export type AdminPermission =
   | 'refund.manage'
   | 'finance.view'
   | 'finance.export'
+  | 'reward.view'
+  | 'reward.manage'
   | 'risk.view'
   | 'staff.manage'
   | 'system.manage';
@@ -32,6 +34,8 @@ const ALL_PERMISSIONS: AdminPermission[] = [
   'refund.manage',
   'finance.view',
   'finance.export',
+  'reward.view',
+  'reward.manage',
   'risk.view',
   'staff.manage',
   'system.manage'
@@ -39,9 +43,9 @@ const ALL_PERMISSIONS: AdminPermission[] = [
 
 export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
   super_admin: ALL_PERMISSIONS,
-  store_manager: ['operations.view', 'order.view', 'order.manage', 'pickup.verify', 'after_sale.manage', 'product.manage'],
+  store_manager: ['operations.view', 'order.view', 'order.manage', 'pickup.verify', 'after_sale.manage', 'product.manage', 'reward.view'],
   clerk: ['pickup.verify', 'order.view'],
-  finance: ['finance.view', 'finance.export', 'refund.view', 'refund.manage', 'risk.view', 'order.view'],
+  finance: ['finance.view', 'finance.export', 'refund.view', 'refund.manage', 'reward.view', 'reward.manage', 'risk.view', 'order.view'],
   aftersales: ['order.view', 'after_sale.manage', 'refund.view'],
   operator: ['operations.view', 'product.manage', 'order.view']
 };

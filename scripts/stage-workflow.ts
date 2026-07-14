@@ -44,7 +44,8 @@ const stageVerifiers: Record<string, CommandSpec> = {
   L39: { title: 'L39 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts'] },
   L40: { title: 'L40 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts'] },
   L41: { title: 'L41 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l41-inventory-deduct-restore-local.ts'] },
-  L42: { title: 'L42 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts'] }
+  L42: { title: 'L42 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts'] },
+  L43: { title: 'L43 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'] }
 };
 
 const regressionChains: Record<string, string[]> = {
@@ -66,7 +67,8 @@ const regressionChains: Record<string, string[]> = {
   L39: ['L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
   L40: ['L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
   L41: ['L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L42: ['L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
+  L42: ['L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
+  L43: ['L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
 };
 
 const dockerApiE2E: CommandSpec = {
@@ -74,6 +76,14 @@ const dockerApiE2E: CommandSpec = {
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-docker-api-e2e-local.ts', '--debug'],
   env: { API_BASE_URL: 'http://127.0.0.1:13080' }
+};
+
+
+const rawComplianceScan: CommandSpec = {
+  title: 'raw compliance scan',
+  command: 'pnpm',
+  args: ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'],
+  successMessage: 'raw compliance scan passed.'
 };
 
 const adminTypeConfigCheck: CommandSpec = {
@@ -174,10 +184,10 @@ function runCommand(spec: CommandSpec): void {
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
-  if (scope === 'all') return [...Object.values(stageVerifiers), dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
+  if (scope === 'all') return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
   if (scope === 'stage') return [stageVerifiers[args.stage]];
-  const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
+  const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'RAW_COMPLIANCE_SCAN' ? [rawComplianceScan] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
   return chainCommands;
 }
 

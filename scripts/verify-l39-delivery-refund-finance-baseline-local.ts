@@ -83,7 +83,55 @@ includesAll('apps/admin/src/api/financeRefundLedger.ts', ['product_refund_amount
 includesAll('apps/admin/src/pages/finance/FinanceRefundLedgerPage.tsx', ['商品退款合计', '配送费退款合计', '剩余可退合计']);
 includesAll('apps/miniapp/pages/orders/detail/index.wxml', ['已退商品金额', '已退配送费', '剩余可退']);
 includesAll('apps/miniapp/pages/after-sales/detail/index.wxml', ['商品退款', '配送费退款']);
-includesAll('apps/api/src/services/commission-service.ts', ['product_amount_cents', 'delivery_fee_cents 不参与']);
+
+const rewardSources = [
+  existsSync('apps/api/src/services/commission-service.ts') ? read('apps/api/src/services/commission-service.ts') : '',
+  existsSync('apps/api/src/modules/rewards/reward-ledger-service.ts') ? read('apps/api/src/modules/rewards/reward-ledger-service.ts') : ''
+].join('\n');
+
+function functionSlice(source: string, functionName: string) {
+  const start = source.search(new RegExp(`(?:function|async function|export function|export async function)\\s+${functionName}\\b`));
+  if (start < 0) return '';
+  const next = source.slice(start + 1).search(/\n(?:function|async function|export function|export async function)\s+\w+\b/);
+  return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+}
+
+const commissionCalculationSurface = [
+  functionSlice(rewardSources, 'productOriginal'),
+  functionSlice(rewardSources, 'productRemaining'),
+  functionSlice(rewardSources, 'calculateCommissionAmount'),
+  functionSlice(rewardSources, 'calculateRefundAdjustedAmount'),
+  functionSlice(rewardSources, 'ensureEstimatedCommission'),
+  functionSlice(rewardSources, 'syncCommissionAfterRefund')
+].filter(Boolean).join('\n');
+
+assert(rewardSources.includes('product_amount_cents'), 'Commission calculation must use product amount');
+assert(rewardSources.includes('product_refund_amount_cents'), 'Commission refund adjustment must use product refund amount');
+assert(commissionCalculationSurface.includes('product_amount_cents'), 'Commission calculation surface must include product amount');
+assert(commissionCalculationSurface.includes('product_refund_amount_cents'), 'Commission calculation surface must include product refund amount');
+assert(!/pay_amount_cents\s*[-+*/]/.test(commissionCalculationSurface), 'Commission calculation must not use paid amount');
+assert(!/delivery_fee_cents\s*[-+*/]/.test(commissionCalculationSurface), 'Delivery fee must not participate in commission calculation');
+assert(!/refund_amount_cents\s*[-+*/]/.test(commissionCalculationSurface), 'Total refund amount must not drive commission calculation');
+
+type RewardCase = {
+  product_amount_cents: number;
+  delivery_fee_cents: number;
+  pay_amount_cents: number;
+  product_refund_amount_cents: number;
+  delivery_refund_amount_cents: number;
+  refund_amount_cents: number;
+  commission_value: number;
+};
+function expectedPercentReward(input: RewardCase) {
+  const originalProductAmountCents = input.product_amount_cents;
+  const remainingProductAmountCents = Math.max(0, originalProductAmountCents - input.product_refund_amount_cents);
+  return Math.floor((remainingProductAmountCents * input.commission_value) / 100);
+}
+const baseRewardCase = { product_amount_cents: 10000, delivery_fee_cents: 500, pay_amount_cents: 10500, product_refund_amount_cents: 0, delivery_refund_amount_cents: 0, refund_amount_cents: 0, commission_value: 10 };
+assert(expectedPercentReward(baseRewardCase) === 1000, 'Initial reward must be 1000 and must not include delivery fee');
+assert(expectedPercentReward({ ...baseRewardCase, delivery_refund_amount_cents: 500, refund_amount_cents: 500 }) === 1000, 'Delivery-fee-only refund must not change reward');
+assert(expectedPercentReward({ ...baseRewardCase, product_refund_amount_cents: 3000, delivery_refund_amount_cents: 500, refund_amount_cents: 3500 }) === 700, 'Product refund must recalculate reward to 700 even when total refund includes delivery fee');
+assert(expectedPercentReward({ ...baseRewardCase, product_refund_amount_cents: 10000, refund_amount_cents: 10500 }) === 0, 'Full product refund must zero reward');
 includesAll('scripts/verify-all-local.sh', ['pnpm exec tsx scripts/verify-l39-delivery-refund-finance-baseline-local.ts']);
 includesAll('scripts/stage-workflow.ts', ['L39', 'verify-l39-delivery-refund-finance-baseline-local.ts', "'L39', 'L38', 'L37'"]);
 includesAll('scripts/generate-stage-report.ts', ['const l39Manifest', 'L39 delivery refund finance baseline', 'POST /api/after-sales', 'GET /api/admin/finance/refund-ledger/export.csv', 'scripts/verify-docker-api-e2e-local.ts']);

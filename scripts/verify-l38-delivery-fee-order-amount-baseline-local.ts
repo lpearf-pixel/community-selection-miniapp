@@ -21,8 +21,48 @@ includesAll('apps/miniapp/pages/orders/confirm/index.wxml', ['商品金额','配
 includesAll('apps/miniapp/pages/orders/confirm/index.js', ['delivery_fee_cents','product_amount_cents','pay_amount_cents']);
 includesAll('apps/miniapp/pages/orders/detail/index.wxml', ['商品金额','配送费','实付金额','配送时段','配送地址']);
 
+
 const commissionText = read('apps/api/src/services/commission-service.ts');
-assert(commissionText.includes('product_amount_cents') && commissionText.includes('delivery_fee_cents 不参与'), 'reward calculation must exclude delivery fee');
+function functionSection(source: string, functionName: string) {
+  const candidates = [
+    `function ${functionName}`,
+    `export function ${functionName}`,
+    `export async function ${functionName}`,
+    `async function ${functionName}`
+  ];
+  const starts = candidates.map((candidate) => source.indexOf(candidate)).filter((index) => index >= 0);
+  const start = starts.length > 0 ? Math.min(...starts) : -1;
+  assert(start >= 0, `Missing function ${functionName}`);
+  const next = source.slice(start + 1).search(/\n(?:function|async function|export function|export async function)\s+\w+\b/);
+  return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+}
+const rewardCalculationSurface = [
+  functionSection(commissionText, 'productOriginal'),
+  functionSection(commissionText, 'productRemaining'),
+  functionSection(commissionText, 'calculateCommissionAmount'),
+  functionSection(commissionText, 'ensureEstimatedCommission'),
+  functionSection(commissionText, 'syncCommissionAfterRefund')
+].join('\n');
+assert(rewardCalculationSurface.includes('product_amount_cents'), 'reward calculation must use product amount');
+assert(rewardCalculationSurface.includes('product_refund_amount_cents'), 'reward refund calculation must use product refund amount');
+assert(rewardCalculationSurface.includes('productOriginal(order) - order.product_refund_amount_cents'), 'remaining product amount must subtract product refund amount');
+assert(functionSection(commissionText, 'calculateCommissionAmount').includes('original_product_amount_cents') && functionSection(commissionText, 'calculateCommissionAmount').includes('remaining_product_amount_cents'), 'calculateCommissionAmount must use original and remaining product amounts');
+assert(!/order\.delivery_fee_cents\b/.test(rewardCalculationSurface), 'reward calculation must exclude delivery fee');
+assert(!/order\.pay_amount_cents\b/.test(rewardCalculationSurface), 'reward calculation must exclude paid amount');
+assert(!/order\.refund_amount_cents\b/.test(rewardCalculationSurface), 'reward calculation must exclude total refund amount');
+
+type RewardCase = { product_amount_cents: number; delivery_fee_cents: number; pay_amount_cents: number; product_refund_amount_cents: number; delivery_refund_amount_cents: number; refund_amount_cents: number; commission_value: number; };
+function expectedReward(input: RewardCase) {
+  const originalProductAmountCents = input.product_amount_cents;
+  const remainingProductAmountCents = Math.max(0, originalProductAmountCents - input.product_refund_amount_cents);
+  return Math.floor((remainingProductAmountCents * input.commission_value) / 100);
+}
+const rewardFixture = { product_amount_cents: 10000, delivery_fee_cents: 500, pay_amount_cents: 10500, product_refund_amount_cents: 0, delivery_refund_amount_cents: 0, refund_amount_cents: 0, commission_value: 10 };
+assert(expectedReward(rewardFixture) === 1000, 'initial reward must use product amount only');
+assert(expectedReward({ ...rewardFixture, delivery_refund_amount_cents: 500, refund_amount_cents: 500 }) === 1000, 'delivery-fee-only refund must not change reward');
+assert(expectedReward({ ...rewardFixture, product_refund_amount_cents: 3000, delivery_refund_amount_cents: 500, refund_amount_cents: 3500 }) === 700, 'product refund must recalculate reward to 700');
+assert(1000 - expectedReward({ ...rewardFixture, product_refund_amount_cents: 3000, delivery_refund_amount_cents: 500, refund_amount_cents: 3500 }) === 300, 'product refund deduct amount must be 300');
+assert(expectedReward({ ...rewardFixture, product_refund_amount_cents: 10000, refund_amount_cents: 10500 }) === 0, 'full product refund must zero reward');
 
 const runtimeFiles = [
   'apps/api/src/modules/order/order-service.ts',

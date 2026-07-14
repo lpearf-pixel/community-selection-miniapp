@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
+import { appendRewardLedgerEntry, getAvailableRewardBalance } from '../services/commission-service.js';
 
 type ConvertCreditBody = {
   leader_user_id?: string;
@@ -15,11 +16,6 @@ function parseAmount(value: unknown) {
   const amount = Number(value);
   if (!Number.isInteger(amount) || amount <= 0) throw new Error('转换金额必须大于 0');
   return amount;
-}
-
-async function rewardBalance(tx: Prisma.TransactionClient, leaderUserId: string) {
-  const entries = await tx.rewardLedger.findMany({ where: { leader_user_id: leaderUserId } });
-  return entries.reduce((sum, entry) => sum + (entry.direction === 'in' ? entry.amount_cents : -entry.amount_cents), 0);
 }
 
 async function creditBalance(tx: Prisma.TransactionClient, userId: string) {
@@ -91,24 +87,24 @@ export function registerRewardRoutes(app: FastifyInstance) {
           }
         });
 
-        const beforeRewardBalance = await rewardBalance(tx, body.leader_user_id);
+        const beforeRewardBalance = await getAvailableRewardBalance(tx, body.leader_user_id);
+        if (beforeRewardBalance < amount) throw new Error('开团服务奖励可用余额不足');
         const beforeCreditBalance = await creditBalance(tx, body.leader_user_id);
-        const rewardLedger = await tx.rewardLedger.create({
-          data: {
-            leader_user_id: body.leader_user_id,
-            commission_id: commission.id,
-            conversion_id: conversion.id,
-            entry_type: 'convert_credit',
-            direction: 'out',
-            amount_cents: amount,
-            balance_after_cents: Math.max(0, beforeRewardBalance - amount),
-            tax_status: 'pending_review',
-            tax_record_id: taxRecord.id,
-            order_id: commission.order_id,
-            remark: '开团服务奖励转平台消费额度',
-            payload: { conversion_id: conversion.id }
-          }
+        const rewardLedgerResult = await appendRewardLedgerEntry(tx, {
+          leader_user_id: body.leader_user_id,
+          commission_id: commission.id,
+          conversion_id: conversion.id,
+          order_id: commission.order_id,
+          event_type: 'convert_credit',
+          entry_type: 'convert_credit',
+          direction: 'out',
+          amount_cents: amount,
+          affects_available_balance: true,
+          idempotency_key: `convert-credit:${body.client_request_id}`,
+          remark: '开团服务奖励转平台消费额度',
+          payload: { conversion_id: conversion.id, tax_status: 'pending_review' }
         });
+        const rewardLedger = rewardLedgerResult.ledger;
         const creditLedger = await tx.consumerCreditLedger.create({
           data: {
             user_id: body.leader_user_id,

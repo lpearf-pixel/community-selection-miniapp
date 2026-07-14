@@ -46,7 +46,7 @@ services:
       - .:/app
       - api-node-modules:/app/node_modules
       - api-pnpm-store:/root/.local/share/pnpm/store
-    command: sh -lc "corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm config set registry https://registry.npmjs.org/ && pnpm config set verify-store-integrity false && pnpm config set store-dir /root/.local/share/pnpm/store && pnpm install --force --prefer-offline && pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm exec tsx -e \"import * as m from '@community-selection/shared'; if (typeof m.fail !== 'function' || typeof m.ok !== 'function') throw new Error('shared exports missing'); console.log('shared exports ok')\" && pnpm db:generate && pnpm db:migrate && pnpm db:seed && pnpm --filter @community-selection/api dev"
+    command: sh -lc "corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm config set registry https://registry.npmjs.org/ && pnpm config set verify-store-integrity false && pnpm config set store-dir /root/.local/share/pnpm/store && pnpm install --force --prefer-offline && pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm exec tsx -e \"import * as m from '@community-selection/shared'; if (typeof m.fail !== 'function' || typeof m.ok !== 'function') throw new Error('shared exports missing'); console.log('shared exports ok')\" && pnpm db:generate && pnpm exec prisma migrate deploy --schema prisma/schema.prisma && pnpm db:seed && pnpm --filter @community-selection/api dev"
 
   admin:
     build:

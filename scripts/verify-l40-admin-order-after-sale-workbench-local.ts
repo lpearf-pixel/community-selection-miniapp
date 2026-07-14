@@ -4,6 +4,42 @@ import { join } from 'node:path';
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string) { return readFileSync(join(process.cwd(), path), 'utf8'); }
 function includesAll(source: string, values: string[], label: string) { for (const value of values) assert(source.includes(value), `${label} missing ${value}`); }
+function extractMainExecutionSource(source: string) {
+  const mainStart = source.indexOf('async function main()');
+  assert(mainStart >= 0, 'Docker E2E main function missing');
+
+  const mainInvocation = source.indexOf('\nmain().catch', mainStart);
+  assert(mainInvocation > mainStart, 'Docker E2E main invocation missing');
+
+  return source.slice(mainStart, mainInvocation);
+}
+
+function assertDockerFixtureBeforeAdminRequests(source: string) {
+  const dockerMain = extractMainExecutionSource(source);
+  const fixtureCall = 'await ensureDockerE2eFixtures(prisma);';
+  const fixtureIndex = dockerMain.indexOf(fixtureCall);
+  const firstAdminRequestIndex = dockerMain.indexOf('/api/admin/');
+
+  assert(fixtureIndex >= 0, 'Docker E2E fixture call missing from main execution path');
+  assert(firstAdminRequestIndex >= 0, 'Docker E2E admin request missing from main execution path');
+  assert(fixtureIndex < firstAdminRequestIndex, 'Docker E2E fixture must run before admin requests');
+}
+
+const regressionFixture = `
+async function helper() {
+  await request('GET', '/api/admin/helper-only');
+}
+
+async function main() {
+  await ensureDockerE2eFixtures(prisma);
+  await request('GET', '/api/health');
+  await request('GET', '/api/admin/orders');
+}
+
+main().catch(() => {});
+`;
+
+assertDockerFixtureBeforeAdminRequests(regressionFixture);
 
 const adminOrdersRoute = read('apps/api/src/routes/admin/orders.ts');
 const afterSalesRoute = read('apps/api/src/routes/after-sales.ts');
@@ -43,7 +79,7 @@ assert(!/auto.*payout|自动打款/.test(joinedRuntime), 'L40 runtime must not i
 assert(!/auto.*tax|自动报税/.test(joinedRuntime), 'L40 runtime must not implement automatic tax filing');
 
 assert(fixtures.includes('DOCKER_E2E_ADMIN_ID') && fixtures.includes('docker-e2e-admin') && fixtures.includes('prisma.adminUser.upsert'), 'Docker E2E admin fixture must upsert deterministic admin');
-assert(dockerE2e.includes('ensureDockerE2eFixtures(prisma)') && dockerE2e.indexOf('ensureDockerE2eFixtures(prisma)') < dockerE2e.indexOf('/api/admin/'), 'Docker E2E fixture must run before admin requests');
+assertDockerFixtureBeforeAdminRequests(dockerE2e);
 assert(afterSaleService.includes('requireExistingAdmin') && afterSaleService.includes('缺少管理员身份') && afterSaleService.includes('管理员不存在或已停用'), 'After-sale service must validate admin identity before FK writes');
 assert(afterSaleService.includes('mapAdminForeignKeyError') && afterSaleService.includes('reviewed_by_admin: { connect') && afterSaleService.includes('resolved_by_admin: { connect'), 'After-sale service must map admin FK errors and connect validated admin relations');
 const dockerAuthSources = `${dockerE2e}

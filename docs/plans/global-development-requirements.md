@@ -132,3 +132,55 @@ L39 验证治理已确认以下组合可通过完整验证：
 - stage workflow 通过。
 
 后续阶段必须保持这套质量门禁，新增功能不得破坏该基线。
+## 10. 阶段开发故障复盘与强制规则
+
+### 10.1 Prisma migration
+
+- Docker、CI、部署等非交互环境只能使用 `prisma migrate deploy`，禁止在容器启动链中使用 `prisma migrate dev`。
+- `migrate dev` 仅用于人工生成 migration。
+- schema 修改必须同时提交正式 migration。
+- 已应用 migration 文件不得改名、删除或修改内容，避免 checksum 冲突；后续修复必须新增 follow-up migration。
+- 新增 nullable unique 字段前必须检查重复的非空值。
+- 如存在重复，只允许确定性修正幂等键，禁止删除财务账本记录或修改金额、方向、余额。
+- 禁止通过 `migrate reset`、删除 PostgreSQL volume 或重建数据库解决开发迁移问题。
+
+### 10.2 Docker 启动
+
+- API Docker 默认端口为 13080。
+- Docker health、E2E、stage workflow 必须使用同一 API_BASE_URL。
+- 容器启动链中的 migration 必须可在非交互环境退出。
+- migration 成功后必须继续验证 seed、API server 和 health endpoint。
+
+### 10.3 Verifier 设计
+
+- verifier 必须验证真实业务语义，不得依赖业务源码中的中文注释、兼容关键字或固定文本。
+- 禁止为了通过 verifier 向业务源码添加无业务意义的注释。
+- 业务逻辑被移动或抽取后，历史 verifier 应跟随真实实现位置。
+- 奖励计算必须通过运行时 fixture 验证：商品金额参与、商品退款参与、配送费不参与、配送费退款不改变奖励。
+- verifier 不得仅凭某个普通业务词判断失败，例如业务状态 `failed`。
+- 成功 marker 只能在对应运行时断言全部通过后输出。
+- 禁止通过 `main()` 外部 `console.log`、固定字符串或伪 fixture 输出制造 passed 证据。
+- 报告生成器不得仅凭成功 marker 判断业务通过；marker 必须由真实测试场景产生。
+- verifier 应检查 success marker 是否位于真实执行路径中。
+- 静态源码检查不能替代关键财务、权限、幂等和状态机运行时测试。
+
+### 10.4 Report generator
+
+- 新阶段注册必须同时覆盖：stage boolean、manifest、changed files、API extraction、DB extraction、checklist、verify scripts、verify result detection、report base branch/commit/title。
+- 所有 stage dispatch 外层条件必须包含新阶段。
+- 报告 helper 的函数名必须通过静态检查和实际 `report:stage` 执行验证，避免调用不存在的函数。
+- report API 权限必须来自 manifest 或真实路由配置，不得输出 public/admin session/unknown 等误导信息。
+- 发布报告的 source commit 必须与 PR head 一致。
+
+### 10.5 兼容 API
+
+- 旧路由、别名路由和兼容接口必须与新标准接口复用同一权限、data scope、幂等和审计 helper。
+- 禁止旧接口绕过新接口的权限限制。
+- 对全局批处理、结算、释放、backfill、导出等操作，普通 permission 不足以授权，必须额外验证全局 data scope。
+- scoped Admin 不得触发全局状态变化。
+
+### 10.6 PR 元数据
+
+- PR 标题、描述、测试结果、阶段名和最终业务规则必须一致。
+- 需求从 T+7 调整为 T+3 后，代码、文档、verifier、manifest、报告和 PR 元数据必须同步修改。
+- 已应用 migration 的历史目录名可以保留，但必须在 review 文档中说明，不得修改已应用 migration。

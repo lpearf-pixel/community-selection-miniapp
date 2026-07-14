@@ -73,7 +73,7 @@
 
 ### finance
 
-承接开团服务奖励相关能力，当前通过 `modules/finance/finance-service.ts` re-export 现有 commission service。规则不变：开团服务奖励只来自开团人自己的真实有效团购订单，退款后按现有逻辑扣回或重算，T+7 可用逻辑不变。
+承接开团服务奖励相关能力，当前通过 `modules/finance/finance-service.ts` re-export 现有 commission service。规则不变：开团服务奖励只来自开团人自己的真实有效团购订单，退款后按现有逻辑扣回或重算，T+3 可用逻辑不变。
 
 ### withdrawal
 

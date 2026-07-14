@@ -79,3 +79,4 @@ pnpm exec tsx scripts/verify-l39-delivery-refund-finance-baseline-local.ts
 pnpm exec tsx scripts/verify-l40-admin-order-after-sale-workbench-local.ts
 pnpm exec tsx scripts/verify-l41-inventory-deduct-restore-local.ts
 pnpm exec tsx scripts/verify-l42-failed-group-buy-manual-closure-local.ts
+pnpm exec tsx scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts
