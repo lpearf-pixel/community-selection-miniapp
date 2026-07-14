@@ -135,6 +135,51 @@ function linksInScope(links: WithdrawalLinkWithOrder[], context: ReturnType<type
   return links.length > 0 && links.every((link) => canAccessOrderDataScope(context, link.commission.order));
 }
 
+function adminOrderScopeWhere(
+  context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>,
+): Prisma.OrderWhereInput | null {
+  if (
+    context.is_super_admin ||
+    context.data_scope.can_access_all_pickup_stores ||
+    context.data_scope.can_access_all_communities
+  ) {
+    return {};
+  }
+
+  const conditions: Prisma.OrderWhereInput[] = [];
+  if (context.data_scope.pickup_store_ids.length > 0) {
+    conditions.push({
+      pickup_store_id: { in: context.data_scope.pickup_store_ids },
+    });
+  }
+  if (context.data_scope.community_ids.length > 0) {
+    conditions.push({
+      community_id: { in: context.data_scope.community_ids },
+    });
+  }
+
+  return conditions.length > 0 ? { OR: conditions } : null;
+}
+
+function withdrawalScopeWhere(
+  context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>,
+): Prisma.WithdrawalWhereInput {
+  if (context.is_super_admin) return {};
+  const orderScope = adminOrderScopeWhere(context);
+  if (!orderScope) return { id: { in: [] } };
+
+  return {
+    commission_links: {
+      some: {},
+      every: {
+        commission: {
+          order: orderScope,
+        },
+      },
+    },
+  };
+}
+
 async function requireWithdrawalDataScope(withdrawalId: string, request: any) {
   const context = resolveAdminAccessContext(request);
   if (!context) throw httpError("ADMIN_UNAUTHORIZED: Admin identity required", 401);
@@ -471,28 +516,91 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
       try {
         const query = request.query as AdminWithdrawalQuery;
         const page = Math.max(1, Number(query.page ?? 1) || 1);
-        const pageSize = Math.min(100, Math.max(1, Number(query.page_size ?? 20) || 20));
+        const pageSize = Math.min(
+          100,
+          Math.max(1, Number(query.page_size ?? 20) || 20),
+        );
         const context = resolveAdminAccessContext(request)!;
-        const where: Prisma.WithdrawalWhereInput = {
+        const keyword = String(query.keyword ?? "").trim();
+        const baseWhere: Prisma.WithdrawalWhereInput = {
           ...(query.status ? { status: query.status as any } : {}),
-          ...(query.leader_user_id ? { leader_user_id: query.leader_user_id } : {}),
-          ...(query.client_request_id ? { client_request_id: query.client_request_id } : {}),
-          ...parseDateRange(query)
+          ...(query.leader_user_id
+            ? { leader_user_id: query.leader_user_id }
+            : {}),
+          ...(query.client_request_id
+            ? { client_request_id: query.client_request_id }
+            : {}),
+          ...parseDateRange(query),
         };
-        const candidates = await prisma.withdrawal.findMany({ where, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } }, orderBy: [{ created_at: "desc" }, { id: "asc" }] });
-        const keyword = String(query.keyword ?? "").trim().toLowerCase();
-        const scopedIds = candidates.filter((w) => {
-          const links = w.commission_links as unknown as WithdrawalLinkWithOrder[];
-          if (!linksInScope(links, context)) return false;
-          if (!keyword) return true;
-          return w.leader_user_id.toLowerCase().includes(keyword) || (w.client_request_id ?? "").toLowerCase().includes(keyword) || (w.leader_user?.nickname ?? "").toLowerCase().includes(keyword);
-        }).map((w) => w.id);
-        const total = scopedIds.length;
-        const pageIds = scopedIds.slice((page - 1) * pageSize, page * pageSize);
-        const pageRows = pageIds.length === 0 ? [] : await prisma.withdrawal.findMany({ where: { id: { in: pageIds } }, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } }, orderBy: [{ created_at: "desc" }, { id: "asc" }] });
-        const orderMap = new Map(pageIds.map((id, index) => [id, index]));
-        const items = pageRows.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0)).map((w) => adminWithdrawalDto(w, w.commission_links as unknown as WithdrawalLinkWithOrder[]));
-        return ok({ items, total, page, page_size: pageSize });
+        const keywordWhere: Prisma.WithdrawalWhereInput | null = keyword
+          ? {
+              OR: [
+                {
+                  leader_user_id: {
+                    contains: keyword,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  client_request_id: {
+                    contains: keyword,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  leader_user: {
+                    is: {
+                      nickname: {
+                        contains: keyword,
+                        mode: "insensitive",
+                      },
+                    },
+                  },
+                },
+              ],
+            }
+          : null;
+        const where: Prisma.WithdrawalWhereInput = {
+          AND: [
+            baseWhere,
+            withdrawalScopeWhere(context),
+            ...(keywordWhere ? [keywordWhere] : []),
+          ],
+        };
+        const [total, rows] = await prisma.$transaction([
+          prisma.withdrawal.count({ where }),
+          prisma.withdrawal.findMany({
+            where,
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+            include: {
+              leader_user: true,
+              commission_links: {
+                include: {
+                  commission: {
+                    include: {
+                      order: {
+                        include: { product: true, community: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: [{ created_at: "desc" }, { id: "asc" }],
+          }),
+        ]);
+        return ok({
+          items: rows.map((withdrawal) =>
+            adminWithdrawalDto(
+              withdrawal,
+              withdrawal.commission_links as unknown as WithdrawalLinkWithOrder[],
+            ),
+          ),
+          total,
+          page,
+          page_size: pageSize,
+        });
       } catch (error) {
         reply.code((error as { statusCode?: number }).statusCode ?? 400);
         return fail(error instanceof Error ? error.message : "查询提现申请失败");
@@ -535,24 +643,41 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
       try {
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
+        const baseWhere: Prisma.TaxRecordWhereInput = {
+          ...(query.leader_user_id
+            ? { leader_user_id: query.leader_user_id }
+            : {}),
+          ...(query.source_type ? { source_type: query.source_type } : {}),
+          ...(query.source_id ? { source_id: query.source_id } : {}),
+          ...(query.tax_status ? { tax_status: query.tax_status } : {}),
+          ...parseDateRange(query),
+        };
+        const scopeFilters: Prisma.TaxRecordWhereInput[] = [];
+        if (!context.is_super_admin) {
+          const accessibleWithdrawalIds = (
+            await prisma.withdrawal.findMany({
+              where: withdrawalScopeWhere(context),
+              select: { id: true },
+            })
+          ).map((withdrawal) => withdrawal.id);
+          scopeFilters.push({
+            OR: [
+              { source_type: { not: "withdrawal" } },
+              {
+                source_type: "withdrawal",
+                source_id: { in: accessibleWithdrawalIds },
+              },
+            ],
+          });
+        }
         const records = await prisma.taxRecord.findMany({
           where: {
-            ...(query.leader_user_id ? { leader_user_id: query.leader_user_id } : {}),
-            ...(query.source_type ? { source_type: query.source_type } : {}),
-            ...(query.source_id ? { source_id: query.source_id } : {}),
-            ...(query.tax_status ? { tax_status: query.tax_status } : {}),
-            ...parseDateRange(query),
+            AND: [baseWhere, ...scopeFilters],
           },
           orderBy: { created_at: "desc" },
           take: 200,
         });
-        const scoped = [] as typeof records;
-        for (const record of records) {
-          if (record.source_type !== "withdrawal") { scoped.push(record); continue; }
-          const links = await getWithdrawalLinks(record.source_id);
-          if (linksInScope(links as unknown as WithdrawalLinkWithOrder[], context)) scoped.push(record);
-        }
-        return ok(scoped);
+        return ok(records);
       } catch (error) {
         reply.code((error as { statusCode?: number }).statusCode ?? 400);
         return fail(error instanceof Error ? error.message : "查询税务记录失败");

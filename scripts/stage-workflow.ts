@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -208,6 +208,14 @@ function runReportStage(stage: string): void {
   runCommand({ title: `report:stage ${stage}`, command: 'pnpm', args: ['report:stage', '--', `--stage=${stage}`] });
 }
 
+function runReportVerifier(): void {
+  runCommand({ title: 'report publish verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts'] });
+  const latestOutput = readFileSync(latestVerifyOutput, 'utf8');
+  if (!latestOutput.includes('Report publish verification passed.')) {
+    throw new Error('Report publish verifier did not emit required success marker: Report publish verification passed.');
+  }
+}
+
 function runReportPublish(args: ParsedArgs): void {
   if (!args.stage) throw new Error('--publish requires --stage=Lxx.');
   const publishArgs = ['report:publish', '--', `--stage=${args.stage}`];
@@ -225,6 +233,7 @@ function main(): void {
   if (args.publish) {
     runVerify(args, true);
     runReportStage(args.stage!);
+    runReportVerifier();
     runReportPublish(args);
     return;
   }

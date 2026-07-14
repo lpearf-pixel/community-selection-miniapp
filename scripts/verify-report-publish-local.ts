@@ -272,4 +272,14 @@ for (const requiredVerify of ['L44 verifier', 'L24-L44 chain regression', 'Docke
 }
 for (const requiredQuality of ['高风险：暂无自动发现', '中风险：暂无自动发现', '未完成项：暂无自动发现']) assert(l44Report.includes(requiredQuality), `L44 report quality summary missing: ${requiredQuality}`);
 
+const stageWorkflowSource = read('scripts/stage-workflow.ts');
+const reportStageIndex = stageWorkflowSource.indexOf('runReportStage(args.stage!)');
+const reportVerifierIndex = stageWorkflowSource.indexOf('runReportVerifier()');
+const reportPublishIndex = stageWorkflowSource.indexOf('runReportPublish(args)');
+assert(reportStageIndex >= 0, 'stage workflow must run report:stage in publish flow');
+assert(reportVerifierIndex > reportStageIndex, 'stage workflow must run report verifier after report:stage');
+assert(reportPublishIndex > reportVerifierIndex, 'stage workflow must run report verifier before report publish');
+assert(stageWorkflowSource.includes("args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts']"), 'stage workflow must invoke report verifier through pnpm exec tsx');
+assert(stageWorkflowSource.includes('Report publish verification passed.'), 'stage workflow must require report verifier success marker');
+
 console.log('Report publish verification passed.');

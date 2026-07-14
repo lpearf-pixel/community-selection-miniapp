@@ -90,8 +90,14 @@ const adminWithdrawalListRoute = routeBlock(route, 'get', '/api/admin/withdrawal
 assert(adminWithdrawalListRoute.includes('requireAdminPermission("withdrawal.view")'), 'Admin withdrawal list must require withdrawal.view');
 assert(adminWithdrawalListRoute.includes('request.query as AdminWithdrawalQuery'), 'Admin withdrawal list must read query');
 assert(adminWithdrawalListRoute.includes('commission_links'), 'Admin withdrawal list must load persistent commission links');
-assert(adminWithdrawalListRoute.includes('linksInScope'), 'Admin withdrawal list must apply data scope');
-assert(adminWithdrawalListRoute.includes('total'), 'Admin withdrawal list must return filtered total');
+assert(adminWithdrawalListRoute.includes('withdrawalScopeWhere(context)'), 'Admin withdrawal list must apply database data scope');
+assert(adminWithdrawalListRoute.includes('prisma.$transaction(['), 'Admin withdrawal list count and page must share one transaction');
+assert(adminWithdrawalListRoute.includes('prisma.withdrawal.count({ where })'), 'Admin withdrawal list must count in database');
+assert(adminWithdrawalListRoute.includes('skip: (page - 1) * pageSize'), 'Admin withdrawal list must paginate with database skip');
+assert(adminWithdrawalListRoute.includes('take: pageSize'), 'Admin withdrawal list must paginate with database take');
+assert(!adminWithdrawalListRoute.includes('const candidates ='), 'Admin withdrawal list must not load all candidates');
+assert(!adminWithdrawalListRoute.includes('scopedIds.slice'), 'Admin withdrawal list must not paginate in memory');
+assert(adminWithdrawalListRoute.includes('total'), 'Admin withdrawal list must return scoped total');
 
 const adminWithdrawalDetailRoute = routeBlock(route, 'get', '/api/admin/withdrawals/:id');
 assert(adminWithdrawalDetailRoute.includes('requireAdminPermission("withdrawal.view")'), 'Admin withdrawal detail must require withdrawal.view');
@@ -123,6 +129,11 @@ assert(markPaidRoute.includes('affects_available_balance: false'), 'Mark-paid le
 assert(route.includes('reply.code((error as { statusCode?: number }).statusCode ?? 400)'), 'route catch preserves status codes');
 assert(route.includes('commission_links') && route.includes('linksInScope'), 'admin list/detail use persistent links for data scope');
 assert(route.includes('requireAdminPermission("finance.view")'), 'tax records keep finance.view semantics');
+const taxRecordsRoute = routeBlock(route, 'get', '/api/admin/tax-records');
+assert(taxRecordsRoute.includes('accessibleWithdrawalIds'), 'tax records must resolve accessible withdrawal ids before limiting results');
+assert(taxRecordsRoute.includes('withdrawalScopeWhere(context)'), 'tax records must apply withdrawal data scope in database');
+assert(taxRecordsRoute.includes('source_id: { in: accessibleWithdrawalIds }'), 'tax records must constrain withdrawal source ids before take');
+assert(!taxRecordsRoute.includes('for (const record of records)'), 'tax records must not filter data scope after take');
 
 const l44Function = functionSlice(e2e, 'runL44WithdrawalScenario');
 assert(!l44Function.includes('const l44RuntimeEvidence'), 'L44 E2E must not use hardcoded evidence object');
