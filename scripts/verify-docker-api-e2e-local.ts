@@ -914,7 +914,7 @@ async function runL45TaxReviewScenario() {
   assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } }) === invalidAuditBefore, 'L45 rejected tax review must not create Audit');
   assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } }) === invalidEventBefore, 'L45 rejected tax review must not create Event');
 
-  const csvResponse = await fetch(`${API_BASE_URL}/api/admin/tax-records/export.csv`, { headers: financeAHeaders });
+  const csvResponse = await fetchOrThrow('GET', '/api/admin/tax-records/export.csv', { headers: financeAHeaders });
   const csv = await csvResponse.text();
   const disposition = csvResponse.headers.get('content-disposition') ?? '';
   record('GET /api/admin/tax-records/export.csv L45 scoped', { status: csvResponse.status, disposition, raw: csv.slice(0, 1500) });
