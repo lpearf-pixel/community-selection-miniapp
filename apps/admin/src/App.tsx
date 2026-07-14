@@ -18,6 +18,7 @@ import { PickupWorkbenchPage } from "./pages/pickup/PickupWorkbenchPage";
 import { DeliveryReservationPage } from "./pages/delivery/DeliveryReservationPage";
 import { DeliveryRuleConfigPage } from "./pages/delivery/DeliveryRuleConfigPage";
 import { RewardLedgerPage } from "./pages/rewards/RewardLedgerPage";
+import { WithdrawalReviewPage } from "./pages/withdrawals/WithdrawalReviewPage";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -1158,6 +1159,7 @@ export function App() {
         ) : null}
 
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
+        {view === "withdrawals" ? <WithdrawalReviewPage /> : null}
         {view === "rewardLedger" ? <RewardLedgerPage /> : null}
         {view === "pickupWorkbench" ? <PickupWorkbenchPage /> : null}
         {view === "deliveryReservation" ? <DeliveryReservationPage /> : null}
