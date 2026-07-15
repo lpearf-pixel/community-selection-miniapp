@@ -1,9 +1,9 @@
 {
   "stage": "L45",
-  "source_branch": "codex/fix-tax-status-enforcement-and-idempotency-r0mcxr",
-  "source_commit": "623f9e5c0532a3f2b1d4e7c4aab32156aa4659a1",
+  "source_branch": "codex/fix-tax-status-enforcement-and-idempotency-fm5x5r",
+  "source_commit": "7e79bd4a701b1d0a071dd9a800f759a82098a1af",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-15T05:27:43.046Z",
+  "generated_at": "2026-07-15T15:54:29.964Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
