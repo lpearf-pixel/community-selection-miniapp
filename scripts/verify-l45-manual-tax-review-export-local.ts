@@ -19,7 +19,7 @@ const l45FixtureEnd = e2e.indexOf('const fixtureA =', l45FixtureStart);
 assert(l45FixtureStart >= 0 && l45FixtureEnd > l45FixtureStart, 'L45 withdrawal fixture helper must exist');
 const l45FixtureBlock = e2e.slice(l45FixtureStart, l45FixtureEnd);
 assert(l45FixtureBlock.includes('prisma.commission.update') && l45FixtureBlock.includes('withdrawal_id: withdrawal.id') && l45FixtureBlock.includes('prisma.withdrawalCommission.create'), 'L45 withdrawal fixture must populate both Commission.withdrawal_id and WithdrawalCommission');
-assert(e2e.includes('fixtureELinkedCommission.status === 'withdrawing'') && e2e.includes('fixtureELinkedCommission.withdrawal_id === fixtureE.withdrawal.id'), 'L45 mark-paid scenario must verify coherent fixture linkage before calling mark-paid');
+assert(e2e.includes("fixtureELinkedCommission.status === 'withdrawing'") && e2e.includes('fixtureELinkedCommission.withdrawal_id === fixtureE.withdrawal.id'), 'L45 mark-paid scenario must verify coherent fixture linkage before calling mark-paid');
 const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
 assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: TAX_EXPORT_LIMIT + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
 assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');
@@ -48,7 +48,7 @@ assert(reportVerifier.includes('L45 report changed files') && reportVerifier.inc
 assert(!route.includes('AUTO_TAX_FILING_ENABLED=true') && !route.includes('AUTO_PAYOUT_ENABLED=true'), 'no automatic tax/payout flag enabled');
 assert(existsSync('docs/dev/stage-verifier-compatibility.md'), 'global verifier compatibility guidance exists');
 for (const readinessMarker of ['waitForApiReady', "'/api/health'", 'fetchWithTimeout', 'fetchOrThrow', 'Docker API E2E target:', 'docker compose logs --tail=200 api']) {
-  assert(e2e.includes(readinessMarker), `Docker E2E readiness/diagnostics must include ${readinessMarker}`);
+  assert(e2e.includes(readinessMarker), `Docker API E2E readiness/diagnostics must include ${readinessMarker}`);
 }
 assert(!e2e.includes('await fetch(`${API_BASE_URL}'), 'Docker E2E API calls must go through fetchOrThrow for diagnostics');
 assert(e2e.includes("const runId = `l45-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`"), 'L45 E2E run token must be unique across reruns and concurrent processes');
