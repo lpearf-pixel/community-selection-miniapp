@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Trigger the one-time workflow after its definition exists on the branch.
 branch_file = Path('scripts/verify-docker-api-e2e-local.ts')
 source = branch_file.read_text()
 old = '''  const csvResponse = await fetchOrThrow('GET', '/api/admin/tax-records/export.csv', { headers: financeAHeaders });
