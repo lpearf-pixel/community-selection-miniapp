@@ -757,7 +757,8 @@ async function runL44WithdrawalScenario() {
   const paidB = await createCommissionFixture('paid-222', leaderPaid.id, communityA.id, 222);
   const paidW = await createWithdrawalFromCommissions(leaderPaid, `${runId}-paid-request`, [paidA.commission, paidB.commission]);
   await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 approve paid withdrawal', body: { remark: `${runId}-approve-paid` } }));
-  await request('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/tax-review`, withAdminJson({ label: 'L44 tax compatibility none', body: { tax_mode: 'none', tax_amount_cents: 0 } }));
+  const l44PaidTaxVersion = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
+  await request('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/tax-review`, withAdminJson({ label: 'L44 tax compatibility none', body: { tax_mode: 'none', tax_amount_cents: 0, client_request_id: `${runId}-l44-tax-none`, expected_updated_at: l44PaidTaxVersion.updated_at.toISOString() } }));
   const markPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 mark paid', body: { manual_reference: `${runId}-manual-reference`, remark: `${runId}-paid` } }));
   const paidFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
   const paidCommissions = await prisma.commission.findMany({ where: { withdrawal_id: paidW.withdrawal_id } });

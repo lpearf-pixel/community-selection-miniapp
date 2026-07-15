@@ -718,3 +718,4 @@
 - 持久化 JSON 的幂等判断必须使用规范化后的语义深比较或 canonical serialization，禁止依赖对象键顺序的原始 `JSON.stringify` 比较。
 - CSV BOM、文件签名等传输层属性必须检查原始响应字节，禁止用 `Response.text()` 解码后的字符串冒充字节证据。
 - API 响应 envelope 或 DTO 字段变化时，必须审计并更新所有旧阶段 E2E、客户端类型和 verifier；分页响应统一通过 `items` 访问记录。
+- Mutation API 新增必填幂等键或 `expected_updated_at` 等安全字段时，必须同步更新所有旧阶段调用；禁止为兼容旧测试而降低新接口约束。

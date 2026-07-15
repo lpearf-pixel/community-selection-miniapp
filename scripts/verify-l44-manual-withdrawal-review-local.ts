@@ -141,6 +141,11 @@ assert(!taxRecordsRoute.includes('for (const record of records)'), 'tax records 
 
 const l44Function = functionSlice(e2e, 'runL44WithdrawalScenario');
 assert(!l44Function.includes('const l44RuntimeEvidence'), 'L44 E2E must not use hardcoded evidence object');
+const l44TaxCompatibilityStart = l44Function.indexOf('const l44PaidTaxVersion');
+const l44TaxCompatibilityEnd = l44Function.indexOf('const markPaid', l44TaxCompatibilityStart);
+assert(l44TaxCompatibilityStart >= 0 && l44TaxCompatibilityEnd > l44TaxCompatibilityStart, 'L44 paid scenario must read the current Withdrawal version before tax review');
+const l44TaxCompatibilityBlock = l44Function.slice(l44TaxCompatibilityStart, l44TaxCompatibilityEnd);
+assert(l44TaxCompatibilityBlock.includes('client_request_id') && l44TaxCompatibilityBlock.includes('expected_updated_at') && l44TaxCompatibilityBlock.includes('updated_at.toISOString()'), 'L44 tax compatibility call must satisfy the current idempotency and optimistic-concurrency contract');
 assert(l44Function.includes('type TaxRecordPage = { items:') && l44Function.includes('taxRecordsA.items') && l44Function.includes('taxRecordsB.items'), 'L44 E2E tax-record consumer must use the paginated response envelope');
 assert(l44Function.includes('tax_record_id') && l44Function.includes('withdrawal_id'), 'L44 E2E tax-record assertions must use the current DTO field names');
 assert(!l44Function.includes("request<Array<{ id: string }>>('GET', `/api/admin/tax-records"), 'L44 E2E must not treat the paginated tax-record API as a raw array');

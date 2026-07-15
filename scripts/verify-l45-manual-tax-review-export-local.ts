@@ -18,6 +18,7 @@ assert(!route.includes('JSON.stringify(previous) !== JSON.stringify(requested)')
 assert(e2e.includes('const reorderedReviewPayload = {') && e2e.includes('semantically identical payload must be idempotent regardless of JSON key order'), 'L45 E2E must verify idempotency after JSON round-trip and key reordering');
 assert(e2e.includes('new Uint8Array(await csvResponse.arrayBuffer())') && e2e.includes('csvBytes[0] === 0xef') && e2e.includes('csvBytes[1] === 0xbb') && e2e.includes('csvBytes[2] === 0xbf'), 'L45 CSV BOM must be verified from raw response bytes');
 assert(e2e.includes('type TaxRecordPage = { items:') && e2e.includes('taxRecordsA.items') && e2e.includes('taxRecordsB.items'), 'L45 must keep the L44 tax-record consumer aligned with the paginated response contract');
+assert(e2e.includes('const l44PaidTaxVersion = await prisma.withdrawal.findUniqueOrThrow') && e2e.includes('`${runId}-l44-tax-none`') && e2e.includes('expected_updated_at: l44PaidTaxVersion.updated_at.toISOString()'), 'L45 must keep the L44 tax-review compatibility call aligned with required idempotency and version fields');
 assert(!e2e.includes("taxRecordsA.some(") && !e2e.includes("taxRecordsB.some("), 'L45 must not leave raw-array assumptions in the L44 regression scenario');
 assert(e2e.includes("new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0))"), 'L45 CSV body must be decoded after raw BOM verification');
 assert(!e2e.includes("csv.charCodeAt(0) === 0xfeff"), 'L45 CSV verifier must not expect Response.text() to preserve BOM');
