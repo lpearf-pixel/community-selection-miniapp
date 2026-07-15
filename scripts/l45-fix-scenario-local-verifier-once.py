@@ -25,3 +25,5 @@ plan_rule = '- 静态 verifier 必须按命名场景/代码块做语义校验，
 if plan_rule not in plan:
     plan = plan.rstrip() + '\n' + plan_rule + '\n'
 plan_path.write_text(plan)
+
+# trigger one-time workflow
