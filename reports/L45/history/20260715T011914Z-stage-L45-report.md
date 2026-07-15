@@ -1,0 +1,128 @@
+# 阶段验收报告：L45
+
+## 1. 阶段结论
+
+- 阶段：L45
+- 业务稳定分支：stable/l44-business-base
+- 业务稳定 commit：3ae666ec0e26383a5b117b64dce30b86a2dee389
+- 报告生成分支：codex/add-manual-tax-review-and-export-system-qgtszl
+- 报告生成 commit：44c8891995e243e86f504d1e992c88cb45db7302
+- 分支：codex/add-manual-tax-review-and-export-system-qgtszl（报告生成环境）
+- 生成时间：2026-07-15T01:19:14.478Z
+- 当前 commit：44c8891995e243e86f504d1e992c88cb45db7302（报告生成环境）
+- 本阶段目标：L45 manual tax review and internal CSV export
+- Codex 自评结论：passed
+
+## 2. 本阶段变更范围
+
+- Diff base：stable/l44-business-base
+- Diff base commit：3ae666ec0e26383a5b117b64dce30b86a2dee389
+- Source commit：44c8891995e243e86f504d1e992c88cb45db7302
+- Changed files count：14
+
+| 类型 | 数量 |
+|---|---|
+| Admin | 1 |
+| Admin API Client | 1 |
+| Admin Page | 1 |
+| API Route | 1 |
+| Business Document | 1 |
+| Governance Document | 1 |
+| Report Generator | 1 |
+| Review Document | 1 |
+| Stage Workflow | 1 |
+| Verifier | 4 |
+| Verify Entry | 1 |
+
+| 类型 | 文件 | 说明 |
+|---|---|---|
+| Admin | apps/admin/src/App.tsx | Admin 应用入口与菜单注册 |
+| Admin API Client | apps/admin/src/api/adminTaxReview.ts | Admin 前端 API client |
+| Admin Page | apps/admin/src/pages/tax-review/TaxReviewPage.tsx | Admin 页面或交互逻辑 |
+| API Route | apps/api/src/routes/withdrawals.ts | API 路由或路由注册边界 |
+| Business Document | docs/dev/stage-verifier-compatibility.md | 业务说明或验收文档 |
+| Governance Document | docs/plans/next-stage-development-plan.md | 阶段治理与开发规范文档 |
+| Review Document | docs/reviews/l45-manual-tax-review-export.md | 阶段 review / audit 文档 |
+| Report Generator | scripts/generate-stage-report.ts | 阶段报告生成器 |
+| Stage Workflow | scripts/stage-workflow.ts | 阶段验证工作流编排 |
+| Verify Entry | scripts/verify-all-local.sh | 本地总体验证入口 |
+| Verifier | scripts/verify-docker-api-e2e-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-l44-manual-withdrawal-review-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-l45-manual-tax-review-export-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-report-publish-local.ts | 阶段验收或防回归 verifier |
+
+## 3. API 变化
+
+| 方法 | 路径 | 权限 | 用途 | 是否有验收 |
+|---|---|---|---|---|
+| GET | /api/admin/tax-records | finance.view + data scope | 税务人工 Review 分页列表 | yes |
+| GET | /api/admin/tax-records/:id | finance.view + data scope | 税务人工 Review 详情 | yes |
+| GET | /api/admin/tax-records/export.csv | finance.export + data scope | 内部人工核对 CSV 导出 | yes |
+| POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope | 人工税务 Review | yes |
+
+## 4. 数据库变化
+
+| Model | 新增/修改 | 说明 |
+|---|---|---|
+| 无新增表 | No DB change | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+| 无新增字段 | No DB change | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+| 复用 Withdrawal | Reuse existing model | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+| 复用 WithdrawalCommission | Reuse existing model | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+| 复用 TaxRecord | Reuse existing model | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+| 复用 AdminAuditLog | Reuse existing model | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+| 复用 BusinessEventLog | Reuse existing model | L45 税务人工 Review 复用既有数据库结构，不新增表或字段。 |
+
+## 5. 核心业务验收点
+
+- [x] scripts/verify-l45-manual-tax-review-export-local.ts（passed）
+- [x] scripts/verify-docker-api-e2e-local.ts（passed）
+- [x] scripts/stage-workflow.ts --stage=L45 --publish --scope=chain --push（passed）
+
+## 6. 验收脚本
+
+| 脚本 | 是否存在 | 是否已加入 verify-all | 说明 |
+|---|---|---|---|
+| scripts/verify-l45-manual-tax-review-export-local.ts | yes | yes | L45 阶段报告质量门禁验收脚本 |
+| scripts/verify-docker-api-e2e-local.ts | yes | via stage-workflow | L45 阶段报告质量门禁验收脚本 |
+| scripts/stage-workflow.ts --stage=L45 --publish --scope=chain --push | yes | yes | L45 阶段报告质量门禁验收脚本 |
+
+## 7. 阶段验证执行结果
+
+| 命令 | 结果 |
+|---|---|
+| L45 verifier | passed |
+| L24-L45 chain regression | passed |
+| Docker API E2E | passed |
+| Admin typecheck config | passed |
+| Admin full typecheck | passed |
+| raw compliance scan | passed |
+| Stage workflow | passed |
+
+## 8. 合规边界检查
+
+- [x] 没有新增多级分销
+- [x] 没有新增团队收益
+- [x] 没有新增代理收益
+- [x] 没有新增 parent_leader_id / upline_id / downline / team_id / level
+- [x] 开团服务奖励仍只来自开团人自己的真实有效团购订单
+- [x] 用户可见文案仍为“开团服务奖励”
+- [x] 没有接真实打款
+- [x] 没有自动报税
+- [x] 没有新增优惠券/会员/营销玩法，除非当前阶段明确要求
+
+## 9. 风险点
+
+- 高风险：暂无自动发现
+- 中风险：暂无自动发现
+- 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
+
+## 10. 未完成项
+
+暂无自动发现
+
+## 11. Codex 给人工 reviewer 的说明
+
+- 本阶段做了什么：根据 L45 的最近一次提交 diff 生成验收报告，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
+- 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
+- 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
