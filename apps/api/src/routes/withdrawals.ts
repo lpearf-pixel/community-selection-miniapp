@@ -122,6 +122,24 @@ type AdminWithdrawalQuery = { status?: string; leader_user_id?: string; client_r
 
 function httpError(message: string, statusCode: number) { return Object.assign(new Error(message), { statusCode }); }
 
+function restoreMarkPaidTransactionError(error: unknown) {
+  const message = error instanceof Error ? error.message : "标记提现处理失败";
+  const statusCode = (error as { statusCode?: number })?.statusCode;
+  if (statusCode) return { message, statusCode };
+  if (message === "ADMIN_UNAUTHORIZED: Admin identity required") return { message, statusCode: 401 };
+  if (message === ADMIN_SCOPE_FORBIDDEN) return { message, statusCode: 403 };
+  if (message === "提现申请不存在") return { message, statusCode: 404 };
+  const conflictMessages = new Set([
+    "仅审核通过的提现申请可标记已处理",
+    "提现税务状态未完成或未计算，不能标记已处理",
+    "可处理金额不能小于 0",
+    "发票状态未确认，不能标记已处理",
+    "提现状态已变化，请刷新后重试",
+    "提现关联奖励状态已变化，请人工复核",
+  ]);
+  return { message, statusCode: conflictMessages.has(message) ? 409 : 400 };
+}
+
 async function getWithdrawalLinks(withdrawalId: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
   return tx.withdrawalCommission.findMany({
     where: { withdrawal_id: withdrawalId },
@@ -1068,8 +1086,9 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         });
         return ok(paid);
       } catch (error) {
-        reply.code((error as { statusCode?: number }).statusCode ?? 400);
-        return fail(error instanceof Error ? error.message : "标记提现处理失败");
+        const restored = restoreMarkPaidTransactionError(error);
+        reply.code(restored.statusCode);
+        return fail(restored.message);
       }
     },
   );}

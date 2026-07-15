@@ -126,4 +126,13 @@
 - 角色矩阵测试至少应覆盖全量角色、受限 session 角色和开发态 mock scope，防止仅验证单一角色造成误放行。
 
 
+## 13. ORM 事务错误与 HTTP 状态传播规范
+
+- Prisma 等 ORM 的交互事务可能重新包装回调内抛出的错误；业务代码不得假设自定义 `statusCode`、`code` 或其他扩展属性一定原样保留到路由外层。
+- 事务内必须保留权限、状态和并发复核，禁止为了获得正确 HTTP 状态码把关键检查全部移到事务外，造成 TOCTOU 竞态。
+- 路由边界应对已知业务错误做精确状态恢复：认证为 401、data scope 为 403、不存在为 404、合法请求与资源状态冲突为 409；未知错误继续使用安全的通用失败状态。
+- 状态恢复必须基于受控错误类型或精确业务消息集合，不得使用宽泛关键词把未知数据库错误误判为 409。
+- Docker E2E 必须同时断言 HTTP 状态、精确业务消息和数据库无副作用，避免“消息正确但状态码回退为 400”的伪通过。
+
+
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
