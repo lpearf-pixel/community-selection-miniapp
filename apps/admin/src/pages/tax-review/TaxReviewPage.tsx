@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Card, DatePicker, Drawer, Form, Input, InputNumber, Select, Space, Table, Tag, Typography, message } from "antd";
 import { formatYuan } from "@community-selection/shared";
-import { getTaxReviewDetail, listTaxReview, submitTaxReview, taxReviewExportUrl, TaxReviewDetail, TaxReviewRow } from "../../api/adminTaxReview";
+import { downloadTaxReviewCsv, getTaxReviewDetail, listTaxReview, submitTaxReview, TaxReviewDetail, TaxReviewRow } from "../../api/adminTaxReview";
 
 const notice = "仅供内部人工核对，不构成税务申报结果。";
 
@@ -10,6 +10,8 @@ export function TaxReviewPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [detail, setDetail] = useState<TaxReviewDetail | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [form] = Form.useForm();
@@ -25,15 +27,28 @@ export function TaxReviewPage() {
   }
   useEffect(() => { void load(1); }, []);
   async function openDetail(row: TaxReviewRow) {
-    try { setDetail(await getTaxReviewDetail(row.tax_record_id)); form.setFieldsValue({ tax_mode: row.tax_mode === "pending_review" ? "none" : row.tax_mode, tax_status: row.tax_status, taxable_amount_cents: row.taxable_amount_cents, tax_amount_cents: row.tax_amount_cents, tax_rate_basis: row.tax_rate_basis, invoice_required: row.invoice_required, invoice_status: row.invoice_status, tax_remark: row.tax_remark, client_request_id: `tax-review-${Date.now()}` }); }
-    catch (error) { message.error(error instanceof Error ? error.message : "详情加载失败"); }
+    try {
+      const fetched = await getTaxReviewDetail(row.tax_record_id);
+      setDetail(fetched);
+      form.setFieldsValue({ tax_mode: fetched.tax_mode === "pending_review" ? "none" : fetched.tax_mode, taxable_amount_cents: fetched.taxable_amount_cents, tax_amount_cents: fetched.tax_amount_cents, tax_rate_basis: fetched.tax_rate_basis, invoice_required: fetched.invoice_required, invoice_status: fetched.invoice_status, tax_remark: fetched.tax_remark, client_request_id: `tax-review-${Date.now()}`, expected_updated_at: fetched.updated_at });
+    } catch (error) { message.error(error instanceof Error ? error.message : "详情加载失败"); }
   }
   async function submit() {
-    if (!detail) return;
-    const values = await form.validateFields();
-    await submitTaxReview(detail.withdrawal_id, values);
-    message.success("人工税务 Review 已保存，系统不会自动报税、不会连接外部税务平台、不会自动发起打款。");
-    setDetail(null); await load();
+    if (!detail || submitting) return;
+    setSubmitting(true);
+    try {
+      const values = await form.validateFields();
+      await submitTaxReview(detail.withdrawal_id, values);
+      message.success("人工税务 Review 已保存，系统不会自动报税、不会连接外部税务平台、不会自动发起打款。");
+      setDetail(null); await load();
+    } catch (error) { message.error(error instanceof Error ? error.message : "保存失败"); }
+    finally { setSubmitting(false); }
+  }
+  async function exportCsv() {
+    setExporting(true);
+    try { const filename = await downloadTaxReviewCsv(params); message.success(`已导出 ${filename}`); }
+    catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
+    finally { setExporting(false); }
   }
 
   return <Card title="税务人工 Review 工作台">
@@ -45,7 +60,7 @@ export function TaxReviewPage() {
       <Select allowClear placeholder="发票状态" style={{ width: 150 }} onChange={(v) => setFilters((f) => ({ ...f, invoice_status: v ?? "" }))} options={["not_required","pending","verified","rejected"].map((v) => ({ value: v, label: v }))} />
       <DatePicker.RangePicker onChange={(_, s) => setFilters((f) => ({ ...f, from: s[0], to: s[1] }))} />
       <Button type="primary" onClick={() => load(1)}>查询</Button>
-      <Button href={taxReviewExportUrl(params)}>导出内部核对 CSV</Button>
+      <Button loading={exporting} onClick={exportCsv}>导出内部核对 CSV</Button>
     </Space>
     <Table rowKey="tax_record_id" loading={loading} dataSource={rows} pagination={{ current: page, total, pageSize: 20, onChange: (p) => load(p) }} columns={[
       { title: "申请编号", dataIndex: "client_request_id" },
@@ -62,15 +77,15 @@ export function TaxReviewPage() {
         <Typography.Paragraph>关联订单/商品：{detail.commissions.map((c) => `${c.order_no}/${c.product_name}/${c.community_name}/${c.reward_amount_cents}分`).join("；")}</Typography.Paragraph>
         <Form form={form} layout="vertical">
           <Form.Item name="tax_mode" label="税务模式" rules={[{ required: true }]}><Select options={["none","withheld","invoice"].map((v) => ({ value: v, label: v }))} /></Form.Item>
-          <Form.Item name="tax_status" label="税务状态"><Input /></Form.Item>
-          <Form.Item name="taxable_amount_cents" label="应税金额（分）" rules={[{ required: true }]}><InputNumber min={0} precision={0} /></Form.Item>
+                    <Form.Item name="taxable_amount_cents" label="应税金额（分）" rules={[{ required: true }]}><InputNumber min={0} precision={0} /></Form.Item>
           <Form.Item name="tax_amount_cents" label="人工确认税额（分）" rules={[{ required: true }]}><InputNumber min={0} precision={0} /></Form.Item>
           <Form.Item name="tax_rate_basis" label="人工依据"><Input /></Form.Item>
-          <Form.Item name="invoice_status" label="发票状态"><Input /></Form.Item>
+          <Form.Item name="invoice_status" label="发票状态"><Select options={["not_required","pending","verified","rejected"].map((v) => ({ value: v, label: v }))} /></Form.Item>
           <Form.Item name="tax_remark" label="备注"><Input.TextArea /></Form.Item>
-          <Form.Item name="client_request_id" label="幂等键" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="client_request_id" label="幂等键" rules={[{ required: true }, { max: 80 }]}><Input /></Form.Item>
+          <Form.Item name="expected_updated_at" hidden><Input /></Form.Item>
         </Form>
-        <Button type="primary" onClick={submit}>保存人工 Review</Button>
+        <Button type="primary" loading={submitting} disabled={submitting} onClick={submit}>保存人工 Review</Button>
       </> : null}
     </Drawer>
   </Card>;

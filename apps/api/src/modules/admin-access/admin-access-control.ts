@@ -86,12 +86,15 @@ export type AdminDataScope = {
   can_access_all_communities: boolean;
 };
 
+export type AdminScopeSource = "session" | "header_mock";
+
 export type AdminAccessContext = {
   admin_user_id: string;
   role: AdminRole;
   permissions: AdminPermission[];
   is_super_admin: boolean;
   data_scope: AdminDataScope;
+  data_scope_source: AdminScopeSource;
 };
 
 const roleValues = new Set<AdminRole>([
@@ -126,19 +129,25 @@ function headerIds(
   return Array.from(new Set(values));
 }
 
-export function resolveAdminDataScope(
-  request: FastifyRequest,
-  role: AdminRole,
-): AdminDataScope {
-  // Only super_admin has default full data scope. clerk 不默认全量; store_manager 不默认全量.
-  if (role === "super_admin") {
-    return {
-      pickup_store_ids: [],
-      community_ids: [],
-      can_access_all_pickup_stores: true,
-      can_access_all_communities: true,
-    };
-  }
+function fullAdminDataScope(): AdminDataScope {
+  return {
+    pickup_store_ids: [],
+    community_ids: [],
+    can_access_all_pickup_stores: true,
+    can_access_all_communities: true,
+  };
+}
+
+function emptyAdminDataScope(): AdminDataScope {
+  return {
+    pickup_store_ids: [],
+    community_ids: [],
+    can_access_all_pickup_stores: false,
+    can_access_all_communities: false,
+  };
+}
+
+function headerMockAdminDataScope(request: FastifyRequest): AdminDataScope {
   return {
     pickup_store_ids: headerIds(
       request,
@@ -155,6 +164,16 @@ export function resolveAdminDataScope(
   };
 }
 
+export function resolveAdminDataScope(
+  request: FastifyRequest,
+  role: AdminRole,
+  source: AdminScopeSource,
+): AdminDataScope {
+  if (role === "super_admin") return fullAdminDataScope();
+  if (source === "header_mock") return headerMockAdminDataScope(request);
+  return emptyAdminDataScope();
+}
+
 function normalizeAdminRole(
   value: string | null | undefined,
   source: "session" | "header",
@@ -165,9 +184,9 @@ function normalizeAdminRole(
   return null; // unknown role rejected
 }
 
-function canUseHeaderRole(): boolean {
-  // x-admin-role is a dev/mock baseline only; production does not trust x-admin-role.
-  return process.env.NODE_ENV !== "production";
+function canUseHeaderMock(request: FastifyRequest): boolean {
+  // x-admin-* headers are a dev/mock baseline only; production and formal sessions do not trust them.
+  return process.env.NODE_ENV !== "production" && !request.adminUser?.id;
 }
 
 export function resolveAdminAccessContext(
@@ -180,11 +199,12 @@ export function resolveAdminAccessContext(
       role: sessionRole,
       permissions: ROLE_PERMISSIONS[sessionRole],
       is_super_admin: sessionRole === "super_admin",
-      data_scope: resolveAdminDataScope(request, sessionRole),
+      data_scope: resolveAdminDataScope(request, sessionRole, "session"),
+      data_scope_source: "session",
     };
   }
 
-  if (!canUseHeaderRole()) return null;
+  if (!canUseHeaderMock(request)) return null;
   const headerRole = normalizeAdminRole(
     headerValue(request, "x-admin-role"),
     "header",
@@ -197,7 +217,8 @@ export function resolveAdminAccessContext(
     role: headerRole,
     permissions: ROLE_PERMISSIONS[headerRole],
     is_super_admin: headerRole === "super_admin",
-    data_scope: resolveAdminDataScope(request, headerRole),
+    data_scope: resolveAdminDataScope(request, headerRole, "header_mock"),
+    data_scope_source: "header_mock",
   };
 }
 
