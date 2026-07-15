@@ -1,0 +1,34 @@
+name: L45 API contract fix once
+
+on:
+  push:
+    branches:
+      - codex/fix-tax-status-enforcement-and-idempotency-r0mcxr
+    paths:
+      - scripts/l45-api-contract-fix-once.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/fix-tax-status-enforcement-and-idempotency-r0mcxr
+          fetch-depth: 0
+      - name: Apply API contract-driven test fix
+        run: python3 scripts/l45-api-contract-fix-once.py
+      - name: Remove one-time files
+        run: |
+          rm -f scripts/l45-api-contract-fix-once.py
+          rm -f .github/workflows/l45-api-contract-fix-once.yml
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(L45): align E2E with documented API contract"
+          git push origin HEAD:codex/fix-tax-status-enforcement-and-idempotency-r0mcxr
