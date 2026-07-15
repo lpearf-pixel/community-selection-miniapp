@@ -1,9 +1,9 @@
 {
   "stage": "L45",
-  "source_branch": "codex/add-manual-tax-review-and-export-system-qgtszl",
-  "source_commit": "44c8891995e243e86f504d1e992c88cb45db7302",
+  "source_branch": "codex/fix-tax-status-enforcement-and-idempotency",
+  "source_commit": "eb69c02a331d4908407de0e097632d452122576c",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-15T01:19:18.075Z",
+  "generated_at": "2026-07-15T02:16:08.518Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
