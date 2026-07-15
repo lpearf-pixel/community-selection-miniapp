@@ -37,3 +37,15 @@ CSV 文本字段导出前做公式注入防护，字段以 `=`、`+`、`-`、`@`
 
 ## 未完成项
 正式税务申报、外部税务平台、自动打款、税率计算引擎均不属于 L45 范围。
+
+
+## Review 修复补充
+
+- 税务状态由后端按 tax_mode / invoice_status 推导，并限制在明确枚举集合内。
+- 税务复核幂等键保存到 TaxRecord.payload.review_requests 历史映射，同 key 同语义返回 idempotent，不同语义返回 409。
+- CSV 导出在匹配条数超过上限时返回 422，不返回部分 CSV。
+- Admin 导出使用带认证和 scope 的 fetch Blob 下载，不使用 href 直链。
+- 详情 DTO 暴露 updated_at，提交 expected_updated_at 做乐观并发控制。
+
+
+L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
