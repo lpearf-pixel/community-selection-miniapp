@@ -12,8 +12,12 @@ assert(route.includes('requireAdminPermission("withdrawal.manage")'), 'withdrawa
 assert(route.includes('withdrawalScopeWhere(context)'), 'database data scope is reused');
 assert(route.includes('prisma.taxRecord.count({ where })') && route.includes('skip: (page - 1) * pageSize') && route.includes('take: pageSize'), 'database pagination exists');
 assert(route.includes('csvSafe') && route.includes('/^[=+\\-@\\t\\r\\n]/'), 'CSV formula injection guard exists');
-assert(route.includes('client_request_id') && route.includes('idempotent: true') && route.includes('409'), 'idempotency conflict handling exists');
-assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
+assert(route.includes('无税务扣减模式的税额必须为 0') && route.includes('taxableAmount > baseWithdrawal.amount_cents'), 'none mode and taxable amount validation must exist');
+assert(route.includes('Object.hasOwn') && route.includes('hasReviewRequest'), 'idempotency history must use Object.hasOwn for key lookup');
+const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
+assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: TAX_EXPORT_LIMIT + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
+assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');
+assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous.snapshot, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
 assert(!route.includes('JSON.stringify(previous) !== JSON.stringify(requested)'), 'tax review idempotency must not depend on JSON object key order');
 assert(e2e.includes('const reorderedReviewPayload = {') && e2e.includes('semantically identical payload must be idempotent regardless of JSON key order'), 'L45 E2E must verify idempotency after JSON round-trip and key reordering');
 assert(e2e.includes('new Uint8Array(await csvResponse.arrayBuffer())') && e2e.includes('csvBytes[0] === 0xef') && e2e.includes('csvBytes[1] === 0xbb') && e2e.includes('csvBytes[2] === 0xbf'), 'L45 CSV BOM must be verified from raw response bytes');
@@ -22,9 +26,15 @@ assert(!e2e.includes("taxRecordsA.some(") && !e2e.includes("taxRecordsB.some("),
 assert(e2e.includes("new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0))"), 'L45 CSV body must be decoded after raw BOM verification');
 assert(!e2e.includes("csv.charCodeAt(0) === 0xfeff"), 'L45 CSV verifier must not expect Response.text() to preserve BOM');
 assert(route.includes('taxAmount > taxableAmount') && route.includes('payableAmount < 0'), 'amount relation validation exists');
+const adminClient = readFileSync('apps/admin/src/api/adminTaxReview.ts', 'utf8');
+assert(adminClient.includes('downloadTaxReviewCsv') && adminClient.includes('adminFetch') && adminClient.includes('URL.createObjectURL') && adminClient.includes('content-disposition'), 'Admin CSV export must use authenticated blob fetch');
+assert(!page.includes('href={taxReviewExportUrl('), 'TaxReviewPage must not use href CSV downloads');
+assert(route.includes('ensureTaxExportWithinLimit') && route.includes('TAX_EXPORT_LIMIT') && route.includes('x-export-total') && route.includes('x-export-truncated') && route.includes('422'), 'CSV export must reject over-limit rather than truncate silently');
+assert(route.includes('expected_updated_at') && route.includes('updated_at: w?.updated_at') && route.includes('where: { id, updated_at: expectedUpdatedAt }'), 'tax review must enforce client-side optimistic concurrency');
+assert(route.includes('const TAX_MODES') && route.includes('const TAX_STATUSES') && route.includes('const INVOICE_STATUSES') && route.includes('validateTaxCombination'), 'tax status allow-lists and combination validation must exist');
 assert(page.includes('系统不会自动报税') && page.includes('系统不会连接外部税务平台') && page.includes('系统不会自动发起打款') && page.includes('仅供内部人工核对'), 'manual review disclaimers exist');
 assert(existsSync('apps/admin/src/api/adminTaxReview.ts'), 'Admin API client exists');
-for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenario();', "POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`", 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeAHeaders', 'financeBHeaders', 'negative taxable', 'rejected tax review must not mutate Withdrawal', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2']) {
+for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenario();', "POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`", 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeAHeaders', 'financeBHeaders', 'negative taxable', 'none nonzero tax', 'l45_tax_detail_success=true', 'l45_export_limit_guard=true', 'rejected tax review must not mutate Withdrawal', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2']) {
   assert(e2e.includes(required), `L45 Docker E2E must include ${required}`);
 }
 assert(report.includes('const isL45Stage') && report.includes('l45Manifest') && report.includes('stable/l44-business-base') && report.includes('3ae666ec0e26383a5b117b64dce30b86a2dee389'), 'L45 report manifest exists');
