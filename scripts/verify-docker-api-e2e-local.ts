@@ -919,10 +919,13 @@ async function runL45TaxReviewScenario() {
   await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureD.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 stale version', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { ...k2, client_request_id: `${runId}-stale`, tax_amount_cents: 101, expected_updated_at: fixtureD.withdrawal.updated_at.toISOString() } });
   await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { ...reviewPayload, tax_amount_cents: 121 } });
   const concurrent = await Promise.allSettled([
-    request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent A', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-same`, expected_updated_at: fixtureC.withdrawal.updated_at.toISOString() } }),
-    request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent B', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-same`, expected_updated_at: fixtureC.withdrawal.updated_at.toISOString() } })
+    request<{ idempotent?: boolean }>('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent A', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-same`, expected_updated_at: fixtureC.withdrawal.updated_at.toISOString() } }),
+    request<{ idempotent?: boolean }>('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent B', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-same`, expected_updated_at: fixtureC.withdrawal.updated_at.toISOString() } })
   ]);
-  assert(concurrent.filter((result) => result.status === 'fulfilled').length === 2, 'L45 same client_request_id concurrent requests must return one applied and one idempotent');
+  const concurrentFulfilled = concurrent.filter((result): result is PromiseFulfilledResult<{ idempotent?: boolean }> => result.status === 'fulfilled');
+  const concurrentAppliedCount = concurrentFulfilled.filter((result) => result.value.idempotent === false).length;
+  const concurrentIdempotentCount = concurrentFulfilled.filter((result) => result.value.idempotent === true).length;
+  assert(concurrentFulfilled.length === 2 && concurrentAppliedCount === 1 && concurrentIdempotentCount === 1, 'L45 same client_request_id concurrent requests must return exactly one applied and one idempotent result');
   const invalidBefore = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureB.withdrawal.id } });
   const invalidTaxBefore = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureB.withdrawal.id } } });
   const invalidAuditBefore = await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } });
@@ -958,7 +961,9 @@ async function runL45TaxReviewScenario() {
   const automaticEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: { in: ['auto_tax_filed', 'auto_payout_requested', 'automatic_tax_filing', 'automatic_payout'] } } });
   assert(automaticEvents === 0, 'L45 must not create automatic tax filing or payout events');
   console.log(`l45_finance_total=${financeList.total}`);
-  console.log(`l45_concurrent_success_count=${concurrent.filter((result) => result.status === 'fulfilled').length}`);
+  console.log(`l45_concurrent_success_count=${concurrentFulfilled.length}`);
+  console.log(`l45_concurrent_applied_count=${concurrentAppliedCount}`);
+  console.log(`l45_concurrent_idempotent_count=${concurrentIdempotentCount}`);
   console.log(`l45_csv_formula_safe=${!executableFormula}`);
   console.log('L45 manual tax review export runtime assertions passed.');
 }

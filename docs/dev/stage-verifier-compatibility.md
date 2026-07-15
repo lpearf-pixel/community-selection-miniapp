@@ -116,3 +116,11 @@
 - 静态 verifier 应检查旧阶段调用满足当前公开 mutation contract，并由完整 chain 进行真实运行验证。
 - 错误修复必须同时覆盖当前阶段和受影响的历史阶段，避免单独运行当前阶段时通过、完整 chain 时失败。
 
+## 13. 运行时 Marker 与业务断言同步规范
+
+- 运行时 marker 必须来自已经通过的业务断言变量，不能由报告脚本猜测或硬编码旧数量。
+- 并发、幂等或状态机语义发生变化时，必须同步审计 Docker E2E 输出、stage report runtime marker、verification row detector 和 report publish verifier。
+- “请求成功数”不足以证明幂等语义；同键并发场景必须分别输出并验证 applied 数和 idempotent 数。
+- 报告生成器不得为了兼容旧输出接受互相矛盾的多个 marker；应只接受当前公开业务契约。
+- 完整 chain 通过后，报告应基于同一次运行产生的 marker，禁止复用旧 head 的 latest verify output。
+
