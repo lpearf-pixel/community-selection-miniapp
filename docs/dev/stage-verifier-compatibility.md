@@ -108,6 +108,14 @@
 - 新阶段改变既有 API shape 时，完整 chain 中所有受影响旧阶段场景都必须真实运行；不能只修改当前阶段 verifier。
 - 静态 verifier 应阻止已知旧 shape，但不能把某一个局部变量名作为唯一门禁；重点应是 envelope 与 DTO 的公开契约。
 
+## 12. 历史阶段安全扫描的作用域规范
+
+- 历史阶段 verifier 的安全扫描只能覆盖该阶段拥有的运行时代码、路由、客户端或明确的配置面；不得把共享 `stage-workflow`、阶段报告生成器、全局文档和后续阶段文件拼接后做通用词黑名单。
+- `source_id`、`signature`、`app_key`、`request`、`fetch` 等通用标识符不能单独作为外部集成证据；必须与供应商域名、SDK/import、供应商前缀凭证或供应商签名上下文组合后才可阻断。
+- 禁止为了规避误报而对共享源码执行 `replaceAll('source_id', '')` 一类逐词豁免；应从根本上缩小扫描文件范围并提高规则语义精度。
+- 外部供应商禁用规则必须同时带有两个自测 fixture：普通业务字段应通过，供应商专属域名或凭证应失败。
+- 新阶段在共享报告、审计、税务、支付等模块新增正常字段时，不得导致未修改的历史业务阶段失败。
+- 如果旧 verifier 因后续阶段共享文件出现新词而失败，应修复旧 verifier 的作用域和供应商上下文规则，禁止删除后续阶段合法字段。
 
 
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
