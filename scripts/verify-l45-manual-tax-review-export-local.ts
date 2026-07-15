@@ -79,6 +79,9 @@ assert(e2e.indexOf('fixtureStaleVersion') < e2e.indexOf("const fixtureE = await 
 const markPaidRollbackBlock = e2e.split('async function assertMarkPaidRollback')[1]?.split("console.log('l45_mark_paid_rollback_verified=true')")[0] ?? '';
 for (const requiredRollback of ['manual_reference', 'processed_at', 'processed_by_admin_id', 'afterCommission.status', 'withdrawal_paid', 'withdrawal_mark_paid', 'businessEventLog']) assert(markPaidRollbackBlock.includes(requiredRollback), `mark-paid rollback assertions must include ${requiredRollback}`);
 assert(report.includes('apiRows.length === L45_API_CONTRACT_LIST.length'), 'L45 report API row count must come from contract length');
+assert(report.includes('function commandCompleted(') && report.includes('l45MissingDockerMarkers') && report.includes('L24-L45 chain regression passed.') && report.includes('rows=${verifyOutput.rows.map') && report.includes('missingDockerMarkers=${missingDockerMarkers.join'), 'L45 report rows must use authoritative command completion markers and actionable failure diagnostics');
+const stageWorkflow = readFileSync('scripts/stage-workflow.ts', 'utf8');
+assert(stageWorkflow.includes('command_completed:${spec.title}=true') && stageWorkflow.includes('L24-${args.stage} chain regression passed.'), 'stage workflow must emit authoritative command and chain completion markers');
 assert(reportVerifier.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID') && reportVerifier.includes('L45 known medium risk must be in risk section') , 'Report verifier must accept documented L45 medium risk');
 assert(!existsSync('scripts/l45-api-contract.js') && existsSync('scripts/l45-api-contract.ts'), 'L45 API contract must have a single TypeScript source');
 assert(existsSync('docs/api/l45-admin-tax-review-api.md'), 'Human-readable L45 API spec must exist');

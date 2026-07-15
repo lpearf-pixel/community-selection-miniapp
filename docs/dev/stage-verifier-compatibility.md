@@ -133,3 +133,11 @@
 - Docker E2E 必须同时断言 HTTP 状态、精确业务消息和数据库无副作用，避免“消息正确但状态码回退为 400”的伪通过。
 
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
+
+## 15. 阶段报告命令证据规范
+
+- 阶段工作流必须在命令退出码为 0 后写入机器可读的命令完成 marker；报告不得仅凭日志中零散成功文案猜测命令是否通过。
+- 合并回归链必须有独立的 chain completion marker，并且只能在链内全部命令成功后输出。
+- 报告解析器不得在找不到目标命令 section 时退化为扫描整份日志；正常的负向 API 测试、预期 4xx 和 ORM 回滚信息不得污染无关验证行。
+- Docker API E2E 行除命令完成 marker 外，仍必须验证机器契约要求的全部业务 runtime markers，不能只看进程退出码。
+- 报告质量断言失败时必须输出每一验证行的状态，并列出缺失 runtime markers，禁止只返回“所有行必须通过”的无诊断总句。
