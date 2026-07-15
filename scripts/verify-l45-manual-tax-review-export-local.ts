@@ -38,7 +38,11 @@ assert(taxReviewContract.scenarios.same_key_different_invalid_payload.expected_s
 assert(apiDocument.includes('校验与状态码优先级') && apiDocument.includes('不同但合法的语义') && apiDocument.includes('不同且非法的 payload'), 'L45 API specification must explain validation/idempotency precedence');
 assert(e2e.includes("readFileSync(L45_API_CONTRACT_PATH, 'utf8')") && e2e.includes('taxReviewContract.status_codes.invalid_request'), 'L45 E2E must load and consume the machine-readable API contract');
 assert(e2e.includes('POST tax-review L45 K1 invalid different after paid') && e2e.includes('POST tax-review L45 K1 valid different after paid') && e2e.includes("tax_mode: 'withheld', tax_amount_cents: 1"), 'L45 E2E must separate invalid 400 from valid idempotency-conflict 409');
-assert(!e2e.includes("label: 'POST tax-review L45 K1 different after paid'") && !e2e.includes("body: { ...k1, tax_amount_cents: 1 } });"), 'L45 E2E must not use an invalid none-mode payload to expect idempotency conflict');
+const invalidAfterPaidLine = e2e.split(/\r?\n/).find((line) => line.includes("label: 'POST tax-review L45 K1 invalid different after paid'"));
+const validAfterPaidLine = e2e.split(/\r?\n/).find((line) => line.includes("label: 'POST tax-review L45 K1 valid different after paid'"));
+assert(invalidAfterPaidLine?.includes('same_key_different_invalid_payload.expected_status') && invalidAfterPaidLine.includes('body: { ...k1, tax_amount_cents: 1 }'), 'L45 invalid same-key payload scenario must use the contract HTTP 400 expectation');
+assert(validAfterPaidLine?.includes('same_key_different_valid_payload.expected_status') && validAfterPaidLine.includes("tax_mode: 'withheld', tax_amount_cents: 1"), 'L45 valid same-key conflict scenario must use a valid payload and the contract HTTP 409 expectation');
+assert(!e2e.includes("label: 'POST tax-review L45 K1 different after paid'"), 'L45 E2E must not retain the ambiguous pre-contract conflict scenario');
 assert(e2e.includes('concurrentFulfilled.length === concurrentContract.fulfilled') && e2e.includes('concurrentAppliedCount === concurrentContract.applied') && e2e.includes('concurrentIdempotentCount === concurrentContract.idempotent'), 'L45 concurrency E2E must use contract quantities');
 assert(report.includes('l45ApiContractPath') && report.includes('l45ConcurrencyContract'), 'L45 report generator must consume the API contract');
 const l45FixtureStart = e2e.indexOf('async function createWithdrawalFixture');

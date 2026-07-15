@@ -127,4 +127,4 @@ L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail A
 - 每个负向用例只允许制造一个失败维度。测试幂等键冲突时，两份 payload 都必须先满足字段、枚举和金额规则；非法 payload 应按接口校验优先级断言 400，而不是误期望 409。
 - 接口校验顺序属于公开契约。字段校验、幂等比较、终态检查、乐观锁等优先级变化时，必须同步更新契约、说明书、E2E、stage report detector 和 report publish verifier。
 - 静态 verifier 必须检查测试确实读取机器契约，而不能只检查契约文件存在。
-
+- 静态 verifier 检查负向场景时，必须先定位具体命名场景或代码块，再核对该场景的 payload 与契约状态码；禁止用全文件 substring 黑名单否定一个在其他合法场景中允许出现的片段。
