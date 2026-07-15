@@ -19,9 +19,38 @@ const admin = read('apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx') +
 includesAll(admin, ['DeliveryRuleConfigPage','配送规则配置','全局默认规则','自提点规则','base_fee_cents','free_threshold_cents','service_radius_text','available_time_windows','禁用','保存','管理配送规则'], 'admin');
 const mini = read('apps/miniapp/pages/orders/confirm/index.js') + read('apps/miniapp/pages/orders/confirm/index.wxml');
 includesAll(mini, ['/api/delivery/rules','pickup_store_id','该自提点暂不支持门店配送','配送费','配送时段','配送范围','delivery_time_window_code'], 'miniapp');
-const changed = files.filter((f) => !f.includes('verify-l37') && f !== 'prisma/schema.prisma').map(read).join('\n').replaceAll('credit_source_id', '');
-const blocked = ['https://newopen.im' + 'dada' + 'abc.com','app_' + 'secret','app_' + 'key','source_' + 'id','sign' + 'ature','axios.post','fetch 到' + '达达','request 到' + '达达','real delivery ' + 'order'];
-for (const word of blocked) assert(!changed.includes(word), `forbidden integration marker: ${word}`);
+
+const deliveryRuntimeFiles = [
+  'apps/api/src/modules/delivery/delivery-rule-service.ts',
+  'apps/api/src/routes/admin/delivery.ts',
+  'apps/api/src/routes/public/delivery.ts',
+  'apps/admin/src/api/delivery.ts',
+  'apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx',
+  'apps/admin/src/pages/delivery/DeliveryReservationPage.tsx',
+  'apps/miniapp/pages/orders/confirm/index.js',
+  'apps/miniapp/pages/orders/confirm/index.wxml'
+];
+const deliveryRuntimeSource = deliveryRuntimeFiles.map(read).join('\n');
+function assertNoDadaIntegration(source: string, label: string) {
+  const dadaPatterns = [
+    /https?:\/\/[^\s'"]*newopen\.imdada\.cn/i,
+    /\bDADA_SOURCE_ID\b/,
+    /\bDADA_APP_KEY\b/,
+    /\bDADA_APP_SECRET\b/,
+    /from\s+['"][^'"]*dada[^'"]*['"]/i,
+    /require\(['"][^'"]*dada[^'"]*['"]\)/i,
+    /dada[^\n]{0,80}(sign|signature)|(?:sign|signature)[^\n]{0,80}dada/i,
+    /(fetch|request|axios\.(?:get|post|put|request))\s*\([^\n]{0,160}newopen\.imdada\.cn/i
+  ];
+  for (const pattern of dadaPatterns) assert(!pattern.test(source), `${label} contains forbidden Dada integration marker: ${pattern}`);
+}
+assertNoDadaIntegration(deliveryRuntimeSource, 'L37 scoped delivery runtime files');
+assertNoDadaIntegration('const source_id = "local"; const signature = "local"; const app_key = "local"; fetch("/api/delivery/rules"); request("/api/admin/delivery/rules");', 'ordinary non-Dada fixture');
+for (const fixture of ['https://newopen.imdada.cn/api/order/add', 'const DADA_SOURCE_ID = "x";', 'const DADA_APP_KEY = "x";', 'const DADA_APP_SECRET = "x";', 'import dada from "dada-sdk";', 'const dadaSignature = sign(payload);', 'fetch("https://newopen.imdada.cn/api/order/add")']) {
+  let rejected = false;
+  try { assertNoDadaIntegration(fixture, 'Dada negative fixture'); } catch { rejected = true; }
+  assert(rejected, `Dada fixture must be rejected: ${fixture}`);
+}
 const safetyFiles = ['apps/api/src/modules/delivery/delivery-rule-service.ts','apps/api/src/routes/admin/delivery.ts','apps/api/src/routes/public/delivery.ts','apps/admin/src/api/delivery.ts','apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx'];
 for (const f of safetyFiles) {
   const source = read(f).replaceAll('receiver_phone_masked','').replaceAll('pickup_store_phone','').replaceAll('receiver_address_masked','').replaceAll('delivery_fee_cents','');

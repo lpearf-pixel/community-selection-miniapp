@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveAdminDataScope } from '../apps/api/src/modules/admin-access/admin-access-control.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -82,7 +83,16 @@ const files = [
 files.forEach((file) => assert(existsSync(file), `${file} should exist`));
 
 const access = read('apps/api/src/modules/admin-access/admin-access-control.ts');
-includesAll(access, ['AdminDataScope','data_scope','pickup_store_ids','community_ids','can_access_all_pickup_stores','can_access_all_communities','x-admin-pickup-store-id','x-admin-pickup-store-ids','x-admin-community-id','x-admin-community-ids','ADMIN_SCOPE_FORBIDDEN','Data scope denied','super_admin','clerk 不默认全量','store_manager 不默认全量'], 'access control');
+includesAll(access, ['AdminDataScope','data_scope','pickup_store_ids','community_ids','can_access_all_pickup_stores','can_access_all_communities','x-admin-pickup-store-id','x-admin-pickup-store-ids','x-admin-community-id','x-admin-community-ids','ADMIN_SCOPE_FORBIDDEN','Data scope denied','super_admin'], 'access control');
+const fullScope = resolveAdminDataScope({ headers: {} } as any, 'super_admin', 'session');
+assert(fullScope.can_access_all_pickup_stores && fullScope.can_access_all_communities, 'super_admin session must have full data scope');
+for (const role of ['clerk', 'store_manager', 'finance', 'operator'] as const) {
+  const scope = resolveAdminDataScope({ headers: { 'x-admin-pickup-store-ids': 'ps-forged', 'x-admin-community-ids': 'c-forged' } } as any, role, 'session');
+  assert(!scope.can_access_all_pickup_stores && !scope.can_access_all_communities && scope.pickup_store_ids.length === 0 && scope.community_ids.length === 0, `${role} session must fail closed without persisted scope`);
+}
+const headerScope = resolveAdminDataScope({ headers: { 'x-admin-pickup-store-id': 'ps-1', 'x-admin-pickup-store-ids': 'ps-1,ps-2', 'x-admin-community-id': 'c-1', 'x-admin-community-ids': 'c-1,c-2' } } as any, 'finance', 'header_mock');
+assert(JSON.stringify(headerScope.pickup_store_ids) === JSON.stringify(['ps-1', 'ps-2']) && JSON.stringify(headerScope.community_ids) === JSON.stringify(['c-1', 'c-2']), 'header_mock scope must include explicit de-duplicated ids');
+assert(!headerScope.can_access_all_pickup_stores && !headerScope.can_access_all_communities, 'header_mock scope must not become full access automatically');
 
 const pickup = read('apps/api/src/routes/admin/pickup.ts');
 includesAll(pickup, ["requireAdminPermission('pickup.verify')",'data_scope','pickup_store_id','by-code scope 检查','verify scope 检查','summary scope 过滤'], 'pickup route');

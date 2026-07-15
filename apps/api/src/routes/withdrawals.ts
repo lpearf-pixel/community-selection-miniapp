@@ -232,6 +232,25 @@ async function loadWithdrawalOrThrow(tx: Prisma.TransactionClient, id: string) {
   return withdrawal;
 }
 
+
+function restoreMarkPaidTransactionError(error: unknown) {
+  if (error && typeof error === "object" && "statusCode" in error) return error as Error & { statusCode?: number };
+  const message = error instanceof Error ? error.message : String(error);
+  const conflictMessages = new Set([
+    "仅审核通过的提现申请可标记已处理",
+    "提现税务状态未完成或未计算，不能标记已处理",
+    "可处理金额不能小于 0",
+    "发票状态未确认，不能标记已处理",
+    "提现状态已变化，请刷新后重试",
+    "提现关联奖励状态已变化，请人工复核",
+  ]);
+  if (message === "提现申请不存在") return httpError(message, 404);
+  if (message.startsWith("ADMIN_UNAUTHORIZED")) return httpError(message, 401);
+  if (message === ADMIN_SCOPE_FORBIDDEN || message.includes("Permission denied")) return httpError(message, 403);
+  if (conflictMessages.has(message)) return httpError(message, 409);
+  return httpError(message || "人工标记已处理失败", 400);
+}
+
 function parseAmount(value: unknown) {
   const amount = Number(value);
   if (!Number.isInteger(amount) || amount <= 0)
@@ -1068,8 +1087,10 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         });
         return ok(paid);
       } catch (error) {
-        reply.code((error as { statusCode?: number }).statusCode ?? 400);
-        return fail(error instanceof Error ? error.message : "标记提现处理失败");
+        const restored = restoreMarkPaidTransactionError(error);
+        reply.code(restored.statusCode ?? 400);
+        return fail(restored.message || "标记提现处理失败");
       }
     },
-  );}
+  );
+}

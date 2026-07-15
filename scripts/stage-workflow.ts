@@ -183,6 +183,7 @@ function runCommand(spec: CommandSpec): void {
   }
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
+  printAndAppend(`command_completed:${spec.title}=true\n`);
   if (spec.successMessage) printAndAppend(`${spec.successMessage}\n`);
 }
 
@@ -203,6 +204,11 @@ function prepareLatestOutput(): void {
 function runVerify(args: ParsedArgs, publishMode = false): void {
   prepareLatestOutput();
   for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
+  if (args.stage === 'L45' && (args.scope ?? (publishMode ? 'chain' : 'stage')) === 'chain') {
+    printAndAppend('command_completed:L24-L45 chain regression=true\n');
+    printAndAppend('L24-L45 chain regression passed.\n');
+  }
+  printAndAppend('command_completed:Stage workflow=true\n');
   printAndAppend('\nStage workflow verification passed.\n');
 }
 

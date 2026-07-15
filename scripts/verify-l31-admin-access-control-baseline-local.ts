@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveAdminAccessContext } from '../apps/api/src/modules/admin-access/admin-access-control.ts';
 
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
@@ -55,7 +56,21 @@ function main() {
     'x-admin-role','x-admin-user-id','ADMIN_FORBIDDEN','Permission denied'
   ].forEach((keyword) => assert(access.includes(keyword), `Missing backend access keyword: ${keyword}`));
 
-  ['unknown role rejected', 'no default super_admin', 'production does not trust x-admin-role'].forEach((keyword) => assert(access.includes(keyword), `Missing access safety comment/semantic: ${keyword}`));
+  const previousNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    assert(resolveAdminAccessContext({ adminUser: { id: 'formal-unknown', role: 'unknown_role' }, headers: {} } as any) === null, 'unknown formal role must be rejected');
+    assert(resolveAdminAccessContext({ headers: {} } as any) === null, 'missing identity must be rejected');
+    assert(resolveAdminAccessContext({ headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': 'forged-admin' } } as any) === null, 'production header-only super_admin must not authenticate');
+
+    process.env.NODE_ENV = 'development';
+    const devFinance = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': 'dev-finance' } } as any);
+    assert(devFinance?.role === 'finance' && devFinance.data_scope_source === 'header_mock', 'development header mock finance must be usable');
+    const formalFinance = resolveAdminAccessContext({ adminUser: { id: 'formal-finance', role: 'finance' }, headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': 'forged-admin' } } as any);
+    assert(formalFinance?.role === 'finance' && formalFinance.data_scope_source === 'session' && !formalFinance.is_super_admin, 'formal finance session must not be elevated by headers');
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+  }
   assert(doc.includes('前端菜单只做体验') && doc.includes('后端权限校验是安全边界'), 'frontend permission is not security boundary must be documented');
 
   const financeRoutes = ['refund-ledger', 'refund-ledger/export.csv', 'refund-risk/overview', 'refund-risk/items', 'refund-risk/export.csv'];

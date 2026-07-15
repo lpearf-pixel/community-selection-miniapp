@@ -1225,6 +1225,18 @@ function commandPassedInSectionOnly(content: string, title: string, successMarke
   return matched ? 'passed' : 'not detected';
 }
 
+function commandCompleted(content: string, title: string): StageVerifyStatus {
+  return content.includes(`command_completed:${title}=true`) ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected';
+}
+
+function l45DockerRequiredMarkers() {
+  return ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', ...l45ConcurrentRuntimeMarkers(), ...L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required)];
+}
+
+function missingL45DockerMarkers(content: string) {
+  return l45DockerRequiredMarkers().filter((marker) => !content.includes(marker));
+}
+
 function stageVerifyChecks(content: string) {
   const failureMarkers = ['ERR_PNPM', 'Command failed', 'ELIFECYCLE', 'Error:', 'failed with exit code', 'exit code 1', 'exit code 2', 'MODULE_NOT_FOUND', 'TypeScript error TS'];
   const hasFailureMarker = hasExplicitFailure(content);
@@ -1234,14 +1246,15 @@ function stageVerifyChecks(content: string) {
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
   if (isL45Stage) {
+    const dockerMarkersMissing = missingL45DockerMarkers(content);
     return [
-      { command: 'L45 verifier', result: commandPassed(content, 'L45 verifier', ['L45 manual tax review export verifier passed.']) },
-      { command: 'L24-L45 chain regression', result: commandPassed(content, 'L24-L45 chain regression', ['L45 manual tax review export verifier passed.', 'L44 manual withdrawal review verifier passed.', 'L43 reward ledger T3 refund deduct verification passed.', 'L24 miniapp cart verification passed.', 'Stage workflow verification passed.'], true) },
-      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', ...l45ConcurrentRuntimeMarkers(), ...L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required)], true) },
-      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
-      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
-      { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },
-      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
+      { command: 'L45 verifier', result: commandCompleted(content, 'L45 verifier') },
+      { command: 'L24-L45 chain regression', result: content.includes('command_completed:L24-L45 chain regression=true') && content.includes('L24-L45 chain regression passed.') ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected' },
+      { command: 'Docker API E2E', result: commandCompleted(content, 'Docker API E2E') === 'passed' && dockerMarkersMissing.length === 0 ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected' },
+      { command: 'Admin typecheck config', result: commandCompleted(content, 'Admin typecheck config check') },
+      { command: 'Admin full typecheck', result: commandCompleted(content, 'Admin typecheck') },
+      { command: 'raw compliance scan', result: commandCompleted(content, 'raw compliance scan') },
+      { command: 'Stage workflow', result: commandCompleted(content, 'Stage workflow') }
     ];
   }
   if (isL44Stage) {
@@ -1474,7 +1487,7 @@ function validateReportInputs() {
     for (const requiredDb of l45Manifest.db) assertReportQuality(modelRows.some((row) => row.model === requiredDb), `L45 DB section missing ${requiredDb}`);
     if (verifyOutput.exists) {
       assertReportQuality(verifyOutput.rows.length === 7, 'L45 must track seven verification rows');
-      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), 'All L45 verification rows must pass');
+      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), `All L45 verification rows must pass rows=${verifyOutput.rows.map((row) => `${row.command}:${row.result}`).join(',')} missingDockerMarkers=${missingL45DockerMarkers(verifyOutput.raw ?? '').join(',')}`);
     }
   }
   if (isL44Stage) {

@@ -1033,7 +1033,8 @@ async function runL45TaxReviewScenario() {
 
   const markPending = await createWithdrawalFixture('a', 'mark-pending-tax', 1500);
   const markPendingBefore = await markPaidRollbackSnapshot(markPending);
-  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', markPending.withdrawal.id)}`, { label: 'POST mark-paid L45 tax pending conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-pending-tax` } });
+  const markPendingError = await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', markPending.withdrawal.id)}`, { label: 'POST mark-paid L45 tax pending conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-pending-tax` } });
+  assert(markPendingError.message === '提现税务状态未完成或未计算，不能标记已处理', 'L45 mark-paid tax pending conflict must return exact 409 message');
   await assertMarkPaidRollback('tax pending', markPending, markPendingBefore);
   const invoiceConflict = await createWithdrawalFixture('a', 'mark-invoice-pending', 1510);
   await prisma.withdrawal.update({ where: { id: invoiceConflict.withdrawal.id }, data: { tax_mode: 'invoice', tax_status: 'completed', invoice_required: true, invoice_status: 'pending' } });

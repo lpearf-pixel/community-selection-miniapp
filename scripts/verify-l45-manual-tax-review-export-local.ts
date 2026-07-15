@@ -8,6 +8,10 @@ const reportVerifier = readFileSync('scripts/verify-report-publish-local.ts', 'u
 const adminAccess = readFileSync('apps/api/src/modules/admin-access/admin-access-control.ts', 'utf8');
 const adminRequest = readFileSync('apps/admin/src/api/adminRequest.ts', 'utf8');
 const contract = readFileSync('scripts/l45-api-contract.ts', 'utf8');
+const l31Verifier = readFileSync('scripts/verify-l31-admin-access-control-baseline-local.ts', 'utf8');
+const l34Verifier = readFileSync('scripts/verify-l34-admin-data-scope-baseline-local.ts', 'utf8');
+const l37Verifier = readFileSync('scripts/verify-l37-delivery-rule-config-baseline-local.ts', 'utf8');
+const stageWorkflow = readFileSync('scripts/stage-workflow.ts', 'utf8');
 const reportGenerator = readFileSync('scripts/generate-stage-report.ts', 'utf8');
 assert(route.includes('/api/admin/tax-records/export.csv'), 'L45 CSV API exists');
 assert(route.includes('requireAdminPermission("finance.view")'), 'finance.view is required');
@@ -95,6 +99,13 @@ assert(scopeRuntimeBlock.includes('production finance session must ignore forged
 const tdzRejectedFixture = "const prodFinance = resolveAdminAccessContext({ headers: { 'x-admin-community-id': communityA.id } });\nconst communityA = await prisma.community.create({ data: {} });";
 assert(/communityA\.id[\s\S]*const communityA/.test(tdzRejectedFixture), 'Verifier TDZ fixture must demonstrate use-before-declaration detection');
 assert(!/communityA\.id[\s\S]*const communityA/.test(scopeRuntimeBlock), 'Admin scope runtime test must not use communityA before declaration');
+assert(l31Verifier.includes('resolveAdminAccessContext') && l31Verifier.includes('previousNodeEnv') && l31Verifier.includes('finally') && !l31Verifier.includes("['unknown role rejected', 'no default super_admin', 'production does not trust x-admin-role']"), 'L31 verifier must use semantic access checks instead of comment binding');
+assert(l34Verifier.includes('resolveAdminDataScope') && l34Verifier.includes("['clerk', 'store_manager', 'finance', 'operator']") && !l34Verifier.includes('clerk 不默认全量') && !l34Verifier.includes('store_manager 不默认全量'), 'L34 verifier must use semantic data-scope checks instead of comment binding');
+assert(l37Verifier.includes('deliveryRuntimeFiles') && l37Verifier.includes('assertNoDadaIntegration') && l37Verifier.includes('DADA_SOURCE_ID') && !l37Verifier.includes("'source_' + 'id'") && !l37Verifier.includes("'sign' + 'ature'"), 'L37 verifier must use scoped Dada-specific integration scanning');
+assert(stageWorkflow.includes('command_completed:${spec.title}=true') && stageWorkflow.includes('command_completed:L24-L45 chain regression=true') && stageWorkflow.includes('L24-L45 chain regression passed.'), 'stage workflow must emit authoritative command completion markers');
+assert(reportGenerator.includes('commandCompleted') && reportGenerator.includes('missingL45DockerMarkers') && reportGenerator.includes('rows=') && reportGenerator.includes('missingDockerMarkers='), 'L45 report generation must use authoritative markers and detailed failure output');
+assert(reportVerifier.includes('l45ConcurrentRuntimeMarkers') && !reportVerifier.includes("'l45TaxReviewConcurrentScenario'"), 'publish verifier must bind to wrapper helper rather than requiring generator to name the low-level helper');
+assert(route.includes('restoreMarkPaidTransactionError') && route.includes('提现关联奖励状态已变化，请人工复核') && route.includes('提现申请不存在'), 'mark-paid must restore transaction error statuses');
 assert(!existsSync('.github/workflows/trigger-l45.yml') && !existsSync('scripts/one-time-l45-fix.ts'), 'No temporary workflow trigger files allowed');
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');

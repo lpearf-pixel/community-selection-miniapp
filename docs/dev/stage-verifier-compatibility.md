@@ -111,3 +111,23 @@
 
 
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
+
+## Historical safety scan scope
+
+Historical stage verifiers must scan only the runtime files owned by that stage. They must not fail on generic names introduced by later stages, global report tooling, Prisma-wide schema additions, or global documentation unless that file is part of the historical stage contract.
+
+## Comments are not business contracts
+
+Verifier checks should execute semantic helpers or runtime code where possible. Source comments such as "unknown role rejected" or "not default full access" are not authoritative contracts and must not be the only gate for access-control behavior.
+
+## ORM transaction error status propagation
+
+When a route performs permission, state, and association checks inside an ORM transaction, it must preserve intended HTTP statuses after transaction rollback. Verifiers should require a controlled error restoration helper instead of moving checks outside the transaction just to preserve status codes.
+
+## Stage report command evidence
+
+Stage reports must rely on authoritative command completion markers, for example `command_completed:<command title>=true`, emitted only after a command exits with status 0. L45 chain reports also require `L24-L45 chain regression passed.` and must not scan the entire log as a fallback when a command section is absent.
+
+## Helper wrapper layers and static gates
+
+Static verifiers may assert that a report generator uses a public wrapper helper while the machine contract owns the lower-level fail-closed helper. They should not require every consumer to directly reference private helper names when the wrapper is the supported API.
