@@ -141,3 +141,10 @@ L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail A
 - 报告解析器不得在找不到目标命令 section 时退化为扫描整份日志；正常的负向 API 测试、预期 4xx 和 ORM 回滚信息不得污染无关验证行。
 - Docker API E2E 行除命令完成 marker 外，仍必须验证机器契约要求的全部业务 runtime markers，不能只看进程退出码。
 - 报告质量断言失败时必须输出每一验证行的状态，并列出缺失 runtime markers，禁止只返回“所有行必须通过”的无诊断总句。
+
+
+## 16. Helper 包装层与静态门禁规范
+
+- 静态 verifier 应验证公开契约、调用链和 fail-closed 语义，不得要求最终消费者直接引用某个内部 helper 名。
+- 当消费者通过受控包装函数间接调用底层校验 helper 时，应分别验证包装函数被消费者使用、包装函数内部调用底层 helper，以及契约缺失时会失败。
+- 禁止同时存在“共享包装 helper 已被消费”的语义检查，又额外要求消费者源码直接出现底层 helper 名；这种重复门禁会阻止等价重构。
