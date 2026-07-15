@@ -5,6 +5,21 @@ const page = readFileSync('apps/admin/src/pages/tax-review/TaxReviewPage.tsx', '
 const e2e = readFileSync('scripts/verify-docker-api-e2e-local.ts', 'utf8');
 const report = readFileSync('scripts/generate-stage-report.ts', 'utf8');
 const reportVerifier = readFileSync('scripts/verify-report-publish-local.ts', 'utf8');
+const apiDocumentPath = 'docs/api/l45-admin-tax-review-api.md';
+const apiContractPath = 'docs/api/contracts/l45-admin-tax-review.contract.json';
+assert(existsSync(apiDocumentPath), 'L45 human-readable API specification must exist');
+assert(existsSync(apiContractPath), 'L45 machine-readable API contract must exist');
+const apiDocument = readFileSync(apiDocumentPath, 'utf8');
+const apiContract = JSON.parse(readFileSync(apiContractPath, 'utf8')) as {
+  source_route: string;
+  human_document: string;
+  endpoints: {
+    tax_review: { method: string; path: string; status_codes: Record<string, number>; validation_precedence: string[]; scenarios: Record<string, { expected_status?: number; fulfilled?: number; applied?: number; idempotent?: number }> };
+    mark_paid: { method: string; path: string; status_codes: Record<string, number> };
+  };
+  test_authoring: Record<string, boolean>;
+};
+const taxReviewContract = apiContract.endpoints.tax_review;
 assert(route.includes('/api/admin/tax-records/export.csv'), 'L45 CSV API exists');
 assert(route.includes('requireAdminPermission("finance.view")'), 'finance.view is required');
 assert(route.includes('requireAdminPermission("finance.export")'), 'finance.export is required');
@@ -12,8 +27,34 @@ assert(route.includes('requireAdminPermission("withdrawal.manage")'), 'withdrawa
 assert(route.includes('withdrawalScopeWhere(context)'), 'database data scope is reused');
 assert(route.includes('prisma.taxRecord.count({ where })') && route.includes('skip: (page - 1) * pageSize') && route.includes('take: pageSize'), 'database pagination exists');
 assert(route.includes('csvSafe') && route.includes('/^[=+\\-@\\t\\r\\n]/'), 'CSV formula injection guard exists');
-assert(route.includes('client_request_id') && route.includes('idempotent: true') && route.includes('409'), 'idempotency conflict handling exists');
-assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
+assert(route.includes('无税务扣减模式的税额必须为 0') && route.includes('taxableAmount > baseWithdrawal.amount_cents'), 'none mode and taxable amount validation must exist');
+assert(route.includes('Object.hasOwn') && route.includes('hasReviewRequest'), 'idempotency history must use Object.hasOwn for key lookup');
+assert(apiContract.source_route === 'apps/api/src/routes/withdrawals.ts' && apiContract.human_document === apiDocumentPath, 'L45 API contract must identify its route and human document');
+assert(taxReviewContract.method === 'POST' && taxReviewContract.path === '/api/admin/withdrawals/:id/tax-review', 'L45 tax-review method/path contract must match the route');
+assert(apiContract.endpoints.mark_paid.method === 'POST' && apiContract.endpoints.mark_paid.path === '/api/admin/withdrawals/:id/mark-paid', 'L45 mark-paid method/path contract must match the route');
+assert(taxReviewContract.scenarios.invalid_none_nonzero_tax.expected_status === 400, 'L45 contract must document invalid none/nonzero tax as HTTP 400');
+assert(taxReviewContract.scenarios.same_key_different_valid_payload.expected_status === 409, 'L45 contract must document valid same-key conflict as HTTP 409');
+assert(taxReviewContract.scenarios.same_key_different_invalid_payload.expected_status === 400, 'L45 contract must document invalid payload precedence as HTTP 400');
+assert(apiDocument.includes('校验与状态码优先级') && apiDocument.includes('不同但合法的语义') && apiDocument.includes('不同且非法的 payload'), 'L45 API specification must explain validation/idempotency precedence');
+assert(e2e.includes("readFileSync(L45_API_CONTRACT_PATH, 'utf8')") && e2e.includes('taxReviewContract.status_codes.invalid_request'), 'L45 E2E must load and consume the machine-readable API contract');
+assert(e2e.includes('POST tax-review L45 K1 invalid different after paid') && e2e.includes('POST tax-review L45 K1 valid different after paid') && e2e.includes("tax_mode: 'withheld', tax_amount_cents: 1"), 'L45 E2E must separate invalid 400 from valid idempotency-conflict 409');
+const invalidAfterPaidLine = e2e.split(/\r?\n/).find((line) => line.includes("label: 'POST tax-review L45 K1 invalid different after paid'"));
+const validAfterPaidLine = e2e.split(/\r?\n/).find((line) => line.includes("label: 'POST tax-review L45 K1 valid different after paid'"));
+assert(invalidAfterPaidLine?.includes('same_key_different_invalid_payload.expected_status') && invalidAfterPaidLine.includes('body: { ...k1, tax_amount_cents: 1 }'), 'L45 invalid same-key payload scenario must use the contract HTTP 400 expectation');
+assert(validAfterPaidLine?.includes('same_key_different_valid_payload.expected_status') && validAfterPaidLine.includes("tax_mode: 'withheld', tax_amount_cents: 1"), 'L45 valid same-key conflict scenario must use a valid payload and the contract HTTP 409 expectation');
+assert(!e2e.includes("label: 'POST tax-review L45 K1 different after paid'"), 'L45 E2E must not retain the ambiguous pre-contract conflict scenario');
+assert(e2e.includes('concurrentFulfilled.length === concurrentContract.fulfilled') && e2e.includes('concurrentAppliedCount === concurrentContract.applied') && e2e.includes('concurrentIdempotentCount === concurrentContract.idempotent'), 'L45 concurrency E2E must use contract quantities');
+assert(report.includes('l45ApiContractPath') && report.includes('l45ConcurrencyContract'), 'L45 report generator must consume the API contract');
+const l45FixtureStart = e2e.indexOf('async function createWithdrawalFixture');
+const l45FixtureEnd = e2e.indexOf('const fixtureA =', l45FixtureStart);
+assert(l45FixtureStart >= 0 && l45FixtureEnd > l45FixtureStart, 'L45 withdrawal fixture helper must exist');
+const l45FixtureBlock = e2e.slice(l45FixtureStart, l45FixtureEnd);
+assert(l45FixtureBlock.includes('prisma.commission.update') && l45FixtureBlock.includes('withdrawal_id: withdrawal.id') && l45FixtureBlock.includes('prisma.withdrawalCommission.create'), 'L45 withdrawal fixture must populate both Commission.withdrawal_id and WithdrawalCommission');
+assert(e2e.includes("fixtureELinkedCommission.status === 'withdrawing'") && e2e.includes('fixtureELinkedCommission.withdrawal_id === fixtureE.withdrawal.id'), 'L45 mark-paid scenario must verify coherent fixture linkage before calling mark-paid');
+const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
+assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: TAX_EXPORT_LIMIT + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
+assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');
+assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous.snapshot, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
 assert(!route.includes('JSON.stringify(previous) !== JSON.stringify(requested)'), 'tax review idempotency must not depend on JSON object key order');
 assert(e2e.includes('const reorderedReviewPayload = {') && e2e.includes('semantically identical payload must be idempotent regardless of JSON key order'), 'L45 E2E must verify idempotency after JSON round-trip and key reordering');
 assert(e2e.includes('new Uint8Array(await csvResponse.arrayBuffer())') && e2e.includes('csvBytes[0] === 0xef') && e2e.includes('csvBytes[1] === 0xbb') && e2e.includes('csvBytes[2] === 0xbf'), 'L45 CSV BOM must be verified from raw response bytes');
@@ -22,9 +63,15 @@ assert(!e2e.includes("taxRecordsA.some(") && !e2e.includes("taxRecordsB.some("),
 assert(e2e.includes("new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0))"), 'L45 CSV body must be decoded after raw BOM verification');
 assert(!e2e.includes("csv.charCodeAt(0) === 0xfeff"), 'L45 CSV verifier must not expect Response.text() to preserve BOM');
 assert(route.includes('taxAmount > taxableAmount') && route.includes('payableAmount < 0'), 'amount relation validation exists');
+const adminClient = readFileSync('apps/admin/src/api/adminTaxReview.ts', 'utf8');
+assert(adminClient.includes('downloadTaxReviewCsv') && adminClient.includes('adminFetch') && adminClient.includes('URL.createObjectURL') && adminClient.includes('content-disposition'), 'Admin CSV export must use authenticated blob fetch');
+assert(!page.includes('href={taxReviewExportUrl('), 'TaxReviewPage must not use href CSV downloads');
+assert(route.includes('ensureTaxExportWithinLimit') && route.includes('TAX_EXPORT_LIMIT') && route.includes('x-export-total') && route.includes('x-export-truncated') && route.includes('422'), 'CSV export must reject over-limit rather than truncate silently');
+assert(route.includes('expected_updated_at') && route.includes('updated_at: w?.updated_at') && route.includes('where: { id, updated_at: expectedUpdatedAt }'), 'tax review must enforce client-side optimistic concurrency');
+assert(route.includes('const TAX_MODES') && route.includes('const TAX_STATUSES') && route.includes('const INVOICE_STATUSES') && route.includes('validateTaxCombination'), 'tax status allow-lists and combination validation must exist');
 assert(page.includes('系统不会自动报税') && page.includes('系统不会连接外部税务平台') && page.includes('系统不会自动发起打款') && page.includes('仅供内部人工核对'), 'manual review disclaimers exist');
 assert(existsSync('apps/admin/src/api/adminTaxReview.ts'), 'Admin API client exists');
-for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenario();', "POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`", 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeAHeaders', 'financeBHeaders', 'negative taxable', 'rejected tax review must not mutate Withdrawal', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2']) {
+for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenario();', "POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`", 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeAHeaders', 'financeBHeaders', 'negative taxable', 'none nonzero tax', 'l45_tax_detail_success=true', 'l45_export_limit_guard=true', 'rejected tax review must not mutate Withdrawal', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2']) {
   assert(e2e.includes(required), `L45 Docker E2E must include ${required}`);
 }
 assert(report.includes('const isL45Stage') && report.includes('l45Manifest') && report.includes('stable/l44-business-base') && report.includes('3ae666ec0e26383a5b117b64dce30b86a2dee389'), 'L45 report manifest exists');
@@ -32,7 +79,7 @@ assert(reportVerifier.includes('L45 report changed files') && reportVerifier.inc
 assert(!route.includes('AUTO_TAX_FILING_ENABLED=true') && !route.includes('AUTO_PAYOUT_ENABLED=true'), 'no automatic tax/payout flag enabled');
 assert(existsSync('docs/dev/stage-verifier-compatibility.md'), 'global verifier compatibility guidance exists');
 for (const readinessMarker of ['waitForApiReady', "'/api/health'", 'fetchWithTimeout', 'fetchOrThrow', 'Docker API E2E target:', 'docker compose logs --tail=200 api']) {
-  assert(e2e.includes(readinessMarker), `Docker E2E readiness/diagnostics must include ${readinessMarker}`);
+  assert(e2e.includes(readinessMarker), `Docker API E2E readiness/diagnostics must include ${readinessMarker}`);
 }
 assert(!e2e.includes('await fetch(`${API_BASE_URL}'), 'Docker E2E API calls must go through fetchOrThrow for diagnostics');
 assert(e2e.includes("const runId = `l45-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`"), 'L45 E2E run token must be unique across reruns and concurrent processes');

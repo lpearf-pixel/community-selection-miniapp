@@ -108,3 +108,23 @@
 - 新阶段改变既有 API shape 时，完整 chain 中所有受影响旧阶段场景都必须真实运行；不能只修改当前阶段 verifier。
 - 静态 verifier 应阻止已知旧 shape，但不能把某一个局部变量名作为唯一门禁；重点应是 envelope 与 DTO 的公开契约。
 
+
+
+L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_export_limit_guard=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
+
+## 14. 多重关联字段 Fixture 一致性规范
+
+- 当同一业务关系同时由直接外键和关联表表达时，E2E fixture 必须同步写入两种表示，不能只构造查询侧能看到的一半数据。
+- 若生产状态迁移同时校验 `Commission.withdrawal_id`、`Commission.status` 与 `WithdrawalCommission`，fixture 必须在调用迁移前断言三者一致。
+- 测试出现“关联状态已变化”时，应先核对 fixture 是否满足生产 where 条件，不得放宽生产并发或状态守卫来迎合不完整 fixture。
+- 静态 verifier 应检查关系构造语义；Docker E2E 应在关键状态迁移前输出或断言真实数据库关系。
+
+## 15. 接口契约驱动测试规范
+
+- 新增或修改 API 时，必须同时维护人类可读接口说明书和机器可读接口契约；路由实现、接口文档、契约文件和 E2E 必须在同一个 PR 中更新。
+- E2E、集成测试和报告 detector 在编写状态码、方法、路径、并发数量前，必须读取对应机器契约，禁止凭经验硬编码接口行为。
+- 测试作者必须先阅读路由实现和接口说明书，再设计 fixture 与断言；测试脚本应在启动时验证契约中的 method/path 与实际目标一致。
+- 每个负向用例只允许制造一个失败维度。测试幂等键冲突时，两份 payload 都必须先满足字段、枚举和金额规则；非法 payload 应按接口校验优先级断言 400，而不是误期望 409。
+- 接口校验顺序属于公开契约。字段校验、幂等比较、终态检查、乐观锁等优先级变化时，必须同步更新契约、说明书、E2E、stage report detector 和 report publish verifier。
+- 静态 verifier 必须检查测试确实读取机器契约，而不能只检查契约文件存在。
+- 静态 verifier 检查负向场景时，必须先定位具体命名场景或代码块，再核对该场景的 payload 与契约状态码；禁止用全文件 substring 黑名单否定一个在其他合法场景中允许出现的片段。

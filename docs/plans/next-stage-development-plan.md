@@ -1,9 +1,12 @@
 # 下一阶段开发计划
 
-当前稳定基线：stable/l43-business-base
-L43 merge commit：72a84e81218845c23872bd91ab58a03ccf4c0f33
+当前稳定基线：`stable/l44-business-base`
+基线 SHA：`3ae666ec0e26383a5b117b64dce30b86a2dee389`
+当前候选阶段：L45
+当前候选 PR：#52
+状态：等待完整 chain、report publish 和人工 review；最终门禁必须包含 `l45_tax_detail_success=true` 与 `l45_export_limit_guard=true`。
 
-L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台。L45 尚未开始。
+说明：L45 候选仍以 `stable/l44-business-base` 为业务基线；在 PR 合并前不得提前记录 `stable/l45-business-base` 或 L45 merge commit。
 
 # 后续阶段开发总计划：L39 到 MVP/上线收口
 
@@ -715,3 +718,6 @@ L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台
 - 持久化 JSON 的幂等判断必须使用规范化后的语义深比较或 canonical serialization，禁止依赖对象键顺序的原始 `JSON.stringify` 比较。
 - CSV BOM、文件签名等传输层属性必须检查原始响应字节，禁止用 `Response.text()` 解码后的字符串冒充字节证据。
 - API 响应 envelope 或 DTO 字段变化时，必须审计并更新所有旧阶段 E2E、客户端类型和 verifier；分页响应统一通过 `items` 访问记录。
+- 同一业务关系同时使用直接外键与关联表时，E2E fixture 必须同步写入并在状态迁移前断言一致；不得通过放宽生产守卫修复不完整 fixture。
+- API 测试必须先读取对应人类接口说明书和机器可读契约，再编写状态码、payload、并发与状态迁移断言；负向用例每次只制造一个失败维度。
+- 静态 verifier 必须按命名场景/代码块做语义校验，不得用全文件字符串黑名单误伤其他合法测试场景。

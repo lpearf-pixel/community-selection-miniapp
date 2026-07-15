@@ -1,0 +1,217 @@
+{
+  "contract_id": "l45-admin-tax-review",
+  "version": 1,
+  "source_route": "apps/api/src/routes/withdrawals.ts",
+  "human_document": "docs/api/l45-admin-tax-review-api.md",
+  "response_envelope": {
+    "success": {
+      "success": true,
+      "data": "endpoint-specific payload",
+      "message": ""
+    },
+    "failure": {
+      "success": false,
+      "data": null,
+      "message": "human-readable error"
+    }
+  },
+  "endpoints": {
+    "tax_record_list": {
+      "method": "GET",
+      "path": "/api/admin/tax-records",
+      "permission": "finance.view",
+      "data_scope": "withdrawal data scope before count and pagination",
+      "status_codes": {
+        "success": 200,
+        "unauthorized": 401,
+        "forbidden": 403,
+        "invalid_query": 400
+      }
+    },
+    "tax_record_detail": {
+      "method": "GET",
+      "path": "/api/admin/tax-records/:id",
+      "permission": "finance.view",
+      "data_scope": "linked withdrawal data scope",
+      "status_codes": {
+        "success": 200,
+        "unauthorized": 401,
+        "forbidden": 403,
+        "not_found": 404
+      }
+    },
+    "tax_record_export": {
+      "method": "GET",
+      "path": "/api/admin/tax-records/export.csv",
+      "permission": "finance.export",
+      "data_scope": "same filters and withdrawal data scope as list",
+      "status_codes": {
+        "success": 200,
+        "unauthorized": 401,
+        "forbidden": 403,
+        "invalid_query": 400,
+        "over_limit": 422
+      },
+      "headers": {
+        "content_type": "text/csv; charset=utf-8",
+        "content_disposition": "attachment; filename=tax-review-YYYY-MM-DD.csv",
+        "x_export_total": "actual exported row count",
+        "x_export_truncated": "false"
+      },
+      "rules": {
+        "utf8_bom": true,
+        "formula_injection_guard": true,
+        "limit": 10000,
+        "limit_strategy": "query limit + 1 and reject rather than truncate"
+      }
+    },
+    "tax_review": {
+      "method": "POST",
+      "path": "/api/admin/withdrawals/:id/tax-review",
+      "permission": "withdrawal.manage",
+      "data_scope": "withdrawal data scope",
+      "status_codes": {
+        "success": 200,
+        "invalid_request": 400,
+        "unauthorized": 401,
+        "forbidden": 403,
+        "not_found": 404,
+        "conflict": 409
+      },
+      "validation_precedence": [
+        "admin authentication and permission",
+        "withdrawal data scope",
+        "client_request_id and tax_mode syntax",
+        "withdrawal existence",
+        "amount, enum and tax-mode combination validation",
+        "normalized request snapshot creation",
+        "idempotency history lookup",
+        "terminal-state rejection for a new key",
+        "expected_updated_at validation and optimistic concurrency",
+        "transactional Withdrawal, TaxRecord, audit and event writes"
+      ],
+      "request": {
+        "required": [
+          "tax_mode",
+          "taxable_amount_cents",
+          "tax_amount_cents",
+          "client_request_id"
+        ],
+        "conditionally_required": [
+          "expected_updated_at for a new idempotency key"
+        ],
+        "optional": [
+          "tax_rate_basis",
+          "invoice_status",
+          "tax_remark"
+        ],
+        "server_derived": [
+          "tax_status",
+          "invoice_required",
+          "payable_amount_cents"
+        ]
+      },
+      "rules": {
+        "client_request_id_length": "trimmed 1-80",
+        "tax_modes": [
+          "none",
+          "withheld",
+          "invoice"
+        ],
+        "none_tax_amount_cents": 0,
+        "taxable_amount_must_not_exceed_withdrawal": true,
+        "tax_amount_must_not_exceed_taxable": true,
+        "new_key_allowed_withdrawal_statuses": [
+          "pending",
+          "approved"
+        ],
+        "idempotency_history_limit": 100
+      },
+      "scenarios": {
+        "invalid_none_nonzero_tax": {
+          "expected_status": 400,
+          "reason": "request fails amount validation before idempotency comparison"
+        },
+        "same_key_same_valid_payload": {
+          "expected_status": 200,
+          "idempotent": true
+        },
+        "same_key_different_valid_payload": {
+          "expected_status": 409,
+          "reason": "valid normalized snapshot conflicts with stored snapshot"
+        },
+        "same_key_different_invalid_payload": {
+          "expected_status": 400,
+          "reason": "invalid request is rejected before idempotency comparison"
+        },
+        "same_key_same_payload_after_terminal": {
+          "expected_status": 200,
+          "idempotent": true
+        },
+        "new_key_after_terminal": {
+          "expected_status": 409
+        },
+        "same_key_concurrent": {
+          "fulfilled": 2,
+          "applied": 1,
+          "idempotent": 1
+        },
+        "stale_new_key": {
+          "expected_status": 409
+        }
+      }
+    },
+    "mark_paid": {
+      "method": "POST",
+      "path": "/api/admin/withdrawals/:id/mark-paid",
+      "permission": "withdrawal.manage",
+      "data_scope": "withdrawal data scope",
+      "status_codes": {
+        "success": 200,
+        "invalid_request": 400,
+        "unauthorized": 401,
+        "forbidden": 403,
+        "conflict": 409
+      },
+      "request": {
+        "required": [
+          "manual_reference"
+        ],
+        "optional": [
+          "remark",
+          "reason"
+        ]
+      },
+      "preconditions": {
+        "withdrawal_status": "approved",
+        "tax_status": [
+          "completed",
+          "calculated"
+        ],
+        "invoice_if_required": "verified",
+        "commission_status": "withdrawing",
+        "commission_withdrawal_id": "must equal withdrawal id",
+        "withdrawal_commission_join": "must exist for every linked commission"
+      },
+      "scenarios": {
+        "valid_none_review_then_mark_paid": {
+          "expected_status": 200,
+          "withdrawal_status": "paid"
+        },
+        "already_paid": {
+          "expected_status": 200,
+          "idempotent": true
+        },
+        "incoherent_commission_link": {
+          "expected_status": 409
+        }
+      }
+    }
+  },
+  "test_authoring": {
+    "contract_file_must_be_loaded": true,
+    "negative_test_single_failure_dimension": true,
+    "valid_payload_required_for_idempotency_conflict_test": true,
+    "route_source_must_be_reviewed": true
+  }
+}
