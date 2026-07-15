@@ -49,3 +49,10 @@ CSV 文本字段导出前做公式注入防护，字段以 `=`、`+`、`-`、`@`
 
 
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_export_limit_guard=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
+
+## 接口契约
+
+- 人类可读说明：`docs/api/l45-admin-tax-review-api.md`
+- 机器可读契约：`docs/api/contracts/l45-admin-tax-review.contract.json`
+- L45 Docker E2E 必须读取机器契约后再断言状态码、幂等冲突和并发数量。
+
