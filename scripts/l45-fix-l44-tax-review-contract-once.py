@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Trigger the one-time workflow after its definition exists on the branch.
 # Update the L44 Docker E2E compatibility call to the current L45 mutation contract.
 e2e_path = Path('scripts/verify-docker-api-e2e-local.ts')
 e2e = e2e_path.read_text()
