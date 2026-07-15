@@ -272,6 +272,26 @@ function taxReviewSnapshot(input: { tax_mode: string; tax_status: string; taxabl
   return input;
 }
 
+function jsonValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left === null || right === null) return false;
+  if (typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((item, index) => jsonValuesEqual(item, right[index]));
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key, index) =>
+      key === rightKeys[index] &&
+      jsonValuesEqual(leftRecord[key], rightRecord[key]),
+  );
+}
+
 function csvSafe(value: unknown) {
   const text = value == null ? "" : String(value);
   const safe = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
@@ -855,7 +875,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
             const clientRequestId = String(body.client_request_id ?? "").trim();
             if (clientRequestId && existingPayload.client_request_id === clientRequestId) {
               const previous = existingPayload.review_snapshot;
-              if (JSON.stringify(previous) !== JSON.stringify(requested)) throw httpError("client_request_id 对应的税务复核内容不一致", 409);
+              if (!jsonValuesEqual(previous, requested)) throw httpError("client_request_id 对应的税务复核内容不一致", 409);
               return { withdrawal, tax_record: existing, idempotent: true };
             }
             const claimed = await tx.withdrawal.updateMany({

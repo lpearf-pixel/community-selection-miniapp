@@ -889,8 +889,19 @@ async function runL45TaxReviewScenario() {
   assert(taxRecordA.tax_mode === 'withheld' && taxRecordA.tax_status === 'calculated' && taxRecordA.amount_cents === 1000, 'L45 valid review must upsert TaxRecord');
   assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureA.withdrawal.id, action: 'withdrawal_tax_reviewed' } }) === beforeAudit + 1, 'L45 valid review must create exactly one AdminAuditLog');
   assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: 'withdrawal_tax_reviewed', order_id: null } }) === beforeEvent + 1, 'L45 valid review must create exactly one root BusinessEventLog');
-  const repeat = await request<{ idempotent?: boolean }>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent repeat', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reviewPayload });
-  assert(repeat.idempotent === true, 'L45 same client_request_id and same payload must be idempotent');
+  const reorderedReviewPayload = {
+    client_request_id: reviewPayload.client_request_id,
+    tax_remark: reviewPayload.tax_remark,
+    invoice_status: reviewPayload.invoice_status,
+    invoice_required: reviewPayload.invoice_required,
+    tax_rate_basis: reviewPayload.tax_rate_basis,
+    tax_amount_cents: reviewPayload.tax_amount_cents,
+    taxable_amount_cents: reviewPayload.taxable_amount_cents,
+    tax_status: reviewPayload.tax_status,
+    tax_mode: reviewPayload.tax_mode,
+  };
+  const repeat = await request<{ idempotent?: boolean }>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent repeat', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reorderedReviewPayload });
+  assert(repeat.idempotent === true, 'L45 same client_request_id and semantically identical payload must be idempotent regardless of JSON key order');
   await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { ...reviewPayload, tax_amount_cents: 121 } });
   const concurrent = await Promise.allSettled([
     request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent A', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-a` } }),

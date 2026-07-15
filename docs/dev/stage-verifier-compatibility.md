@@ -80,3 +80,14 @@
 - 并发执行两个 E2E 进程时，fixture 不得发生唯一键碰撞。
 - 可以增加 best-effort cleanup，但 cleanup 不能成为可重跑的唯一保障；核心保障必须是每次运行的唯一命名空间。
 - 出现唯一约束错误时，应先检查 fixture 唯一性契约，不得删除业务唯一索引或降低数据库约束来让测试通过。
+
+## 9. 持久化 JSON 与幂等比较规范
+
+- PostgreSQL `json` / `jsonb`、ORM 和序列化层不保证对象键顺序与请求输入顺序一致。
+- 禁止使用原始 `JSON.stringify(previous) === JSON.stringify(current)` 判断持久化 JSON 的业务等价性。
+- 幂等请求必须先把默认值、nullable 字段和枚举状态规范化为固定业务快照，再使用递归深比较或键排序后的 canonical serialization。
+- 对象键顺序不应影响幂等结果；数组顺序只有在业务语义定义为有序时才参与比较。
+- 同一幂等键和语义等价 payload 必须返回幂等成功；同一幂等键和真实字段差异必须返回 409。
+- Docker E2E 必须覆盖数据库 round-trip 后的重复请求，并至少一次使用不同属性插入顺序构造语义相同的 payload。
+- 静态 verifier 必须禁止顺序敏感的持久化 JSON 比较，但不能把具体 helper 名作为唯一实现方式；门禁应围绕语义等价、canonicalization 或 deep equality。
+
