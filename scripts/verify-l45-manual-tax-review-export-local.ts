@@ -19,7 +19,7 @@ assert(route.includes('csvSafe') && route.includes('/^[=+\\-@\\t\\r\\n]/'), 'CSV
 assert(route.includes('无税务扣减模式的税额必须为 0') && route.includes('taxableAmount > baseWithdrawal.amount_cents'), 'none mode and taxable amount validation must exist');
 assert(route.includes('Object.hasOwn') && route.includes('hasReviewRequest'), 'idempotency history must use Object.hasOwn for key lookup');
 const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
-assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: taxExportLimit(options.taxExportLimit) + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
+assert(exportBlock.includes('const limit = taxExportLimit(options.taxExportLimit)') && exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: limit + 1') && exportBlock.includes('ensureTaxExportWithinLimit(exportRecords, limit)') && !exportBlock.includes('count({ where })'), 'CSV export must use one local limit for deterministic limit+1 guard and validation');
 assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');
 assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous.snapshot, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
 assert(!route.includes('JSON.stringify(previous) !== JSON.stringify(requested)'), 'tax review idempotency must not depend on JSON object key order');
@@ -63,6 +63,7 @@ for (const key of ['tax_record_list','tax_record_detail','tax_record_export','ta
 assert(contract.includes('fulfilled_count') && contract.includes('applied_count') && contract.includes('idempotent_count') && !contract.includes('idempotent_count?: boolean'), 'concurrent contract must use count fields');
 assert(e2e.includes('l45_tax_export_over_limit_http_422=true') && e2e.includes('overLimitApp.inject') && e2e.includes('registerWithdrawalRoutes(overLimitApp, { taxExportLimit: 5 })') && !e2e.includes('process.env.TAX_RECORD_EXPORT_LIMIT') && !e2e.includes('l45_export_limit_guard=true'), 'CSV 422 marker must come from HTTP request, not helper-only marker');
 assert(reportGenerator.includes('L45_API_CONTRACT_LIST') && reportGenerator.includes('latestVerifyOutputForManifest.includes(api.runtime_marker)'), 'L45 report API verification must be per-interface from machine contract');
+assert(reportGenerator.includes('function l45ConcurrentRuntimeMarkers()') && reportGenerator.includes(".find((item) => item.type === 'concurrent')") && !reportGenerator.includes('l45_concurrent_fulfilled_count=2'), 'L45 report concurrent markers must be derived from the machine contract');
 assert(route.includes('提现税务状态未完成或未计算，不能标记已处理", 409') && route.includes('发票状态未确认，不能标记已处理", 409'), 'mark-paid state conflicts must use 409');
 
 const l44Body = e2e.split('async function runL44WithdrawalScenario()')[1]?.split('async function runL45TaxReviewScenario()')[0] ?? '';
@@ -74,6 +75,16 @@ assert(reportVerifier.includes('L45 中风险：buildTaxRecordWhere 当前会读
 assert(!existsSync('scripts/l45-api-contract.js') && existsSync('scripts/l45-api-contract.ts'), 'L45 API contract must have a single TypeScript source');
 assert(existsSync('docs/api/l45-admin-tax-review-api.md'), 'Human-readable L45 API spec must exist');
 assert(e2e.includes('l45_admin_scope_runtime=true') && e2e.includes('resolveAdminAccessContext'), 'E2E must include runtime admin scope source tests');
+const scopeRuntimeIndex = e2e.indexOf('const previousNodeEnv = process.env.NODE_ENV;');
+const scopeMarkerIndex = e2e.indexOf("console.log('l45_admin_scope_runtime=true')");
+assert(scopeRuntimeIndex >= 0 && scopeMarkerIndex > scopeRuntimeIndex, 'Admin scope runtime test and marker must exist in order');
+const scopeRuntimeBlock = e2e.slice(scopeRuntimeIndex, scopeMarkerIndex);
+assert(scopeRuntimeBlock.includes("const forgedScopeId = 'forged-community-id'") || scopeRuntimeBlock.indexOf('const communityA') < scopeRuntimeBlock.indexOf('communityA.id'), 'Admin scope test must define fixture or forged scope before use');
+assert(scopeRuntimeBlock.includes('try {') && scopeRuntimeBlock.includes('finally {') && scopeRuntimeBlock.includes('delete process.env.NODE_ENV') && scopeRuntimeBlock.includes('process.env.NODE_ENV = previousNodeEnv'), 'Admin scope runtime test must restore NODE_ENV with try/finally');
+assert(scopeRuntimeBlock.includes('production finance session must ignore forged scope headers') && scopeRuntimeBlock.includes('development header mock must use header scope') && scopeRuntimeBlock.includes('formal session must not fall back to header mock'), 'Admin scope runtime assertions must cover production and development trust boundaries');
+const tdzRejectedFixture = "const prodFinance = resolveAdminAccessContext({ headers: { 'x-admin-community-id': communityA.id } });\nconst communityA = await prisma.community.create({ data: {} });";
+assert(/communityA\.id[\s\S]*const communityA/.test(tdzRejectedFixture), 'Verifier TDZ fixture must demonstrate use-before-declaration detection');
+assert(!/communityA\.id[\s\S]*const communityA/.test(scopeRuntimeBlock), 'Admin scope runtime test must not use communityA before declaration');
 assert(!existsSync('.github/workflows/trigger-l45.yml') && !existsSync('scripts/one-time-l45-fix.ts'), 'No temporary workflow trigger files allowed');
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');

@@ -35,6 +35,19 @@ function argValue(name: string) {
 
 const stage = argValue('stage') ?? 'unknown';
 
+function l45ConcurrentRuntimeMarkers() {
+  const scenario = L45_API_CONTRACT_LIST
+    .flatMap((api) => api.scenarios)
+    .find((item) => item.type === 'concurrent');
+  if (!scenario || scenario.type !== 'concurrent') return [];
+  return [
+    `l45_concurrent_fulfilled_count=${scenario.fulfilled_count}`,
+    `l45_concurrent_applied_count=${scenario.applied_count}`,
+    `l45_concurrent_idempotent_count=${scenario.idempotent_count}`
+  ];
+}
+
+
 
 
 
@@ -212,7 +225,7 @@ function hasL44RuntimeMarkers() {
 }
 
 function hasL45RuntimeMarkers() {
-  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=','l45_concurrent_fulfilled_count=2','l45_concurrent_applied_count=1','l45_concurrent_idempotent_count=1','l45_csv_formula_safe=true','l45_tax_detail_success=true','l45_tax_export_over_limit_http_422=true','L45 manual tax review export runtime assertions passed.'];
+  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=',...l45ConcurrentRuntimeMarkers(),'l45_csv_formula_safe=true','l45_tax_detail_success=true','l45_tax_export_over_limit_http_422=true','L45 manual tax review export runtime assertions passed.'];
   return required.every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
 const l45Manifest = {
@@ -1232,7 +1245,7 @@ function stageVerifyChecks(content: string) {
     return [
       { command: 'L45 verifier', result: commandPassed(content, 'L45 verifier', ['L45 manual tax review export verifier passed.']) },
       { command: 'L24-L45 chain regression', result: commandPassed(content, 'L24-L45 chain regression', ['L45 manual tax review export verifier passed.', 'L44 manual withdrawal review verifier passed.', 'L43 reward ledger T3 refund deduct verification passed.', 'L24 miniapp cart verification passed.', 'Stage workflow verification passed.'], true) },
-      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', 'l45_concurrent_fulfilled_count=2', 'l45_concurrent_applied_count=1', 'l45_concurrent_idempotent_count=1', 'l45_csv_formula_safe=true', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', ...l45ConcurrentRuntimeMarkers(), 'l45_csv_formula_safe=true', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true'], true) },
       { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
       { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
       { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },

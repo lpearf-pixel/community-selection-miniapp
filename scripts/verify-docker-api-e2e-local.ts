@@ -841,19 +841,28 @@ async function runL45TaxReviewScenario() {
   const product = await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } });
 
   const previousNodeEnv = process.env.NODE_ENV;
-  process.env.NODE_ENV = 'production';
-  const prodFinance = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_FINANCE_ADMIN_ID, role: 'finance' }, headers: { 'x-admin-community-id': communityA.id } } as any);
-  assert(prodFinance?.data_scope_source === 'session' && prodFinance.data_scope.community_ids.length === 0 && !prodFinance.data_scope.can_access_all_communities, 'production finance session must ignore forged scope headers and fail closed');
-  const prodSuper = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_ADMIN_ID, role: 'super_admin' }, headers: {} } as any);
-  assert(prodSuper?.data_scope_source === 'session' && prodSuper.data_scope.can_access_all_communities && prodSuper.data_scope.can_access_all_pickup_stores, 'production super_admin session must retain full scope');
-  const prodHeaderOnly = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': communityA.id } } as any);
-  assert(prodHeaderOnly === null, 'production header-only mock identity must not authenticate');
-  process.env.NODE_ENV = 'development';
-  const devHeader = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': communityA.id } } as any);
-  assert(devHeader?.data_scope_source === 'header_mock' && devHeader.data_scope.community_ids.includes(communityA.id), 'development header mock must use header scope');
-  const devSession = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_FINANCE_ADMIN_ID, role: 'finance' }, headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': DOCKER_E2E_ADMIN_ID, 'x-admin-community-id': communityA.id } } as any);
-  assert(devSession?.data_scope_source === 'session' && devSession.role === 'finance' && devSession.data_scope.community_ids.length === 0, 'formal session must not fall back to header mock even in development');
-  if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+  const forgedScopeId = 'forged-community-id';
+  try {
+    process.env.NODE_ENV = 'production';
+    const prodFinance = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_FINANCE_ADMIN_ID, role: 'finance' }, headers: { 'x-admin-community-id': forgedScopeId } } as any);
+    assert(prodFinance?.data_scope_source === 'session' && prodFinance.data_scope.community_ids.length === 0 && !prodFinance.data_scope.can_access_all_communities, 'production finance session must ignore forged scope headers and fail closed');
+    const prodSuper = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_ADMIN_ID, role: 'super_admin' }, headers: {} } as any);
+    assert(prodSuper?.data_scope_source === 'session' && prodSuper.data_scope.can_access_all_communities && prodSuper.data_scope.can_access_all_pickup_stores, 'production super_admin session must retain full scope');
+    const prodHeaderOnly = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': forgedScopeId } } as any);
+    assert(prodHeaderOnly === null, 'production header-only mock identity must not authenticate');
+
+    process.env.NODE_ENV = 'development';
+    const devHeader = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': forgedScopeId } } as any);
+    assert(devHeader?.data_scope_source === 'header_mock' && devHeader.data_scope.community_ids.includes(forgedScopeId), 'development header mock must use header scope');
+    const devSession = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_FINANCE_ADMIN_ID, role: 'finance' }, headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': DOCKER_E2E_ADMIN_ID, 'x-admin-community-id': forgedScopeId } } as any);
+    assert(devSession?.data_scope_source === 'session' && devSession.role === 'finance' && devSession.data_scope.community_ids.length === 0, 'formal session must not fall back to header mock even in development');
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  }
   console.log('l45_admin_scope_runtime=true');
 
   const leaderA = await prisma.user.create({ data: { openid: `${runId}-leader-a`, nickname: '=HYPERLINK("https://example.com")', phone: '13600000001', role: 'leader' } });

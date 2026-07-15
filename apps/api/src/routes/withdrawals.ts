@@ -833,10 +833,11 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
         const where = await buildTaxRecordWhere(query, context);
-        const exportRecords = await prisma.taxRecord.findMany({ where, orderBy: [{ created_at: "desc" }, { id: "desc" }], take: taxExportLimit(options.taxExportLimit) + 1 });
+        const limit = taxExportLimit(options.taxExportLimit);
+        const exportRecords = await prisma.taxRecord.findMany({ where, orderBy: [{ created_at: "desc" }, { id: "desc" }], take: limit + 1 });
         let records: typeof exportRecords;
         try {
-          records = ensureTaxExportWithinLimit(exportRecords);
+          records = ensureTaxExportWithinLimit(exportRecords, limit);
         } catch (error) {
           reply.code((error as { statusCode?: number }).statusCode ?? 422);
           return fail(error instanceof Error ? error.message : "导出记录超过上限");
