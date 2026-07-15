@@ -1,0 +1,34 @@
+name: L45 scenario-local verifier one-time fix
+
+on:
+  push:
+    branches:
+      - codex/fix-tax-status-enforcement-and-idempotency-r0mcxr
+    paths:
+      - scripts/l45-fix-scenario-local-verifier-once.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/fix-tax-status-enforcement-and-idempotency-r0mcxr
+          fetch-depth: 0
+      - name: Apply scenario-local verifier fix
+        run: python3 scripts/l45-fix-scenario-local-verifier-once.py
+      - name: Remove one-time files
+        run: |
+          rm -f scripts/l45-fix-scenario-local-verifier-once.py
+          rm -f .github/workflows/l45-fix-scenario-local-verifier-once.yml
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/verify-l45-manual-tax-review-export-local.ts docs/dev/stage-verifier-compatibility.md docs/plans/next-stage-development-plan.md scripts/l45-fix-scenario-local-verifier-once.py .github/workflows/l45-fix-scenario-local-verifier-once.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(L45): scope verifier checks to named API scenarios"
+          git push origin HEAD:codex/fix-tax-status-enforcement-and-idempotency-r0mcxr
