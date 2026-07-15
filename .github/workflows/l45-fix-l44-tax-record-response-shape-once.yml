@@ -1,0 +1,33 @@
+name: L45 one-time L44 tax-record response shape fix
+
+on:
+  push:
+    branches:
+      - codex/add-manual-tax-review-and-export-system-qgtszl
+    paths:
+      - scripts/l45-fix-l44-tax-record-response-shape-once.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/add-manual-tax-review-and-export-system-qgtszl
+          fetch-depth: 0
+      - name: Apply response contract fix
+        run: python3 scripts/l45-fix-l44-tax-record-response-shape-once.py
+      - name: Remove one-time files
+        run: |
+          rm -f scripts/l45-fix-l44-tax-record-response-shape-once.py
+          rm -f .github/workflows/l45-fix-l44-tax-record-response-shape-once.yml
+      - name: Commit and push
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(L45): align L44 tax-record E2E with paginated response" || exit 0
+          git push origin HEAD:codex/add-manual-tax-review-and-export-system-qgtszl
