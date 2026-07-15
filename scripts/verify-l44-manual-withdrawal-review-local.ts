@@ -141,6 +141,9 @@ assert(!taxRecordsRoute.includes('for (const record of records)'), 'tax records 
 
 const l44Function = functionSlice(e2e, 'runL44WithdrawalScenario');
 assert(!l44Function.includes('const l44RuntimeEvidence'), 'L44 E2E must not use hardcoded evidence object');
+assert(l44Function.includes('type TaxRecordPage = { items:') && l44Function.includes('taxRecordsA.items') && l44Function.includes('taxRecordsB.items'), 'L44 E2E tax-record consumer must use the paginated response envelope');
+assert(l44Function.includes('tax_record_id') && l44Function.includes('withdrawal_id'), 'L44 E2E tax-record assertions must use the current DTO field names');
+assert(!l44Function.includes("request<Array<{ id: string }>>('GET', `/api/admin/tax-records"), 'L44 E2E must not treat the paginated tax-record API as a raw array');
 for (const required of ['/api/leaders/me/withdrawals','/api/leaders/me/withdrawable-commissions','/api/admin/withdrawals/','Promise.all','Promise.allSettled']) assert(l44Function.includes(required), `L44 E2E must issue real request/concurrency: ${required}`);
 for (const required of ['prisma.withdrawal','prisma.withdrawalCommission','prisma.commission','prisma.rewardLedger','prisma.adminAuditLog','prisma.businessEventLog','getAvailableRewardBalance']) assert(l44Function.includes(required), `L44 E2E must assert database state: ${required}`);
 for (const marker of ['withdrawal_initial_available_balance_cents','withdrawal_reserved_amount_cents','withdrawal_balance_after_request_cents','withdrawal_same_request_concurrent_count','withdrawal_competing_request_success_count','withdrawal_link_count','withdrawal_ledger_mismatch_event_count','withdrawal_rejected_restore_ledger_count','withdrawal_balance_after_reject_cents','withdrawal_approve_reject_success_count','withdrawal_paid_status','withdrawal_balance_after_paid_cents','withdrawal_paid_ledger_count','withdrawal_repeat_no_duplicate']) assertTemplateMarker(l44Function, marker);

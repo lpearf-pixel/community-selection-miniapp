@@ -99,3 +99,12 @@
 - 调试日志应记录首字节数组和 BOM 判断结果，但不得把完整敏感文件内容写入日志。
 - 静态 verifier 必须阻止把文本解码结果冒充原始传输字节证据。
 
+## 11. API 响应契约与跨阶段消费者规范
+
+- API 从裸数组升级为分页 envelope、字段重命名或嵌套结构调整时，必须搜索并更新所有旧阶段 E2E、Admin/小程序客户端、类型定义和 verifier 消费者。
+- 测试不得只依赖 TypeScript 泛型“声明”响应形状；必须对运行时 envelope（如 `items`、`total`、`page`、`page_size`）执行断言后再访问记录。
+- 分页接口禁止继续对响应根对象调用 `.some()`、`.map()`、`.length` 等数组方法；应明确访问 `response.items`。
+- DTO 字段必须使用接口当前公开名称，例如 `tax_record_id`，不得继续假设 Prisma 原始字段 `id`。
+- 新阶段改变既有 API shape 时，完整 chain 中所有受影响旧阶段场景都必须真实运行；不能只修改当前阶段 verifier。
+- 静态 verifier 应阻止已知旧 shape，但不能把某一个局部变量名作为唯一门禁；重点应是 envelope 与 DTO 的公开契约。
+

@@ -789,9 +789,11 @@ async function runL44WithdrawalScenario() {
   const negativeAfter = { withdrawal: await prisma.withdrawal.findUnique({ where: { id: scopeBW.withdrawal_id } }), links: await prisma.withdrawalCommission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), commissions: await prisma.commission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), ledger: await prisma.rewardLedger.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), audit: await prisma.adminAuditLog.count({ where: { target_id: scopeBW.withdrawal_id } }), events: await prisma.businessEventLog.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }) };
   assert(JSON.stringify(negativeBefore) === JSON.stringify(negativeAfter), 'L44 negative authorization calls must not mutate withdrawal/link/commission/ledger/audit/event snapshots');
   const taxRecord = await prisma.taxRecord.create({ data: { leader_user_id: leaderScopeB.id, source_type: 'withdrawal', source_id: scopeBW.withdrawal_id, tax_mode: 'none', tax_status: 'completed', amount_cents: 111, payload: { runId } } });
-  const taxRecordsA = await request<Array<{ id: string }>>('GET', `/api/admin/tax-records?source_type=withdrawal&source_id=${scopeBW.withdrawal_id}`, { label: 'L44 tax records scoped finance A excludes B', headers: financeAHeaders });
-  const taxRecordsB = await request<Array<{ id: string }>>('GET', `/api/admin/tax-records?source_type=withdrawal&source_id=${scopeBW.withdrawal_id}`, { label: 'L44 tax records scoped finance B includes B', headers: financeBHeaders });
-  assert(!taxRecordsA.some((item) => item.id === taxRecord.id) && taxRecordsB.some((item) => item.id === taxRecord.id), 'L44 tax-records must apply withdrawal data scope');
+  type TaxRecordPage = { items: Array<{ tax_record_id: string; withdrawal_id: string | null }>; total: number; page: number; page_size: number };
+  const taxRecordsA = await request<TaxRecordPage>('GET', `/api/admin/tax-records?source_type=withdrawal&source_id=${scopeBW.withdrawal_id}`, { label: 'L44 tax records scoped finance A excludes B', headers: financeAHeaders });
+  const taxRecordsB = await request<TaxRecordPage>('GET', `/api/admin/tax-records?source_type=withdrawal&source_id=${scopeBW.withdrawal_id}`, { label: 'L44 tax records scoped finance B includes B', headers: financeBHeaders });
+  assert(Array.isArray(taxRecordsA.items) && taxRecordsA.total === 0 && taxRecordsA.items.length === 0, 'L44 scoped finance A tax-record page must exclude the scope B record');
+  assert(Array.isArray(taxRecordsB.items) && taxRecordsB.total === 1 && taxRecordsB.items.length === 1 && taxRecordsB.items[0].tax_record_id === taxRecord.id && taxRecordsB.items[0].withdrawal_id === scopeBW.withdrawal_id, 'L44 scoped finance B tax-record page must include the exact scope B record');
   console.log('l44_authorization_scenario_passed');
 
   const withdrawalReservedAmount = reservedLedgers[0].amount_cents;
