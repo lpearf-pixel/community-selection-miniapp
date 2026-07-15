@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveAdminAccessContext } from '../apps/api/src/modules/admin-access/admin-access-control.js';
 
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
@@ -17,6 +18,60 @@ function assertNoSensitiveOutput(file: string, content: string) {
   for (const term of forbidden) assert(!content.includes(term), `${file} must not expose ${term}`);
   const rawPhoneOutput = /receiver_phone\s*:/g.test(content.replace(/receiver_phone\?:/g, '').replace(/receiver_phone_masked/g, ''));
   assert(!rawPhoneOutput, `${file} must not output raw receiver phone`);
+}
+
+function verifyAdminIdentityTrustBoundary() {
+  const previousNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+
+    const unknownSessionRole = resolveAdminAccessContext({
+      adminUser: { id: 'admin-unknown-role', role: 'unknown-role' },
+      headers: {},
+    } as any);
+    assert(unknownSessionRole === null, 'unknown formal-session role must be rejected');
+
+    const missingIdentity = resolveAdminAccessContext({ headers: {} } as any);
+    assert(missingIdentity === null, 'missing Admin identity must not default to super_admin');
+
+    const productionHeaderOnly = resolveAdminAccessContext({
+      headers: {
+        'x-admin-role': 'super_admin',
+        'x-admin-user-id': 'forged-admin',
+      },
+    } as any);
+    assert(productionHeaderOnly === null, 'production must not trust x-admin-role or x-admin-user-id');
+
+    process.env.NODE_ENV = 'development';
+    const developmentHeaderMock = resolveAdminAccessContext({
+      headers: {
+        'x-admin-role': 'finance',
+        'x-admin-user-id': 'dev-finance',
+      },
+    } as any);
+    assert(
+      developmentHeaderMock?.role === 'finance' && developmentHeaderMock.data_scope_source === 'header_mock',
+      'development header mock must remain available for the L31 baseline',
+    );
+
+    const formalSessionWins = resolveAdminAccessContext({
+      adminUser: { id: 'formal-finance', role: 'finance' },
+      headers: {
+        'x-admin-role': 'super_admin',
+        'x-admin-user-id': 'forged-super-admin',
+      },
+    } as any);
+    assert(
+      formalSessionWins?.admin_user_id === 'formal-finance' &&
+      formalSessionWins.role === 'finance' &&
+      formalSessionWins.data_scope_source === 'session' &&
+      !formalSessionWins.is_super_admin,
+      'formal session identity must not be elevated by x-admin-role headers',
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
 }
 
 function main() {
@@ -55,7 +110,7 @@ function main() {
     'x-admin-role','x-admin-user-id','ADMIN_FORBIDDEN','Permission denied'
   ].forEach((keyword) => assert(access.includes(keyword), `Missing backend access keyword: ${keyword}`));
 
-  ['unknown role rejected', 'no default super_admin', 'production does not trust x-admin-role'].forEach((keyword) => assert(access.includes(keyword), `Missing access safety comment/semantic: ${keyword}`));
+  verifyAdminIdentityTrustBoundary();
   assert(doc.includes('前端菜单只做体验') && doc.includes('后端权限校验是安全边界'), 'frontend permission is not security boundary must be documented');
 
   const financeRoutes = ['refund-ledger', 'refund-ledger/export.csv', 'refund-risk/overview', 'refund-risk/items', 'refund-risk/export.csv'];
