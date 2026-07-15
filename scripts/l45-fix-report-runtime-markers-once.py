@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Trigger the one-time workflow after its definition exists on the branch.
 # Align E2E runtime evidence with the current same-key concurrency contract.
 e2e_path = Path('scripts/verify-docker-api-e2e-local.ts')
 e2e = e2e_path.read_text()
