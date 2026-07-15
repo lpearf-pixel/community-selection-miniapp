@@ -1,9 +1,12 @@
 # 下一阶段开发计划
 
-当前稳定基线：stable/l43-business-base
-L43 merge commit：72a84e81218845c23872bd91ab58a03ccf4c0f33
+当前稳定基线：`stable/l44-business-base`
+基线 SHA：`3ae666ec0e26383a5b117b64dce30b86a2dee389`
+当前候选阶段：L45
+当前候选 PR：#52
+状态：等待完整 chain、report publish 和人工 review。
 
-L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台。L45 尚未开始。
+说明：L45 候选仍以 `stable/l44-business-base` 为业务基线；在 PR 合并前不得提前记录 `stable/l45-business-base` 或 L45 merge commit。
 
 # 后续阶段开发总计划：L39 到 MVP/上线收口
 
@@ -715,3 +718,5 @@ L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台
 - 持久化 JSON 的幂等判断必须使用规范化后的语义深比较或 canonical serialization，禁止依赖对象键顺序的原始 `JSON.stringify` 比较。
 - CSV BOM、文件签名等传输层属性必须检查原始响应字节，禁止用 `Response.text()` 解码后的字符串冒充字节证据。
 - API 响应 envelope 或 DTO 字段变化时，必须审计并更新所有旧阶段 E2E、客户端类型和 verifier；分页响应统一通过 `items` 访问记录。
+- Mutation API 新增必填幂等键或 `expected_updated_at` 等安全字段时，必须同步更新所有旧阶段调用；禁止为兼容旧测试而降低新接口约束。
+- 并发或幂等语义变化时，必须同步更新 E2E marker、stage report detector 与 report publish verifier；同键并发需分别验证 applied 与 idempotent 数量。

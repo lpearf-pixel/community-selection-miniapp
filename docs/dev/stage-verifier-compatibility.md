@@ -108,3 +108,19 @@
 - 新阶段改变既有 API shape 时，完整 chain 中所有受影响旧阶段场景都必须真实运行；不能只修改当前阶段 verifier。
 - 静态 verifier 应阻止已知旧 shape，但不能把某一个局部变量名作为唯一门禁；重点应是 envelope 与 DTO 的公开契约。
 
+## 12. Mutation 请求契约与旧阶段兼容规范
+
+- 新阶段为既有 mutation API 增加必填幂等键、版本字段、状态字段或其他安全参数时，必须搜索并更新所有旧阶段 E2E、客户端调用、示例、文档和 verifier。
+- 不得为了让旧调用继续通过而把新安全字段重新改为可选；应让旧调用读取当前资源版本并提供每次运行唯一的幂等键。
+- 需要 optimistic concurrency 的调用必须在前置 mutation 完成后重新读取最新 `updated_at`，禁止继续使用创建 fixture 时的陈旧版本。
+- 静态 verifier 应检查旧阶段调用满足当前公开 mutation contract，并由完整 chain 进行真实运行验证。
+- 错误修复必须同时覆盖当前阶段和受影响的历史阶段，避免单独运行当前阶段时通过、完整 chain 时失败。
+
+## 13. 运行时 Marker 与业务断言同步规范
+
+- 运行时 marker 必须来自已经通过的业务断言变量，不能由报告脚本猜测或硬编码旧数量。
+- 并发、幂等或状态机语义发生变化时，必须同步审计 Docker E2E 输出、stage report runtime marker、verification row detector 和 report publish verifier。
+- “请求成功数”不足以证明幂等语义；同键并发场景必须分别输出并验证 applied 数和 idempotent 数。
+- 报告生成器不得为了兼容旧输出接受互相矛盾的多个 marker；应只接受当前公开业务契约。
+- 完整 chain 通过后，报告应基于同一次运行产生的 marker，禁止复用旧 head 的 latest verify output。
+

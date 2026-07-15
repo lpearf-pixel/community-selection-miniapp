@@ -1,4 +1,4 @@
-const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
+import { adminFetch, requestAdminJson } from "./adminRequest";
 
 export type TaxReviewRow = {
   tax_record_id: string;
@@ -23,6 +23,7 @@ export type TaxReviewRow = {
   community_names: string[];
   created_at: string;
   processed_at?: string | null;
+  updated_at: string;
 };
 export type TaxReviewList = { items: TaxReviewRow[]; total: number; page: number; page_size: number };
 export type TaxReviewDetail = TaxReviewRow & {
@@ -40,14 +41,8 @@ export type TaxReviewPayload = {
   invoice_status?: string;
   tax_remark?: string;
   client_request_id: string;
+  expected_updated_at: string;
 };
-
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${apiBaseUrl}${path}`, { ...init, headers: { "content-type": "application/json", "x-admin-user-id": "admin-dev", "x-admin-role": "finance", ...(init?.headers ?? {}) } });
-  const body = await res.json();
-  if (!res.ok || !body.success) throw new Error(body.message ?? "请求失败");
-  return body.data as T;
-}
 
 function query(params: Record<string, unknown>) {
   const query = new URLSearchParams();
@@ -57,8 +52,28 @@ function query(params: Record<string, unknown>) {
 
 export function listTaxReview(params: Record<string, unknown>) {
   const qs = query(params);
-  return requestJson<TaxReviewList>(`/api/admin/tax-records${qs ? `?${qs}` : ""}`);
+  return requestAdminJson<TaxReviewList>(`/api/admin/tax-records${qs ? `?${qs}` : ""}`);
 }
-export function getTaxReviewDetail(id: string) { return requestJson<TaxReviewDetail>(`/api/admin/tax-records/${id}`); }
-export function submitTaxReview(withdrawalId: string, payload: TaxReviewPayload) { return requestJson(`/api/admin/withdrawals/${withdrawalId}/tax-review`, { method: "POST", body: JSON.stringify(payload) }); }
-export function taxReviewExportUrl(params: Record<string, unknown>) { const qs = query(params); return `${apiBaseUrl}/api/admin/tax-records/export.csv${qs ? `?${qs}` : ""}`; }
+export function getTaxReviewDetail(id: string) { return requestAdminJson<TaxReviewDetail>(`/api/admin/tax-records/${id}`); }
+export function submitTaxReview(withdrawalId: string, payload: TaxReviewPayload) { return requestAdminJson(`/api/admin/withdrawals/${withdrawalId}/tax-review`, { method: "POST", body: JSON.stringify(payload) }); }
+export async function downloadTaxReviewCsv(params: Record<string, unknown>): Promise<string> {
+  const qs = query(params);
+  const res = await adminFetch(`/api/admin/tax-records/export.csv${qs ? `?${qs}` : ""}`, { json: false });
+  if (!res.ok) {
+    let message = "导出失败";
+    try { const body = await res.json(); message = body.message ?? message; } catch { message = await res.text() || message; }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? "tax-review.csv";
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  return filename;
+}
