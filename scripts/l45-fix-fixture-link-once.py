@@ -69,3 +69,5 @@ plan_line = '- 同一业务关系同时使用直接外键与关联表时，E2E f
 if plan_line not in plan:
     plan = plan.rstrip() + '\n' + plan_line + '\n'
 plan_path.write_text(plan)
+
+# Trigger one-time workflow.
