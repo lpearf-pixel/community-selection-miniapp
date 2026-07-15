@@ -28,7 +28,10 @@ for (const readinessMarker of ['waitForApiReady', "'/api/health'", 'fetchWithTim
 }
 assert(!e2e.includes('await fetch(`${API_BASE_URL}'), 'Docker E2E API calls must go through fetchOrThrow for diagnostics');
 assert(e2e.includes("const runId = `l45-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`"), 'L45 E2E run token must be unique across reruns and concurrent processes');
-assert(e2e.includes("suffix === 'danger-a' ? `\tclient-danger-${runId}`"), 'L45 dangerous unique client_request_id fixture must include the run token');
-assert(!e2e.includes("suffix === 'danger-a' ? '\tclient-danger'"), 'L45 unique fields must not use fixed dangerous fixture values');
+const dangerousClientFixtureLine = e2e.split(/\r?\n/).find((line) => line.includes("suffix === 'danger-a'") && line.includes('client_request_id'));
+assert(dangerousClientFixtureLine, 'L45 dangerous client_request_id fixture line must exist');
+assert(dangerousClientFixtureLine.includes('client-danger-${runId}'), 'L45 dangerous unique client_request_id fixture must include the run token');
+assert(dangerousClientFixtureLine.includes(String.raw`\tclient-danger-`), 'L45 dangerous client_request_id fixture must preserve the escaped tab prefix');
+assert(!e2e.includes(String.raw`suffix === 'danger-a' ? '\tclient-danger'`), 'L45 unique fields must not use fixed dangerous fixture values');
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');
