@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
+import { l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -160,18 +161,19 @@ assert(generateSource.includes('Commission') && generateSource.includes('review_
 for (const required of ['L44 manual withdrawal review workbench','stable/l43-business-base','72a84e81218845c23872bd91ab58a03ccf4c0f33','WithdrawalCommission','GET', '/api/admin/withdrawals/:id', 'withdrawal.view + data scope', 'withdrawal.manage + data scope', 'hasL44RuntimeMarkers']) {
   assert(generateSource.includes(required), `L44 report generator should include ${required}`);
 }
-for (const required of ['isL45Stage', 'L45 manual tax review and internal CSV export', 'stable/l44-business-base', '3ae666ec0e26383a5b117b64dce30b86a2dee389', 'withdrawal.manage + data scope', '无新增表', '无新增字段', '复用 Withdrawal', '复用 WithdrawalCommission', '复用 TaxRecord', '复用 AdminAuditLog', '复用 BusinessEventLog', 'L24-L45 chain regression', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true']) {
+for (const required of ['isL45Stage', 'L45 manual tax review and internal CSV export', 'stable/l44-business-base', '3ae666ec0e26383a5b117b64dce30b86a2dee389', 'withdrawal.manage + data scope', '无新增表', '无新增字段', '复用 Withdrawal', '复用 WithdrawalCommission', '复用 TaxRecord', '复用 AdminAuditLog', '复用 BusinessEventLog', 'L24-L45 chain regression', 'runtime_markers_required', 'l45TaxReviewConcurrentScenario', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true', 'l45_tax_review_stale_version_409=true', 'l45_mark_paid_rollback_verified=true']) {
   assert(generateSource.includes(required), `L45 report generator should include ${required}`);
 }
 assert(!generateSource.includes("permissions: ['public']"), 'L44 report permissions must not be public');
 const l45ContractSource = read('scripts/l45-api-contract.ts');
-for (const required of ['tax_record_list','tax_record_detail','tax_record_export','tax_review','mark_paid','fulfilled_count','applied_count','idempotent_count']) assert(l45ContractSource.includes(required), `L45 machine contract missing ${required}`);
+for (const required of ['tax_record_list','tax_record_detail','tax_record_export','tax_review','mark_paid','fulfilled_count','applied_count','idempotent_count','runtime_markers_required','l45_tax_review_stale_version_409=true','l45_mark_paid_rollback_verified=true']) assert(l45ContractSource.includes(required), `L45 machine contract missing ${required}`);
+assert(l45ConcurrentRuntimeMarkers().every((marker) => generateSource.includes('l45ConcurrentRuntimeMarkers') || l45ContractSource.includes(marker.split('=')[0])), 'L45 report verifier must share concurrent marker helper semantics');
 const dockerE2eSource = read('scripts/verify-docker-api-e2e-local.ts');
 assert(!dockerE2eSource.includes('const l44RuntimeEvidence'), 'L44 Docker E2E must not use hardcoded evidence object');
 for (const required of ['=== L44 leader identity scenario ===','l44_creation_scenario_passed','Promise.allSettled','/api/leaders/me/withdrawals','/api/admin/withdrawals/','prisma.withdrawal','prisma.withdrawalCommission','prisma.rewardLedger','prisma.businessEventLog','getAvailableRewardBalance']) {
   assert(dockerE2eSource.includes(required), `L44 Docker E2E should include real runtime evidence: ${required}`);
 }
-for (const required of ['runL45TaxReviewScenario', 'POST /api/admin/withdrawals/:id/tax-review', 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeNoScopeHeaders', 'fixtureB', 'negative taxable', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2', 'l45_csv_formula_safe', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true', 'none nonzero tax']) {
+for (const required of ['runL45TaxReviewScenario', 'POST /api/admin/withdrawals/:id/tax-review', 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeNoScopeHeaders', 'fixtureB', 'negative taxable', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2', 'l45_csv_formula_safe', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true', 'none nonzero tax', 'l45_tax_review_stale_version_409=true', 'l45_tax_review_terminal_replay=true', 'l45_tax_review_invalid_same_key_400=true', 'l45_tax_review_valid_same_key_409=true', 'l45_mark_paid_rollback_verified=true']) {
   assert(dockerE2eSource.includes(required), `L45 Docker E2E should include real runtime evidence: ${required}`);
 }
 

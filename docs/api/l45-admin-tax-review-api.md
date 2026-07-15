@@ -78,3 +78,31 @@ The client cannot set `tax_status` or `invoice_required`; both are server-derive
 - Formula-leading cells (`=`, `+`, `-`, `@`, tab, CR/LF) are prefixed safely.
 - Export uses a deterministic `limit + 1` guard and never returns partial CSV when over limit.
 - Over-limit export returns HTTP 422 JSON failure, no BOM, and no `Content-Disposition: attachment`.
+
+## Required runtime markers by API
+
+A report may mark an API as `verified=yes` only when every marker in that API group is present in the final Docker/stage verify output.
+
+- Tax record list: `l45_tax_list_scope_success=true`, `l45_admin_scope_runtime=true`.
+- Tax record detail: `l45_tax_detail_success=true`.
+- Tax record export: `l45_tax_export_success=true`, `l45_tax_export_over_limit_http_422=true`, `l45_csv_formula_safe=true`.
+- Tax review: `l45_tax_review_success=true`, `l45_tax_review_stale_version_409=true`, `l45_tax_review_terminal_replay=true`, `l45_tax_review_new_key_terminal_409=true`, `l45_tax_review_invalid_same_key_400=true`, `l45_tax_review_valid_same_key_409=true`, `l45_tax_review_concurrent_counts=true`.
+- Mark paid: `l45_mark_paid_success=true`, `l45_mark_paid_conflict_409=true`, `l45_mark_paid_rollback_verified=true`.
+
+## Stale version 409 semantics
+
+For a new `client_request_id`, the backend compares `expected_updated_at` with the current Withdrawal `updated_at` before writing any Review side effects. If the value is stale while the Withdrawal is still in an otherwise reviewable state, the API returns HTTP 409 with exactly:
+
+```text
+提现税务状态已变化，请刷新后重试
+```
+
+The stale request must not mutate Withdrawal, append the failed key to `TaxRecord.payload.review_requests`, or write `AdminAuditLog` / `BusinessEventLog` rows.
+
+## Mark-paid transaction atomicity
+
+All mark-paid state changes run in one transaction. For tax-status conflicts, unverified invoice conflicts, and Commission association/status conflicts, HTTP 409 must roll back the attempted Withdrawal update and must not write `manual_reference`, `processed_at`, `processed_by_admin_id`, Commission status changes, `withdrawal_paid` RewardLedger rows, `withdrawal_mark_paid` AdminAuditLog rows, or `withdrawal_mark_paid` BusinessEventLog rows.
+
+## Known medium risk
+
+`buildTaxRecordWhere` currently reads visible Withdrawal IDs into memory and constructs a TaxRecord `source_id IN (...)` filter. This preserves correct count and pagination semantics for L45, but it is a known medium scale risk and should be replaced by a database-side `EXISTS`/JOIN query in a later stage.

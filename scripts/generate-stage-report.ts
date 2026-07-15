@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { L45_API_CONTRACT_LIST } from './l45-api-contract.ts';
+import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -35,16 +35,8 @@ function argValue(name: string) {
 
 const stage = argValue('stage') ?? 'unknown';
 
-function l45ConcurrentRuntimeMarkers() {
-  const scenario = L45_API_CONTRACT_LIST
-    .flatMap((api) => api.scenarios)
-    .find((item) => item.type === 'concurrent');
-  if (!scenario || scenario.type !== 'concurrent') return [];
-  return [
-    `l45_concurrent_fulfilled_count=${scenario.fulfilled_count}`,
-    `l45_concurrent_applied_count=${scenario.applied_count}`,
-    `l45_concurrent_idempotent_count=${scenario.idempotent_count}`
-  ];
+function l45ApiVerified(api: (typeof L45_API_CONTRACT_LIST)[number]) {
+  return api.runtime_markers_required.every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
 
 
@@ -225,14 +217,14 @@ function hasL44RuntimeMarkers() {
 }
 
 function hasL45RuntimeMarkers() {
-  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=',...l45ConcurrentRuntimeMarkers(),'l45_csv_formula_safe=true','l45_tax_detail_success=true','l45_tax_export_over_limit_http_422=true','L45 manual tax review export runtime assertions passed.'];
+  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=',...l45ConcurrentRuntimeMarkers(),...L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required),'L45 manual tax review export runtime assertions passed.'];
   return required.every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
 const l45Manifest = {
   businessBaseBranch: 'stable/l44-business-base',
   businessBaseCommit: '3ae666ec0e26383a5b117b64dce30b86a2dee389',
   title: 'L45 manual tax review and internal CSV export',
-  apis: L45_API_CONTRACT_LIST.map((api) => ({ method: api.method, path: api.path, permissions: [api.permission], purpose: api.purpose, verified: latestVerifyOutputForManifest.includes(api.runtime_marker) ? 'yes' : 'not detected' })),
+  apis: L45_API_CONTRACT_LIST.map((api) => ({ method: api.method, path: api.path, permissions: [api.permission], purpose: api.purpose, verified: l45ApiVerified(api) ? 'yes' : 'not detected' })),
   db: ['无新增表','无新增字段','复用 Withdrawal','复用 WithdrawalCommission','复用 TaxRecord','复用 AdminAuditLog','复用 BusinessEventLog'],
   verify: ['scripts/verify-l45-manual-tax-review-export-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L45 --publish --scope=chain --push']
 };
@@ -1245,7 +1237,7 @@ function stageVerifyChecks(content: string) {
     return [
       { command: 'L45 verifier', result: commandPassed(content, 'L45 verifier', ['L45 manual tax review export verifier passed.']) },
       { command: 'L24-L45 chain regression', result: commandPassed(content, 'L24-L45 chain regression', ['L45 manual tax review export verifier passed.', 'L44 manual withdrawal review verifier passed.', 'L43 reward ledger T3 refund deduct verification passed.', 'L24 miniapp cart verification passed.', 'Stage workflow verification passed.'], true) },
-      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', ...l45ConcurrentRuntimeMarkers(), 'l45_csv_formula_safe=true', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true'], true) },
+      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', ...l45ConcurrentRuntimeMarkers(), ...L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required)], true) },
       { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
       { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
       { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },
