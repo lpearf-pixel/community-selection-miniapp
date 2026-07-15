@@ -117,5 +117,13 @@
 - 新阶段在共享报告、审计、税务、支付等模块新增正常字段时，不得导致未修改的历史业务阶段失败。
 - 如果旧 verifier 因后续阶段共享文件出现新词而失败，应修复旧 verifier 的作用域和供应商上下文规则，禁止删除后续阶段合法字段。
 
+## 13. 注释与说明文本不得作为业务契约
+
+- 源码注释、中文说明、历史 helper 名和某句提示文案不是权限、scope、状态机或事务语义本身，历史 verifier 不得要求这些文本必须存在。
+- 权限和 data scope 应优先通过导出的纯函数、运行时 resolver 或明确输入/输出 fixture 验证，例如验证非 `super_admin` session 的全量标志为 false，而不是搜索“某角色不默认全量”的注释。
+- 当注释因重构被删除，但生产行为保持或变得更严格时，应更新 verifier 为可执行语义断言，禁止为了让旧 verifier 通过而恢复无功能注释。
+- 静态字符串断言只适合稳定的公开 API 路径、权限名、数据库字段和外部契约 marker；对内部实现应使用聚焦代码块和运行行为双重验证。
+- 角色矩阵测试至少应覆盖全量角色、受限 session 角色和开发态 mock scope，防止仅验证单一角色造成误放行。
+
 
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
