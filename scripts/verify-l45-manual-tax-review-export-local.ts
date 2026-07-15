@@ -14,6 +14,12 @@ assert(route.includes('prisma.taxRecord.count({ where })') && route.includes('sk
 assert(route.includes('csvSafe') && route.includes('/^[=+\\-@\\t\\r\\n]/'), 'CSV formula injection guard exists');
 assert(route.includes('无税务扣减模式的税额必须为 0') && route.includes('taxableAmount > baseWithdrawal.amount_cents'), 'none mode and taxable amount validation must exist');
 assert(route.includes('Object.hasOwn') && route.includes('hasReviewRequest'), 'idempotency history must use Object.hasOwn for key lookup');
+const l45FixtureStart = e2e.indexOf('async function createWithdrawalFixture');
+const l45FixtureEnd = e2e.indexOf('const fixtureA =', l45FixtureStart);
+assert(l45FixtureStart >= 0 && l45FixtureEnd > l45FixtureStart, 'L45 withdrawal fixture helper must exist');
+const l45FixtureBlock = e2e.slice(l45FixtureStart, l45FixtureEnd);
+assert(l45FixtureBlock.includes('prisma.commission.update') && l45FixtureBlock.includes('withdrawal_id: withdrawal.id') && l45FixtureBlock.includes('prisma.withdrawalCommission.create'), 'L45 withdrawal fixture must populate both Commission.withdrawal_id and WithdrawalCommission');
+assert(e2e.includes('fixtureELinkedCommission.status === 'withdrawing'') && e2e.includes('fixtureELinkedCommission.withdrawal_id === fixtureE.withdrawal.id'), 'L45 mark-paid scenario must verify coherent fixture linkage before calling mark-paid');
 const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
 assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: TAX_EXPORT_LIMIT + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
 assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');

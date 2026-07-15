@@ -111,3 +111,11 @@
 
 
 L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_export_limit_guard=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
+
+## 14. 多重关联字段 Fixture 一致性规范
+
+- 当同一业务关系同时由直接外键和关联表表达时，E2E fixture 必须同步写入两种表示，不能只构造查询侧能看到的一半数据。
+- 若生产状态迁移同时校验 `Commission.withdrawal_id`、`Commission.status` 与 `WithdrawalCommission`，fixture 必须在调用迁移前断言三者一致。
+- 测试出现“关联状态已变化”时，应先核对 fixture 是否满足生产 where 条件，不得放宽生产并发或状态守卫来迎合不完整 fixture。
+- 静态 verifier 应检查关系构造语义；Docker E2E 应在关键状态迁移前输出或断言真实数据库关系。
+

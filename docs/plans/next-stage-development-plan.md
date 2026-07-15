@@ -718,3 +718,4 @@
 - 持久化 JSON 的幂等判断必须使用规范化后的语义深比较或 canonical serialization，禁止依赖对象键顺序的原始 `JSON.stringify` 比较。
 - CSV BOM、文件签名等传输层属性必须检查原始响应字节，禁止用 `Response.text()` 解码后的字符串冒充字节证据。
 - API 响应 envelope 或 DTO 字段变化时，必须审计并更新所有旧阶段 E2E、客户端类型和 verifier；分页响应统一通过 `items` 访问记录。
+- 同一业务关系同时使用直接外键与关联表时，E2E fixture 必须同步写入并在状态迁移前断言一致；不得通过放宽生产守卫修复不完整 fixture。
