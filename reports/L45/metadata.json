@@ -3,7 +3,7 @@
   "source_branch": "codex/fix-tax-status-enforcement-and-idempotency-r0mcxr",
   "source_commit": "623f9e5c0532a3f2b1d4e7c4aab32156aa4659a1",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-15T03:55:56.476Z",
+  "generated_at": "2026-07-15T05:27:43.046Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
