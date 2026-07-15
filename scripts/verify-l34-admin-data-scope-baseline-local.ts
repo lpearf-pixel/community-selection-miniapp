@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveAdminDataScope } from '../apps/api/src/modules/admin-access/admin-access-control.js';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -82,7 +83,31 @@ const files = [
 files.forEach((file) => assert(existsSync(file), `${file} should exist`));
 
 const access = read('apps/api/src/modules/admin-access/admin-access-control.ts');
-includesAll(access, ['AdminDataScope','data_scope','pickup_store_ids','community_ids','can_access_all_pickup_stores','can_access_all_communities','x-admin-pickup-store-id','x-admin-pickup-store-ids','x-admin-community-id','x-admin-community-ids','ADMIN_SCOPE_FORBIDDEN','Data scope denied','super_admin','clerk 不默认全量','store_manager 不默认全量'], 'access control');
+includesAll(access, ['AdminDataScope','data_scope','pickup_store_ids','community_ids','can_access_all_pickup_stores','can_access_all_communities','x-admin-pickup-store-id','x-admin-pickup-store-ids','x-admin-community-id','x-admin-community-ids','ADMIN_SCOPE_FORBIDDEN','Data scope denied','super_admin','resolveAdminDataScope'], 'access control');
+
+// Verify the L34 business contract through executable behavior, not historical comments.
+const emptyRequest = { headers: {} } as any;
+for (const role of ['clerk', 'store_manager', 'finance', 'operator'] as const) {
+  const scope = resolveAdminDataScope(emptyRequest, role, 'session');
+  assert(scope.pickup_store_ids.length === 0 && scope.community_ids.length === 0, `${role} formal session must have no implicit ids`);
+  assert(!scope.can_access_all_pickup_stores && !scope.can_access_all_communities, `${role} formal session must not default to full scope`);
+}
+
+const superAdminScope = resolveAdminDataScope(emptyRequest, 'super_admin', 'session');
+assert(superAdminScope.can_access_all_pickup_stores && superAdminScope.can_access_all_communities, 'super_admin session must have full scope');
+
+const headerMockRequest = {
+  headers: {
+    'x-admin-pickup-store-id': 'store-a',
+    'x-admin-pickup-store-ids': 'store-a,store-b',
+    'x-admin-community-id': 'community-a',
+    'x-admin-community-ids': 'community-a,community-b'
+  }
+} as any;
+const clerkHeaderScope = resolveAdminDataScope(headerMockRequest, 'clerk', 'header_mock');
+assert(JSON.stringify(clerkHeaderScope.pickup_store_ids) === JSON.stringify(['store-a', 'store-b']), 'clerk header mock must use only declared pickup-store ids');
+assert(JSON.stringify(clerkHeaderScope.community_ids) === JSON.stringify(['community-a', 'community-b']), 'clerk header mock must use only declared community ids');
+assert(!clerkHeaderScope.can_access_all_pickup_stores && !clerkHeaderScope.can_access_all_communities, 'clerk header mock must not become full scope');
 
 const pickup = read('apps/api/src/routes/admin/pickup.ts');
 includesAll(pickup, ["requireAdminPermission('pickup.verify')",'data_scope','pickup_store_id','by-code scope 检查','verify scope 检查','summary scope 过滤'], 'pickup route');

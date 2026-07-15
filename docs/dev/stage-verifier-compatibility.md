@@ -61,7 +61,6 @@
 - [ ] stage report 与当前 head、merge-base 和真实 diff 一致；
 - [ ] 完整 chain 与 report publish verifier 均通过。
 
-
 ## 6. Docker API 就绪与网络诊断
 
 - `docker compose exec api ...` 只说明容器可执行命令，不代表 API 端口已经监听。
@@ -108,3 +107,44 @@
 - 新阶段改变既有 API shape 时，完整 chain 中所有受影响旧阶段场景都必须真实运行；不能只修改当前阶段 verifier。
 - 静态 verifier 应阻止已知旧 shape，但不能把某一个局部变量名作为唯一门禁；重点应是 envelope 与 DTO 的公开契约。
 
+## 12. 历史阶段安全扫描的作用域规范
+
+- 历史阶段 verifier 的安全扫描只能覆盖该阶段拥有的运行时代码、路由、客户端或明确的配置面；不得把共享 `stage-workflow`、阶段报告生成器、全局文档和后续阶段文件拼接后做通用词黑名单。
+- `source_id`、`signature`、`app_key`、`request`、`fetch` 等通用标识符不能单独作为外部集成证据；必须与供应商域名、SDK/import、供应商前缀凭证或供应商签名上下文组合后才可阻断。
+- 禁止为了规避误报而对共享源码执行 `replaceAll('source_id', '')` 一类逐词豁免；应从根本上缩小扫描文件范围并提高规则语义精度。
+- 外部供应商禁用规则必须同时带有两个自测 fixture：普通业务字段应通过，供应商专属域名或凭证应失败。
+- 新阶段在共享报告、审计、税务、支付等模块新增正常字段时，不得导致未修改的历史业务阶段失败。
+- 如果旧 verifier 因后续阶段共享文件出现新词而失败，应修复旧 verifier 的作用域和供应商上下文规则，禁止删除后续阶段合法字段。
+
+## 13. 注释与说明文本不得作为业务契约
+
+- 源码注释、中文说明、历史 helper 名和某句提示文案不是权限、scope、状态机或事务语义本身，历史 verifier 不得要求这些文本必须存在。
+- 权限和 data scope 应优先通过导出的纯函数、运行时 resolver 或明确输入/输出 fixture 验证，例如验证非 `super_admin` session 的全量标志为 false，而不是搜索“某角色不默认全量”的注释。
+- 当注释因重构被删除，但生产行为保持或变得更严格时，应更新 verifier 为可执行语义断言，禁止为了让旧 verifier 通过而恢复无功能注释。
+- 静态字符串断言只适合稳定的公开 API 路径、权限名、数据库字段和外部契约 marker；对内部实现应使用聚焦代码块和运行行为双重验证。
+- 角色矩阵测试至少应覆盖全量角色、受限 session 角色和开发态 mock scope，防止仅验证单一角色造成误放行。
+
+## 14. ORM 事务错误与 HTTP 状态传播规范
+
+- Prisma 等 ORM 的交互事务可能重新包装回调内抛出的错误；业务代码不得假设自定义 `statusCode`、`code` 或其他扩展属性一定原样保留到路由外层。
+- 事务内必须保留权限、状态和并发复核，禁止为了获得正确 HTTP 状态码把关键检查全部移到事务外，造成 TOCTOU 竞态。
+- 路由边界应对已知业务错误做精确状态恢复：认证为 401、data scope 为 403、不存在为 404、合法请求与资源状态冲突为 409；未知错误继续使用安全的通用失败状态。
+- 状态恢复必须基于受控错误类型或精确业务消息集合，不得使用宽泛关键词把未知数据库错误误判为 409。
+- Docker E2E 必须同时断言 HTTP 状态、精确业务消息和数据库无副作用，避免“消息正确但状态码回退为 400”的伪通过。
+
+L45 final review markers: `l45_tax_detail_success=true` confirms scoped detail API runtime coverage; `l45_tax_export_over_limit_http_422=true` confirms deterministic export limit guard coverage. None-mode tax review must reject non-zero tax amounts without database side effects, and terminal same-key replay must remain idempotent after paid/rejected status.
+
+## 15. 阶段报告命令证据规范
+
+- 阶段工作流必须在命令退出码为 0 后写入机器可读的命令完成 marker；报告不得仅凭日志中零散成功文案猜测命令是否通过。
+- 合并回归链必须有独立的 chain completion marker，并且只能在链内全部命令成功后输出。
+- 报告解析器不得在找不到目标命令 section 时退化为扫描整份日志；正常的负向 API 测试、预期 4xx 和 ORM 回滚信息不得污染无关验证行。
+- Docker API E2E 行除命令完成 marker 外，仍必须验证机器契约要求的全部业务 runtime markers，不能只看进程退出码。
+- 报告质量断言失败时必须输出每一验证行的状态，并列出缺失 runtime markers，禁止只返回“所有行必须通过”的无诊断总句。
+
+
+## 16. Helper 包装层与静态门禁规范
+
+- 静态 verifier 应验证公开契约、调用链和 fail-closed 语义，不得要求最终消费者直接引用某个内部 helper 名。
+- 当消费者通过受控包装函数间接调用底层校验 helper 时，应分别验证包装函数被消费者使用、包装函数内部调用底层 helper，以及契约缺失时会失败。
+- 禁止同时存在“共享包装 helper 已被消费”的语义检查，又额外要求消费者源码直接出现底层 helper 名；这种重复门禁会阻止等价重构。

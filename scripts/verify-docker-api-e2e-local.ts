@@ -1,4 +1,8 @@
+import Fastify from 'fastify';
 import { PrismaClient } from '@prisma/client';
+import { resolveAdminAccessContext } from '../apps/api/src/modules/admin-access/admin-access-control.js';
+import { L45_API_CONTRACT } from './l45-api-contract.ts';
+import { ensureTaxExportWithinLimit, registerWithdrawalRoutes } from '../apps/api/src/routes/withdrawals.js';
 import { ensureEstimatedCommission, getAvailableRewardBalance, markCommissionPendingForCompletedOrder, releaseDueCommissions, syncCommissionAfterRefund } from '../apps/api/src/services/commission-service.js';
 import { DOCKER_E2E_ADMIN_ID, DOCKER_E2E_FINANCE_ADMIN_ID, DOCKER_E2E_INACTIVE_ADMIN_ID, DOCKER_E2E_OPERATOR_ADMIN_ID, DOCKER_E2E_STORE_MANAGER_ADMIN_ID, DOCKER_E2E_COMMUNITY_ID, DOCKER_E2E_INITIAL_STOCK, DOCKER_E2E_INSUFFICIENT_STOCK_PRODUCT_ID, DOCKER_E2E_PICKUP_STORE_ID, DOCKER_E2E_PRODUCT_ID, ensureDockerE2eFixtures } from './lib/docker-e2e-fixtures.js';
 type ApiResponse<T> = {
@@ -757,7 +761,8 @@ async function runL44WithdrawalScenario() {
   const paidB = await createCommissionFixture('paid-222', leaderPaid.id, communityA.id, 222);
   const paidW = await createWithdrawalFromCommissions(leaderPaid, `${runId}-paid-request`, [paidA.commission, paidB.commission]);
   await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 approve paid withdrawal', body: { remark: `${runId}-approve-paid` } }));
-  await request('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/tax-review`, withAdminJson({ label: 'L44 tax compatibility none', body: { tax_mode: 'none', tax_amount_cents: 0 } }));
+  const paidWBeforeTax = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
+  await request('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/tax-review`, withAdminJson({ label: 'L44 tax compatibility none', body: { tax_mode: 'none', taxable_amount_cents: paidWBeforeTax.amount_cents, tax_amount_cents: 0, client_request_id: `${runId}-paid-tax-none`, expected_updated_at: paidWBeforeTax.updated_at.toISOString() } }));
   const markPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 mark paid', body: { manual_reference: `${runId}-manual-reference`, remark: `${runId}-paid` } }));
   const paidFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
   const paidCommissions = await prisma.commission.findMany({ where: { withdrawal_id: paidW.withdrawal_id } });
@@ -834,6 +839,32 @@ async function runL45TaxReviewScenario() {
   console.log('=== L45 manual tax review export scenario ===');
   const runId = `l45-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
   const product = await prisma.product.findUniqueOrThrow({ where: { id: DOCKER_E2E_PRODUCT_ID } });
+
+  const previousNodeEnv = process.env.NODE_ENV;
+  const forgedScopeId = 'forged-community-id';
+  try {
+    process.env.NODE_ENV = 'production';
+    const prodFinance = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_FINANCE_ADMIN_ID, role: 'finance' }, headers: { 'x-admin-community-id': forgedScopeId } } as any);
+    assert(prodFinance?.data_scope_source === 'session' && prodFinance.data_scope.community_ids.length === 0 && !prodFinance.data_scope.can_access_all_communities, 'production finance session must ignore forged scope headers and fail closed');
+    const prodSuper = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_ADMIN_ID, role: 'super_admin' }, headers: {} } as any);
+    assert(prodSuper?.data_scope_source === 'session' && prodSuper.data_scope.can_access_all_communities && prodSuper.data_scope.can_access_all_pickup_stores, 'production super_admin session must retain full scope');
+    const prodHeaderOnly = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': forgedScopeId } } as any);
+    assert(prodHeaderOnly === null, 'production header-only mock identity must not authenticate');
+
+    process.env.NODE_ENV = 'development';
+    const devHeader = resolveAdminAccessContext({ headers: { 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_FINANCE_ADMIN_ID, 'x-admin-community-id': forgedScopeId } } as any);
+    assert(devHeader?.data_scope_source === 'header_mock' && devHeader.data_scope.community_ids.includes(forgedScopeId), 'development header mock must use header scope');
+    const devSession = resolveAdminAccessContext({ adminUser: { id: DOCKER_E2E_FINANCE_ADMIN_ID, role: 'finance' }, headers: { 'x-admin-role': 'super_admin', 'x-admin-user-id': DOCKER_E2E_ADMIN_ID, 'x-admin-community-id': forgedScopeId } } as any);
+    assert(devSession?.data_scope_source === 'session' && devSession.role === 'finance' && devSession.data_scope.community_ids.length === 0, 'formal session must not fall back to header mock even in development');
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  }
+  console.log('l45_admin_scope_runtime=true');
+
   const leaderA = await prisma.user.create({ data: { openid: `${runId}-leader-a`, nickname: '=HYPERLINK("https://example.com")', phone: '13600000001', role: 'leader' } });
   const leaderB = await prisma.user.create({ data: { openid: `${runId}-leader-b`, nickname: '+SUM(1,1)', phone: '13600000002', role: 'leader' } });
   const userA = await prisma.user.create({ data: { openid: `${runId}-user-a`, nickname: 'L45 User A', phone: '13600000003' } });
@@ -848,104 +879,253 @@ async function runL45TaxReviewScenario() {
     const order = await prisma.order.create({ data: { order_no: `${runId}-${suffix}`, user_id: user.id, group_buy_id: groupBuy.id, product_id: product.id, leader_user_id: leader.id, community_id: community.id, total_amount_cents: amount, product_amount_cents: amount, pay_amount_cents: amount, quantity: 1, pay_status: 'paid', order_status: 'completed', refund_status: 'none', paid_at: new Date(Date.now() - 1200_000), completed_at: new Date(Date.now() - 600_000), receiver_name: 'L45', receiver_phone: '13600000005' } });
     const commission = await prisma.commission.create({ data: { leader_user_id: leader.id, order_id: order.id, group_buy_id: groupBuy.id, base_amount_cents: amount, commission_type: 'fixed', commission_value: amount, estimated_amount_cents: amount, final_amount_cents: amount, status: 'withdrawing', available_at: new Date(Date.now() - 300_000), review_status: 'approved' } });
     const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: amount, status: 'approved', client_request_id: suffix === 'danger-a' ? `\tclient-danger-${runId}` : `${runId}-${suffix}-withdrawal`, tax_mode: 'pending_review', tax_status: 'pending', taxable_amount_cents: amount, tax_amount_cents: 0, payable_amount_cents: amount } });
+    await prisma.commission.update({ where: { id: commission.id }, data: { withdrawal_id: withdrawal.id } });
     await prisma.withdrawalCommission.create({ data: { withdrawal_id: withdrawal.id, commission_id: commission.id, amount_cents: amount } });
     const taxRecord = await prisma.taxRecord.create({ data: { leader_user_id: leader.id, source_type: 'withdrawal', source_id: withdrawal.id, tax_mode: withdrawal.tax_mode, tax_status: withdrawal.tax_status, amount_cents: amount, payload: { tax_remark: '\r\nleading-newline', tax_rate_basis: '-1+2' } } });
-    return { withdrawal, taxRecord, order, community };
+    return { withdrawal, taxRecord, order, community, commission };
   }
+  assert(ensureTaxExportWithinLimit([1, 2, 3], 3).length === 3, 'L45 export limit helper must allow exactly limit rows');
+  let exportLimitRejected = false;
+  try { ensureTaxExportWithinLimit([1, 2, 3, 4], 3); } catch (error) { exportLimitRejected = (error as { statusCode?: number }).statusCode === 422; }
+  assert(exportLimitRejected, 'L45 export limit helper must reject limit + 1 rows');
+  console.log('l45_export_limit_helper_guard=true');
   const fixtureA = await createWithdrawalFixture('a', 'danger-a', 1000);
   const fixtureB = await createWithdrawalFixture('b', 'danger-b', 2000);
   const fixtureC = await createWithdrawalFixture('a', 'concurrent', 1200);
   const financeAHeaders = { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-community-id': communityA.id };
   const financeNoScopeHeaders = { ...adminHeaders, 'x-admin-role': 'finance' };
   const financeBHeaders = { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-community-id': communityB.id };
+  const listContract = L45_API_CONTRACT.tax_record_list;
+  const detailContract = L45_API_CONTRACT.tax_record_detail;
+  const exportContract = L45_API_CONTRACT.tax_record_export;
+  const taxReviewContract = L45_API_CONTRACT.tax_review;
+  const markPaidContract = L45_API_CONTRACT.mark_paid;
 
-  const financeList = await request<{ items: Array<{ withdrawal_id: string; leader_phone_masked?: string }>; total: number; page: number; page_size: number }>('GET', '/api/admin/tax-records?page=1&page_size=1', { label: 'GET /api/admin/tax-records L45 finance', headers: financeAHeaders });
+  const taxReviewStatus = (marker: string) => {
+    const scenario = taxReviewContract.scenarios.find((item) => item.marker === marker);
+    assert(scenario?.type === 'http_status' || scenario?.type === 'single_request', `L45 tax_review contract missing HTTP/single scenario ${marker}`);
+    return scenario.expected_status;
+  };
+  async function markPaidRollbackSnapshot(fixture: Awaited<ReturnType<typeof createWithdrawalFixture>>) {
+    return {
+      withdrawal: await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixture.withdrawal.id } }),
+      commission: await prisma.commission.findUniqueOrThrow({ where: { id: fixture.commission.id } }),
+      ledgerCount: await prisma.rewardLedger.count({ where: { withdrawal_id: fixture.withdrawal.id, event_type: 'withdrawal_paid' } }),
+      auditCount: await prisma.adminAuditLog.count({ where: { target_id: fixture.withdrawal.id, action: 'withdrawal_mark_paid' } }),
+      eventCount: await prisma.businessEventLog.count({ where: { withdrawal_id: fixture.withdrawal.id, event_type: 'withdrawal_mark_paid' } })
+    };
+  }
+  async function assertMarkPaidRollback(label: string, fixture: Awaited<ReturnType<typeof createWithdrawalFixture>>, before: Awaited<ReturnType<typeof markPaidRollbackSnapshot>>) {
+    const afterWithdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixture.withdrawal.id } });
+    const afterCommission = await prisma.commission.findUniqueOrThrow({ where: { id: fixture.commission.id } });
+    assert(afterWithdrawal.status === before.withdrawal.status && afterWithdrawal.manual_reference === before.withdrawal.manual_reference && afterWithdrawal.processed_at?.toISOString() === before.withdrawal.processed_at?.toISOString() && afterWithdrawal.processed_by_admin_id === before.withdrawal.processed_by_admin_id, `L45 mark-paid ${label} conflict must roll back Withdrawal fields`);
+    assert(afterCommission.status === before.commission.status && afterCommission.withdrawal_id === before.commission.withdrawal_id, `L45 mark-paid ${label} conflict must not mutate Commission`);
+    assert(await prisma.rewardLedger.count({ where: { withdrawal_id: fixture.withdrawal.id, event_type: 'withdrawal_paid' } }) === before.ledgerCount, `L45 mark-paid ${label} conflict must not create withdrawal_paid ledger`);
+    assert(await prisma.adminAuditLog.count({ where: { target_id: fixture.withdrawal.id, action: 'withdrawal_mark_paid' } }) === before.auditCount, `L45 mark-paid ${label} conflict must not create withdrawal_mark_paid audit`);
+    assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixture.withdrawal.id, event_type: 'withdrawal_mark_paid' } }) === before.eventCount, `L45 mark-paid ${label} conflict must not create withdrawal_mark_paid event`);
+  }
+
+  const financeList = await request<{ items: Array<{ withdrawal_id: string; leader_phone_masked?: string }>; total: number; page: number; page_size: number }>(listContract.method, `${listContract.path}?page=1&page_size=1`, { label: 'GET /api/admin/tax-records L45 finance', headers: financeAHeaders });
   assert(financeList.total === 2 && financeList.items.length === 1 && financeList.page === 1 && financeList.page_size === 1, 'L45 finance list must return the two scoped fixtures with database count/skip/take pagination');
   assert(financeList.items.every((item) => item.leader_phone_masked?.includes('****')), 'L45 list must mask leader phone');
-  const page2 = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', '/api/admin/tax-records?page=2&page_size=1', { label: 'GET /api/admin/tax-records L45 page 2', headers: financeAHeaders });
+  console.log('l45_tax_list_scope_success=true');
+  const page2 = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>(listContract.method, `${listContract.path}?page=2&page_size=1`, { label: 'GET /api/admin/tax-records L45 page 2', headers: financeAHeaders });
   assert(page2.total === financeList.total && page2.items.length === 1 && page2.items[0].withdrawal_id !== financeList.items[0].withdrawal_id, 'L45 pagination must use database skip/take');
-  const filtered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?tax_status=pending&tax_mode=pending_review&invoice_status=not_required&from=${encodeURIComponent(new Date(Date.now() - 86400_000).toISOString())}&to=${encodeURIComponent(new Date(Date.now() + 86400_000).toISOString())}&withdrawal_id=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 filters', headers: financeAHeaders });
+  const filtered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>(listContract.method, `${listContract.path}?tax_status=pending&tax_mode=pending_review&invoice_status=not_required&from=${encodeURIComponent(new Date(Date.now() - 86400_000).toISOString())}&to=${encodeURIComponent(new Date(Date.now() + 86400_000).toISOString())}&withdrawal_id=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 filters', headers: financeAHeaders });
   assert(filtered.total === 1 && filtered.items.length === 1 && filtered.items[0].withdrawal_id === fixtureA.withdrawal.id, 'L45 status/mode/invoice/date/withdrawal filters and scope must apply');
-  const keywordFiltered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?keyword=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 keyword', headers: financeAHeaders });
+  const keywordFiltered = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>(listContract.method, `${listContract.path}?keyword=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 keyword', headers: financeAHeaders });
   assert(keywordFiltered.total === 1 && keywordFiltered.items.length === 1 && keywordFiltered.items[0].withdrawal_id === fixtureA.withdrawal.id, 'L45 keyword must match the explicitly searchable withdrawal id fixture');
-  const scopeAAll = await request<{ items: Array<{ withdrawal_id: string }> }>('GET', '/api/admin/tax-records?page=1&page_size=20', { label: 'GET /api/admin/tax-records L45 scope A', headers: financeAHeaders });
+  const scopeAAll = await request<{ items: Array<{ withdrawal_id: string }> }>(listContract.method, `${listContract.path}?page=1&page_size=20`, { label: 'GET /api/admin/tax-records L45 scope A', headers: financeAHeaders });
   assert(scopeAAll.items.some((item) => item.withdrawal_id === fixtureA.withdrawal.id) && !scopeAAll.items.some((item) => item.withdrawal_id === fixtureB.withdrawal.id), 'L45 scope A must only see scope A');
-  await request<ErrorApiResponse>('GET', `/api/admin/tax-records/${fixtureB.taxRecord.id}`, { label: 'GET /api/admin/tax-records/:id L45 cross scope', headers: financeAHeaders, expectedStatus: 403 });
-  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureB.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 cross scope', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 403, body: { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 0, client_request_id: `${runId}-cross-scope` } });
-  const noScope = await request<{ items: unknown[]; total: number }>('GET', '/api/admin/tax-records?page=1&page_size=20', { label: 'GET /api/admin/tax-records L45 finance no scope', headers: financeNoScopeHeaders });
+  await request<ErrorApiResponse>(detailContract.method, `${detailContract.path.replace(':id', fixtureB.taxRecord.id)}`, { label: 'GET /api/admin/tax-records/:id L45 cross scope', headers: financeAHeaders, expectedStatus: 403 });
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureB.withdrawal.id)}`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 cross scope', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 403, body: { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 0, client_request_id: `${runId}-cross-scope`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() } });
+  const noScope = await request<{ items: unknown[]; total: number }>(listContract.method, `${listContract.path}?page=1&page_size=20`, { label: 'GET /api/admin/tax-records L45 finance no scope', headers: financeNoScopeHeaders });
   assert(noScope.total === 0 && noScope.items.length === 0, 'L45 no-scope finance must return empty list');
-  await request<ErrorApiResponse>('GET', '/api/admin/tax-records', { label: 'GET /api/admin/tax-records L45 store_manager', headers: { ...adminHeaders, 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID }, expectedStatus: 403 });
-  await request<ErrorApiResponse>('GET', '/api/admin/tax-records', { label: 'GET /api/admin/tax-records L45 operator', headers: { ...adminHeaders, 'x-admin-role': 'operator', 'x-admin-user-id': DOCKER_E2E_OPERATOR_ADMIN_ID }, expectedStatus: 403 });
-  await request<ErrorApiResponse>('GET', '/api/admin/tax-records', { label: 'GET /api/admin/tax-records L45 inactive admin', headers: { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_INACTIVE_ADMIN_ID }, expectedStatus: 401 });
-  const superAdminA = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?withdrawal_id=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 super_admin scope A', headers: adminHeaders });
-  const superAdminB = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>('GET', `/api/admin/tax-records?withdrawal_id=${encodeURIComponent(fixtureB.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 super_admin scope B', headers: adminHeaders });
+  await request<ErrorApiResponse>(listContract.method, listContract.path, { label: 'GET /api/admin/tax-records L45 store_manager', headers: { ...adminHeaders, 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID }, expectedStatus: 403 });
+  await request<ErrorApiResponse>(listContract.method, listContract.path, { label: 'GET /api/admin/tax-records L45 operator', headers: { ...adminHeaders, 'x-admin-role': 'operator', 'x-admin-user-id': DOCKER_E2E_OPERATOR_ADMIN_ID }, expectedStatus: 403 });
+  await request<ErrorApiResponse>(listContract.method, listContract.path, { label: 'GET /api/admin/tax-records L45 inactive admin', headers: { ...adminHeaders, 'x-admin-role': 'finance', 'x-admin-user-id': DOCKER_E2E_INACTIVE_ADMIN_ID }, expectedStatus: 401 });
+  const superAdminA = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>(listContract.method, `${listContract.path}?withdrawal_id=${encodeURIComponent(fixtureA.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 super_admin scope A', headers: adminHeaders });
+  const superAdminB = await request<{ items: Array<{ withdrawal_id: string }>; total: number }>(listContract.method, `${listContract.path}?withdrawal_id=${encodeURIComponent(fixtureB.withdrawal.id)}`, { label: 'GET /api/admin/tax-records L45 super_admin scope B', headers: adminHeaders });
   assert(superAdminA.total === 1 && superAdminA.items[0]?.withdrawal_id === fixtureA.withdrawal.id && superAdminB.total === 1 && superAdminB.items[0]?.withdrawal_id === fixtureB.withdrawal.id, 'L45 super_admin must read explicit fixtures from both scopes');
 
   const beforeAudit = await prisma.adminAuditLog.count({ where: { target_id: fixtureA.withdrawal.id, action: 'withdrawal_tax_reviewed' } });
   const beforeEvent = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: 'withdrawal_tax_reviewed', order_id: null } });
-  const reviewPayload = { tax_mode: 'withheld', tax_status: 'calculated', taxable_amount_cents: 1000, tax_amount_cents: 120, tax_rate_basis: '-1+2', invoice_required: false, invoice_status: 'not_required', tax_remark: '@cmd', client_request_id: `${runId}-review` };
-  await request('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 success', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reviewPayload });
+  const reviewPayload = { tax_mode: 'withheld', taxable_amount_cents: 1000, tax_amount_cents: 120, tax_rate_basis: '-1+2', invoice_status: 'not_required', tax_remark: '@cmd', client_request_id: `${runId}-review`, expected_updated_at: fixtureA.withdrawal.updated_at.toISOString() };
+  await request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureA.withdrawal.id)}`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 success', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reviewPayload });
   const updatedA = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureA.withdrawal.id } });
   const taxRecordA = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureA.withdrawal.id } } });
+  console.log('l45_tax_review_success=true');
   assert(updatedA.tax_mode === 'withheld' && updatedA.tax_status === 'calculated' && updatedA.taxable_amount_cents === 1000 && updatedA.tax_amount_cents === 120 && updatedA.payable_amount_cents === 880, 'L45 valid review must update Withdrawal tax fields');
   assert(taxRecordA.tax_mode === 'withheld' && taxRecordA.tax_status === 'calculated' && taxRecordA.amount_cents === 1000, 'L45 valid review must upsert TaxRecord');
   assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureA.withdrawal.id, action: 'withdrawal_tax_reviewed' } }) === beforeAudit + 1, 'L45 valid review must create exactly one AdminAuditLog');
   assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: 'withdrawal_tax_reviewed', order_id: null } }) === beforeEvent + 1, 'L45 valid review must create exactly one root BusinessEventLog');
+  const detailA = await request<{ tax_record_id: string; withdrawal_id: string; updated_at?: string; leader_phone_masked?: string; commissions: Array<{ commission_id: string; order_no: string; product_name: string; community_name: string; reward_amount_cents: number }>; admin_audits: Array<{ action: string }>; business_events: Array<{ event_type: string }> }>(detailContract.method, `${detailContract.path.replace(':id', taxRecordA.id)}`, { label: 'GET /api/admin/tax-records/:id L45 detail success', headers: financeAHeaders });
+  assert(detailA.tax_record_id === taxRecordA.id && detailA.withdrawal_id === fixtureA.withdrawal.id && Boolean(detailA.updated_at), 'L45 detail must return exact ids and updated_at');
+  assert(detailA.leader_phone_masked?.includes('****') && !JSON.stringify(detailA).includes('13600000001'), 'L45 detail must mask raw leader phone');
+  assert(detailA.commissions.some((item) => item.order_no === fixtureA.order.order_no && item.product_name && item.community_name && item.reward_amount_cents === 1000), 'L45 detail must include commission/order/product/community context');
+  assert(detailA.admin_audits.some((item) => item.action === 'withdrawal_tax_reviewed') && detailA.business_events.some((item) => item.event_type === 'withdrawal_tax_reviewed'), 'L45 detail must include review audit and business event');
+  console.log('l45_tax_detail_success=true');
+
   const reorderedReviewPayload = {
     client_request_id: reviewPayload.client_request_id,
     tax_remark: reviewPayload.tax_remark,
     invoice_status: reviewPayload.invoice_status,
-    invoice_required: reviewPayload.invoice_required,
     tax_rate_basis: reviewPayload.tax_rate_basis,
     tax_amount_cents: reviewPayload.tax_amount_cents,
     taxable_amount_cents: reviewPayload.taxable_amount_cents,
-    tax_status: reviewPayload.tax_status,
     tax_mode: reviewPayload.tax_mode,
+    expected_updated_at: reviewPayload.expected_updated_at,
   };
-  const repeat = await request<{ idempotent?: boolean }>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent repeat', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reorderedReviewPayload });
+  const repeat = await request<{ idempotent?: boolean }>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureA.withdrawal.id)}`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent repeat', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: reorderedReviewPayload });
   assert(repeat.idempotent === true, 'L45 same client_request_id and semantically identical payload must be idempotent regardless of JSON key order');
-  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureA.withdrawal.id}/tax-review`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { ...reviewPayload, tax_amount_cents: 121 } });
+
+  const fixtureStaleVersion = await createWithdrawalFixture('a', 'stale-version', 1600);
+  const staleInitialUpdatedAt = fixtureStaleVersion.withdrawal.updated_at.toISOString();
+  const staleK1 = { tax_mode: 'none', taxable_amount_cents: 1600, tax_amount_cents: 0, client_request_id: `${runId}-stale-k1`, expected_updated_at: staleInitialUpdatedAt };
+  await request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureStaleVersion.withdrawal.id)}`, { label: 'POST tax-review L45 stale fixture K1', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: staleK1 });
+  const staleAfterK1 = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureStaleVersion.withdrawal.id } });
+  assert(staleAfterK1.status === 'approved' && staleAfterK1.updated_at.toISOString() !== staleInitialUpdatedAt, 'L45 stale version fixture must remain approved and have a changed updated_at after K1');
+  const staleTaxBeforeFailure = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureStaleVersion.withdrawal.id } } });
+  const staleAuditBeforeFailure = await prisma.adminAuditLog.count({ where: { target_id: fixtureStaleVersion.withdrawal.id, action: 'withdrawal_tax_reviewed' } });
+  const staleEventBeforeFailure = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureStaleVersion.withdrawal.id, event_type: 'withdrawal_tax_reviewed' } });
+  const staleError = await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureStaleVersion.withdrawal.id)}`, { label: 'POST tax-review L45 stale approved fixture', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: taxReviewStatus('l45_tax_review_stale_version_409=true'), body: { tax_mode: 'withheld', taxable_amount_cents: 1600, tax_amount_cents: 100, client_request_id: `${runId}-stale-k2`, expected_updated_at: staleInitialUpdatedAt } });
+  assert(staleError.message === '提现税务状态已变化，请刷新后重试', 'L45 stale approved fixture must hit exact optimistic-lock error');
+  const staleAfterFailure = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureStaleVersion.withdrawal.id } });
+  const staleTaxAfterFailure = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureStaleVersion.withdrawal.id } } });
+  const staleReviewRequests = ((staleTaxAfterFailure.payload as any)?.review_requests ?? {}) as Record<string, unknown>;
+  assert(staleAfterFailure.tax_mode === staleAfterK1.tax_mode && staleAfterFailure.tax_amount_cents === staleAfterK1.tax_amount_cents && staleAfterFailure.updated_at.toISOString() === staleAfterK1.updated_at.toISOString(), 'L45 stale approved fixture must not mutate Withdrawal after CAS conflict');
+  assert(JSON.stringify(staleTaxAfterFailure) === JSON.stringify(staleTaxBeforeFailure) && !Object.hasOwn(staleReviewRequests, `${runId}-stale-k2`), 'L45 stale approved fixture must not append failed idempotency key');
+  assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureStaleVersion.withdrawal.id, action: 'withdrawal_tax_reviewed' } }) === staleAuditBeforeFailure && await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureStaleVersion.withdrawal.id, event_type: 'withdrawal_tax_reviewed' } }) === staleEventBeforeFailure, 'L45 stale approved fixture must not create audit/event');
+  console.log('l45_tax_review_stale_version_409=true');
+
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureB.withdrawal.id)}`, { label: 'POST tax-review L45 missing key', headers: { ...financeBHeaders, 'content-type': 'application/json' }, expectedStatus: 400, body: { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 0, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() } });
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureB.withdrawal.id)}`, { label: 'POST tax-review L45 overlong key', headers: { ...financeBHeaders, 'content-type': 'application/json' }, expectedStatus: 400, body: { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 0, client_request_id: 'x'.repeat(81), expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() } });
+  const fixtureE = await createWithdrawalFixture('a', 'none-mark-paid', 1400);
+  await request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureE.withdrawal.id)}`, { label: 'POST tax-review L45 none success', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1400, tax_amount_cents: 0, client_request_id: `${runId}-none-success`, expected_updated_at: fixtureE.withdrawal.updated_at.toISOString() } });
+  const noneReviewed = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureE.withdrawal.id } });
+  assert(noneReviewed.tax_status === 'completed' && noneReviewed.tax_amount_cents === 0 && noneReviewed.payable_amount_cents === noneReviewed.amount_cents, 'L45 none mode zero tax must complete and keep payable equal amount');
+  const noneCommissionBeforePaid = await prisma.commission.findUniqueOrThrow({ where: { id: fixtureE.commission.id } });
+  assert(noneCommissionBeforePaid.status === 'withdrawing' && noneCommissionBeforePaid.withdrawal_id === fixtureE.withdrawal.id && await prisma.withdrawalCommission.count({ where: { withdrawal_id: fixtureE.withdrawal.id, commission_id: fixtureE.commission.id } }) === 1, 'L45 none mark-paid fixture must maintain Commission.withdrawal_id and WithdrawalCommission');
+  const nonePaid = await request<{ withdrawal: { status: string } }>(markPaidContract.method, `${markPaidContract.path.replace(':id', fixtureE.withdrawal.id)}`, { label: 'POST mark-paid L45 none reviewed', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { manual_reference: `${runId}-none-paid` } });
+  assert(nonePaid.withdrawal.status === 'paid', 'L45 mark-paid must pass after valid none tax review');
+  console.log('l45_mark_paid_success=true');
+
+  const markPending = await createWithdrawalFixture('a', 'mark-pending-tax', 1500);
+  const markPendingBefore = await markPaidRollbackSnapshot(markPending);
+  const taxPendingConflict = await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', markPending.withdrawal.id)}`, { label: 'POST mark-paid L45 tax pending conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-pending-tax` } });
+  assert(taxPendingConflict.message === '提现税务状态未完成或未计算，不能标记已处理', 'L45 mark-paid tax pending conflict must preserve the exact 409 business error');
+  await assertMarkPaidRollback('tax pending', markPending, markPendingBefore);
+  const invoiceConflict = await createWithdrawalFixture('a', 'mark-invoice-pending', 1510);
+  await prisma.withdrawal.update({ where: { id: invoiceConflict.withdrawal.id }, data: { tax_mode: 'invoice', tax_status: 'completed', invoice_required: true, invoice_status: 'pending' } });
+  const invoiceConflictBefore = await markPaidRollbackSnapshot(invoiceConflict);
+  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', invoiceConflict.withdrawal.id)}`, { label: 'POST mark-paid L45 invoice unverified conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-invoice-conflict` } });
+  await assertMarkPaidRollback('invoice unverified', invoiceConflict, invoiceConflictBefore);
+  const commissionConflict = await createWithdrawalFixture('a', 'mark-commission-conflict', 1520);
+  await prisma.withdrawal.update({ where: { id: commissionConflict.withdrawal.id }, data: { tax_mode: 'none', tax_status: 'completed', tax_amount_cents: 0, payable_amount_cents: 1520 } });
+  await prisma.commission.updateMany({ where: { withdrawal_id: commissionConflict.withdrawal.id }, data: { status: 'available' } });
+  const commissionConflictBefore = await markPaidRollbackSnapshot(commissionConflict);
+  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', commissionConflict.withdrawal.id)}`, { label: 'POST mark-paid L45 commission conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-commission-conflict` } });
+  await assertMarkPaidRollback('commission mismatch', commissionConflict, commissionConflictBefore);
+  console.log('l45_mark_paid_conflict_409=true');
+  console.log('l45_mark_paid_rollback_verified=true');
+  const fixtureD = await createWithdrawalFixture('a', 'idempotency-history', 1300);
+  const k1 = { tax_mode: 'none', taxable_amount_cents: 1300, tax_amount_cents: 0, client_request_id: `${runId}-k1`, expected_updated_at: fixtureD.withdrawal.updated_at.toISOString() };
+  await request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 K1', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: k1 });
+  const afterK1 = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureD.withdrawal.id } });
+  const k2 = { tax_mode: 'withheld', taxable_amount_cents: 1300, tax_amount_cents: 100, client_request_id: `${runId}-k2`, expected_updated_at: afterK1.updated_at.toISOString() };
+  await request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 K2', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: k2 });
+  const replayK1 = await request<{ idempotent?: boolean }>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 replay K1', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: k1 });
+  const afterReplayK1 = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureD.withdrawal.id } });
+  assert(replayK1.idempotent === true && afterReplayK1.tax_mode === 'withheld' && afterReplayK1.tax_amount_cents === 100, 'L45 replaying K1 after K2 must be idempotent and must not roll back state');
+  const paidReplayAuditBefore = await prisma.adminAuditLog.count({ where: { target_id: fixtureD.withdrawal.id, action: 'withdrawal_tax_reviewed' } });
+  const paidReplayEventBefore = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureD.withdrawal.id, event_type: 'withdrawal_tax_reviewed' } });
+  const terminalCommissionBeforePaid = await prisma.commission.findUniqueOrThrow({ where: { id: fixtureD.commission.id } });
+  assert(terminalCommissionBeforePaid.status === 'withdrawing' && terminalCommissionBeforePaid.withdrawal_id === fixtureD.withdrawal.id && await prisma.withdrawalCommission.count({ where: { withdrawal_id: fixtureD.withdrawal.id, commission_id: fixtureD.commission.id } }) === 1, 'L45 terminal replay fixture must maintain Commission.withdrawal_id and WithdrawalCommission before mark-paid');
+  await request(markPaidContract.method, `${markPaidContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST mark-paid L45 terminal replay fixture', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { manual_reference: `${runId}-terminal-paid` } });
+  const replayK1AfterPaid = await request<{ idempotent?: boolean }>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 replay K1 after paid', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: k1 });
+  const afterPaidReplay = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureD.withdrawal.id } });
+  assert(replayK1AfterPaid.idempotent === true && afterPaidReplay.status === 'paid' && afterPaidReplay.tax_amount_cents === 100 && afterPaidReplay.payable_amount_cents === 1200, 'L45 paid terminal same-key replay must be idempotent without state rollback');
+  assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureD.withdrawal.id, action: 'withdrawal_tax_reviewed' } }) === paidReplayAuditBefore && await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureD.withdrawal.id, event_type: 'withdrawal_tax_reviewed' } }) === paidReplayEventBefore, 'L45 paid terminal same-key replay must not create audit/event');
+  console.log('l45_tax_review_terminal_replay=true');
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 new key after paid', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: taxReviewStatus('l45_tax_review_new_key_terminal_409=true'), body: { ...k2, client_request_id: `${runId}-paid-new-key`, expected_updated_at: afterPaidReplay.updated_at.toISOString() } });
+  console.log('l45_tax_review_new_key_terminal_409=true');
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 K1 invalid different after paid', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: taxReviewStatus('l45_tax_review_invalid_same_key_400=true'), body: { ...k1, tax_amount_cents: 1 } });
+  console.log('l45_tax_review_invalid_same_key_400=true');
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 K1 valid different after paid', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: taxReviewStatus('l45_tax_review_valid_same_key_409=true'), body: { ...k1, tax_mode: 'withheld', tax_amount_cents: 1 } });
+  console.log('l45_tax_review_valid_same_key_409=true');
+
+  await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureA.withdrawal.id)}`, { label: 'POST /api/admin/withdrawals/:id/tax-review L45 idempotent conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { ...reviewPayload, tax_amount_cents: 121 } });
   const concurrent = await Promise.allSettled([
-    request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent A', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-a` } }),
-    request('POST', `/api/admin/withdrawals/${fixtureC.withdrawal.id}/tax-review`, { label: 'POST tax-review L45 concurrent B', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'withheld', taxable_amount_cents: 1200, tax_amount_cents: 100, client_request_id: `${runId}-concurrent-b` } })
+    request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureC.withdrawal.id)}`, { label: 'POST tax-review L45 concurrent A', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-same`, expected_updated_at: fixtureC.withdrawal.updated_at.toISOString() } }),
+    request(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureC.withdrawal.id)}`, { label: 'POST tax-review L45 concurrent B', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { tax_mode: 'none', taxable_amount_cents: 1200, tax_amount_cents: 0, client_request_id: `${runId}-concurrent-same`, expected_updated_at: fixtureC.withdrawal.updated_at.toISOString() } })
   ]);
-  assert(concurrent.filter((result) => result.status === 'fulfilled').length === 1 && concurrent.filter((result) => result.status === 'rejected').length === 1, 'L45 concurrent different review results must allow only one success');
+  const concurrentFulfilled = concurrent.filter((result): result is PromiseFulfilledResult<{ applied?: boolean; idempotent?: boolean }> => result.status === 'fulfilled');
+  const concurrentContract = taxReviewContract.scenarios.find((item) => item.type === 'concurrent');
+  const appliedCount = concurrentFulfilled.filter((result) => result.value?.applied !== false && result.value?.idempotent !== true).length;
+  const idempotentCount = concurrentFulfilled.filter((result) => result.value?.idempotent === true).length;
+  assert(concurrentContract?.type === 'concurrent' && concurrentFulfilled.length === concurrentContract.fulfilled_count && appliedCount === concurrentContract.applied_count && idempotentCount === concurrentContract.idempotent_count, 'L45 same client_request_id concurrent requests must return one applied and one idempotent');
+  console.log('l45_tax_review_concurrent_counts=true');
   const invalidBefore = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureB.withdrawal.id } });
   const invalidTaxBefore = await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureB.withdrawal.id } } });
   const invalidAuditBefore = await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } });
   const invalidEventBefore = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } });
   for (const [label, body] of [
-    ['negative taxable', { tax_mode: 'none', taxable_amount_cents: -1, tax_amount_cents: 0, client_request_id: `${runId}-negative-taxable` }],
-    ['negative tax', { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: -1, client_request_id: `${runId}-negative-tax` }],
-    ['tax gt taxable', { tax_mode: 'withheld', taxable_amount_cents: 100, tax_amount_cents: 101, client_request_id: `${runId}-tax-gt-taxable` }],
-    ['payable negative', { tax_mode: 'withheld', taxable_amount_cents: 3000, tax_amount_cents: 2500, client_request_id: `${runId}-payable-negative` }]
+    ['missing taxable', { tax_mode: 'none', tax_amount_cents: 0, client_request_id: `${runId}-missing-taxable`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['missing tax amount', { tax_mode: 'none', taxable_amount_cents: 2000, client_request_id: `${runId}-missing-tax-amount`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['null taxable', { tax_mode: 'none', taxable_amount_cents: null, tax_amount_cents: 0, client_request_id: `${runId}-null-taxable`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['string taxable', { tax_mode: 'none', taxable_amount_cents: '100', tax_amount_cents: 0, client_request_id: `${runId}-string-taxable`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['decimal tax amount', { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 1.5, client_request_id: `${runId}-decimal-tax-amount`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['overflow taxable', { tax_mode: 'none', taxable_amount_cents: 2147483648, tax_amount_cents: 0, client_request_id: `${runId}-overflow-taxable`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['none nonzero tax', { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: 1, client_request_id: `${runId}-none-nonzero-tax`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['negative taxable', { tax_mode: 'none', taxable_amount_cents: -1, tax_amount_cents: 0, client_request_id: `${runId}-negative-taxable`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['negative tax', { tax_mode: 'none', taxable_amount_cents: 2000, tax_amount_cents: -1, client_request_id: `${runId}-negative-tax`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['tax gt taxable', { tax_mode: 'withheld', taxable_amount_cents: 100, tax_amount_cents: 101, client_request_id: `${runId}-tax-gt-taxable`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }],
+    ['payable negative', { tax_mode: 'withheld', taxable_amount_cents: 3000, tax_amount_cents: 2500, client_request_id: `${runId}-payable-negative`, expected_updated_at: fixtureB.withdrawal.updated_at.toISOString() }]
   ] as const) {
-    await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${fixtureB.withdrawal.id}/tax-review`, { label: `POST tax-review L45 invalid ${label}`, headers: { ...financeBHeaders, 'content-type': 'application/json' }, expectedStatus: 400, body });
+    await request<ErrorApiResponse>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureB.withdrawal.id)}`, { label: `POST tax-review L45 invalid ${label}`, headers: { ...financeBHeaders, 'content-type': 'application/json' }, expectedStatus: 400, body });
   }
   assert(JSON.stringify(await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureB.withdrawal.id } })) === JSON.stringify(invalidBefore), 'L45 rejected tax review must not mutate Withdrawal');
   assert(JSON.stringify(await prisma.taxRecord.findUniqueOrThrow({ where: { source_type_source_id: { source_type: 'withdrawal', source_id: fixtureB.withdrawal.id } } })) === JSON.stringify(invalidTaxBefore), 'L45 rejected tax review must not mutate TaxRecord');
   assert(await prisma.adminAuditLog.count({ where: { target_id: fixtureB.withdrawal.id } }) === invalidAuditBefore, 'L45 rejected tax review must not create Audit');
   assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } }) === invalidEventBefore, 'L45 rejected tax review must not create Event');
 
-  const csvResponse = await fetchOrThrow('GET', '/api/admin/tax-records/export.csv', { headers: financeAHeaders });
+
+  const overLimitBeforeTaxRecords = await prisma.taxRecord.count();
+  for (let index = 0; index < 6; index += 1) await createWithdrawalFixture('b', `export-over-limit-${index}`, 500 + index);
+  const overLimitApp = Fastify();
+  registerWithdrawalRoutes(overLimitApp, { taxExportLimit: 5 });
+  const overLimitResponse = await overLimitApp.inject({ method: exportContract.method, url: exportContract.path, headers: financeBHeaders });
+  await overLimitApp.close();
+  const overLimitBytes = new Uint8Array(Buffer.from(overLimitResponse.body));
+  const overLimitText = overLimitResponse.body;
+  const overLimitDisposition = overLimitResponse.headers['content-disposition'] ? String(overLimitResponse.headers['content-disposition']) : '';
+  record('GET /api/admin/tax-records/export.csv L45 over limit', { status: overLimitResponse.statusCode, raw: overLimitText.slice(0, 1000) });
+  assert(overLimitResponse.statusCode === 422 && overLimitText.includes('"success":false') && overLimitBytes[0] !== 0xef && !overLimitDisposition.includes('attachment'), 'L45 export over-limit must return JSON 422 without CSV BOM or attachment');
+  assert(await prisma.taxRecord.count() === overLimitBeforeTaxRecords + 6, 'L45 export over-limit HTTP request must not mutate database');
+  console.log('l45_tax_export_over_limit_http_422=true');
+
+  const csvResponse = await fetchOrThrow(exportContract.method, exportContract.path, { headers: financeAHeaders });
   const csvBytes = new Uint8Array(await csvResponse.arrayBuffer());
   const hasUtf8Bom = csvBytes.length >= 3 && csvBytes[0] === 0xef && csvBytes[1] === 0xbb && csvBytes[2] === 0xbf;
   const csv = new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0));
   const disposition = csvResponse.headers.get('content-disposition') ?? '';
   record('GET /api/admin/tax-records/export.csv L45 scoped', { status: csvResponse.status, disposition, utf8_bom: hasUtf8Bom, first_bytes: Array.from(csvBytes.slice(0, 3)), raw: csv.slice(0, 1500) });
-  assert(csvResponse.ok && hasUtf8Bom, `L45 CSV must start with UTF-8 BOM bytes EF BB BF; actual=${Array.from(csvBytes.slice(0, 3)).map((value) => value.toString(16).padStart(2, '0')).join(' ')}`);
+  assert(csvResponse.status === exportContract.success_status && csvResponse.ok && hasUtf8Bom, `L45 CSV must start with UTF-8 BOM bytes EF BB BF; actual=${Array.from(csvBytes.slice(0, 3)).map((value) => value.toString(16).padStart(2, '0')).join(' ')}`);
   assert(/tax-review-\d{4}-\d{2}-\d{2}\.csv/.test(disposition), 'L45 CSV filename must include date');
   assert(csv.includes('仅供内部人工核对，不构成税务申报结果。'), 'L45 CSV must include internal manual review notice');
   assert(csv.includes("'\tclient-danger") && csv.includes("'=HYPERLINK") && csv.includes("'@cmd") && csv.includes("'-1+2"), 'L45 CSV must prefix dangerous text fields with a single quote');
   assert(!csv.includes(fixtureB.withdrawal.id) && !csv.includes(communityB.name), 'L45 CSV must only include authorized scope');
-  const csvFiltered = await requestText('GET', `/api/admin/tax-records/export.csv?withdrawal_id=${encodeURIComponent('does-not-match-l45')}`, { label: 'GET /api/admin/tax-records/export.csv L45 filtered empty', headers: financeAHeaders });
+  console.log('l45_tax_export_success=true');
+  const csvFiltered = await requestText(exportContract.method, `${exportContract.path}?withdrawal_id=${encodeURIComponent('does-not-match-l45')}`, { label: 'GET /api/admin/tax-records/export.csv L45 filtered empty', headers: financeAHeaders });
   assert(!csvFiltered.includes(fixtureA.withdrawal.id), 'L45 CSV filters must apply');
   const executableFormula = csv.split(/\r?\n/).some((line) => line.split(',').some((cell) => /^"?[=+@]/.test(cell) || /^"?-\d/.test(cell)));
   assert(!executableFormula, 'L45 CSV must not contain executable formula-leading cells');
   const automaticEvents = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureA.withdrawal.id, event_type: { in: ['auto_tax_filed', 'auto_payout_requested', 'automatic_tax_filing', 'automatic_payout'] } } });
   assert(automaticEvents === 0, 'L45 must not create automatic tax filing or payout events');
   console.log(`l45_finance_total=${financeList.total}`);
-  console.log(`l45_concurrent_success_count=${concurrent.filter((result) => result.status === 'fulfilled').length}`);
+  console.log(`l45_concurrent_fulfilled_count=${concurrentFulfilled.length}`);
+  console.log(`l45_concurrent_applied_count=${appliedCount}`);
+  console.log(`l45_concurrent_idempotent_count=${idempotentCount}`);
   console.log(`l45_csv_formula_safe=${!executableFormula}`);
   console.log('L45 manual tax review export runtime assertions passed.');
 }

@@ -184,6 +184,7 @@ function runCommand(spec: CommandSpec): void {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
   if (spec.successMessage) printAndAppend(`${spec.successMessage}\n`);
+  printAndAppend(`command_completed:${spec.title}=true\n`);
 }
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
@@ -203,6 +204,8 @@ function prepareLatestOutput(): void {
 function runVerify(args: ParsedArgs, publishMode = false): void {
   prepareLatestOutput();
   for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
+  const resolvedScope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
+  if (args.stage && resolvedScope === 'chain') printAndAppend(`L24-${args.stage} chain regression passed.\n`);
   printAndAppend('\nStage workflow verification passed.\n');
 }
 

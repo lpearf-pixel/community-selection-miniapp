@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -33,6 +34,11 @@ function argValue(name: string) {
 }
 
 const stage = argValue('stage') ?? 'unknown';
+
+function l45ApiVerified(api: (typeof L45_API_CONTRACT_LIST)[number]) {
+  return api.runtime_markers_required.every((marker) => latestVerifyOutputForManifest.includes(marker));
+}
+
 
 
 
@@ -211,19 +217,14 @@ function hasL44RuntimeMarkers() {
 }
 
 function hasL45RuntimeMarkers() {
-  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=','l45_concurrent_success_count=1','l45_csv_formula_safe=true','L45 manual tax review export runtime assertions passed.'];
+  const required = ['=== L45 manual tax review export scenario ===','l45_finance_total=',...l45ConcurrentRuntimeMarkers(),...L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required),'L45 manual tax review export runtime assertions passed.'];
   return required.every((marker) => latestVerifyOutputForManifest.includes(marker));
 }
 const l45Manifest = {
   businessBaseBranch: 'stable/l44-business-base',
   businessBaseCommit: '3ae666ec0e26383a5b117b64dce30b86a2dee389',
   title: 'L45 manual tax review and internal CSV export',
-  apis: [
-    { method: 'GET', path: '/api/admin/tax-records', permissions: ['finance.view + data scope'], purpose: '税务人工 Review 分页列表', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' },
-    { method: 'GET', path: '/api/admin/tax-records/:id', permissions: ['finance.view + data scope'], purpose: '税务人工 Review 详情', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' },
-    { method: 'GET', path: '/api/admin/tax-records/export.csv', permissions: ['finance.export + data scope'], purpose: '内部人工核对 CSV 导出', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' },
-    { method: 'POST', path: '/api/admin/withdrawals/:id/tax-review', permissions: ['withdrawal.manage + data scope'], purpose: '人工税务 Review', verified: hasL45RuntimeMarkers() ? 'yes' : 'not detected' }
-  ],
+  apis: L45_API_CONTRACT_LIST.map((api) => ({ method: api.method, path: api.path, permissions: [api.permission], purpose: api.purpose, verified: l45ApiVerified(api) ? 'yes' : 'not detected' })),
   db: ['无新增表','无新增字段','复用 Withdrawal','复用 WithdrawalCommission','复用 TaxRecord','复用 AdminAuditLog','复用 BusinessEventLog'],
   verify: ['scripts/verify-l45-manual-tax-review-export-local.ts','scripts/verify-docker-api-e2e-local.ts','scripts/stage-workflow.ts --stage=L45 --publish --scope=chain --push']
 };
@@ -1214,6 +1215,18 @@ function commandPassed(content: string, title: string, successMarkers: string[],
   return matched ? 'passed' : 'not detected';
 }
 
+function commandCompleted(content: string, title: string) {
+  return content.includes(`command_completed:${title}=true`);
+}
+
+function l45DockerRequiredMarkers() {
+  return ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', ...l45ConcurrentRuntimeMarkers(), ...L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required)];
+}
+
+function l45MissingDockerMarkers(content: string) {
+  return l45DockerRequiredMarkers().filter((marker) => !content.includes(marker));
+}
+
 function commandPassedInSectionOnly(content: string, title: string, successMarkers: string[], requireAllMarkers = false): StageVerifyStatus {
   const section = commandSection(content, title);
   if (!section) return 'not detected';
@@ -1233,14 +1246,15 @@ function stageVerifyChecks(content: string) {
     return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
   };
   if (isL45Stage) {
+    const dockerMarkersComplete = l45MissingDockerMarkers(content).length === 0;
     return [
-      { command: 'L45 verifier', result: commandPassed(content, 'L45 verifier', ['L45 manual tax review export verifier passed.']) },
-      { command: 'L24-L45 chain regression', result: commandPassed(content, 'L24-L45 chain regression', ['L45 manual tax review export verifier passed.', 'L44 manual withdrawal review verifier passed.', 'L43 reward ledger T3 refund deduct verification passed.', 'L24 miniapp cart verification passed.', 'Stage workflow verification passed.'], true) },
-      { command: 'Docker API E2E', result: commandPassed(content, 'Docker API E2E', ['Docker API E2E verification passed.', 'L45 manual tax review export runtime assertions passed.', 'l45_concurrent_success_count=1', 'l45_csv_formula_safe=true'], true) },
-      { command: 'Admin typecheck config', result: commandPassed(content, 'Admin typecheck config', ['Admin typecheck config check passed.']) },
-      { command: 'Admin full typecheck', result: detectAdminTypecheck(content) },
-      { command: 'raw compliance scan', result: commandPassedInSectionOnly(content, 'raw compliance scan', ['raw compliance scan passed.']) },
-      { command: 'Stage workflow', result: commandPassed(content, 'Stage workflow', ['Stage workflow verification passed.']) }
+      { command: 'L45 verifier', result: commandCompleted(content, 'L45 verifier') && content.includes('L45 manual tax review export verifier passed.') ? 'passed' : 'not detected' },
+      { command: 'L24-L45 chain regression', result: content.includes('L24-L45 chain regression passed.') ? 'passed' : 'not detected' },
+      { command: 'Docker API E2E', result: commandCompleted(content, 'Docker API E2E') && dockerMarkersComplete ? 'passed' : 'not detected' },
+      { command: 'Admin typecheck config', result: commandCompleted(content, 'Admin typecheck config check') && content.includes('Admin typecheck config check passed.') ? 'passed' : 'not detected' },
+      { command: 'Admin full typecheck', result: commandCompleted(content, 'Admin typecheck') && content.includes('Admin typecheck passed.') ? 'passed' : 'not detected' },
+      { command: 'raw compliance scan', result: commandCompleted(content, 'raw compliance scan') && content.includes('raw compliance scan passed.') ? 'passed' : 'not detected' },
+      { command: 'Stage workflow', result: content.includes('Stage workflow verification passed.') ? 'passed' : 'not detected' }
     ];
   }
   if (isL44Stage) {
@@ -1468,12 +1482,14 @@ function validateReportInputs() {
     assertReportQuality(l45MergeBase.ok && l45MergeBase.output.trim() === l45Manifest.businessBaseCommit, ['L45 merge-base must equal business base commit', `expected=${l45Manifest.businessBaseCommit}`, `actual=${l45MergeBase.output}`].join(' '));
     assertReportQuality(!changed.error, changed.error || 'L45 changed-file diff must be available');
     assertChangedFileCoverage(changed.files, fileRows);
-    assertReportQuality(apiRows.length === 4, 'L45 report must list four APIs');
+    assertReportQuality(apiRows.length === L45_API_CONTRACT_LIST.length, 'L45 report must list all APIs from machine contract');
     assertReportQuality(apiRows.every((row) => row.permission.includes('data scope') && row.verified === 'yes'), 'L45 APIs must have precise permissions and runtime verification');
     for (const requiredDb of l45Manifest.db) assertReportQuality(modelRows.some((row) => row.model === requiredDb), `L45 DB section missing ${requiredDb}`);
     if (verifyOutput.exists) {
       assertReportQuality(verifyOutput.rows.length === 7, 'L45 must track seven verification rows');
-      assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), 'All L45 verification rows must pass');
+      const failingRows = verifyOutput.rows.filter((row) => row.result !== 'passed');
+      const missingDockerMarkers = l45MissingDockerMarkers(verifyOutput.raw ?? '');
+      assertReportQuality(failingRows.length === 0, ['All L45 verification rows must pass', `rows=${verifyOutput.rows.map((row) => `${row.command}:${row.result}`).join(',')}`, `missingDockerMarkers=${missingDockerMarkers.join(',') || 'none'}`].join(' | '));
     }
   }
   if (isL44Stage) {
@@ -1547,8 +1563,9 @@ function validateReportInputs() {
 
 validateReportInputs();
 
-const highRiskSummary = highRisks.length ? highRisks.join('；') : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
-const mediumRiskSummary = todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const highRiskSummary = highRisks.length ? highRisks.join('；') : (isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
+const l45TaxRecordScopeRisk = 'L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID 到内存再构造 TaxRecord source_id IN (...)，后续阶段应改造为数据库 EXISTS/JOIN 查询以避免大范围数据内存压力。';
+const mediumRiskSummary = isL45Stage ? l45TaxRecordScopeRisk : todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
 const unfinishedSummary = todos.length ? todos.join('\n') : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
 
 const report = `# 阶段验收报告：${stage}

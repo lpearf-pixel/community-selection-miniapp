@@ -19,9 +19,40 @@ const admin = read('apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx') +
 includesAll(admin, ['DeliveryRuleConfigPage','配送规则配置','全局默认规则','自提点规则','base_fee_cents','free_threshold_cents','service_radius_text','available_time_windows','禁用','保存','管理配送规则'], 'admin');
 const mini = read('apps/miniapp/pages/orders/confirm/index.js') + read('apps/miniapp/pages/orders/confirm/index.wxml');
 includesAll(mini, ['/api/delivery/rules','pickup_store_id','该自提点暂不支持门店配送','配送费','配送时段','配送范围','delivery_time_window_code'], 'miniapp');
-const changed = files.filter((f) => !f.includes('verify-l37') && f !== 'prisma/schema.prisma').map(read).join('\n').replaceAll('credit_source_id', '');
-const blocked = ['https://newopen.im' + 'dada' + 'abc.com','app_' + 'secret','app_' + 'key','source_' + 'id','sign' + 'ature','axios.post','fetch 到' + '达达','request 到' + '达达','real delivery ' + 'order'];
-for (const word of blocked) assert(!changed.includes(word), `forbidden integration marker: ${word}`);
+
+// L37 forbids real third-party delivery integration. Scan only the L37 delivery
+// implementation surface, not shared stage/report files that later stages extend.
+const deliveryIntegrationFiles = [
+  'apps/api/src/modules/delivery/delivery-rule-service.ts',
+  'apps/api/src/routes/admin/delivery.ts',
+  'apps/api/src/routes/public/delivery.ts',
+  'apps/admin/src/api/delivery.ts',
+  'apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx',
+  'apps/admin/src/pages/delivery/DeliveryReservationPage.tsx',
+  'apps/miniapp/pages/orders/confirm/index.js',
+];
+const deliveryIntegrationSurface = deliveryIntegrationFiles.map(read).join('\n');
+const forbiddenIntegrations: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'Dada API host', pattern: /newopen\.imdada/i },
+  { label: 'Dada source credential', pattern: /\bDADA[_-]?SOURCE[_-]?ID\b/i },
+  { label: 'Dada app secret', pattern: /\bDADA[_-]?APP[_-]?SECRET\b/i },
+  { label: 'Dada app key', pattern: /\bDADA[_-]?APP[_-]?KEY\b/i },
+  { label: 'Dada request signature', pattern: /(?:dada[\s\S]{0,80}(?:signature|sign_method)|(?:signature|sign_method)[\s\S]{0,80}dada)/i },
+  { label: 'Dada SDK/import', pattern: /(?:from\s+['"][^'"]*dada|require\(\s*['"][^'"]*dada)/i },
+  { label: 'real Dada HTTP request', pattern: /(?:fetch|axios\.post|request)\s*\([^\n]{0,240}newopen\.imdada/i },
+  { label: 'real delivery order integration', pattern: /\breal delivery order\b/i },
+];
+for (const rule of forbiddenIntegrations) {
+  assert(!rule.pattern.test(deliveryIntegrationSurface), `forbidden integration marker: ${rule.label}`);
+}
+
+// Guard against broad historical blacklists: generic domain fields are valid in
+// later stages and must not be mistaken for provider-specific integration secrets.
+const allowedGenericFixture = 'const source_id = record.source_id; const signature = audit.signature; const app_key = config.app_key;';
+assert(!forbiddenIntegrations.some((rule) => rule.pattern.test(allowedGenericFixture)), 'L37 integration rules must allow generic source_id/signature/app_key fields');
+const rejectedDadaFixture = 'const DADA_SOURCE_ID = value; fetch("https://newopen.imdada.cn/api/order");';
+assert(forbiddenIntegrations.some((rule) => rule.pattern.test(rejectedDadaFixture)), 'L37 integration rules must reject provider-specific Dada integration');
+
 const safetyFiles = ['apps/api/src/modules/delivery/delivery-rule-service.ts','apps/api/src/routes/admin/delivery.ts','apps/api/src/routes/public/delivery.ts','apps/admin/src/api/delivery.ts','apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx'];
 for (const f of safetyFiles) {
   const source = read(f).replaceAll('receiver_phone_masked','').replaceAll('pickup_store_phone','').replaceAll('receiver_address_masked','').replaceAll('delivery_fee_cents','');

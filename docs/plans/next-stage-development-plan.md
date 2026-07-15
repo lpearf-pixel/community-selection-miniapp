@@ -1,9 +1,12 @@
 # 下一阶段开发计划
 
-当前稳定基线：stable/l43-business-base
-L43 merge commit：72a84e81218845c23872bd91ab58a03ccf4c0f33
+当前稳定基线：`stable/l44-business-base`
+基线 SHA：`3ae666ec0e26383a5b117b64dce30b86a2dee389`
+当前候选阶段：L45
+当前候选 PR：#52
+状态：等待完整 chain、report publish 和人工 review；最终门禁必须包含 `l45_tax_detail_success=true` 与 `l45_tax_export_over_limit_http_422=true`。
 
-L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台。L45 尚未开始。
+说明：L45 候选仍以 `stable/l44-business-base` 为业务基线；在 PR 合并前不得提前记录 `stable/l45-business-base` 或 L45 merge commit。
 
 # 后续阶段开发总计划：L39 到 MVP/上线收口
 
