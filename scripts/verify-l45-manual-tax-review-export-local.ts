@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { L45_API_CONTRACT_LIST } from './l45-api-contract.ts';
 function assert(c: unknown, m: string) { if (!c) throw new Error(m); }
 const route = readFileSync('apps/api/src/routes/withdrawals.ts', 'utf8');
 const page = readFileSync('apps/admin/src/pages/tax-review/TaxReviewPage.tsx', 'utf8');
@@ -69,6 +70,16 @@ for (const key of ['tax_record_list','tax_record_detail','tax_record_export','ta
 for (const marker of ['runtime_markers_required', 'l45_admin_scope_runtime=true', 'l45_tax_list_stable_pagination=true', 'l45_mark_paid_not_found_404=true', 'l45_tax_review_stale_version_409=true', 'l45_tax_review_terminal_replay=true', 'l45_tax_review_new_key_terminal_409=true', 'l45_tax_review_invalid_same_key_400=true', 'l45_tax_review_valid_same_key_409=true', 'l45_mark_paid_rollback_verified=true']) assert(contract.includes(marker), `L45 API contract missing required marker ${marker}`);
 assert(contract.includes('fulfilled_count') && contract.includes('applied_count') && contract.includes('idempotent_count') && !contract.includes('idempotent_count?: boolean'), 'concurrent contract must use count fields');
 assert(e2e.includes('l45_tax_export_over_limit_http_422=true') && e2e.includes('overLimitApp.inject') && e2e.includes('registerWithdrawalRoutes(overLimitApp, { taxExportLimit: 5 })') && !e2e.includes('process.env.TAX_RECORD_EXPORT_LIMIT') && !e2e.includes('l45_export_limit_guard=true'), 'CSV 422 marker must come from HTTP request, not helper-only marker');
+
+const csvFormulaAssertIndex = e2e.indexOf("assert(!executableFormula, 'L45 CSV must not contain executable formula-leading cells')");
+const csvFormulaMarkerIndex = Math.max(e2e.indexOf('console.log("l45_csv_formula_safe=true")'), e2e.indexOf("console.log('l45_csv_formula_safe=true')"));
+assert(csvFormulaAssertIndex >= 0 && csvFormulaMarkerIndex > csvFormulaAssertIndex, 'CSV formula-safe success marker must be emitted literally after the runtime assertion');
+assert(!e2e.includes('l45_csv_formula_safe=${!executableFormula}'), 'CSV formula-safe marker must not be dynamically interpolated');
+const requiredBooleanMarkers = L45_API_CONTRACT_LIST.flatMap((api) => api.runtime_markers_required);
+for (const marker of requiredBooleanMarkers) {
+  const literalConsoleLog = e2e.includes(`console.log('${marker}')`) || e2e.includes(`console.log("${marker}")`);
+  assert(literalConsoleLog, `L45 Docker E2E must emit required boolean marker literally: ${marker}`);
+}
 assert(reportGenerator.includes('L45_API_CONTRACT_LIST') && reportGenerator.includes('runtime_markers_required') && reportGenerator.includes('function l45ApiVerified'), 'L45 report API verification must consume all per-interface required markers from machine contract');
 assert(contract.includes('function l45TaxReviewConcurrentScenario()') && contract.includes('L45_API_CONTRACT.tax_review.scenarios.filter') && contract.includes('scenarios.length !== 1') && contract.includes('fulfilled_count === applied_count + idempotent_count') && reportGenerator.includes('l45ConcurrentRuntimeMarkers') && !reportGenerator.includes('l45_concurrent_fulfilled_count=2'), 'L45 report concurrent markers must fail closed from the tax_review machine contract helper');
 assert(route.includes('提现税务状态未完成或未计算，不能标记已处理", 409') && route.includes('发票状态未确认，不能标记已处理", 409'), 'mark-paid state conflicts must use 409');
