@@ -19,7 +19,7 @@ assert(route.includes('csvSafe') && route.includes('/^[=+\\-@\\t\\r\\n]/'), 'CSV
 assert(route.includes('无税务扣减模式的税额必须为 0') && route.includes('taxableAmount > baseWithdrawal.amount_cents'), 'none mode and taxable amount validation must exist');
 assert(route.includes('Object.hasOwn') && route.includes('hasReviewRequest'), 'idempotency history must use Object.hasOwn for key lookup');
 const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
-assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: taxExportLimit() + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
+assert(exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('take: taxExportLimit(options.taxExportLimit) + 1') && !exportBlock.includes('count({ where })'), 'CSV export must use deterministic limit+1 guard instead of count/take race');
 assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');
 assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous.snapshot, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
 assert(!route.includes('JSON.stringify(previous) !== JSON.stringify(requested)'), 'tax review idempotency must not depend on JSON object key order');
@@ -61,8 +61,19 @@ assert(adminRequest.includes('import.meta.env?.DEV === true') && adminRequest.in
 assert(route.includes('parseRequiredMoneyCents') && !route.includes('body.taxable_amount_cents ?? baseWithdrawal.amount_cents') && !route.includes('Number(body.tax_amount_cents'), 'tax review money fields must be strict required numbers without coercion/defaults');
 for (const key of ['tax_record_list','tax_record_detail','tax_record_export','tax_review','mark_paid']) assert(contract.includes(key), `L45 API contract missing ${key}`);
 assert(contract.includes('fulfilled_count') && contract.includes('applied_count') && contract.includes('idempotent_count') && !contract.includes('idempotent_count?: boolean'), 'concurrent contract must use count fields');
-assert(e2e.includes('l45_tax_export_over_limit_http_422=true') && e2e.includes('fetchOrThrow(exportContract.method, exportContract.path') && !e2e.includes('l45_export_limit_guard=true'), 'CSV 422 marker must come from HTTP request, not helper-only marker');
+assert(e2e.includes('l45_tax_export_over_limit_http_422=true') && e2e.includes('overLimitApp.inject') && e2e.includes('registerWithdrawalRoutes(overLimitApp, { taxExportLimit: 5 })') && !e2e.includes('process.env.TAX_RECORD_EXPORT_LIMIT') && !e2e.includes('l45_export_limit_guard=true'), 'CSV 422 marker must come from HTTP request, not helper-only marker');
 assert(reportGenerator.includes('L45_API_CONTRACT_LIST') && reportGenerator.includes('latestVerifyOutputForManifest.includes(api.runtime_marker)'), 'L45 report API verification must be per-interface from machine contract');
 assert(route.includes('提现税务状态未完成或未计算，不能标记已处理", 409') && route.includes('发票状态未确认，不能标记已处理", 409'), 'mark-paid state conflicts must use 409');
+
+const l44Body = e2e.split('async function runL44WithdrawalScenario()')[1]?.split('async function runL45TaxReviewScenario()')[0] ?? '';
+assert(!/detailContract|taxReviewContract|exportContract|markPaidContract/.test(l44Body), 'L44 scenario must not reference L45 local contract variables');
+assert(e2e.includes('data: { withdrawal_id: withdrawal.id }') && e2e.includes('withdrawalCommission.create') && e2e.includes('return { withdrawal, taxRecord, order, community, commission }'), 'L45 fixture must maintain Commission.withdrawal_id and WithdrawalCommission');
+assert(e2e.includes('K1 invalid different after paid') && e2e.includes('same_key_different_invalid_payload') && e2e.includes('K1 valid different after paid') && e2e.includes('same_key_different_valid_payload'), 'L45 E2E must split invalid 400 and valid 409 same-key different payload scenarios');
+assert(report.includes('apiRows.length === L45_API_CONTRACT_LIST.length'), 'L45 report API row count must come from contract length');
+assert(reportVerifier.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID') && reportVerifier.includes('L45 known medium risk must be in risk section') , 'Report verifier must accept documented L45 medium risk');
+assert(!existsSync('scripts/l45-api-contract.js') && existsSync('scripts/l45-api-contract.ts'), 'L45 API contract must have a single TypeScript source');
+assert(existsSync('docs/api/l45-admin-tax-review-api.md'), 'Human-readable L45 API spec must exist');
+assert(e2e.includes('l45_admin_scope_runtime=true') && e2e.includes('resolveAdminAccessContext'), 'E2E must include runtime admin scope source tests');
+assert(!existsSync('.github/workflows/trigger-l45.yml') && !existsSync('scripts/one-time-l45-fix.ts'), 'No temporary workflow trigger files allowed');
 assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');

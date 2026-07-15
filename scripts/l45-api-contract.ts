@@ -41,7 +41,7 @@ export const L45_API_CONTRACT: Record<L45ApiContractEntry['key'], L45ApiContract
     permission: 'finance.view + data scope',
     data_scope: 'server session scope or non-production header_mock scope',
     success_status: 200,
-    error_statuses: [401, 403],
+    error_statuses: [400, 401, 403],
     runtime_marker: 'l45_tax_list_scope_success=true',
     scenarios: [{ type: 'http_status', expected_status: 200, marker: 'l45_tax_list_scope_success=true' }]
   },
@@ -65,7 +65,7 @@ export const L45_API_CONTRACT: Record<L45ApiContractEntry['key'], L45ApiContract
     permission: 'finance.export + data scope',
     data_scope: 'server session scope or non-production header_mock scope',
     success_status: 200,
-    error_statuses: [401, 403, 422],
+    error_statuses: [400, 401, 403, 422],
     runtime_marker: 'l45_tax_export_success=true',
     scenarios: [
       { type: 'http_status', expected_status: 200, marker: 'l45_tax_export_success=true' },
@@ -80,10 +80,15 @@ export const L45_API_CONTRACT: Record<L45ApiContractEntry['key'], L45ApiContract
     permission: 'withdrawal.manage + data scope',
     data_scope: 'server session scope or non-production header_mock scope',
     success_status: 200,
-    error_statuses: [400, 401, 403, 409],
+    error_statuses: [400, 401, 403, 404, 409],
     runtime_marker: 'l45_tax_review_success=true',
     scenarios: [
       { type: 'single_request', expected_status: 200, marker: 'l45_tax_review_success=true' },
+      { type: 'http_status', expected_status: 200, marker: 'same_key_same_payload_after_terminal' },
+      { type: 'http_status', expected_status: 409, marker: 'new_key_after_terminal' },
+      { type: 'http_status', expected_status: 409, marker: 'stale_new_key' },
+      { type: 'http_status', expected_status: 400, marker: 'same_key_different_invalid_payload' },
+      { type: 'http_status', expected_status: 409, marker: 'same_key_different_valid_payload' },
       { type: 'concurrent', fulfilled_count: 2, applied_count: 1, idempotent_count: 1, marker: 'l45_tax_review_concurrent_counts=true' }
     ]
   },

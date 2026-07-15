@@ -347,7 +347,8 @@ function csvSafe(value: unknown) {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
-export function taxExportLimit() {
+export function taxExportLimit(configuredLimit?: number) {
+  if (Number.isInteger(configuredLimit) && configuredLimit > 0) return configuredLimit;
   const configured = Number.parseInt(process.env.TAX_RECORD_EXPORT_LIMIT ?? "", 10);
   return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_TAX_EXPORT_LIMIT;
 }
@@ -532,7 +533,7 @@ async function writeAdminAuditLog(
   });
 }
 
-export function registerWithdrawalRoutes(app: FastifyInstance) {
+export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExportLimit?: number } = {}) {
   app.get("/api/leaders/me/withdrawals", async (request, reply) => {
     try {
       const leader = await resolveCurrentLeader(request);
@@ -832,7 +833,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance) {
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
         const where = await buildTaxRecordWhere(query, context);
-        const exportRecords = await prisma.taxRecord.findMany({ where, orderBy: [{ created_at: "desc" }, { id: "desc" }], take: taxExportLimit() + 1 });
+        const exportRecords = await prisma.taxRecord.findMany({ where, orderBy: [{ created_at: "desc" }, { id: "desc" }], take: taxExportLimit(options.taxExportLimit) + 1 });
         let records: typeof exportRecords;
         try {
           records = ensureTaxExportWithinLimit(exportRecords);

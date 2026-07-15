@@ -300,7 +300,7 @@ assert(l45Report.includes(`业务稳定 commit：${l45BaseCommit}`), 'L45 report
 assert(l45Report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L45 report source commit must equal HEAD');
 assert(l45Report.includes('Codex 自评结论：passed'), 'L45 report conclusion must be passed');
 assert(!l45Report.includes('Codex 自评结论：partial'), 'L45 report must not be partial');
-for (const row of ['GET | /api/admin/tax-records | finance.view + data scope', 'GET | /api/admin/tax-records/:id | finance.view + data scope', 'GET | /api/admin/tax-records/export.csv | finance.export + data scope', 'POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope']) {
+for (const row of ['GET | /api/admin/tax-records | finance.view + data scope', 'GET | /api/admin/tax-records/:id | finance.view + data scope', 'GET | /api/admin/tax-records/export.csv | finance.export + data scope', 'POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope', 'POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope']) {
   assert(l45Report.includes(row), `L45 report API row missing: ${row}`);
 }
 for (const requiredDb of ['无新增表', '无新增字段', '复用 Withdrawal', '复用 WithdrawalCommission', '复用 TaxRecord', '复用 AdminAuditLog', '复用 BusinessEventLog']) {
@@ -309,9 +309,11 @@ for (const requiredDb of ['无新增表', '无新增字段', '复用 Withdrawal'
 for (const requiredVerify of ['L45 verifier', 'L24-L45 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow']) {
   assert(l45Report.includes(requiredVerify) && l45Report.includes(`${requiredVerify} | passed`), `L45 report verification row must pass: ${requiredVerify}`);
 }
-for (const requiredQuality of ['高风险：暂无自动发现', '中风险：暂无自动发现']) {
+for (const requiredQuality of ['高风险：暂无自动发现', 'L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID']) {
   assert(l45Report.includes(requiredQuality), `L45 report quality summary missing: ${requiredQuality}`);
 }
+const l45RiskSection = l45Report.split('## 9. 风险')[1]?.split('## 10. 未完成项')[0] ?? '';
+assert(l45RiskSection.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID'), 'L45 known medium risk must be in risk section');
 const l45UnfinishedSection = l45Report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0] ?? '';
 assert(l45UnfinishedSection.trim() === '暂无自动发现', `L45 report unfinished section must be empty; actual=${l45UnfinishedSection.trim()}`);
 

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { L45_API_CONTRACT_LIST } from './l45-api-contract.js';
+import { L45_API_CONTRACT_LIST } from './l45-api-contract.ts';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -1464,7 +1464,7 @@ function validateReportInputs() {
     assertReportQuality(l45MergeBase.ok && l45MergeBase.output.trim() === l45Manifest.businessBaseCommit, ['L45 merge-base must equal business base commit', `expected=${l45Manifest.businessBaseCommit}`, `actual=${l45MergeBase.output}`].join(' '));
     assertReportQuality(!changed.error, changed.error || 'L45 changed-file diff must be available');
     assertChangedFileCoverage(changed.files, fileRows);
-    assertReportQuality(apiRows.length === 4, 'L45 report must list four APIs');
+    assertReportQuality(apiRows.length === L45_API_CONTRACT_LIST.length, 'L45 report must list all APIs from machine contract');
     assertReportQuality(apiRows.every((row) => row.permission.includes('data scope') && row.verified === 'yes'), 'L45 APIs must have precise permissions and runtime verification');
     for (const requiredDb of l45Manifest.db) assertReportQuality(modelRows.some((row) => row.model === requiredDb), `L45 DB section missing ${requiredDb}`);
     if (verifyOutput.exists) {
