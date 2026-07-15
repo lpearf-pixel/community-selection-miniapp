@@ -91,3 +91,11 @@
 - Docker E2E 必须覆盖数据库 round-trip 后的重复请求，并至少一次使用不同属性插入顺序构造语义相同的 payload。
 - 静态 verifier 必须禁止顺序敏感的持久化 JSON 比较，但不能把具体 helper 名作为唯一实现方式；门禁应围绕语义等价、canonicalization 或 deep equality。
 
+## 10. HTTP 文本解码与原始字节验证规范
+
+- `Response.text()`、`TextDecoder` 等文本解码层可能消费 UTF-8 BOM；解码后的首字符不是 `U+FEFF`，不能证明响应缺少 BOM。
+- CSV BOM、文件签名、压缩头、图片魔数等传输层属性必须通过 `arrayBuffer()` / 原始字节验证，禁止对解码后的字符串使用 `charCodeAt(0)` 作为字节证据。
+- UTF-8 BOM 应精确验证前三个字节为 `0xEF 0xBB 0xBF`；验证后再从 BOM 之后解码正文。
+- 调试日志应记录首字节数组和 BOM 判断结果，但不得把完整敏感文件内容写入日志。
+- 静态 verifier 必须阻止把文本解码结果冒充原始传输字节证据。
+

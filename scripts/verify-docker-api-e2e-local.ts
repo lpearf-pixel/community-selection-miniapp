@@ -926,10 +926,12 @@ async function runL45TaxReviewScenario() {
   assert(await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureB.withdrawal.id } }) === invalidEventBefore, 'L45 rejected tax review must not create Event');
 
   const csvResponse = await fetchOrThrow('GET', '/api/admin/tax-records/export.csv', { headers: financeAHeaders });
-  const csv = await csvResponse.text();
+  const csvBytes = new Uint8Array(await csvResponse.arrayBuffer());
+  const hasUtf8Bom = csvBytes.length >= 3 && csvBytes[0] === 0xef && csvBytes[1] === 0xbb && csvBytes[2] === 0xbf;
+  const csv = new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0));
   const disposition = csvResponse.headers.get('content-disposition') ?? '';
-  record('GET /api/admin/tax-records/export.csv L45 scoped', { status: csvResponse.status, disposition, raw: csv.slice(0, 1500) });
-  assert(csvResponse.ok && csv.charCodeAt(0) === 0xfeff, 'L45 CSV must be UTF-8 BOM text');
+  record('GET /api/admin/tax-records/export.csv L45 scoped', { status: csvResponse.status, disposition, utf8_bom: hasUtf8Bom, first_bytes: Array.from(csvBytes.slice(0, 3)), raw: csv.slice(0, 1500) });
+  assert(csvResponse.ok && hasUtf8Bom, `L45 CSV must start with UTF-8 BOM bytes EF BB BF; actual=${Array.from(csvBytes.slice(0, 3)).map((value) => value.toString(16).padStart(2, '0')).join(' ')}`);
   assert(/tax-review-\d{4}-\d{2}-\d{2}\.csv/.test(disposition), 'L45 CSV filename must include date');
   assert(csv.includes('仅供内部人工核对，不构成税务申报结果。'), 'L45 CSV must include internal manual review notice');
   assert(csv.includes("'\tclient-danger") && csv.includes("'=HYPERLINK") && csv.includes("'@cmd") && csv.includes("'-1+2"), 'L45 CSV must prefix dangerous text fields with a single quote');

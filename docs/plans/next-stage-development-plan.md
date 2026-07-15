@@ -713,3 +713,4 @@ L43 已完成并合并。当前开发阶段为 L44：提现人工审核工作台
 - Docker E2E 的所有唯一字段 fixture 必须包含每次运行唯一的 run token，确保失败后可重跑且并发执行不碰撞。
 - Docker E2E 必须先等待 `/api/health`，transport 错误必须包含 URL、底层 cause 与容器日志排查命令。
 - 持久化 JSON 的幂等判断必须使用规范化后的语义深比较或 canonical serialization，禁止依赖对象键顺序的原始 `JSON.stringify` 比较。
+- CSV BOM、文件签名等传输层属性必须检查原始响应字节，禁止用 `Response.text()` 解码后的字符串冒充字节证据。
