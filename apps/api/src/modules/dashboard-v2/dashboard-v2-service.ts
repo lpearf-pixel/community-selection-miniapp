@@ -4,11 +4,13 @@ import { DASHBOARD_DEFAULT_TIMEZONE, DASHBOARD_FINANCE_PERMISSIONS, DASHBOARD_LO
 
 export type DashboardPeriod = { from: Date; to: Date; timezone: string };
 export function parseDashboardPeriod(query: DashboardQuery, maxDays: number): DashboardPeriod {
+  const timezone = query.timezone || DASHBOARD_DEFAULT_TIMEZONE;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(); } catch { throw Object.assign(new Error('timezone is invalid'), { statusCode: 400 }); }
   const to = query.to ? new Date(query.to) : new Date(); const from = query.from ? new Date(query.from) : new Date(to.getTime() - 30 * 86400000);
   if (Number.isNaN(from.valueOf()) || Number.isNaN(to.valueOf())) throw Object.assign(new Error('from/to must be ISO time'), { statusCode: 400 });
   if (from >= to) throw Object.assign(new Error('from must be before to'), { statusCode: 400 });
   if (to.getTime() - from.getTime() > maxDays * 86400000) throw Object.assign(new Error(`date range exceeds ${maxDays} days`), { statusCode: 422 });
-  return { from, to, timezone: query.timezone || DASHBOARD_DEFAULT_TIMEZONE };
+  return { from, to, timezone };
 }
 function section(context: AdminAccessContext, permissions: readonly string[]) { return permissions.some((p) => hasAdminPermission(context, p as any)); }
 function orderScope(context: AdminAccessContext, q: DashboardQuery) {
