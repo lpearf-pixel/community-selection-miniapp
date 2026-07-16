@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { getStageChain, getStageDefinition, latestRegisteredStage as latestStageDefinition, STAGE_REGISTRY } from './stage-registry.ts';
 
 type Scope = 'stage' | 'chain' | 'all';
 type CommandSpec = {
@@ -25,55 +26,9 @@ type ParsedArgs = {
 const reportsDir = join(process.cwd(), 'reports');
 const latestVerifyOutput = join(reportsDir, 'latest-verify-output.txt');
 
-const stageVerifiers: Record<string, CommandSpec> = {
-  L24: { title: 'L24 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l24-miniapp-cart-local.ts'] },
-  L25: { title: 'L25 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l25-order-confirm-quantity-guard-local.ts'] },
-  L26: { title: 'L26 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l26-group-buy-success-rule-local.ts'] },
-  L27: { title: 'L27 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts'] },
-  L28: { title: 'L28 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l28-refund-ledger-finance-check-local.ts'] },
-  L29: { title: 'L29 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l29-admin-refund-ledger-page-local.ts'] },
-  L30: { title: 'L30 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l30-refund-payment-risk-idempotency-local.ts'] },
-  L31: { title: 'L31 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l31-admin-access-control-baseline-local.ts'] },
-  L32: { title: 'L32 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l32-clerk-pickup-workbench-local.ts'] },
-  L33: { title: 'L33 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts'] },
-  L34: { title: 'L34 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l34-admin-data-scope-baseline-local.ts'] },
-  L35: { title: 'L35 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l35-user-delivery-option-baseline-local.ts'] },
-  L36: { title: 'L36 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l36-delivery-fee-window-range-baseline-local.ts'] },
-  L37: { title: 'L37 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts'] },
-  L38: { title: 'L38 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts'] },
-  L39: { title: 'L39 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts'] },
-  L40: { title: 'L40 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts'] },
-  L41: { title: 'L41 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l41-inventory-deduct-restore-local.ts'] },
-  L42: { title: 'L42 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts'] },
-  L43: { title: 'L43 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'] },
-  L44: { title: 'L44 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l44-manual-withdrawal-review-local.ts'] },
-  L45: { title: 'L45 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l45-manual-tax-review-export-local.ts'] }
-};
-
-const regressionChains: Record<string, string[]> = {
-  L24: ['L24'],
-  L25: ['L25', 'L24'],
-  L26: ['L26', 'L25', 'L24'],
-  L27: ['L27', 'L26', 'L25', 'L24'],
-  L28: ['L28', 'L27', 'L26', 'L25', 'L24'],
-  L29: ['L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L30: ['L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L31: ['L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L32: ['L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L33: ['L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L34: ['L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L35: ['L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L36: ['L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L37: ['L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L38: ['L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L39: ['L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L40: ['L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L41: ['L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L42: ['L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L43: ['L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L44: ['L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L45: ['L45', 'L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
-};
+const stageVerifiers: Record<string, CommandSpec> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier!] }]));
+const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, (stage.additionalVerifiers ?? []).map((verifier) => ({ title: `${stage.id} additional verifier`, command: 'pnpm', args: ['exec', 'tsx', verifier] }))]));
+const regressionChains: Record<string, string[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, [...getStageChain(stage.id), ...(stage.number >= 43 ? ['RAW_COMPLIANCE_SCAN'] : []), ...(stage.number >= 38 ? ['DOCKER_API_E2E', 'ADMIN_TYPECHECK'] : [])]]));
 
 const dockerApiE2E: CommandSpec = {
   title: 'Docker API E2E',
@@ -131,11 +86,7 @@ function normalizeStage(value: string): string {
   return value.trim().toUpperCase();
 }
 
-function latestRegisteredStage(): string {
-  return Object.keys(stageVerifiers)
-    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
-    .at(-1)!;
-}
+function latestRegisteredStage(): string { return latestStageDefinition().id; }
 
 function assertRegisteredStage(stage: string): void {
   const verifier = stageVerifiers[stage];
@@ -191,9 +142,9 @@ function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandS
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
   if (scope === 'all') return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
-  if (scope === 'stage') return [stageVerifiers[args.stage]];
+  if (scope === 'stage') return [stageVerifiers[args.stage], ...stageAdditionalVerifiers[args.stage]];
   const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'RAW_COMPLIANCE_SCAN' ? [rawComplianceScan] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
-  return chainCommands;
+  return chainCommands.flatMap((command) => command === stageVerifiers[args.stage] ? [command, ...stageAdditionalVerifiers[args.stage]] : [command]);
 }
 
 function prepareLatestOutput(): void {

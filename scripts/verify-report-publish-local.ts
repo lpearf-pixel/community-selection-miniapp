@@ -1,3 +1,4 @@
+import { getStageDefinition } from './stage-registry.ts';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
