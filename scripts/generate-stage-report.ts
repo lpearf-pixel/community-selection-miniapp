@@ -1565,7 +1565,9 @@ function validateReportInputs() {
 
 validateReportInputs();
 
-const stageManifest = isL45Stage ? l45Manifest : isL44Stage ? l44Manifest : isL43Stage ? l43Manifest : isL42Stage ? l42Manifest : isL41Stage ? l41Manifest : isL40Stage ? l40Manifest : undefined;
+const stageManifest = isL45Stage ? l45Manifest : isL44Stage ? l44Manifest : isL43Stage ? l43Manifest : isL42Stage ? l42Manifest : isL41Stage ? l41Manifest : isL40Stage ? l40Manifest : isL39Stage ? l39Manifest : undefined;
+const businessBaseBranch = stageManifest?.businessBaseBranch ?? stageDefinition.reportContract?.businessBaseBranch ?? '未配置';
+const businessBaseCommit = stageManifest?.businessBaseCommit ?? stageDefinition.reportContract?.businessBaseCommit ?? '未配置';
 const stageGoal = stageManifest?.title ?? stageDefinition.title;
 const highRiskSummary = highRisks.length ? highRisks.join('；') : (isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
 const l45TaxRecordScopeRisk = 'L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID 到内存再构造 TaxRecord source_id IN (...)，后续阶段应改造为数据库 EXISTS/JOIN 查询以避免大范围数据内存压力。';
@@ -1577,8 +1579,8 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL45Stage ? l45Manifest.businessBaseBranch : isL44Stage ? l44Manifest.businessBaseBranch : isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL45Stage ? l45Manifest.businessBaseCommit : isL44Stage ? l44Manifest.businessBaseCommit : isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${businessBaseBranch}
+- 业务稳定 commit：${businessBaseCommit}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
