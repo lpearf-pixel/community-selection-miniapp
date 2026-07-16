@@ -1,8 +1,10 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { scanComplianceFiles } from "./lib/compliance-scan";
 
+assertStageRegistered('L24', 'scripts/verify-l24-miniapp-cart-local.ts');
 const repoRoot = process.cwd();
 const requireFromRoot = createRequire(join(repoRoot, "package.json"));
 function assert(condition: unknown, message: string): asserts condition {

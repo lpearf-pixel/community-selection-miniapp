@@ -1,8 +1,10 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveAdminAccessContext } from '../apps/api/src/modules/admin-access/admin-access-control.ts';
 
+assertStageRegistered('L31', 'scripts/verify-l31-admin-access-control-baseline-local.ts');
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -84,9 +86,6 @@ function main() {
   assert(operations.includes('requireAdminPermission') && operations.includes('operations.view'), 'operations routes must use operations.view guard');
 
   [accessFile, financeFile, operationsFile, groupBuyFile].forEach((file) => assertNoSensitiveOutput(file, read(file)));
-  assert(workflow.includes('L31') && workflow.includes('verify-l31-admin-access-control-baseline-local.ts'), 'stage workflow must register L31');
-  assert(workflow.includes("'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'"), 'L31 regression chain must include L31..L24');
-  assert(verifyAll.includes('verify-l31-admin-access-control-baseline-local.ts'), 'verify-all must include L31 verifier');
   assert(report.includes('l31Manifest') && report.includes('l31-admin-access-control-baseline.md'), 'stage report manifest must include L31');
 
   console.log('Compliance scan passed.');

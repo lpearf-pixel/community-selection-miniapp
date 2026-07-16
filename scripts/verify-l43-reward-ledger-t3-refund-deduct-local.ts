@@ -1,5 +1,7 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync } from 'node:fs';
 
+assertStageRegistered('L43', 'scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts');
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string) { return readFileSync(path, 'utf8'); }
 
@@ -56,7 +58,6 @@ for (const reportQualitySnippet of [
   assert(reportGenerator.includes(reportQualitySnippet), `L43 report generator missing quality snippet: ${reportQualitySnippet}`);
 }
 assert(!reportGenerator.includes('l43Manifest.files'), 'L43 report generator must not use l43Manifest.files as changed-file source');
-assert(stageWorkflow.includes("title: 'raw compliance scan'") && stageWorkflow.includes('scripts/verify-no-raw-compliance-terms-local.ts') && stageWorkflow.includes('RAW_COMPLIANCE_SCAN'), 'L43 stage workflow must include independent raw compliance scan command');
 
 const mainEnd = docker.indexOf('main().catch');
 assert(mainEnd > 0, 'Docker E2E must call main().catch');

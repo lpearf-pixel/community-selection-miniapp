@@ -1,5 +1,7 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 
+assertStageRegistered('L46', 'scripts/verify-l46-tax-record-db-scope-local.ts');
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`L46 tax-record verifier: ${message}`);
 }

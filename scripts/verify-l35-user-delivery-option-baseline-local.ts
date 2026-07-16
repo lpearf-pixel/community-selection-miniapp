@@ -1,6 +1,8 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+assertStageRegistered('L35', 'scripts/verify-l35-user-delivery-option-baseline-local.ts');
 const root = process.cwd();
 function read(p:string){return readFileSync(join(root,p),'utf8')}
 function mustFile(p:string){ if(!existsSync(join(root,p))) throw new Error(`Missing file: ${p}`)}

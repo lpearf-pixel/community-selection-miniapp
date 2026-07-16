@@ -1,6 +1,8 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
+assertStageRegistered('L37', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts');
 function read(path: string) { return readFileSync(path, 'utf8'); }
 function assert(condition: unknown, message: string) { if (!condition) throw new Error(message); }
 function includesAll(source: string, needles: string[], label: string) { for (const needle of needles) assert(source.includes(needle), `${label} missing: ${needle}`); }

@@ -1,6 +1,8 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
+assertStageRegistered('L33', 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts');
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string) { assert(existsSync(path), `${path} should exist`); return readFileSync(path, 'utf8'); }
 function includesAll(source: string, needles: string[], label: string) { for (const needle of needles) assert(source.includes(needle), `${label} missing ${needle}`); }

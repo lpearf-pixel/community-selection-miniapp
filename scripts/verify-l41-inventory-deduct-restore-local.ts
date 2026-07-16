@@ -1,9 +1,11 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync } from 'node:fs';
 import { prisma } from '../apps/api/src/db.js';
 import { createNormalOrder } from '../apps/api/src/modules/order/order-service.js';
 import { buildInventoryIdempotencyKey, deductInventoryForPaidOrder, getInventoryIdempotencyPrefix, getOrderInventorySummary, inventoryIdempotencyPrefixes, restoreInventoryForRefund } from '../apps/api/src/modules/inventory/inventory-order-service.js';
 import { markOrderPaid } from '../apps/api/src/services/payment-service.js';
 
+assertStageRegistered('L41', 'scripts/verify-l41-inventory-deduct-restore-local.ts');
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string) { return readFileSync(path, 'utf8'); }
 

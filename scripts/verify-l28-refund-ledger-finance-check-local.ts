@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
 
+assertStageRegistered('L28', 'scripts/verify-l28-refund-ledger-finance-check-local.ts');
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -40,8 +42,6 @@ async function main() {
   assert(!combined.includes('AUTO_PAYOUT_ENABLED = ' + 'true'), 'L28 must not enable automatic payouts');
   assert(!combined.includes('AUTO_TAX_FILING_ENABLED = ' + 'true'), 'L28 must not enable automatic tax filing');
 
-  assert(workflow.includes('L28') && workflow.includes('verify-l28-refund-ledger-finance-check-local.ts'), 'stage workflow must register L28 verifier');
-  assert(verifyAll.includes('verify-l28-refund-ledger-finance-check-local.ts'), 'verify:all must include L28 verifier');
   assert(report.includes('l28Manifest') && report.includes('l28-refund-ledger-finance-check.md'), 'stage report manifest must include L28');
   ['退款台账', '财务对账', '人工退款', '不调用真实微信退款 API', 'CSV 防公式注入', 'receiver_phone_masked'].forEach((keyword) => assert(doc.includes(keyword), `Review doc missing keyword: ${keyword}`));
 

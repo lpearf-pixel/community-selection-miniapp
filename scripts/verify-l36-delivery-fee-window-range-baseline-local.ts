@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+assertStageRegistered('L36', 'scripts/verify-l36-delivery-fee-window-range-baseline-local.ts');
 const root = process.cwd();
 function exists(p: string) { return existsSync(join(root, p)); }
 function read(p: string) { return readFileSync(join(root, p), 'utf8'); }

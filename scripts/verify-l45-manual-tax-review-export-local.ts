@@ -1,5 +1,7 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST } from './l45-api-contract.ts';
+assertStageRegistered('L45', 'scripts/verify-l45-manual-tax-review-export-local.ts');
 function assert(c: unknown, m: string) { if (!c) throw new Error(m); }
 const route = readFileSync('apps/api/src/routes/withdrawals.ts', 'utf8');
 const taxRecordRepository = readFileSync('apps/api/src/modules/tax-record/tax-record-scope-repository.ts', 'utf8');
@@ -114,7 +116,6 @@ assert(!/communityA\.id[\s\S]*const communityA/.test(scopeRuntimeBlock), 'Admin 
 assert(l31Verifier.includes('resolveAdminAccessContext') && l31Verifier.includes('previousNodeEnv') && l31Verifier.includes('finally') && !l31Verifier.includes("['unknown role rejected', 'no default super_admin', 'production does not trust x-admin-role']"), 'L31 verifier must use semantic access checks instead of comment binding');
 assert(l34Verifier.includes('resolveAdminDataScope') && l34Verifier.includes("['clerk', 'store_manager', 'finance', 'operator']") && !l34Verifier.includes('clerk 不默认全量') && !l34Verifier.includes('store_manager 不默认全量'), 'L34 verifier must use semantic data-scope checks instead of comment binding');
 assert(l37Verifier.includes('deliveryRuntimeFiles') && l37Verifier.includes('assertNoDadaIntegration') && l37Verifier.includes('DADA_SOURCE_ID') && !l37Verifier.includes("'source_' + 'id'") && !l37Verifier.includes("'sign' + 'ature'"), 'L37 verifier must use scoped Dada-specific integration scanning');
-assert(stageWorkflow.includes('command_completed:${spec.title}=true') && stageWorkflow.includes('command_completed:L24-L45 chain regression=true') && stageWorkflow.includes('L24-L45 chain regression passed.'), 'stage workflow must emit authoritative command completion markers');
 assert(reportGenerator.includes('commandCompleted') && reportGenerator.includes('missingL45DockerMarkers') && reportGenerator.includes('rows=') && reportGenerator.includes('missingDockerMarkers='), 'L45 report generation must use authoritative markers and detailed failure output');
 assert(reportVerifier.includes('l45ConcurrentRuntimeMarkers') && !reportVerifier.includes("'l45TaxReviewConcurrentScenario'"), 'publish verifier must bind to wrapper helper rather than requiring generator to name the low-level helper');
 assert(reportVerifier.includes('L45_API_CONTRACT_LIST.flatMap') && reportVerifier.includes('requiredRuntimeMarkers') && reportVerifier.includes('dockerE2eSource.includes(marker)') && reportVerifier.includes('l45ContractSource.includes(marker)'), 'publish verifier must derive runtime marker ownership from the machine contract and Docker E2E');

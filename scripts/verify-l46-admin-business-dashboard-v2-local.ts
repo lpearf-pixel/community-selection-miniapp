@@ -1,5 +1,7 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+assertStageRegistered('L46', 'scripts/verify-l46-admin-business-dashboard-v2-local.ts');
 function assert(ok: unknown, message: string): asserts ok { if (!ok) throw new Error(`L46 verifier: ${message}`); }
 const files=['docs/plans/l46-admin-business-dashboard-v2.md','apps/api/src/modules/dashboard-v2/dashboard-v2-service.ts','apps/api/src/modules/dashboard-v2/dashboard-v2-query.ts','apps/api/src/routes/admin/dashboard-v2.ts','apps/admin/src/api/adminDashboardV2.ts','apps/admin/src/pages/dashboard-v2/AdminBusinessDashboardV2Page.tsx','scripts/l46-dashboard-contract.ts'];
 for(const file of files) assert(existsSync(file),`${file} missing`);

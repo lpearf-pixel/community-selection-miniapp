@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+assertStageRegistered('L29', 'scripts/verify-l29-admin-refund-ledger-page-local.ts');
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -76,8 +78,6 @@ async function main() {
   assertNoSensitiveFields(pageFile, page);
   assertNoSensitiveFields(apiFile, api);
 
-  assert(workflow.includes('L29') && workflow.includes('verify-l29-admin-refund-ledger-page-local.ts'), 'stage workflow must register L29 verifier');
-  assert(verifyAll.includes('verify-l29-admin-refund-ledger-page-local.ts'), 'verify:all must include L29 verifier');
   assert(report.includes('l29Manifest') && report.includes('l29-admin-refund-ledger-page.md'), 'stage report manifest must include L29');
   ['退款台账', 'CSV 导出', 'receiver_phone_masked', '不调用真实微信退款 API', '无新增表', '无新增字段'].forEach((keyword) => assert(doc.includes(keyword), `Review doc missing keyword: ${keyword}`));
 

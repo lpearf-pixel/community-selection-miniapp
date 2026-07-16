@@ -1,5 +1,7 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync, existsSync } from 'node:fs';
 
+assertStageRegistered('L44', 'scripts/verify-l44-manual-withdrawal-review-local.ts');
 function read(path: string) { return readFileSync(path, 'utf8'); }
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 

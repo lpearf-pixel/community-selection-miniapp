@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+assertStageRegistered('L30', 'scripts/verify-l30-refund-payment-risk-idempotency-local.ts');
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -83,9 +85,6 @@ function main() {
     assert(!service.includes(term) && !route.includes(term), `Forbidden runtime term added: ${term}`);
   }
 
-  assert(workflow.includes('L30') && workflow.includes('verify-l30-refund-payment-risk-idempotency-local.ts'), 'stage workflow must register L30');
-  assert(workflow.includes("'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'"), 'L30 regression chain must include L30..L24');
-  assert(verifyAll.includes('verify-l30-refund-payment-risk-idempotency-local.ts'), 'verify-all must include L30 verifier');
   assert(report.includes('l30Manifest') && report.includes('l30-refund-payment-risk-idempotency.md'), 'stage report must include L30 manifest');
   ['风险 CSV 导出','手机号脱敏','无新增表','无新增字段'].forEach((keyword) => assert(doc.includes(keyword), `Doc missing keyword: ${keyword}`));
 
