@@ -20,3 +20,14 @@ assert(generator.includes('reportContract') && verifier.includes('definition.rep
 assert(!verifier.includes('reportChangedFileBases') && !verifier.includes("?? 'HEAD~1'"), 'L46 does not fall back to HEAD~1');
 assert(!verifier.includes(`report.includes('${l46Definition.title}')`), 'verifier has no hardcoded L46 title');
 console.log('Report stage routing checks passed.');
+const compactGenerator = generator.replace(/\s+/g, ' ');
+assert(/resolveReportSource\s*\(\s*stage\s*\)/.test(generator), 'Generator must resolve report source using the requested stage');
+assert(/stageDefinition\.reportContract\s*\?\s*resolveReportSource\s*\(\s*stage\s*\)/.test(compactGenerator), 'Generator must resolve Registry report source only for contracted stages');
+assert(/registryReportSource\??\.sourceMode\s*===\s*['"]git_diff['"]/.test(generator), 'Generator must branch on resolved git_diff source mode');
+assert(/return\s+registryReportSource\.businessBaseCommit/.test(generator), 'Generator git diff base must come from resolved business base commit');
+assert(/stageManifest\??\.businessBaseBranch\s*\?\?\s*registryReportSource\??\.businessBaseBranch/.test(generator), 'Generator business base branch must fall back to resolved source');
+assert(/stageManifest\??\.businessBaseCommit\s*\?\?\s*registryReportSource\??\.businessBaseCommit/.test(generator), 'Generator business base commit must fall back to resolved source');
+assert(/isL39Stage\s*\?\s*l39Manifest/.test(generator), 'L39 must retain its historical manifest');
+assert(/stageManifest\??\.title\s*\?\?\s*stageDefinition\.title/.test(generator), 'Generator title must prefer historical manifest then Registry');
+assert(!/stageDefinition!?\??\.reportContract!?\??\.businessBase(Branch|Commit)/.test(generator), 'Generator must not directly read reportContract business base fields');
+for (const forbidden of ['HEAD~1', 'HEAD^']) assert(!generator.includes(forbidden), `Generator must not infer report source from ${forbidden}`);
