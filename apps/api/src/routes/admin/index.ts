@@ -13,6 +13,7 @@ import { registerAdminOperationsRoutes } from './operations.js';
 import { registerAdminPickupRoutes } from './pickup.js';
 import { registerAdminDeliveryRoutes } from './delivery.js';
 import { registerAdminOrderRoutes } from './orders.js';
+import { registerAdminDashboardV2Routes } from './dashboard-v2.js';
 
 export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminAuthRoutes(app);
@@ -29,4 +30,5 @@ export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminPickupRoutes(app);
   registerAdminDeliveryRoutes(app);
   registerAdminOrderRoutes(app);
+  registerAdminDashboardV2Routes(app);
 }
