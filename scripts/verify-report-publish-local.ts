@@ -1,7 +1,9 @@
+import { parseStageArg } from './stage-args.ts';
 import { getStageDefinition } from './stage-registry.ts';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
+const stage = parseStageArg(process.argv.slice(2));
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -302,8 +304,8 @@ const l45Head = gitOutput(['rev-parse', 'HEAD']);
 execFileSync('git', ['merge-base', '--is-ancestor', l45BaseCommit, l45Head], { stdio: 'pipe' });
 const l45MergeBase = gitOutput(['merge-base', l45BaseCommit, l45Head]);
 assert(l45MergeBase === l45BaseCommit, ['L45 report source must actually descend from business base', `base=${l45BaseCommit}`, `head=${l45Head}`, `merge_base=${l45MergeBase}`].join(' '));
-execFileSync(process.execPath, ['scripts/generate-stage-report.ts', '--stage=L45'], { stdio: 'pipe' });
-const l45Report = read('reports/stage-L45-report.md');
+execFileSync(process.execPath, ['scripts/generate-stage-report.ts', `--stage=${stage}`], { stdio: 'pipe' });
+const l45Report = read(`reports/stage-${stage}-report.md`);
 const l45ExpectedFiles = gitDiffFiles(l45BaseCommit, 'HEAD');
 const l45ReportFiles = extractMarkdownFilePaths(l45Report);
 assertSetEqual(l45ExpectedFiles, l45ReportFiles, 'L45 report changed files');

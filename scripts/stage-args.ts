@@ -1,0 +1,2 @@
+import { getStageDefinition } from './stage-registry.ts';
+export function parseStageArg(argv:readonly string[]){for(let i=0;i<argv.length;i++){if(argv[i]==='--')continue;let value=argv[i].startsWith('--stage=')?argv[i].slice(8):argv[i]==='--stage'?argv[++i]:undefined;if(value){const stage=value.toUpperCase();if(!getStageDefinition(stage))throw new Error(`Unknown stage: ${stage}`);return stage;}}throw new Error('Missing required --stage=Lxx');}

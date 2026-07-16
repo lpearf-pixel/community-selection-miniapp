@@ -167,8 +167,8 @@ function runReportStage(stage: string): void {
   runCommand({ title: `report:stage ${stage}`, command: 'pnpm', args: ['report:stage', '--', `--stage=${stage}`] });
 }
 
-function runReportVerifier(): void {
-  runCommand({ title: 'report publish verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts'] });
+function runReportVerifier(stage: string): void {
+  runCommand({ title: 'report publish verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts', `--stage=${stage}`] });
   const latestOutput = readFileSync(latestVerifyOutput, 'utf8');
   if (!latestOutput.includes('Report publish verification passed.')) {
     throw new Error('Report publish verifier did not emit required success marker: Report publish verification passed.');
@@ -192,7 +192,7 @@ function main(): void {
   if (args.publish) {
     runVerify(args, true);
     runReportStage(args.stage!);
-    runReportVerifier();
+    runReportVerifier(args.stage!);
     runReportPublish(args);
     return;
   }

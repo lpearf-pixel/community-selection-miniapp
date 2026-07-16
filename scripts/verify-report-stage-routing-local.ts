@@ -1,0 +1,4 @@
+import { parseStageArg } from './stage-args.ts'; import { readFileSync } from 'node:fs';
+function assert(v:unknown,m:string):asserts v{if(!v)throw new Error(m)}
+assert(parseStageArg(['--stage=L45'])==='L45','inline stage');assert(parseStageArg(['--','--stage=L46'])==='L46','separator stage');assert(parseStageArg(['--stage','L46'])==='L46','split stage');for(const argv of [[],['--stage=L99']]){let failed=false;try{parseStageArg(argv)}catch{failed=true}assert(failed,'invalid stage must fail')}
+const workflow=readFileSync('scripts/stage-workflow.ts','utf8'),publish=readFileSync('scripts/verify-report-publish-local.ts','utf8');assert(workflow.includes('`--stage=${stage}`'),'workflow must forward stage');assert(publish.includes('parseStageArg(process.argv.slice(2))'),'publish must parse stage');console.log('Report stage routing checks passed.');
