@@ -24,6 +24,7 @@ export function restoreSelectedIdOrder<T extends { id: string }>(ids: readonly s
 }
 
 export function buildScopedTaxRecordSql(scope: TaxRecordAdminScope, filters: TaxRecordScopeFilters) {
+  if (filters.createdAtToInclusive && filters.createdAtToExclusive) throw new Error('TaxRecord time filter cannot contain both inclusive and exclusive to');
   const parts: Prisma.Sql[] = [Prisma.sql`tr.source_type = ${filters.sourceType}`];
   if (!scope.isSuperAdmin) {
     if (!scope.communityIds.length && !scope.pickupStoreIds.length) parts.push(Prisma.sql`FALSE`);
@@ -42,8 +43,9 @@ export function buildScopedTaxRecordSql(scope: TaxRecordAdminScope, filters: Tax
   if (filters.invoiceStatus) parts.push(Prisma.sql`w.invoice_status = ${filters.invoiceStatus}`);
   if (filters.leaderUserId) parts.push(Prisma.sql`w.leader_user_id = ${filters.leaderUserId}`);
   if (filters.withdrawalId) parts.push(Prisma.sql`w.id = ${filters.withdrawalId}`);
-  if (filters.from) parts.push(Prisma.sql`tr.created_at >= ${filters.from}`);
-  if (filters.to) parts.push(Prisma.sql`tr.created_at < ${filters.to}`);
+  if (filters.createdAtFromInclusive) parts.push(Prisma.sql`tr.created_at >= ${filters.createdAtFromInclusive}`);
+  if (filters.createdAtToInclusive) parts.push(Prisma.sql`tr.created_at <= ${filters.createdAtToInclusive}`);
+  if (filters.createdAtToExclusive) parts.push(Prisma.sql`tr.created_at < ${filters.createdAtToExclusive}`);
   if (filters.keyword) {
     const keyword = `%${escapeLikePattern(filters.keyword)}%`;
     parts.push(Prisma.sql`(w.id ILIKE ${keyword} ESCAPE '\\' OR w.client_request_id ILIKE ${keyword} ESCAPE '\\' OR u.nickname ILIKE ${keyword} ESCAPE '\\' OR u.phone ILIKE ${keyword} ESCAPE '\\')`);
@@ -74,11 +76,13 @@ export async function countScopedPendingInvoices(db: TaxRecordDbClient, scope: T
 }
 export async function listScopedTaxAlerts(db: TaxRecordDbClient, scope: TaxRecordAdminScope, filters: TaxRecordScopeFilters, take = 50): Promise<ScopedTaxAlertRow[]> {
   return db.$queryRaw<ScopedTaxAlertRow[]>(Prisma.sql`
-    SELECT tr.id AS "taxRecordId", w.id AS "withdrawalId",
-      CASE WHEN tr.tax_status = 'pending' THEN 'tax_review_pending' ELSE 'invoice_pending' END AS "alertType",
-      tr.created_at AS "occurredAt"
-    ${base(scope, filters)}
-      AND (tr.tax_status = 'pending' OR (w.invoice_required = true AND w.invoice_status = 'pending'))
-    ORDER BY tr.created_at DESC, tr.id DESC, w.id DESC
+    SELECT * FROM (
+      SELECT tr.id AS "taxRecordId", w.id AS "withdrawalId", 'tax_review_pending' AS "alertType", tr.created_at AS "occurredAt"
+      ${base(scope, filters)} AND tr.tax_status = 'pending'
+      UNION ALL
+      SELECT tr.id AS "taxRecordId", w.id AS "withdrawalId", 'invoice_pending' AS "alertType", tr.created_at AS "occurredAt"
+      ${base(scope, filters)} AND w.invoice_required = true AND w.invoice_status = 'pending'
+    ) alerts
+    ORDER BY "occurredAt" DESC, "withdrawalId" ASC, "taxRecordId" ASC, "alertType" ASC
     LIMIT ${take}`);
 }

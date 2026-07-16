@@ -411,7 +411,7 @@ function taxRecordDto(record: any, withdrawal?: any) {
 }
 
 function taxScope(context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>) { return { isSuperAdmin: context.is_super_admin, communityIds: context.data_scope.community_ids, pickupStoreIds: context.data_scope.pickup_store_ids }; }
-function taxFilters(query: TaxRecordQuery) { const dates=parseDateRange(query); return { sourceType: "withdrawal" as const, taxMode:query.tax_mode, taxStatus:query.tax_status, invoiceStatus:query.invoice_status, leaderUserId:query.leader_user_id, withdrawalId:query.withdrawal_id ?? query.source_id, keyword:query.keyword, from:dates.created_at?.gte, to:dates.created_at?.lt }; }
+function taxFilters(query: TaxRecordQuery) { const dates=parseDateRange(query); return { sourceType: "withdrawal" as const, taxMode:query.tax_mode, taxStatus:query.tax_status, invoiceStatus:query.invoice_status, leaderUserId:query.leader_user_id, withdrawalId:query.withdrawal_id ?? query.source_id, keyword:query.keyword, createdAtFromInclusive:dates.created_at?.gte, createdAtToInclusive:dates.created_at?.lte }; }
 
 function uniqueOrderIds(orderIds: Array<string | null | undefined> = []) {
   return Array.from(
@@ -811,7 +811,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
             include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } },
           });
           return { total, records, withdrawals };
-        });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
         const map = new Map(withdrawals.map((w) => [w.id, w]));
         return ok({ items: records.map((record) => taxRecordDto(record, map.get(record.source_id))), total, page, page_size: pageSize });
       } catch (error) {
@@ -835,7 +835,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
           const exportRecords = restoreSelectedIdOrder(selectedIds, hydrated);
           const withdrawals = await tx.withdrawal.findMany({ where: { id: { in: exportRecords.map((record) => record.source_id) } }, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } } });
           return { exportRecords, withdrawals };
-        });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
         let records: typeof exportRecords;
         try {
           records = ensureTaxExportWithinLimit(exportRecords, limit);
