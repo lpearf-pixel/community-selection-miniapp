@@ -1,5 +1,6 @@
 import { parseStageArg } from './stage-args.ts';
 import { getStageDefinition } from './stage-registry.ts';
+import { resolveReportSource, type ResolvedReportSource } from './stage-report-source.ts';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
@@ -210,26 +211,32 @@ for (const required of ['git fetch origin', 'git pull --ff-only', 'pnpm verify:a
 const verifyAll = read(verifyAllPath);
 assert(verifyAll.includes('pnpm exec tsx scripts/verify-report-publish-local.ts'), 'verify-all should include report publish verifier');
 
-function changedFilesForStage(stageId: string) {
+function resolvePublishReportSource(stageId: string): ResolvedReportSource {
   const definition = getStageDefinition(stageId);
   assert(definition, `registered report stage is required: ${stageId}`);
-  const contract = definition.reportContract;
-  assert(contract?.sourceMode === 'git_diff', `${definition.id} report contract must use git_diff`);
-  return { base: contract.businessBaseCommit, files: gitDiffFiles(contract.businessBaseCommit, 'HEAD') };
+  return definition.reportContract ? resolveReportSource(definition.id) : resolveReportSource(definition.id, {});
+}
+type PublishChangedFiles = { sourceMode: 'git_diff'; base: string; files: string[] } | { sourceMode: 'legacy_manifest' };
+function changedFilesForStage(stageId: string): PublishChangedFiles {
+  const source = resolvePublishReportSource(stageId);
+  if (source.sourceMode === 'git_diff') return { sourceMode: 'git_diff', base: source.businessBaseCommit, files: gitDiffFiles(source.businessBaseCommit, 'HEAD') };
+  return { sourceMode: 'legacy_manifest' };
 }
 function validateCommonReport(stageId: string) {
   const definition = getStageDefinition(stageId);
   assert(definition, `stage registry must define ${stageId}`);
   execFileSync(process.execPath, ['scripts/generate-stage-report.ts', `--stage=${definition.id}`], { stdio: 'pipe' });
   const report = read(`reports/stage-${definition.id}-report.md`);
-  const { files } = changedFilesForStage(definition.id);
-  assertSetEqual(files, extractMarkdownFilePaths(report), `${definition.id} report changed files`);
+  const changedFiles = changedFilesForStage(definition.id);
+  const reportFiles = extractMarkdownFilePaths(report);
+  if (changedFiles.sourceMode === 'git_diff') assertSetEqual(changedFiles.files, reportFiles, `${definition.id} report changed files`);
+  else { assert(reportFiles.length > 0, `${definition.id} legacy report must contain changed files`); assert(!report.includes(`Stage ${definition.id} has no configured report source`), `${definition.id} legacy report source must resolve`); }
   assert(report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), `${definition.id} report source commit must equal HEAD`);
   return report;
 }
 
 function validateL43Report(report: string) {
-  const base = '20d5023f0e493bad7485e4fe8cbc5ccba014e118';
+  const source = resolveReportSource('L43'); assert(source.sourceMode === 'git_diff', 'L43 report source must use git_diff'); const base = source.businessBaseCommit;
   assertSetEqual(gitDiffFiles(base, 'HEAD'), extractMarkdownFilePaths(report), 'L43 report changed files');
   assert(report.includes(`业务稳定 commit：${base}`) && report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L43 report base/source commit');
   for (const required of ['prisma/migrations/202607130001_l43_reward_ledger_t7_refund_deduct/migration.sql','prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql','review_status','last_adjusted_at','idempotency_key','affects_available_balance','original_key:legacy:{ledger.id}']) assert(report.includes(required), `L43 report should include ${required}`);
@@ -237,7 +244,7 @@ function validateL43Report(report: string) {
   assert(report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'), 'L43 report conclusion');
 }
 function validateL44Report(report: string) {
-  const base = getStageDefinition('L44')!.reportContract!.businessBaseCommit; assertSetEqual(gitDiffFiles(base, 'HEAD'), extractMarkdownFilePaths(report), 'L44 report changed files');
+  const source = resolveReportSource('L44'); assert(source.sourceMode === 'git_diff', 'L44 report source must use git_diff'); const base = source.businessBaseCommit; assertSetEqual(gitDiffFiles(base, 'HEAD'), extractMarkdownFilePaths(report), 'L44 report changed files');
   assert(report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'), 'L44 report conclusion');
   for (const row of ['GET | /api/leaders/me/withdrawable-commissions | leader self','GET | /api/leaders/me/withdrawals | leader self','GET | /api/leaders/me/withdrawals/:id | leader self','POST | /api/leaders/me/withdrawals | leader self','GET | /api/admin/withdrawals | withdrawal.view + data scope','GET | /api/admin/withdrawals/:id | withdrawal.view + data scope','POST | /api/admin/withdrawals/:id/approve | withdrawal.manage + data scope','POST | /api/admin/withdrawals/:id/reject | withdrawal.manage + data scope','POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope']) assert(report.includes(row), `L44 report API row missing: ${row}`);
   assert(!/\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|[^\n]*\|\s*(public|admin session)\s*\|/.test(report), 'L44 API permission must be precise');
@@ -246,7 +253,7 @@ function validateL44Report(report: string) {
   assert(report.includes('高风险：暂无自动发现') && report.includes('中风险：暂无自动发现'), 'L44 risks'); assert((report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0] ?? '').trim() === '暂无自动发现', 'L44 unfinished');
 }
 function validateL45Report(report: string) {
-  const base=getStageDefinition('L45')!.reportContract!.businessBaseCommit; assertSetEqual(gitDiffFiles(base,'HEAD'),extractMarkdownFilePaths(report),'L45 report changed files'); assert(report.includes('业务稳定分支：stable/l44-business-base') && report.includes(`业务稳定 commit：${base}`) && report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'),'L45 report metadata');
+  const source=resolveReportSource('L45'); assert(source.sourceMode === 'git_diff', 'L45 report source must use git_diff'); const base=source.businessBaseCommit; assertSetEqual(gitDiffFiles(base,'HEAD'),extractMarkdownFilePaths(report),'L45 report changed files'); assert(report.includes(`业务稳定分支：${source.businessBaseBranch}`) && report.includes(`业务稳定 commit：${base}`) && report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'),'L45 report metadata');
   for (const row of ['GET | /api/admin/tax-records | finance.view + data scope','GET | /api/admin/tax-records/:id | finance.view + data scope','GET | /api/admin/tax-records/export.csv | finance.export + data scope','POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope','POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope']) assert(report.includes(row),`L45 report API row missing: ${row}`);
   for (const item of ['无新增表','无新增字段','复用 Withdrawal','复用 WithdrawalCommission','复用 TaxRecord','复用 AdminAuditLog','复用 BusinessEventLog']) assert(report.includes(item),`L45 report database section missing ${item}`); for (const item of ['L45 verifier','L24-L45 chain regression','Docker API E2E','Admin typecheck config','Admin full typecheck','raw compliance scan','Stage workflow']) assert(report.includes(`${item} | passed`),`L45 report verification row must pass: ${item}`); assert((report.split('## 9. 风险')[1]?.split('## 10. 未完成项')[0]??'').includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID'),'L45 known medium risk'); assert((report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0]??'').trim()==='暂无自动发现','L45 unfinished');
 }
@@ -257,6 +264,9 @@ function validateL46Report(report: string) {
   assert(definition, 'L46 must be registered');
   assert(report.includes(`- 注册阶段标题：${definition.title}`), 'L46 report must use the registered stage title');
   assert(report.includes(`- 本阶段目标：${definition.title}`), 'L46 report goal must use the registered stage title');
+  const source = resolveReportSource('L46'); assert(source.sourceMode === 'git_diff', 'L46 report source must use git_diff');
+  assert(report.includes(`- 业务稳定分支：${source.businessBaseBranch}`), 'L46 report must use the registered business base branch');
+  assert(report.includes(`- 业务稳定 commit：${source.businessBaseCommit}`), 'L46 report must use the registered business base commit');
 }
 
 const scannerDefinitionFixture = `function isVerifierTodoTestString() { return /${'TO' + 'DO'}|${'FIX' + 'ME'}|${'T' + 'BD'}|${'NOT_' + 'IMPLEMENTED'}/.test(''); }`;
