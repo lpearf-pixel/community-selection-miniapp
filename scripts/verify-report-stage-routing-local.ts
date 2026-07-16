@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { getStageDefinition } from './stage-registry.ts';
+import { GLOBAL_STATIC_VERIFIERS, getStageDefinition } from './stage-registry.ts';
+import { resolveReportSource } from './stage-report-source.ts';
 import { parseStageArg } from './stage-args.ts';
 function assert(v: unknown, m: string): asserts v { if (!v) throw new Error(m); }
 function assertThrows(callback: () => unknown, expectedMessage: string): void { let actualError: unknown; try { callback(); } catch (error) { actualError = error; } assert(actualError instanceof Error, `Expected error containing: ${expectedMessage}`); assert(actualError.message.includes(expectedMessage), [`Expected error containing: ${expectedMessage}`, `Actual: ${actualError.message}`].join('\n')); }
@@ -9,11 +10,13 @@ assert(parseStageArg(['--', '--stage=L46']) === 'L46', 'Separator stage argument
 assertThrows(() => parseStageArg([]), 'Missing required --stage=Lxx');
 assertThrows(() => parseStageArg(['--stage=L99']), 'Unknown stage: L99');
 const generator = readFileSync('scripts/generate-stage-report.ts', 'utf8'); const verifier = readFileSync('scripts/verify-report-publish-local.ts', 'utf8');
-const l46 = getStageDefinition('L46'); assert(l46?.title === 'Admin Business Dashboard V2', 'L46 registry title');
+const l46Definition = getStageDefinition('L46'); assert(l46Definition, 'L46 must be registered'); assert(l46Definition.reportContract, 'L46 report contract must be registered'); const l46Source = resolveReportSource('L46'); assert(l46Source.sourceMode === 'git_diff', 'L46 report source must use git_diff'); assert(l46Source.businessBaseBranch === l46Definition.reportContract.businessBaseBranch, 'L46 resolver branch must match Registry'); assert(l46Source.businessBaseCommit === l46Definition.reportContract.businessBaseCommit, 'L46 resolver commit must match Registry');
+const l25Source = resolveReportSource('L25', {}); assert(l25Source.sourceMode === 'legacy_manifest', 'L25 report source must use legacy manifest'); assert(l25Source.businessBaseBranch === undefined, 'L25 legacy source must not invent a branch'); assert(l25Source.businessBaseCommit === undefined, 'L25 legacy source must not invent a commit');
+assert(GLOBAL_STATIC_VERIFIERS.includes('scripts/verify-report-source-resolver-local.ts'), 'Report source resolver verifier must be globally registered');
 assert(generator.includes("title: 'L45 manual tax review and internal CSV export'"), 'L45 retains manifest title');
 assert(generator.includes('stageManifest?.title ?? stageDefinition.title'), 'generator selects manifest then registry title');
 assert(!generator.includes('${stage} 阶段目标，需结合阶段说明人工确认'), 'no generic L46 fallback');
 assert(generator.includes('reportContract') && verifier.includes('definition.reportContract'), 'shared report contract');
 assert(!verifier.includes('reportChangedFileBases') && !verifier.includes("?? 'HEAD~1'"), 'L46 does not fall back to HEAD~1');
-assert(!verifier.includes("report.includes('Admin Business Dashboard V2')"), 'verifier has no hardcoded L46 title');
+assert(!verifier.includes(`report.includes('${l46Definition.title}')`), 'verifier has no hardcoded L46 title');
 console.log('Report stage routing checks passed.');
