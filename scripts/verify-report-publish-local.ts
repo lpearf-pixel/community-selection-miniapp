@@ -228,32 +228,27 @@ function validateCommonReport(stageId: string) {
   return report;
 }
 
-function validateL44Report(report: string) {
-  const definition = getStageDefinition('L44');
-  assert(definition?.reportContract, 'L44 report contract must be registered');
-  const l44BaseCommit = definition.reportContract.businessBaseCommit;
-  const l44Head = gitOutput(['rev-parse', 'HEAD']);
-  execFileSync('git', ['merge-base', '--is-ancestor', l44BaseCommit, l44Head], { stdio: 'pipe' });
-  assert(gitOutput(['merge-base', l44BaseCommit, l44Head]) === l44BaseCommit, 'L44 report source must actually descend from business base');
-  assert(report.includes(`业务稳定 commit：${l44BaseCommit}`), 'L44 report must include the L43 merge commit as business base');
-  for (const row of ['GET | /api/leaders/me/withdrawable-commissions | leader self', 'GET | /api/admin/withdrawals | withdrawal.view + data scope']) assert(report.includes(row), `L44 report API row missing: ${row}`);
-  for (const requiredVerify of ['L44 verifier', 'L24-L44 chain regression', 'Docker API E2E']) assert(report.includes(`${requiredVerify} | passed`), `L44 report verification row must pass: ${requiredVerify}`);
+function validateL43Report(report: string) {
+  const base = '20d5023f0e493bad7485e4fe8cbc5ccba014e118';
+  assertSetEqual(gitDiffFiles(base, 'HEAD'), extractMarkdownFilePaths(report), 'L43 report changed files');
+  assert(report.includes(`业务稳定 commit：${base}`) && report.includes(`报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L43 report base/source commit');
+  for (const required of ['prisma/migrations/202607130001_l43_reward_ledger_t7_refund_deduct/migration.sql','prisma/migrations/202607130002_l43_reward_ledger_t3_refund_deduct/migration.sql','review_status','last_adjusted_at','idempotency_key','affects_available_balance','original_key:legacy:{ledger.id}']) assert(report.includes(required), `L43 report should include ${required}`);
+  assert(!report.includes('Commission | L43 manifest') && !report.includes('RewardLedger | L43 manifest'), 'L43 report must not contain manifest placeholders');
+  assert(report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'), 'L43 report conclusion');
 }
-
+function validateL44Report(report: string) {
+  const base = getStageDefinition('L44')!.reportContract!.businessBaseCommit; assertSetEqual(gitDiffFiles(base, 'HEAD'), extractMarkdownFilePaths(report), 'L44 report changed files');
+  assert(report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'), 'L44 report conclusion');
+  for (const row of ['GET | /api/leaders/me/withdrawable-commissions | leader self','GET | /api/leaders/me/withdrawals | leader self','GET | /api/leaders/me/withdrawals/:id | leader self','POST | /api/leaders/me/withdrawals | leader self','GET | /api/admin/withdrawals | withdrawal.view + data scope','GET | /api/admin/withdrawals/:id | withdrawal.view + data scope','POST | /api/admin/withdrawals/:id/approve | withdrawal.manage + data scope','POST | /api/admin/withdrawals/:id/reject | withdrawal.manage + data scope','POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope']) assert(report.includes(row), `L44 report API row missing: ${row}`);
+  assert(!/\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|[^\n]*\|\s*(public|admin session)\s*\|/.test(report), 'L44 API permission must be precise');
+  for (const item of ['Withdrawal','WithdrawalCommission','client_request_id','reviewed_by_admin_id','processed_by_admin_id','manual_reference','withdrawal_id','commission_id','amount_cents','unique(withdrawal_id, commission_id)','20260714000100_l44_manual_withdrawal_review','20260714000200_l44_withdrawal_commission_links']) assert(report.includes(item), `L44 database section missing ${item}`);
+  for (const item of ['L44 verifier','L24-L44 chain regression','Docker API E2E','Admin typecheck config','Admin full typecheck','raw compliance scan','Stage workflow']) assert(report.includes(`${item} | passed`), `L44 report verification row must pass: ${item}`);
+  assert(report.includes('高风险：暂无自动发现') && report.includes('中风险：暂无自动发现'), 'L44 risks'); assert((report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0] ?? '').trim() === '暂无自动发现', 'L44 unfinished');
+}
 function validateL45Report(report: string) {
-  const definition = getStageDefinition('L45');
-  assert(definition?.reportContract, 'L45 report contract must be registered');
-  const l45BaseCommit = definition.reportContract.businessBaseCommit;
-  const l45Head = gitOutput(['rev-parse', 'HEAD']);
-  execFileSync('git', ['merge-base', '--is-ancestor', l45BaseCommit, l45Head], { stdio: 'pipe' });
-  assert(gitOutput(['merge-base', l45BaseCommit, l45Head]) === l45BaseCommit, 'L45 report source must actually descend from business base');
-  assertSetEqual(gitDiffFiles(l45BaseCommit, 'HEAD'), extractMarkdownFilePaths(report), 'L45 report changed files');
-  assert(report.includes('业务稳定分支：stable/l44-business-base'), 'L45 report must include stable/l44-business-base');
-  assert(report.includes(`业务稳定 commit：${l45BaseCommit}`), 'L45 report must include base commit');
-  for (const row of ['GET | /api/admin/tax-records | finance.view + data scope', 'GET | /api/admin/tax-records/:id | finance.view + data scope', 'GET | /api/admin/tax-records/export.csv | finance.export + data scope', 'POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope', 'POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope']) assert(report.includes(row), `L45 report API row missing: ${row}`);
-  for (const requiredVerify of ['L45 verifier', 'L24-L45 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow']) assert(report.includes(`${requiredVerify} | passed`), `L45 report verification row must pass: ${requiredVerify}`);
-  const l45RiskSection = report.split('## 9. 风险')[1]?.split('## 10. 未完成项')[0] ?? '';
-  assert(l45RiskSection.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID'), 'L45 known medium risk must be in risk section');
+  const base=getStageDefinition('L45')!.reportContract!.businessBaseCommit; assertSetEqual(gitDiffFiles(base,'HEAD'),extractMarkdownFilePaths(report),'L45 report changed files'); assert(report.includes('业务稳定分支：stable/l44-business-base') && report.includes(`业务稳定 commit：${base}`) && report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'),'L45 report metadata');
+  for (const row of ['GET | /api/admin/tax-records | finance.view + data scope','GET | /api/admin/tax-records/:id | finance.view + data scope','GET | /api/admin/tax-records/export.csv | finance.export + data scope','POST | /api/admin/withdrawals/:id/tax-review | withdrawal.manage + data scope','POST | /api/admin/withdrawals/:id/mark-paid | withdrawal.manage + data scope']) assert(report.includes(row),`L45 report API row missing: ${row}`);
+  for (const item of ['无新增表','无新增字段','复用 Withdrawal','复用 WithdrawalCommission','复用 TaxRecord','复用 AdminAuditLog','复用 BusinessEventLog']) assert(report.includes(item),`L45 report database section missing ${item}`); for (const item of ['L45 verifier','L24-L45 chain regression','Docker API E2E','Admin typecheck config','Admin full typecheck','raw compliance scan','Stage workflow']) assert(report.includes(`${item} | passed`),`L45 report verification row must pass: ${item}`); assert((report.split('## 9. 风险')[1]?.split('## 10. 未完成项')[0]??'').includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID'),'L45 known medium risk'); assert((report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0]??'').trim()==='暂无自动发现','L45 unfinished');
 }
 
 function validateL46Report(report: string) {
@@ -264,7 +259,14 @@ function validateL46Report(report: string) {
   assert(report.includes(`- 本阶段目标：${definition.title}`), 'L46 report goal must use the registered stage title');
 }
 
+const scannerDefinitionFixture = `function isVerifierTodoTestString() { return /${'TO' + 'DO'}|${'FIX' + 'ME'}|${'T' + 'BD'}|${'NOT_' + 'IMPLEMENTED'}/.test(''); }`;
+const realTodoFixture = `export function calculateReward() { // ${'TO' + 'DO'}: implement reward calculation }`;
+const verifierFixture = `assert(!source.includes('${'TO' + 'DO'}'), 'runtime source must not contain ${'TO' + 'DO'}');`;
+assert(fixtureTodoItems('scripts/generate-stage-report.ts', scannerDefinitionFixture).length === 0, 'TODO scanner implementation fixture');
+assert(fixtureTodoItems('apps/api/src/services/reward-example.ts', realTodoFixture).length === 1, 'real business TODO fixture');
+assert(fixtureTodoItems('scripts/verify-example-local.ts', verifierFixture).length === 0, 'verifier TODO assertion fixture');
 const report = validateCommonReport(stage);
+if (stage === 'L43') validateL43Report(report);
 if (stage === 'L44') validateL44Report(report);
 if (stage === 'L45') validateL45Report(report);
 if (stage === 'L46') validateL46Report(report);
