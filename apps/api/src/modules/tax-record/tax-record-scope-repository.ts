@@ -1,0 +1,14 @@
+import { Prisma } from '@prisma/client'; import { prisma } from '../../db.js'; import type { TaxRecordAdminScope,TaxRecordScopeFilters } from './tax-record-scope-types.js';
+export function buildScopedTaxRecordSql(scope:TaxRecordAdminScope,f:TaxRecordScopeFilters){
+ const parts:Prisma.Sql[]=[Prisma.sql`tr.source_type = ${f.sourceType}`];
+ if(!scope.isSuperAdmin){ if(!scope.communityIds.length&&!scope.pickupStoreIds.length) parts.push(Prisma.sql`FALSE`); else { const allowed=Prisma.join([scope.communityIds.length?Prisma.sql`o.community_id IN (${Prisma.join(scope.communityIds)})`:Prisma.sql`FALSE`,scope.pickupStoreIds.length?Prisma.sql`o.pickup_store_id IN (${Prisma.join(scope.pickupStoreIds)})`:Prisma.sql`FALSE`],Prisma.sql` OR `); parts.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM "WithdrawalCommission" wc JOIN "Commission" c ON c.id=wc.commission_id JOIN "Order" o ON o.id=c.order_id WHERE wc.withdrawal_id=w.id AND NOT (${allowed}))`,Prisma.sql`EXISTS (SELECT 1 FROM "WithdrawalCommission" wc WHERE wc.withdrawal_id=w.id)`); }}
+ if(f.taxMode)parts.push(Prisma.sql`tr.tax_mode=${f.taxMode}`); if(f.taxStatus)parts.push(Prisma.sql`tr.tax_status=${f.taxStatus}`); if(f.invoiceStatus)parts.push(Prisma.sql`w.invoice_status=${f.invoiceStatus}`); if(f.leaderUserId)parts.push(Prisma.sql`w.leader_user_id=${f.leaderUserId}`);if(f.withdrawalId)parts.push(Prisma.sql`w.id=${f.withdrawalId}`);if(f.from)parts.push(Prisma.sql`tr.created_at >= ${f.from}`);if(f.to)parts.push(Prisma.sql`tr.created_at < ${f.to}`);if(f.keyword){const k=`%${f.keyword}%`;parts.push(Prisma.sql`(w.id ILIKE ${k} OR w.client_request_id ILIKE ${k} OR u.nickname ILIKE ${k} OR u.phone ILIKE ${k})`)}
+ return Prisma.join(parts,Prisma.sql` AND `);
+}
+const base=(s:TaxRecordAdminScope,f:TaxRecordScopeFilters)=>Prisma.sql` FROM "TaxRecord" tr JOIN "Withdrawal" w ON tr.source_id=w.id LEFT JOIN "User" u ON u.id=w.leader_user_id WHERE ${buildScopedTaxRecordSql(s,f)}`;
+export async function listScopedTaxRecordIds(s:TaxRecordAdminScope,f:TaxRecordScopeFilters,skip=0,take=50){return prisma.$queryRaw<{id:string}[]>(Prisma.sql`SELECT tr.id ${base(s,f)} ORDER BY tr.created_at DESC,tr.id DESC OFFSET ${skip} LIMIT ${take}`)}
+export async function countScopedTaxRecords(s:TaxRecordAdminScope,f:TaxRecordScopeFilters){const r=await prisma.$queryRaw<{count:bigint}[]>(Prisma.sql`SELECT COUNT(*)::bigint count ${base(s,f)}`);return Number(r[0]?.count??0)}
+export const listScopedTaxRecordsForExport=listScopedTaxRecordIds;
+export const countScopedPendingTaxReviews=(s:TaxRecordAdminScope,f:Omit<TaxRecordScopeFilters,'taxStatus'>)=>countScopedTaxRecords(s,{...f,taxStatus:'pending'});
+export const countScopedPendingInvoices=(s:TaxRecordAdminScope,f:TaxRecordScopeFilters)=>countScopedTaxRecords(s,f);
+export async function listScopedTaxAlerts(s:TaxRecordAdminScope,f:TaxRecordScopeFilters,take=50){return listScopedTaxRecordIds(s,f,0,take)}

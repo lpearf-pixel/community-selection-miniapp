@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { fail, ok } from "@community-selection/shared";
 import { prisma } from "../db.js";
+import { countScopedTaxRecords, listScopedTaxRecordIds } from "../modules/tax-record/tax-record-scope-repository.js";
 import {
   safeRecordBusinessEvent,
   safeRecordOrderTimeline,
@@ -409,30 +410,8 @@ function taxRecordDto(record: any, withdrawal?: any) {
   };
 }
 
-async function buildTaxRecordWhere(query: TaxRecordQuery, context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>): Promise<Prisma.TaxRecordWhereInput> {
-  const withdrawalWhere: Prisma.WithdrawalWhereInput = {
-    ...withdrawalScopeWhere(context),
-    ...(query.keyword ? { OR: [
-      { client_request_id: { contains: query.keyword, mode: "insensitive" } },
-      { id: { contains: query.keyword, mode: "insensitive" } },
-      { leader_user: { nickname: { contains: query.keyword, mode: "insensitive" } } },
-      { leader_user: { phone: { contains: query.keyword, mode: "insensitive" } } },
-    ] } : {}),
-    ...(query.tax_mode ? { tax_mode: query.tax_mode } : {}),
-    ...(query.tax_status ? { tax_status: query.tax_status } : {}),
-    ...(query.invoice_status ? { invoice_status: query.invoice_status } : {}),
-    ...(query.leader_user_id ? { leader_user_id: query.leader_user_id } : {}),
-    ...(query.withdrawal_id || query.source_id ? { id: query.withdrawal_id ?? query.source_id } : {}),
-  };
-  return {
-    source_type: "withdrawal",
-    ...(query.leader_user_id ? { leader_user_id: query.leader_user_id } : {}),
-    ...(query.tax_status ? { tax_status: query.tax_status } : {}),
-    ...(query.tax_mode ? { tax_mode: query.tax_mode } : {}),
-    ...parseDateRange(query),
-    source_id: { in: (await prisma.withdrawal.findMany({ where: withdrawalWhere, select: { id: true } })).map((item) => item.id) },
-  };
-}
+function taxScope(context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>) { return { isSuperAdmin: context.is_super_admin, communityIds: context.data_scope.community_ids, pickupStoreIds: context.data_scope.pickup_store_ids }; }
+function taxFilters(query: TaxRecordQuery) { const dates=parseDateRange(query); return { sourceType: "withdrawal" as const, taxMode:query.tax_mode, taxStatus:query.tax_status, invoiceStatus:query.invoice_status, leaderUserId:query.leader_user_id, withdrawalId:query.withdrawal_id ?? query.source_id, keyword:query.keyword, from:dates.created_at?.gte, to:dates.created_at?.lt }; }
 
 function uniqueOrderIds(orderIds: Array<string | null | undefined> = []) {
   return Array.from(
@@ -821,16 +800,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
         const { page, pageSize } = parsePage(query);
-        const where = await buildTaxRecordWhere(query, context);
-        const [total, records] = await prisma.$transaction([
-          prisma.taxRecord.count({ where }),
-          prisma.taxRecord.findMany({
-            where,
-            orderBy: [{ created_at: "desc" }, { id: "desc" }],
-            skip: (page - 1) * pageSize,
-            take: pageSize,
-          }),
-        ]);
+        const filters = taxFilters(query); const [total, ids] = await Promise.all([countScopedTaxRecords(taxScope(context), filters), listScopedTaxRecordIds(taxScope(context), filters, (page - 1) * pageSize, pageSize)]);
+        const records = await prisma.taxRecord.findMany({ where: { id: { in: ids.map((item) => item.id) } }, orderBy: [{ created_at: "desc" }, { id: "desc" }] });
         const withdrawals = await prisma.withdrawal.findMany({
           where: { id: { in: records.map((record) => record.source_id) } },
           include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } },
@@ -851,9 +822,9 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
       try {
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
-        const where = await buildTaxRecordWhere(query, context);
         const limit = taxExportLimit(options.taxExportLimit);
-        const exportRecords = await prisma.taxRecord.findMany({ where, orderBy: [{ created_at: "desc" }, { id: "desc" }], take: limit + 1 });
+        const ids = await listScopedTaxRecordIds(taxScope(context), taxFilters(query), 0, limit + 1);
+        const exportRecords = await prisma.taxRecord.findMany({ where: { id: { in: ids.map((item) => item.id) } }, orderBy: [{ created_at: "desc" }, { id: "desc" }] });
         let records: typeof exportRecords;
         try {
           records = ensureTaxExportWithinLimit(exportRecords, limit);
