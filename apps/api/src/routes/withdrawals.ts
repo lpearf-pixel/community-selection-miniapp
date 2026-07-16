@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { fail, ok } from "@community-selection/shared";
 import { prisma } from "../db.js";
-import { countScopedTaxRecords, listScopedTaxRecordIds } from "../modules/tax-record/tax-record-scope-repository.js";
+import { countScopedTaxRecords, listScopedTaxRecordIds, restoreSelectedIdOrder } from "../modules/tax-record/tax-record-scope-repository.js";
 import {
   safeRecordBusinessEvent,
   safeRecordOrderTimeline,
@@ -800,11 +800,17 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
         const { page, pageSize } = parsePage(query);
-        const filters = taxFilters(query); const [total, ids] = await Promise.all([countScopedTaxRecords(taxScope(context), filters), listScopedTaxRecordIds(taxScope(context), filters, (page - 1) * pageSize, pageSize)]);
-        const records = await prisma.taxRecord.findMany({ where: { id: { in: ids.map((item) => item.id) } }, orderBy: [{ created_at: "desc" }, { id: "desc" }] });
-        const withdrawals = await prisma.withdrawal.findMany({
-          where: { id: { in: records.map((record) => record.source_id) } },
-          include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } },
+        const filters = taxFilters(query);
+        const { total, records, withdrawals } = await prisma.$transaction(async (tx) => {
+          const total = await countScopedTaxRecords(tx, taxScope(context), filters);
+          const selectedIds = (await listScopedTaxRecordIds(tx, taxScope(context), filters, (page - 1) * pageSize, pageSize)).map((item) => item.id);
+          const hydrated = await tx.taxRecord.findMany({ where: { id: { in: selectedIds } } });
+          const records = restoreSelectedIdOrder(selectedIds, hydrated);
+          const withdrawals = await tx.withdrawal.findMany({
+            where: { id: { in: records.map((record) => record.source_id) } },
+            include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } },
+          });
+          return { total, records, withdrawals };
         });
         const map = new Map(withdrawals.map((w) => [w.id, w]));
         return ok({ items: records.map((record) => taxRecordDto(record, map.get(record.source_id))), total, page, page_size: pageSize });
@@ -823,8 +829,13 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         const query = request.query as TaxRecordQuery;
         const context = resolveAdminAccessContext(request)!;
         const limit = taxExportLimit(options.taxExportLimit);
-        const ids = await listScopedTaxRecordIds(taxScope(context), taxFilters(query), 0, limit + 1);
-        const exportRecords = await prisma.taxRecord.findMany({ where: { id: { in: ids.map((item) => item.id) } }, orderBy: [{ created_at: "desc" }, { id: "desc" }] });
+        const { exportRecords, withdrawals } = await prisma.$transaction(async (tx) => {
+          const selectedIds = (await listScopedTaxRecordIds(tx, taxScope(context), taxFilters(query), 0, limit + 1)).map((item) => item.id);
+          const hydrated = await tx.taxRecord.findMany({ where: { id: { in: selectedIds } } });
+          const exportRecords = restoreSelectedIdOrder(selectedIds, hydrated);
+          const withdrawals = await tx.withdrawal.findMany({ where: { id: { in: exportRecords.map((record) => record.source_id) } }, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } } });
+          return { exportRecords, withdrawals };
+        });
         let records: typeof exportRecords;
         try {
           records = ensureTaxExportWithinLimit(exportRecords, limit);
@@ -833,7 +844,6 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
           return fail(error instanceof Error ? error.message : "导出记录超过上限");
         }
         const total = records.length;
-        const withdrawals = await prisma.withdrawal.findMany({ where: { id: { in: records.map((record) => record.source_id) } }, include: { leader_user: true, commission_links: { include: { commission: { include: { order: { include: { product: true, community: true } } } } } } } });
         const map = new Map(withdrawals.map((w) => [w.id, w]));
         const rows = records.map((record) => taxRecordDto(record, map.get(record.source_id)));
         const header = ["说明","税务记录ID","提现ID","申请编号","Leader","手机号(脱敏)","总金额(分)","应税金额(分)","人工确认税额(分)","实际应付金额(分)","税务模式","税务状态","税率/依据","是否需发票","发票状态","备注","社区","创建时间"];
