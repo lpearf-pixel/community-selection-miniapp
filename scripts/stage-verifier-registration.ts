@@ -1,0 +1,2 @@
+import { existsSync } from 'node:fs'; import { getStageDefinition } from './stage-registry.ts';
+export function assertStageRegistered(stageId:string, expectedVerifier:string){const stage=getStageDefinition(stageId);if(!stage)throw new Error(`Stage ${stageId} is not registered`);if(stage.verifier!==expectedVerifier && !(stage.additionalVerifiers??[]).includes(expectedVerifier))throw new Error(`Stage ${stageId} verifier mismatch`);if(!existsSync(expectedVerifier))throw new Error(`Stage verifier missing: ${expectedVerifier}`);}

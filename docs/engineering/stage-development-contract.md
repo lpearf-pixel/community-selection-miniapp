@@ -7,3 +7,5 @@ Verifiers validate public contracts, call relationships, runtime results, and in
 The stage registry is the single source of truth. Business PRs must not include reports, artifacts, or temporary trigger files. Every stage needs business implementation, a static verifier, a runtime scenario, chain registration, and a report manifest. Historical verifiers continue to validate their own behavior after later stages exist; they must not require future-stage files to be absent.
 
 Validation levels are: (1) syntax/typecheck, (2) static verifier, (3) focused API/database runtime, (4) historical regression chain, and (5) report publish verification. Feature work adds only its relevant test delta rather than restating every level.
+
+Verifiers must use registry APIs rather than scan `stage-workflow.ts` or require their filename in `verify-all-local.sh`. Registry configuration is explicit and never inferred from directory traversal. Architecture changes require an anti-pattern scan and migration of every affected historical verifier; `verify-all-local.sh` calls only the registry runner for L24+.
