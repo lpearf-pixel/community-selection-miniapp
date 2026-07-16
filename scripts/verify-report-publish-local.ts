@@ -210,19 +210,13 @@ for (const required of ['git fetch origin', 'git pull --ff-only', 'pnpm verify:a
 const verifyAll = read(verifyAllPath);
 assert(verifyAll.includes('pnpm exec tsx scripts/verify-report-publish-local.ts'), 'verify-all should include report publish verifier');
 
-const reportChangedFileBases: Record<string, string> = {
-  L43: '20d5023f0e493bad7485e4fe8cbc5ccba014e118',
-  L44: '72a84e81218845c23872bd91ab58a03ccf4c0f33',
-  L45: '3ae666ec0e26383a5b117b64dce30b86a2dee389'
-};
-
 function changedFilesForStage(stageId: string) {
   const definition = getStageDefinition(stageId);
   assert(definition, `registered report stage is required: ${stageId}`);
-  const base = reportChangedFileBases[definition.id] ?? 'HEAD~1';
-  return { base, files: gitDiffFiles(base, 'HEAD') };
+  const contract = definition.reportContract;
+  assert(contract?.sourceMode === 'git_diff', `${definition.id} report contract must use git_diff`);
+  return { base: contract.businessBaseCommit, files: gitDiffFiles(contract.businessBaseCommit, 'HEAD') };
 }
-
 function validateCommonReport(stageId: string) {
   const definition = getStageDefinition(stageId);
   assert(definition, `stage registry must define ${stageId}`);
@@ -235,7 +229,9 @@ function validateCommonReport(stageId: string) {
 }
 
 function validateL44Report(report: string) {
-  const l44BaseCommit = reportChangedFileBases.L44;
+  const definition = getStageDefinition('L44');
+  assert(definition?.reportContract, 'L44 report contract must be registered');
+  const l44BaseCommit = definition.reportContract.businessBaseCommit;
   const l44Head = gitOutput(['rev-parse', 'HEAD']);
   execFileSync('git', ['merge-base', '--is-ancestor', l44BaseCommit, l44Head], { stdio: 'pipe' });
   assert(gitOutput(['merge-base', l44BaseCommit, l44Head]) === l44BaseCommit, 'L44 report source must actually descend from business base');
@@ -245,7 +241,9 @@ function validateL44Report(report: string) {
 }
 
 function validateL45Report(report: string) {
-  const l45BaseCommit = reportChangedFileBases.L45;
+  const definition = getStageDefinition('L45');
+  assert(definition?.reportContract, 'L45 report contract must be registered');
+  const l45BaseCommit = definition.reportContract.businessBaseCommit;
   const l45Head = gitOutput(['rev-parse', 'HEAD']);
   execFileSync('git', ['merge-base', '--is-ancestor', l45BaseCommit, l45Head], { stdio: 'pipe' });
   assert(gitOutput(['merge-base', l45BaseCommit, l45Head]) === l45BaseCommit, 'L45 report source must actually descend from business base');
@@ -260,7 +258,10 @@ function validateL45Report(report: string) {
 
 function validateL46Report(report: string) {
   assert(report.includes('阶段：L46'), 'L46 report must identify its own stage');
-  assert(report.includes('Admin Business Dashboard V2'), 'L46 report must use the registered stage title');
+  const definition = getStageDefinition('L46');
+  assert(definition, 'L46 must be registered');
+  assert(report.includes(`- 注册阶段标题：${definition.title}`), 'L46 report must use the registered stage title');
+  assert(report.includes(`- 本阶段目标：${definition.title}`), 'L46 report goal must use the registered stage title');
 }
 
 const report = validateCommonReport(stage);
