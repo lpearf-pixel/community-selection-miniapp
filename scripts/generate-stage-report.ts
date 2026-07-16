@@ -1,4 +1,5 @@
 import { getStageDefinition } from './stage-registry.ts';
+import { resolveReportSource, type ResolvedReportSource } from './stage-report-source.ts';
 import { execFileSync } from 'node:child_process';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -37,6 +38,7 @@ function argValue(name: string) {
 const stage = argValue('stage') ?? 'unknown';
 const stageDefinition = getStageDefinition(stage);
 if (!stageDefinition) throw new Error(`Stage ${stage} is not registered`);
+const registryReportSource: ResolvedReportSource | undefined = stageDefinition.reportContract ? resolveReportSource(stage) : undefined;
 
 function l45ApiVerified(api: (typeof L45_API_CONTRACT_LIST)[number]) {
   return api.runtime_markers_required.every((marker) => latestVerifyOutputForManifest.includes(marker));
@@ -800,10 +802,7 @@ function safeRead(path: string) {
 }
 
 function getStageBaseRef() {
-  if (stageDefinition!.reportContract?.sourceMode === 'git_diff') return stageDefinition!.reportContract.businessBaseCommit;
-  if (isL45Stage) return l45Manifest.businessBaseCommit || l45Manifest.businessBaseBranch;
-  if (isL44Stage) return l44Manifest.businessBaseCommit || l44Manifest.businessBaseBranch;
-  if (isL43Stage) return l43Manifest.businessBaseCommit || l43Manifest.businessBaseBranch;
+  if (registryReportSource?.sourceMode === 'git_diff') return registryReportSource.businessBaseCommit;
   return '';
 }
 
@@ -847,9 +846,7 @@ function getChangedFiles() {
   if (isL30Stage) return { files: l30Manifest.files, error: '' };
   if (isL29Stage) return { files: l29Manifest.files, error: '' };
   if (isL28Stage) return { files: l28Manifest.files, error: '' };
-  const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
-  if (!diff.ok) return { baseRef: 'HEAD~1', files: [] as string[], error: diff.output };
-  return { baseRef: 'HEAD~1', files: parseChangedFiles(diff.output), error: '' };
+  return { files: [] as string[], error: `Stage ${stage} has no configured report source` };
 }
 
 function classifyFile(file: string): FileRow {
@@ -1566,8 +1563,8 @@ function validateReportInputs() {
 validateReportInputs();
 
 const stageManifest = isL45Stage ? l45Manifest : isL44Stage ? l44Manifest : isL43Stage ? l43Manifest : isL42Stage ? l42Manifest : isL41Stage ? l41Manifest : isL40Stage ? l40Manifest : isL39Stage ? l39Manifest : undefined;
-const businessBaseBranch = stageManifest?.businessBaseBranch ?? stageDefinition.reportContract?.businessBaseBranch ?? '未配置';
-const businessBaseCommit = stageManifest?.businessBaseCommit ?? stageDefinition.reportContract?.businessBaseCommit ?? '未配置';
+const businessBaseBranch = stageManifest?.businessBaseBranch ?? registryReportSource?.businessBaseBranch ?? '未配置';
+const businessBaseCommit = stageManifest?.businessBaseCommit ?? registryReportSource?.businessBaseCommit ?? '未配置';
 const stageGoal = stageManifest?.title ?? stageDefinition.title;
 const highRiskSummary = highRisks.length ? highRisks.join('；') : (isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
 const l45TaxRecordScopeRisk = 'L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID 到内存再构造 TaxRecord source_id IN (...)，后续阶段应改造为数据库 EXISTS/JOIN 查询以避免大范围数据内存压力。';
