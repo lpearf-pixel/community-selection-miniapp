@@ -9,3 +9,5 @@ The stage registry is the single source of truth. Business PRs must not include 
 Validation levels are: (1) syntax/typecheck, (2) static verifier, (3) focused API/database runtime, (4) historical regression chain, and (5) report publish verification. Feature work adds only its relevant test delta rather than restating every level.
 
 Verifiers must use registry APIs rather than scan `stage-workflow.ts` or require their filename in `verify-all-local.sh`. Registry configuration is explicit and never inferred from directory traversal. Architecture changes require an anti-pattern scan and migration of every affected historical verifier; `verify-all-local.sh` calls only the registry runner for L24+.
+
+`Prisma.join(values, separator)` separators must be static ordinary strings. Never pass a `Prisma.sql` object as the separator. Every raw SQL builder needs static composition coverage, a PostgreSQL runtime query, an `[object Object]` check, and parameter-binding coverage.

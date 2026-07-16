@@ -32,7 +32,7 @@ export function buildScopedTaxRecordSql(scope: TaxRecordAdminScope, filters: Tax
       const allowed = Prisma.join([
         scope.communityIds.length ? Prisma.sql`o.community_id IN (${Prisma.join(scope.communityIds)})` : Prisma.sql`FALSE`,
         scope.pickupStoreIds.length ? Prisma.sql`o.pickup_store_id IN (${Prisma.join(scope.pickupStoreIds)})` : Prisma.sql`FALSE`,
-      ], Prisma.sql` OR `);
+      ], ' OR ');
       // Every linked order must be authorized, and a withdrawal without orders is never visible.
       parts.push(Prisma.sql`EXISTS (SELECT 1 FROM "WithdrawalCommission" wc WHERE wc.withdrawal_id = w.id)`);
       parts.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM "WithdrawalCommission" wc JOIN "Commission" c ON c.id = wc.commission_id JOIN "Order" o ON o.id = c.order_id WHERE wc.withdrawal_id = w.id AND NOT (${allowed}))`);
@@ -50,7 +50,7 @@ export function buildScopedTaxRecordSql(scope: TaxRecordAdminScope, filters: Tax
     const keyword = `%${escapeLikePattern(filters.keyword)}%`;
     parts.push(Prisma.sql`(w.id ILIKE ${keyword} ESCAPE '\\' OR w.client_request_id ILIKE ${keyword} ESCAPE '\\' OR u.nickname ILIKE ${keyword} ESCAPE '\\' OR u.phone ILIKE ${keyword} ESCAPE '\\')`);
   }
-  return Prisma.join(parts, Prisma.sql` AND `);
+  return Prisma.join(parts, ' AND ');
 }
 
 const base = (scope: TaxRecordAdminScope, filters: TaxRecordScopeFilters) => Prisma.sql`
