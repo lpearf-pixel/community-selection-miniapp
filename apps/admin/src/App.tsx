@@ -20,6 +20,7 @@ import { DeliveryRuleConfigPage } from "./pages/delivery/DeliveryRuleConfigPage"
 import { RewardLedgerPage } from "./pages/rewards/RewardLedgerPage";
 import { WithdrawalReviewPage } from "./pages/withdrawals/WithdrawalReviewPage";
 import { TaxReviewPage } from "./pages/tax-review/TaxReviewPage";
+import { AdminBusinessDashboardV2Page } from "./pages/dashboard-v2/AdminBusinessDashboardV2Page";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -46,7 +47,8 @@ type ViewKey =
   | "operations"
   | "pickupWorkbench"
   | "deliveryReservation"
-  | "deliveryRuleConfig";
+  | "deliveryRuleConfig"
+  | "dashboardV2";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -1107,6 +1109,7 @@ export function App() {
               <Button onClick={() => setView("withdrawals")}>提现管理</Button>
               <Button onClick={() => setView("alerts")}>告警中心</Button>
               <Button onClick={() => setView("taxRecords")}>税务人工 Review</Button>
+              <Button onClick={() => setView("dashboardV2")}>经营驾驶舱 V2</Button>
               <Button onClick={() => setView("finance")}>财务对账</Button>
               <Button onClick={() => setView("refundLedger")}>退款台账</Button>
               <Button onClick={() => setView("rewardLedger")}>开团服务奖励</Button>
@@ -1162,6 +1165,7 @@ export function App() {
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
         {view === "withdrawals" ? <WithdrawalReviewPage /> : null}
         {view === "taxRecords" ? <TaxReviewPage /> : null}
+        {view === "dashboardV2" ? <AdminBusinessDashboardV2Page /> : null}
         {view === "rewardLedger" ? <RewardLedgerPage /> : null}
         {view === "pickupWorkbench" ? <PickupWorkbenchPage /> : null}
         {view === "deliveryReservation" ? <DeliveryReservationPage /> : null}

@@ -1,0 +1,5 @@
+export const L46_DASHBOARD_CONTRACT = { stage:'L46', apis:[
+ {method:'GET',path:'/api/admin/dashboard-v2/overview',permissions:'operations or finance section',scope:'server intersection',success:200,errors:[400,401,403,422],range_days:93},
+ {method:'GET',path:'/api/admin/dashboard-v2/trends',permissions:'operations or finance section',scope:'server intersection',success:200,errors:[400,401,403,422],range_days:31,ordering:'date asc'},
+ {method:'GET',path:'/api/admin/dashboard-v2/alerts',permissions:'operations or finance section',scope:'server intersection',success:200,errors:[401,403],ordering:'severity,occurred_at,target_id'}],
+ requiredRuntimeMarkers:['l46_dashboard_scope_runtime=true','l46_dashboard_overview_success=true','l46_dashboard_permission_sections=true','l46_dashboard_trends_success=true','l46_dashboard_trends_stable=true','l46_dashboard_alerts_success=true','l46_dashboard_alerts_stable=true','l46_dashboard_tax_scope_db_query=true','l46_dashboard_no_sensitive_data=true','l46_dashboard_no_auto_action=true'] } as const;
