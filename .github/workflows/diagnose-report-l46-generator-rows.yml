@@ -1,0 +1,101 @@
+name: Diagnose L46 generator evidence patch
+
+on:
+  push:
+    branches:
+      - work/report-l46-generator-rows
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/report-l46-generator-rows
+      - name: Apply or record first error
+        shell: bash
+        run: |
+          set +e
+          python3 - <<'PY' >/tmp/patch.log 2>&1
+          from pathlib import Path
+          path = Path('scripts/generate-stage-report.ts')
+          text = path.read_text()
+          old_flags = """const isL41Stage = stage.toUpperCase() === 'L41';
+          const isL42Stage = stage.toUpperCase() === 'L42';
+          const isL43Stage = stage.toUpperCase() === 'L43';
+          const isL45Stage = stage.toUpperCase() === 'L45';
+          const isL44Stage = stage.toUpperCase() === 'L44';"""
+          new_flags = """const isL41Stage = stage.toUpperCase() === 'L41';
+          const isL42Stage = stage.toUpperCase() === 'L42';
+          const isL43Stage = stage.toUpperCase() === 'L43';
+          const isL45Stage = stage.toUpperCase() === 'L45';
+          const isL46Stage = stage.toUpperCase() === 'L46';
+          const isL44Stage = stage.toUpperCase() === 'L44';"""
+          assert old_flags in text, 'Stage flag baseline not found'
+          text = text.replace(old_flags, new_flags, 1)
+          old_branch = """  const passIf = (markers: string[], title = ''): StageVerifyStatus => {
+            if (title) return commandPassed(content, title, markers);
+            if (hasFailureMarker) return 'failed';
+            return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
+          };
+          if (isL45Stage) {"""
+          new_branch = """  const passIf = (markers: string[], title = ''): StageVerifyStatus => {
+            if (title) return commandPassed(content, title, markers);
+            if (hasFailureMarker) return 'failed';
+            return hasAnyMarker(content, markers) ? 'passed' : 'not detected';
+          };
+          if (isL46Stage) {
+            return [
+              { command: 'L46 verifier', result: commandCompleted(content, 'L46 verifier') },
+              { command: 'L46 tax-record DB scope verifier', result: commandCompleted(content, 'L46 tax-record DB scope verifier') },
+              { command: 'L24-L46 chain regression', result: content.includes('command_completed:L24-L46 chain regression=true') && content.includes('L24-L46 chain regression passed.') ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected' },
+              { command: 'Docker API E2E', result: commandCompleted(content, 'Docker API E2E') },
+              { command: 'Admin typecheck config', result: commandCompleted(content, 'Admin typecheck config check') },
+              { command: 'Admin full typecheck', result: commandCompleted(content, 'Admin typecheck') },
+              { command: 'raw compliance scan', result: commandCompleted(content, 'raw compliance scan') },
+              { command: 'Stage workflow', result: commandCompleted(content, 'Stage workflow') }
+            ];
+          }
+          if (isL45Stage) {"""
+          assert old_branch in text, 'stageVerifyChecks insertion point not found'
+          text = text.replace(old_branch, new_branch, 1)
+          old_validate = """function validateReportInputs() {
+            if (isL45Stage) {"""
+          new_validate = """function validateReportInputs() {
+            if (isL46Stage && verifyOutput.exists) {
+              assertReportQuality(verifyOutput.rows.length === 8, 'L46 must track eight verification rows');
+              assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), `All L46 verification rows must pass rows=${verifyOutput.rows.map((row) => `${row.command}:${row.result}`).join(',')}`);
+            }
+            if (isL45Stage) {"""
+          assert old_validate in text, 'validateReportInputs insertion point not found'
+          text = text.replace(old_validate, new_validate, 1)
+          path.write_text(text)
+          PY
+          status=$?
+          cat /tmp/patch.log
+          rm -f .github/workflows/apply-report-l46-generator-rows.yml .github/workflows/diagnose-report-l46-generator-rows.yml .work-trigger-l46-generator .work-trigger-l46-generator-2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/patch.log .work-diagnostic-l46-generator.txt
+            git add -A
+            git commit -m "chore(work): record L46 generator patch error"
+            git push origin HEAD:work/report-l46-generator-rows
+            exit 0
+          fi
+          git diff --check > /tmp/diff-check.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            cat /tmp/diff-check.log > .work-diagnostic-l46-generator.txt
+            git add -A
+            git commit -m "chore(work): record L46 generator diff error"
+            git push origin HEAD:work/report-l46-generator-rows
+            exit 0
+          fi
+          rm -f .work-diagnostic-l46-generator.txt
+          git add -A
+          git commit -m "feat(report): generate complete L46 verification rows"
+          git push origin HEAD:work/report-l46-generator-rows
