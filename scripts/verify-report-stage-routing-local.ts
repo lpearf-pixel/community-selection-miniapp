@@ -4,6 +4,7 @@ import { resolveReportSource } from './stage-report-source.ts';
 import { parseStageArg } from './stage-args.ts';
 function assert(v: unknown, m: string): asserts v { if (!v) throw new Error(m); }
 function assertThrows(callback: () => unknown, expectedMessage: string): void { let actualError: unknown; try { callback(); } catch (error) { actualError = error; } assert(actualError instanceof Error, `Expected error containing: ${expectedMessage}`); assert(actualError.message.includes(expectedMessage), [`Expected error containing: ${expectedMessage}`, `Actual: ${actualError.message}`].join('\n')); }
+function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 assert(parseStageArg(['--stage=L45']) === 'L45', 'Inline stage argument must resolve');
 assert(parseStageArg(['--stage', 'L46']) === 'L46', 'Split stage argument must resolve');
 assert(parseStageArg(['--', '--stage=L46']) === 'L46', 'Separator stage argument must resolve');
@@ -79,14 +80,17 @@ for (const [validator, stageId] of [[l43Validator, 'L43'], [l44Validator, 'L44']
 const l46DefinitionMatch = l46Validator.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*getStageDefinition\s*\(\s*['\"]L46['\"]\s*\)/);
 assert(l46DefinitionMatch, 'L46 report validator must read its Registry definition');
 const l46DefinitionVariable = l46DefinitionMatch[1];
-const l46TitleInterpolation = `\\$\\{\\s*${l46DefinitionVariable}\\s*\\.\\s*title\\s*\\}`;
+const l46DefinitionVariablePattern = escapeRegExp(l46DefinitionVariable);
+const l46TitleInterpolation = `\\$\\{\\s*${l46DefinitionVariablePattern}\\s*\\.\\s*title\\s*\\}`;
 assert(new RegExp(`注册阶段标题\\s*：\\s*${l46TitleInterpolation}`).test(l46Validator), 'L46 report validator must interpolate the registered title');
 assert(new RegExp(`本阶段目标\\s*：\\s*${l46TitleInterpolation}`).test(l46Validator), 'L46 report validator must interpolate the registered goal');
 const l46SourceMatch = l46Validator.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*resolveReportSource\s*\(\s*['\"]L46['\"]\s*\)/);
 assert(l46SourceMatch, 'L46 report validator must resolve its report source');
 const l46SourceVariable = l46SourceMatch[1];
-assert(new RegExp(`${l46SourceVariable}\\s*\\.\\s*sourceMode\\s*===\\s*['\"]git_diff['\"]`).test(l46Validator), 'L46 report validator must require a git_diff source');
-assert(new RegExp(`业务稳定分支\\s*：\\s*\\$\\{\\s*${l46SourceVariable}\\s*\\.\\s*businessBaseBranch\\s*\\}`).test(l46Validator), 'L46 report validator must interpolate the resolved business base branch');
-assert(new RegExp(`业务稳定 commit\\s*：\\s*\\$\\{\\s*${l46SourceVariable}\\s*\\.\\s*businessBaseCommit\\s*\\}`).test(l46Validator), 'L46 report validator must interpolate the resolved business base commit');
+const l46SourceVariablePattern = escapeRegExp(l46SourceVariable);
+assert(new RegExp(`${l46SourceVariablePattern}\\s*\\.\\s*sourceMode\\s*===\\s*['\"]git_diff['\"]`).test(l46Validator), 'L46 report validator must require a git_diff source');
+assert(new RegExp(`业务稳定分支\\s*：\\s*\\$\\{\\s*${l46SourceVariablePattern}\\s*\\.\\s*businessBaseBranch\\s*\\}`).test(l46Validator), 'L46 report validator must interpolate the resolved business base branch');
+assert(new RegExp(`业务稳定 commit\\s*：\\s*\\$\\{\\s*${l46SourceVariablePattern}\\s*\\.\\s*businessBaseCommit\\s*\\}`).test(l46Validator), 'L46 report validator must interpolate the resolved business base commit');
 for (const value of [l46Definition.title, l46Source.businessBaseBranch, l46Source.businessBaseCommit]) assert(!l46Validator.includes(value), 'L46 report validator must not hardcode Registry or resolver metadata');
+assert(new RegExp(`${escapeRegExp('$definition')}\\s*\\.\\s*title`).test('$definition.title'), 'Escaped identifier fixture must match a dollar-prefixed identifier');
 console.log('Report stage routing checks passed.');
