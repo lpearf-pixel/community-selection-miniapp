@@ -105,6 +105,11 @@ export function transformL46Report(report: string, verifyOutput: string): string
   updated = normalizeUnfinishedSection(updated, allPassed);
 
   const noUnfinishedItems = unfinishedSection(updated) === '暂无自动发现';
+  if (allPassed && noUnfinishedItems) {
+    updated = updated
+      .replace('- 高风险：暂无自动发现，需人工 review', '- 高风险：暂无自动发现')
+      .replace('- 中风险：暂无自动发现，需人工 review', '- 中风险：暂无自动发现');
+  }
   const conclusion = allPassed && noUnfinishedItems ? 'passed' : 'partial';
   if (!/- Codex 自评结论：(passed|partial)/.test(updated)) {
     throw new Error('L46 report conclusion line is missing');
