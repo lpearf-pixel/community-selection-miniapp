@@ -24,11 +24,14 @@ jobs:
 
           path = Path('scripts/verify-report-stage-routing-local.ts')
           text = path.read_text()
-          anchor = "assert(stageCall.index < verifierCall.index && verifierCall.index < publishCall.index, 'Workflow publish branch must generate, verify, then publish reports');\nconsole.log('Report stage routing checks passed.');"
-          if anchor not in text:
-              raise SystemExit('routing verifier tail anchor not found')
+          marker = "\nconsole.log('Report stage routing checks passed.');"
+          marker_index = text.rfind(marker)
+          if marker_index < 0:
+              raise SystemExit('routing success marker not found')
+          if 'const publishStageMatch = verifier.match' in text:
+              raise SystemExit('historical routing guards already present')
 
-          addition = r"""assert(stageCall.index < verifierCall.index && verifierCall.index < publishCall.index, 'Workflow publish branch must generate, verify, then publish reports');
+          addition = r"""
 const publishStageMatch = verifier.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*parseStageArg\s*\(/);
 assert(publishStageMatch, 'Publish verifier must parse one requested Stage');
 const publishStagePattern = escapeRegExp(publishStageMatch[1]);
@@ -47,15 +50,17 @@ const validatorDispatchCalls = dispatchBlock.match(/validateL(?:43|44|45|46)Repo
 assert(validatorDispatchCalls.length === 4, 'Publish verifier must dispatch exactly four historical Stage validators');
 assert(/function\s+fixtureTodoItems\s*\(/.test(compactVerifier), 'Publish verifier must retain fixtureTodoItems');
 const fixtureStart = compactVerifier.indexOf('const scannerDefinitionFixture');
-const fixtureEnd = compactVerifier.indexOf('validateCommonReport', fixtureStart);
+const fixtureEnd = compactVerifier.indexOf('const report = validateCommonReport', fixtureStart);
 assert(fixtureStart >= 0 && fixtureEnd > fixtureStart, 'TODO fixture block must have stable boundaries');
 const fixtureBlock = compactVerifier.slice(fixtureStart, fixtureEnd);
 for (const fixtureName of ['scannerDefinitionFixture', 'realTodoFixture', 'verifierFixture']) assert(fixtureBlock.includes(`const ${fixtureName}`), `TODO fixture must retain ${fixtureName}`);
 assert(/fixtureTodoItems\s*\(\s*['\"]scripts\/generate-stage-report\.ts['\"]\s*,\s*scannerDefinitionFixture\s*\)\.length\s*===\s*0/.test(fixtureBlock), 'Scanner implementation fixture must produce zero TODO rows');
 assert(/fixtureTodoItems\s*\(\s*['\"]apps\/api\/src\/services\/reward-example\.ts['\"]\s*,\s*realTodoFixture\s*\)\.length\s*===\s*1/.test(fixtureBlock), 'Real business TODO fixture must produce one TODO row');
 assert(/fixtureTodoItems\s*\(\s*['\"]scripts\/verify-example-local\.ts['\"]\s*,\s*verifierFixture\s*\)\.length\s*===\s*0/.test(fixtureBlock), 'Verifier TODO assertion fixture must produce zero TODO rows');
-console.log('Report stage routing checks passed.');"""
-          text = text.replace(anchor, addition, 1)
+"""
+          text = text[:marker_index] + addition + text[marker_index:]
+          if text.count("console.log('Report stage routing checks passed.');") != 1:
+              raise SystemExit('routing success marker must occur once')
           if not text.rstrip().endswith("console.log('Report stage routing checks passed.');"):
               raise SystemExit('routing success marker must remain last')
           path.write_text(text)
