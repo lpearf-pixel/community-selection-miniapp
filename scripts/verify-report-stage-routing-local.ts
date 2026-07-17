@@ -42,4 +42,18 @@ assert(/source\.sourceMode\s*===\s*['\"]git_diff['\"]/.test(compactVerifier), 'C
 assert(/base\s*:\s*source\.businessBaseCommit/.test(compactVerifier), 'git_diff changed-files base must use resolved business base commit');
 assert(/gitDiffFiles\s*\(\s*source\.businessBaseCommit\s*,\s*['\"]HEAD['\"]\s*\)/.test(compactVerifier), 'git_diff changed-files must compare resolved base to HEAD');
 assert(/return\s*\{\s*sourceMode\s*:\s*['\"]legacy_manifest['\"]\s*\}/.test(compactVerifier), 'Legacy changed-files routing must return only legacy_manifest mode');
+const commonValidatorStart = compactVerifier.indexOf('function validateCommonReport');
+const commonValidatorEnd = compactVerifier.indexOf('function validateL43Report', commonValidatorStart);
+assert(commonValidatorStart >= 0, 'Publish verifier must define common report validation');
+assert(commonValidatorEnd > commonValidatorStart, 'Common report validation must end before L43 validation');
+const commonValidator = compactVerifier.slice(commonValidatorStart, commonValidatorEnd);
+assert(/const\s+changedFiles\s*=\s*changedFilesForStage\s*\(\s*definition\.id\s*\)/.test(commonValidator), 'Common report validation must resolve changed-files by Stage');
+assert(/if\s*\(\s*changedFiles\.sourceMode\s*===\s*['\"]git_diff['\"]\s*\)\s*assertSetEqual\s*\(\s*changedFiles\.files\s*,\s*reportFiles/.test(commonValidator), 'git_diff reports must compare exact changed-file sets');
+const exactSetComparisons = commonValidator.match(/assertSetEqual\s*\(/g) ?? [];
+assert(exactSetComparisons.length === 1, 'Common report validation must perform one git_diff exact-set comparison');
+assert(/else\s*\{\s*assert\s*\(\s*reportFiles\.length\s*>\s*0/.test(commonValidator), 'Legacy reports must contain manifest changed-files');
+assert(commonValidator.includes('!report.includes'), 'Legacy report validation must reject unresolved report-source output');
+assert(commonValidator.includes('has no configured report source'), 'Legacy report validation must detect unresolved report-source output');
+assert(commonValidator.includes('报告生成 commit：${gitOutput'), 'Common report validation must check the report generation commit');
+assert(/gitOutput\s*\(\s*\[\s*['\"]rev-parse['\"]\s*,\s*['\"]HEAD['\"]\s*\]\s*\)/.test(commonValidator), 'Common report validation must compare generation commit with HEAD');
 console.log('Report stage routing checks passed.');
