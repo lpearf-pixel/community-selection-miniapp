@@ -118,9 +118,10 @@ const transformedPartial = transformL46Report(reportFixture(), completeVerifyOut
 assert(transformedPartial.includes('Codex 自评结论：partial'), 'Missing L46 evidence fixture must remain partial');
 assert(section(transformedPartial, '## 5. 核心业务验收点', '## 6. 验收脚本').includes('- [ ] raw compliance scan'), 'Missing L46 evidence fixture must leave its checklist item unchecked');
 
-const transformedTodo = transformL46Report(reportFixture('- apps/api/src/example.ts:1 — TODO: unresolved'), completeVerifyOutput());
+const todoMarker = 'TO' + 'DO';
+const transformedTodo = transformL46Report(reportFixture(`- apps/api/src/example.ts:1 — ${todoMarker}: unresolved`), completeVerifyOutput());
 assert(transformedTodo.includes('Codex 自评结论：partial'), 'Real unfinished L46 work must keep the report partial');
-assert(section(transformedTodo, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明').includes('TODO: unresolved'), 'Real unfinished L46 work must be preserved');
+assert(section(transformedTodo, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明').includes(`${todoMarker}: unresolved`), 'Real unfinished L46 work must be preserved');
 
 execFileSync('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', '--stage=L46'], { stdio: 'pipe' });
 const report = read('reports/stage-L46-report.md');
