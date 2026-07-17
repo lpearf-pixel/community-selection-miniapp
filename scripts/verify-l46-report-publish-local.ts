@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { getStageDefinition } from './stage-registry.ts';
 import { resolveReportSource } from './stage-report-source.ts';
 import { parseStageArg } from './stage-args.ts';
+import { extractMarkdownFilePaths as extractSharedMarkdownFilePaths } from './report-markdown.ts';
 import {
   L46_REPORT_EVIDENCE_LABELS,
   transformL46Report,
@@ -28,17 +29,7 @@ function gitDiffFiles(base: string, head: string): string[] {
 }
 
 function extractMarkdownFilePaths(report: string): string[] {
-  const range = report.split('## 2. 本阶段变更范围')[1]?.split('## 3. API 变化')[0] ?? '';
-  const files: string[] = [];
-  for (const line of range.split('\n')) {
-    if (!line.startsWith('|')) continue;
-    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-    if (cells.length < 3) continue;
-    const file = cells[1];
-    if (file === '文件' || file === '---') continue;
-    if (file) files.push(file);
-  }
-  return Array.from(new Set(files)).sort();
+  return extractSharedMarkdownFilePaths(report);
 }
 
 const rootFileReportFixture = [
