@@ -191,6 +191,11 @@ function runStageReport(stage: string) {
   run('pnpm', ['report:stage', '--', `--stage=${stage}`], { stdio: 'inherit' });
 }
 
+function verifyStageReportBeforeCopy(stage: string) {
+  if (stage !== 'L46') return;
+  run('pnpm', ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
+}
+
 function main() {
   const stage = argValue('stage');
   if (!stage) throw new Error('缺少必填参数 --stage=Lxx');
@@ -217,6 +222,7 @@ pnpm report:publish -- --stage=${stage}`);
   }
 
   runStageReport(stage);
+  verifyStageReportBeforeCopy(stage);
   const reportFile = join(reportsDir, `stage-${stage}-report.md`);
   if (!existsSync(reportFile)) throw new Error(`阶段报告不存在：${reportFile}`);
 
