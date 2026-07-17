@@ -31,4 +31,9 @@ assert(/isL39Stage\s*\?\s*l39Manifest/.test(generator), 'L39 must retain its his
 assert(/stageManifest\??\.title\s*\?\?\s*stageDefinition\.title/.test(generator), 'Generator title must prefer historical manifest then Registry');
 assert(!/stageDefinition!?\??\.reportContract!?\??\.businessBase(Branch|Commit)/.test(generator), 'Generator must not directly read reportContract business base fields');
 for (const forbidden of ['HEAD~1', 'HEAD^']) assert(!generator.includes(forbidden), `Generator must not infer report source from ${forbidden}`);
+const compactVerifier = verifier.replace(/\s+/g, ' ');
+assert(/function\s+resolvePublishReportSource\s*\(\s*stageId:\s*string\s*\)/.test(compactVerifier), 'Publish verifier must define report source routing');
+assert(/const\s+definition\s*=\s*getStageDefinition\s*\(\s*stageId\s*\)/.test(compactVerifier), 'Publish source routing must read the requested Stage definition');
+assert(/definition\.reportContract\s*\?\s*resolveReportSource\s*\(\s*definition\.id\s*\)/.test(compactVerifier), 'Contracted Stage must resolve source from Registry contract');
+assert(/:\s*resolveReportSource\s*\(\s*definition\.id\s*,\s*\{\s*\}\s*\)/.test(compactVerifier), 'Legacy Stage must explicitly opt into manifest source');
 console.log('Report stage routing checks passed.');
