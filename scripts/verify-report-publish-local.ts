@@ -14,7 +14,6 @@ function read(path: string) {
   return readFileSync(path, 'utf8');
 }
 
-
 function gitOutput(args: string[]) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
@@ -37,7 +36,6 @@ function extractMarkdownFilePaths(report: string) {
   }
   return Array.from(new Set(files)).sort();
 }
-
 
 function isFixtureTodoScannerImplementationLine(file: string, lineNumber: number, sourceLines: string[]) {
   if (file !== 'scripts/generate-stage-report.ts') return false;
@@ -86,7 +84,7 @@ assert(existsSync(publishPath), 'publish-stage-report.ts should exist');
 assert(existsSync(docsPath), 'docs/dev/reporting.md should exist');
 
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
-assert(packageJson.scripts?.['report:stage'] === 'tsx scripts/generate-stage-report.ts', 'package.json should expose report:stage');
+assert(packageJson.scripts?.['report:stage'] === 'tsx scripts/generate-stage-report-entry.ts', 'package.json should expose the canonical report:stage entry');
 assert(packageJson.scripts?.['report:publish'] === 'tsx scripts/publish-stage-report.ts', 'package.json should expose report:publish');
 
 const publishSource = read(publishPath);
@@ -190,7 +188,6 @@ for (const required of ['runL45TaxReviewScenario', 'POST /api/admin/withdrawals/
   assert(dockerE2eSource.includes(required), `L45 Docker E2E should include real runtime evidence: ${required}`);
 }
 
-
 assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
 assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
 assert(generateSource.includes('todos.length === 0'), 'passed report must require todos.length === 0');
@@ -225,7 +222,7 @@ function changedFilesForStage(stageId: string): PublishChangedFiles {
 function validateCommonReport(stageId: string) {
   const definition = getStageDefinition(stageId);
   assert(definition, `stage registry must define ${stageId}`);
-  execFileSync(process.execPath, ['scripts/generate-stage-report.ts', `--stage=${definition.id}`], { stdio: 'pipe' });
+  execFileSync('pnpm', ['report:stage', '--', `--stage=${definition.id}`], { stdio: 'pipe' });
   const report = read(`reports/stage-${definition.id}-report.md`);
   const changedFiles = changedFilesForStage(definition.id);
   const reportFiles = extractMarkdownFilePaths(report);
