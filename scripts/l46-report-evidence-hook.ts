@@ -1,15 +1,19 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-type EvidenceStatus = 'passed' | 'failed' | 'not detected';
-type EvidenceRow = { command: string; result: EvidenceStatus };
+export type EvidenceStatus = 'passed' | 'failed' | 'not detected';
+export type EvidenceRow = { command: string; result: EvidenceStatus };
 
-function stageArg(argv: string[]): string | undefined {
-  const inline = argv.find((arg) => arg.startsWith('--stage='));
-  if (inline) return inline.slice('--stage='.length);
-  const index = argv.indexOf('--stage');
-  return index >= 0 ? argv[index + 1] : undefined;
-}
+export const L46_REPORT_EVIDENCE_LABELS = [
+  'L46 verifier',
+  'L46 tax-record DB scope verifier',
+  'L24-L46 chain regression',
+  'Docker API E2E',
+  'Admin typecheck config',
+  'Admin full typecheck',
+  'raw compliance scan',
+  'Stage workflow',
+] as const;
 
 function hasExplicitFailure(content: string): boolean {
   return [
@@ -54,6 +58,23 @@ export function l46EvidenceRows(content: string): EvidenceRow[] {
   ];
 }
 
+function replaceSection(report: string, startHeader: string, endHeader: string, replacement: string): string {
+  const start = report.indexOf(startHeader);
+  const end = report.indexOf(endHeader, start);
+  if (start < 0 || end <= start) {
+    throw new Error(`L46 report section boundaries are missing: ${startHeader} -> ${endHeader}`);
+  }
+  return `${report.slice(0, start)}${replacement}\n\n${report.slice(end)}`;
+}
+
+function renderChecklistSection(rows: EvidenceRow[]): string {
+  return [
+    '## 5. 核心业务验收点',
+    '',
+    ...rows.map((row) => `- [${row.result === 'passed' ? 'x' : ' '}] ${row.command}（machine evidence: ${row.result}）`),
+  ].join('\n');
+}
+
 function renderEvidenceSection(rows: EvidenceRow[]): string {
   return [
     '## 7. 阶段验证执行结果',
@@ -64,38 +85,44 @@ function renderEvidenceSection(rows: EvidenceRow[]): string {
   ].join('\n');
 }
 
-function unfinishedItemsAreClear(report: string): boolean {
-  const section = report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0]?.trim() ?? '';
-  return section === '暂无自动发现' || section === '暂无自动发现，需人工 review';
+function unfinishedSection(report: string): string {
+  return report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0]?.trim() ?? '';
 }
 
-function applyL46Evidence(): void {
+function normalizeUnfinishedSection(report: string, allPassed: boolean): string {
+  const current = unfinishedSection(report);
+  if (!allPassed) return report;
+  if (current !== '暂无自动发现' && current !== '暂无自动发现，需人工 review') return report;
+  return replaceSection(report, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明', '## 10. 未完成项\n\n暂无自动发现');
+}
+
+export function transformL46Report(report: string, verifyOutput: string): string {
+  const rows = l46EvidenceRows(verifyOutput);
+  const allPassed = rows.length === L46_REPORT_EVIDENCE_LABELS.length && rows.every((row) => row.result === 'passed');
+
+  let updated = replaceSection(report, '## 5. 核心业务验收点', '## 6. 验收脚本', renderChecklistSection(rows));
+  updated = replaceSection(updated, '## 7. 阶段验证执行结果', '## 8. 合规边界检查', renderEvidenceSection(rows));
+  updated = normalizeUnfinishedSection(updated, allPassed);
+
+  const noUnfinishedItems = unfinishedSection(updated) === '暂无自动发现';
+  const conclusion = allPassed && noUnfinishedItems ? 'passed' : 'partial';
+  if (!/- Codex 自评结论：(passed|partial)/.test(updated)) {
+    throw new Error('L46 report conclusion line is missing');
+  }
+  updated = updated.replace(/- Codex 自评结论：(passed|partial)/, `- Codex 自评结论：${conclusion}`);
+
+  if (updated.includes('undefined')) throw new Error('L46 report evidence transform produced undefined');
+  return updated;
+}
+
+export function applyL46ReportEvidence(): void {
   const reportsDir = join(process.cwd(), 'reports');
   const verifyPath = join(reportsDir, 'latest-verify-output.txt');
   const reportPath = join(reportsDir, 'stage-L46-report.md');
-  if (!existsSync(reportPath)) throw new Error('L46 report evidence hook could not find reports/stage-L46-report.md');
+  if (!existsSync(reportPath)) {
+    throw new Error('L46 report evidence transform could not find reports/stage-L46-report.md');
+  }
   const verifyOutput = existsSync(verifyPath) ? readFileSync(verifyPath, 'utf8') : '';
   const report = readFileSync(reportPath, 'utf8');
-  const sectionStart = report.indexOf('## 7. 阶段验证执行结果');
-  const sectionEnd = report.indexOf('## 8. 合规边界检查', sectionStart);
-  if (sectionStart < 0 || sectionEnd <= sectionStart) throw new Error('L46 report evidence section boundaries are missing');
-  const rows = l46EvidenceRows(verifyOutput);
-  const allPassed = rows.every((row) => row.result === 'passed');
-  const conclusion = allPassed && unfinishedItemsAreClear(report) ? 'passed' : 'partial';
-  let updated = `${report.slice(0, sectionStart)}${renderEvidenceSection(rows)}\n\n${report.slice(sectionEnd)}`;
-  if (!/- Codex 自评结论：(passed|partial)/.test(updated)) throw new Error('L46 report conclusion line is missing');
-  updated = updated.replace(/- Codex 自评结论：(passed|partial)/, `- Codex 自评结论：${conclusion}`);
-  writeFileSync(reportPath, updated);
-}
-
-export function installL46ReportEvidenceHook(): void {
-  const entry = (process.argv[1] ?? '').replace(/\\/g, '/');
-  if (!entry.endsWith('/scripts/generate-stage-report.ts') && !entry.endsWith('scripts/generate-stage-report.ts')) return;
-  if (stageArg(process.argv.slice(2))?.trim().toUpperCase() !== 'L46') return;
-  let applied = false;
-  process.once('beforeExit', () => {
-    if (applied) return;
-    applied = true;
-    applyL46Evidence();
-  });
+  writeFileSync(reportPath, transformL46Report(report, verifyOutput));
 }
