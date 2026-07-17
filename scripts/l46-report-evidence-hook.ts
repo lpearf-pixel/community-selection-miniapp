@@ -64,6 +64,11 @@ function renderEvidenceSection(rows: EvidenceRow[]): string {
   ].join('\n');
 }
 
+function unfinishedItemsAreClear(report: string): boolean {
+  const section = report.split('## 10. 未完成项')[1]?.split('## 11. Codex 给人工 reviewer 的说明')[0]?.trim() ?? '';
+  return section === '暂无自动发现' || section === '暂无自动发现，需人工 review';
+}
+
 function applyL46Evidence(): void {
   const reportsDir = join(process.cwd(), 'reports');
   const verifyPath = join(reportsDir, 'latest-verify-output.txt');
@@ -74,7 +79,12 @@ function applyL46Evidence(): void {
   const sectionStart = report.indexOf('## 7. 阶段验证执行结果');
   const sectionEnd = report.indexOf('## 8. 合规边界检查', sectionStart);
   if (sectionStart < 0 || sectionEnd <= sectionStart) throw new Error('L46 report evidence section boundaries are missing');
-  const updated = `${report.slice(0, sectionStart)}${renderEvidenceSection(l46EvidenceRows(verifyOutput))}\n\n${report.slice(sectionEnd)}`;
+  const rows = l46EvidenceRows(verifyOutput);
+  const allPassed = rows.every((row) => row.result === 'passed');
+  const conclusion = allPassed && unfinishedItemsAreClear(report) ? 'passed' : 'partial';
+  let updated = `${report.slice(0, sectionStart)}${renderEvidenceSection(rows)}\n\n${report.slice(sectionEnd)}`;
+  if (!/- Codex 自评结论：(passed|partial)/.test(updated)) throw new Error('L46 report conclusion line is missing');
+  updated = updated.replace(/- Codex 自评结论：(passed|partial)/, `- Codex 自评结论：${conclusion}`);
   writeFileSync(reportPath, updated);
 }
 
