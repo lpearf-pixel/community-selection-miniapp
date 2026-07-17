@@ -6,6 +6,7 @@ import { parseStageArg } from './stage-args.ts';
 import {
   L46_REPORT_EVIDENCE_LABELS,
   transformL46Report,
+  verificationSourceCommit,
 } from './l46-report-evidence-hook.ts';
 
 const stage = parseStageArg(process.argv.slice(2));
@@ -50,8 +51,9 @@ function section(report: string, startHeader: string, endHeader: string): string
   return report.split(startHeader)[1]?.split(endHeader)[0]?.trim() ?? '';
 }
 
-function completeVerifyOutput(): string {
+function completeVerifyOutput(commit: string): string {
   return [
+    `verification_source_commit:${commit}`,
     'command_completed:L46 verifier=true',
     'command_completed:L46 tax-record DB scope verifier=true',
     'command_completed:L24-L46 chain regression=true',
@@ -114,6 +116,7 @@ const evidenceApplyIndex = entrySource.indexOf('applyL46ReportEvidence()');
 assert(generatorImportIndex >= 0 && evidenceApplyIndex > generatorImportIndex, 'L46 report entry must explicitly apply evidence after the base generator completes');
 for (const forbidden of ['beforeExit', 'process.once', 'process.argv[1]']) assert(!evidenceSource.includes(forbidden), `L46 evidence module must not depend on ${forbidden}`);
 assert(/if\s*\(\s*stage\s*===\s*['"]L46['"]\s*\)\s*applyL46ReportEvidence\s*\(\s*\)/.test(entrySource), 'L46 report entry must only apply evidence for L46');
+assert(evidenceSource.includes('verification_source_commit') && evidenceSource.includes('verificationSourceCommit'), 'L46 evidence module must require commit-bound verification output');
 
 const workflowSource = read('scripts/stage-workflow.ts');
 const compactWorkflow = workflowSource.replace(/\s+/g, ' ');
@@ -130,21 +133,39 @@ assert(reportStageBlock.includes("args: ['report:stage', '--', `--stage=${stage}
 assert(/stage\s*===\s*['"]L46['"]/.test(reportVerifierBlock) && reportVerifierBlock.includes('scripts/verify-l46-report-publish-local.ts'), 'Workflow must route L46 through its strict publish gate');
 assert(reportVerifierBlock.includes('scripts/verify-report-publish-local.ts'), 'Workflow must preserve the historical report publish verifier');
 assert(workflowSource.includes('L46 tax-record DB scope verifier'), 'Workflow must preserve the stable L46 DB scope evidence title');
+assert(workflowSource.includes('verification_source_commit:${currentHeadCommit()}'), 'Workflow must bind latest verify output to the current HEAD commit');
 
-const transformedPass = transformL46Report(reportFixture(), completeVerifyOutput());
+const publishSource = read('scripts/publish-stage-report.ts');
+assert(publishSource.includes("if (stage === 'L46')") && publishSource.includes('scripts/generate-stage-report-entry.ts'), 'Publisher must regenerate L46 through the canonical entry');
+assert(publishSource.includes('scripts/verify-l46-report-publish-local.ts'), 'Publisher must run the strict L46 gate before copying');
+const publishMain = publishSource.slice(publishSource.indexOf('function main()'));
+const regenerateIndex = publishMain.indexOf('runStageReport(stage);');
+const verifyIndex = publishMain.indexOf('verifyStageReportBeforeCopy(stage);');
+const copyIndex = publishMain.indexOf('copyReportFiles(');
+assert(regenerateIndex >= 0 && verifyIndex > regenerateIndex && copyIndex > verifyIndex, 'Publisher must regenerate, verify, then copy the final L46 report');
+
+const fixtureCommit = 'a'.repeat(40);
+const transformedPass = transformL46Report(reportFixture(), completeVerifyOutput(fixtureCommit), fixtureCommit);
 assert(transformedPass.includes('Codex 自评结论：passed'), 'Complete L46 evidence fixture must pass');
 assert(!section(transformedPass, '## 5. 核心业务验收点', '## 6. 验收脚本').includes('- [ ]'), 'Complete L46 evidence fixture must check every checklist item');
 assert(section(transformedPass, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明') === '暂无自动发现', 'Complete L46 evidence fixture must clear the generic unfinished placeholder');
 assert(!section(transformedPass, '## 9. 风险点', '## 10. 未完成项').includes('需人工 review'), 'Complete L46 evidence fixture must clear generic risk placeholders');
 
-const transformedPartial = transformL46Report(reportFixture(), completeVerifyOutput().replace('command_completed:raw compliance scan=true', ''));
+const transformedCommitMismatch = transformL46Report(reportFixture(), completeVerifyOutput('b'.repeat(40)), fixtureCommit);
+assert(transformedCommitMismatch.includes('Codex 自评结论：partial'), 'Evidence from another commit must remain partial');
+
+const transformedPartial = transformL46Report(reportFixture(), completeVerifyOutput(fixtureCommit).replace('command_completed:raw compliance scan=true', ''), fixtureCommit);
 assert(transformedPartial.includes('Codex 自评结论：partial'), 'Missing L46 evidence fixture must remain partial');
 assert(section(transformedPartial, '## 5. 核心业务验收点', '## 6. 验收脚本').includes('- [ ] raw compliance scan'), 'Missing L46 evidence fixture must leave its checklist item unchecked');
 
 const todoMarker = 'TO' + 'DO';
-const transformedTodo = transformL46Report(reportFixture(`- apps/api/src/example.ts:1 — ${todoMarker}: unresolved`), completeVerifyOutput());
+const transformedTodo = transformL46Report(reportFixture(`- apps/api/src/example.ts:1 — ${todoMarker}: unresolved`), completeVerifyOutput(fixtureCommit), fixtureCommit);
 assert(transformedTodo.includes('Codex 自评结论：partial'), 'Real unfinished L46 work must keep the report partial');
 assert(section(transformedTodo, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明').includes(`${todoMarker}: unresolved`), 'Real unfinished L46 work must be preserved');
+
+const currentCommit = gitOutput(['rev-parse', 'HEAD']);
+const verifyOutput = read('reports/latest-verify-output.txt');
+assert(verificationSourceCommit(verifyOutput) === currentCommit, `L46 verification output must be bound to HEAD expected=${currentCommit} actual=${verificationSourceCommit(verifyOutput) ?? 'missing'}`);
 
 execFileSync('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', '--stage=L46'], { stdio: 'pipe' });
 const report = read('reports/stage-L46-report.md');
@@ -157,7 +178,7 @@ assert(report.includes(`- 注册阶段标题：${definition.title}`), 'L46 repor
 assert(report.includes(`- 本阶段目标：${definition.title}`), 'L46 report must use the registered goal');
 assert(report.includes(`- 业务稳定分支：${source.businessBaseBranch}`), 'L46 report must use the resolved business base branch');
 assert(report.includes(`- 业务稳定 commit：${source.businessBaseCommit}`), 'L46 report must use the resolved business base commit');
-assert(report.includes(`- 报告生成 commit：${gitOutput(['rev-parse', 'HEAD'])}`), 'L46 report generation commit must equal HEAD');
+assert(report.includes(`- 报告生成 commit：${currentCommit}`), 'L46 report generation commit must equal HEAD');
 assertSetEqual(gitDiffFiles(source.businessBaseCommit, 'HEAD'), extractMarkdownFilePaths(report), 'L46 report changed files');
 
 assert(report.includes('Codex 自评结论：passed') && !report.includes('Codex 自评结论：partial'), 'L46 report conclusion must be passed');
