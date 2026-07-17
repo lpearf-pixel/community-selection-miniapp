@@ -30,13 +30,15 @@ pnpm exec tsx scripts/validate-env.ts
 pnpm exec tsx scripts/check-migrations.ts
 pnpm exec tsx scripts/compliance-scan.ts
 
-# Report publish verification is Stage-specific. Keep verify:all deterministic by
-# running it only when the caller explicitly selects a registered report Stage.
+# Report publish verification is Stage-specific. L46 requires commit-bound Stage
+# workflow evidence and must never fall back to the historical report verifier.
 if [[ -n "${REPORT_PUBLISH_STAGE:-}" ]]; then
   REPORT_PUBLISH_STAGE_NORMALIZED="$(printf '%s' "${REPORT_PUBLISH_STAGE}" | tr '[:lower:]' '[:upper:]')"
   case "${REPORT_PUBLISH_STAGE_NORMALIZED}" in
     L46)
-      pnpm exec tsx scripts/verify-l46-report-publish-local.ts --stage=L46
+      echo "REPORT_PUBLISH_STAGE=L46 cannot run inside verify:all because the strict gate requires commit-bound Stage workflow evidence." >&2
+      echo "Run: pnpm exec tsx scripts/stage-workflow.ts --stage=L46 --publish --scope=chain" >&2
+      exit 2
       ;;
     *)
       pnpm exec tsx scripts/verify-report-publish-local.ts --stage="${REPORT_PUBLISH_STAGE_NORMALIZED}"
