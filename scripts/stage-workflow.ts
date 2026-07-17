@@ -27,7 +27,11 @@ const reportsDir = join(process.cwd(), 'reports');
 const latestVerifyOutput = join(reportsDir, 'latest-verify-output.txt');
 
 const stageVerifiers: Record<string, CommandSpec> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier!] }]));
-const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, (stage.additionalVerifiers ?? []).map((verifier) => ({ title: `${stage.id} additional verifier`, command: 'pnpm', args: ['exec', 'tsx', verifier] }))]));
+function additionalVerifierTitle(stageId: string, verifier: string): string {
+  if (verifier === 'scripts/verify-l46-tax-record-db-scope-local.ts') return 'L46 tax-record DB scope verifier';
+  return `${stageId} additional verifier`;
+}
+const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, (stage.additionalVerifiers ?? []).map((verifier) => ({ title: additionalVerifierTitle(stage.id, verifier), command: 'pnpm', args: ['exec', 'tsx', verifier] }))]));
 const regressionChains: Record<string, string[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, [...getStageChain(stage.id), ...(stage.number >= 43 ? ['RAW_COMPLIANCE_SCAN'] : []), ...(stage.number >= 38 ? ['DOCKER_API_E2E', 'ADMIN_TYPECHECK'] : [])]]));
 
 const dockerApiE2E: CommandSpec = {
@@ -152,12 +156,25 @@ function prepareLatestOutput(): void {
   writeFileSync(latestVerifyOutput, '');
 }
 
+function resolvedScope(args: ParsedArgs, publishMode: boolean): Scope {
+  return args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
+}
+
+function chainRegressionLabel(stageId: string): string {
+  const chain = getStageChain(stageId);
+  const firstStage = chain.at(-1) ?? stageId;
+  const lastStage = chain[0] ?? stageId;
+  return `${firstStage}-${lastStage} chain regression`;
+}
+
 function runVerify(args: ParsedArgs, publishMode = false): void {
   prepareLatestOutput();
+  const scope = resolvedScope(args, publishMode);
   for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
-  if (args.stage === 'L45' && (args.scope ?? (publishMode ? 'chain' : 'stage')) === 'chain') {
-    printAndAppend('command_completed:L24-L45 chain regression=true\n');
-    printAndAppend('L24-L45 chain regression passed.\n');
+  if (args.stage && scope === 'chain') {
+    const label = chainRegressionLabel(args.stage);
+    printAndAppend(`command_completed:${label}=true\n`);
+    printAndAppend(`${label} passed.\n`);
   }
   printAndAppend('command_completed:Stage workflow=true\n');
   printAndAppend('\nStage workflow verification passed.\n');
