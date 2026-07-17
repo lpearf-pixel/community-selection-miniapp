@@ -1,0 +1,78 @@
+name: Diagnose report routing history patch
+
+on:
+  push:
+    branches:
+      - work/report-c3b-routing-history
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/report-c3b-routing-history
+      - name: Patch, diagnose, and commit
+        shell: bash
+        run: |
+          set +e
+          python3 - <<'PY' >/tmp/patch.log 2>&1
+          from pathlib import Path
+          path = Path('scripts/verify-report-stage-routing-local.ts')
+          text = path.read_text()
+          marker = "\nconsole.log('Report stage routing checks passed.');"
+          marker_index = text.rfind(marker)
+          assert marker_index >= 0, 'routing success marker not found'
+          assert 'const publishStageMatch = verifier.match' not in text, 'historical routing guards already present'
+          addition = r"""
+const publishStageMatch = verifier.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*parseStageArg\s*\(/);
+assert(publishStageMatch, 'Publish verifier must parse one requested Stage');
+const publishStagePattern = escapeRegExp(publishStageMatch[1]);
+const publishReportMatch = compactVerifier.match(new RegExp(`const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*validateCommonReport\\s*\\(\\s*${publishStagePattern}\\s*\\)`));
+assert(publishReportMatch, 'Publish verifier must validate the common report before Stage dispatch');
+const publishReportPattern = escapeRegExp(publishReportMatch[1]);
+const dispatchStart = compactVerifier.indexOf(publishReportMatch[0]);
+const dispatchEnd = compactVerifier.indexOf('const stageWorkflowSource', dispatchStart);
+assert(dispatchStart >= 0 && dispatchEnd > dispatchStart, 'Publish verifier Stage dispatch block must have stable boundaries');
+const dispatchBlock = compactVerifier.slice(dispatchStart, dispatchEnd);
+for (const stageId of ['L43', 'L44', 'L45', 'L46'] as const) {
+  const dispatchPattern = new RegExp(`if\\s*\\(\\s*${publishStagePattern}\\s*===\\s*['\"]${stageId}['\"]\\s*\\)\\s*validate${stageId}Report\\s*\\(\\s*${publishReportPattern}\\s*\\)`);
+  assert(dispatchPattern.test(dispatchBlock), `${stageId} must dispatch only its matching report validator`);
+}
+const validatorDispatchCalls = dispatchBlock.match(/validateL(?:43|44|45|46)Report\s*\(/g) ?? [];
+assert(validatorDispatchCalls.length === 4, 'Publish verifier must dispatch exactly four historical Stage validators');
+assert(/function\s+fixtureTodoItems\s*\(/.test(compactVerifier), 'Publish verifier must retain fixtureTodoItems');
+const fixtureStart = compactVerifier.indexOf('const scannerDefinitionFixture');
+const fixtureEnd = compactVerifier.indexOf('const report = validateCommonReport', fixtureStart);
+assert(fixtureStart >= 0 && fixtureEnd > fixtureStart, 'TODO fixture block must have stable boundaries');
+const fixtureBlock = compactVerifier.slice(fixtureStart, fixtureEnd);
+for (const fixtureName of ['scannerDefinitionFixture', 'realTodoFixture', 'verifierFixture']) assert(fixtureBlock.includes(`const ${fixtureName}`), `TODO fixture must retain ${fixtureName}`);
+assert(/fixtureTodoItems\s*\(\s*['\"]scripts\/generate-stage-report\.ts['\"]\s*,\s*scannerDefinitionFixture\s*\)\.length\s*===\s*0/.test(fixtureBlock), 'Scanner implementation fixture must produce zero TODO rows');
+assert(/fixtureTodoItems\s*\(\s*['\"]apps\/api\/src\/services\/reward-example\.ts['\"]\s*,\s*realTodoFixture\s*\)\.length\s*===\s*1/.test(fixtureBlock), 'Real business TODO fixture must produce one TODO row');
+assert(/fixtureTodoItems\s*\(\s*['\"]scripts\/verify-example-local\.ts['\"]\s*,\s*verifierFixture\s*\)\.length\s*===\s*0/.test(fixtureBlock), 'Verifier TODO assertion fixture must produce zero TODO rows');
+"""
+          text = text[:marker_index] + addition + text[marker_index:]
+          assert text.count("console.log('Report stage routing checks passed.');") == 1, 'routing success marker count changed'
+          assert text.rstrip().endswith("console.log('Report stage routing checks passed.');"), 'routing success marker not last'
+          path.write_text(text)
+          PY
+          status=$?
+          cat /tmp/patch.log
+          rm -f .github/workflows/apply-report-routing-history.yml .github/workflows/diagnose-report-routing-history.yml .work-trigger-routing-history .work-trigger-routing-history-2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/patch.log .work-diagnostic-routing-history.txt
+            git add -A
+            git commit -m "chore(work): record routing history patch error"
+            git push origin HEAD:work/report-c3b-routing-history
+            exit 0
+          fi
+          rm -f .work-diagnostic-routing-history.txt
+          git diff --check
+          git add -A
+          git commit -m "test(report): preserve historical routing guards"
+          git push origin HEAD:work/report-c3b-routing-history
