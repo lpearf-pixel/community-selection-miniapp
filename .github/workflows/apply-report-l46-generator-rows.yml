@@ -80,6 +80,9 @@ jobs:
               raise SystemExit('validateReportInputs insertion point not found')
           text = text.replace(old_validate, new_validate, 1)
 
+          l46_start = text.index('if (isL46Stage) {', text.index('function stageVerifyChecks'))
+          l46_end = text.index('if (isL45Stage) {', l46_start)
+          l46_block = text[l46_start:l46_end]
           required_rows = [
               'L46 verifier',
               'L46 tax-record DB scope verifier',
@@ -90,11 +93,9 @@ jobs:
               'raw compliance scan',
               'Stage workflow',
           ]
-          if "const isL46Stage = stage.toUpperCase() === 'L46';" not in text:
-              raise SystemExit('L46 Stage flag missing after patch')
           for row in required_rows:
-              if text.count(f"command: '{row}'") != 1:
-                  raise SystemExit(f'L46 verification row must occur exactly once: {row}')
+              if l46_block.count(f"command: '{row}'") != 1:
+                  raise SystemExit(f'L46 branch must contain exactly one row: {row}')
           if "verifyOutput.rows.length === 8" not in text or "verifyOutput.rows.every((row) => row.result === 'passed')" not in text:
               raise SystemExit('L46 report quality checks missing')
 
