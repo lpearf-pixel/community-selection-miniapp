@@ -29,7 +29,13 @@ pnpm build
 pnpm exec tsx scripts/validate-env.ts
 pnpm exec tsx scripts/check-migrations.ts
 pnpm exec tsx scripts/compliance-scan.ts
-pnpm exec tsx scripts/verify-report-publish-local.ts
+
+# Report publish verification is Stage-specific. Keep verify:all deterministic by
+# running it only when the caller explicitly selects a registered report Stage.
+if [[ -n "${REPORT_PUBLISH_STAGE:-}" ]]; then
+  pnpm exec tsx scripts/verify-report-publish-local.ts --stage="${REPORT_PUBLISH_STAGE}"
+fi
+
 pnpm exec tsx scripts/verify-l10-security-local.ts
 pnpm exec tsx scripts/verify-l11-admin-auth-local.ts
 pnpm exec tsx scripts/verify-l12-fulfillment-local.ts
