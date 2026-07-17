@@ -1,0 +1,134 @@
+name: Apply remaining report work
+
+on:
+  push:
+    branches:
+      - work/report-l46-workflow-evidence
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/report-l46-workflow-evidence
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin \
+            work/report-c3b-routing-history \
+            work/report-l46-generator-rows \
+            work/report-l46-workflow-evidence
+      - name: Apply routing history guards
+        shell: bash
+        run: |
+          git switch -C work/report-c3b-routing-history origin/work/report-c3b-routing-history
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/verify-report-stage-routing-local.ts')
+          text = path.read_text()
+          if 'const publishStageMatch = verifier.match' not in text:
+              marker = "\nconsole.log('Report stage routing checks passed.');"
+              marker_index = text.rfind(marker)
+              assert marker_index >= 0, 'routing success marker not found'
+              addition = r"""
+const publishStageMatch = verifier.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*parseStageArg\s*\(/);
+assert(publishStageMatch, 'Publish verifier must parse one requested Stage');
+const publishStagePattern = escapeRegExp(publishStageMatch[1]);
+const publishReportMatch = compactVerifier.match(new RegExp(`const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*validateCommonReport\\s*\\(\\s*${publishStagePattern}\\s*\\)`));
+assert(publishReportMatch, 'Publish verifier must validate the common report before Stage dispatch');
+const publishReportPattern = escapeRegExp(publishReportMatch[1]);
+const dispatchStart = compactVerifier.indexOf(publishReportMatch[0]);
+const dispatchEnd = compactVerifier.indexOf('const stageWorkflowSource', dispatchStart);
+assert(dispatchStart >= 0 && dispatchEnd > dispatchStart, 'Publish verifier Stage dispatch block must have stable boundaries');
+const dispatchBlock = compactVerifier.slice(dispatchStart, dispatchEnd);
+for (const stageId of ['L43', 'L44', 'L45', 'L46'] as const) {
+  const dispatchPattern = new RegExp(`if\\s*\\(\\s*${publishStagePattern}\\s*===\\s*['\"]${stageId}['\"]\\s*\\)\\s*validate${stageId}Report\\s*\\(\\s*${publishReportPattern}\\s*\\)`);
+  assert(dispatchPattern.test(dispatchBlock), `${stageId} must dispatch only its matching report validator`);
+}
+const validatorDispatchCalls = dispatchBlock.match(/validateL(?:43|44|45|46)Report\s*\(/g) ?? [];
+assert(validatorDispatchCalls.length === 4, 'Publish verifier must dispatch exactly four historical Stage validators');
+assert(/function\s+fixtureTodoItems\s*\(/.test(compactVerifier), 'Publish verifier must retain fixtureTodoItems');
+const fixtureStart = compactVerifier.indexOf('const scannerDefinitionFixture');
+const fixtureEnd = compactVerifier.indexOf('const report = validateCommonReport', fixtureStart);
+assert(fixtureStart >= 0 && fixtureEnd > fixtureStart, 'TODO fixture block must have stable boundaries');
+const fixtureBlock = compactVerifier.slice(fixtureStart, fixtureEnd);
+for (const fixtureName of ['scannerDefinitionFixture', 'realTodoFixture', 'verifierFixture']) assert(fixtureBlock.includes(`const ${fixtureName}`), `TODO fixture must retain ${fixtureName}`);
+assert(/fixtureTodoItems\s*\(\s*['\"]scripts\/generate-stage-report\.ts['\"]\s*,\s*scannerDefinitionFixture\s*\)\.length\s*===\s*0/.test(fixtureBlock), 'Scanner implementation fixture must produce zero TODO rows');
+assert(/fixtureTodoItems\s*\(\s*['\"]apps\/api\/src\/services\/reward-example\.ts['\"]\s*,\s*realTodoFixture\s*\)\.length\s*===\s*1/.test(fixtureBlock), 'Real business TODO fixture must produce one TODO row');
+assert(/fixtureTodoItems\s*\(\s*['\"]scripts\/verify-example-local\.ts['\"]\s*,\s*verifierFixture\s*\)\.length\s*===\s*0/.test(fixtureBlock), 'Verifier TODO assertion fixture must produce zero TODO rows');
+"""
+              text = text[:marker_index] + addition + text[marker_index:]
+          assert text.rstrip().endswith("console.log('Report stage routing checks passed.');")
+          path.write_text(text)
+          PY
+          rm -f .github/workflows/apply-report-routing-history.yml \
+            .github/workflows/diagnose-report-routing-history.yml \
+            .work-trigger-routing-history .work-trigger-routing-history-2 \
+            .work-diagnostic-routing-history.txt
+          git diff --check
+          git add -A
+          git commit -m "test(report): preserve historical routing guards"
+          git push origin HEAD:work/report-c3b-routing-history
+      - name: Apply L46 generator rows
+        shell: bash
+        run: |
+          git switch -C work/report-l46-generator-rows origin/work/report-l46-generator-rows
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/generate-stage-report.ts')
+          text = path.read_text()
+          flag_anchor = "const isL45Stage = stage.toUpperCase() === 'L45';"
+          if "const isL46Stage = stage.toUpperCase() === 'L46';" not in text:
+              flag_index = text.index(flag_anchor) + len(flag_anchor)
+              text = text[:flag_index] + "\nconst isL46Stage = stage.toUpperCase() === 'L46';" + text[flag_index:]
+          verify_start = text.index('function stageVerifyChecks(content: string)')
+          l45_branch = text.index('  if (isL45Stage) {', verify_start)
+          if "{ command: 'L46 verifier'" not in text[verify_start:l45_branch]:
+              l46_block = """  if (isL46Stage) {
+            return [
+              { command: 'L46 verifier', result: commandCompleted(content, 'L46 verifier') },
+              { command: 'L46 tax-record DB scope verifier', result: commandCompleted(content, 'L46 tax-record DB scope verifier') },
+              { command: 'L24-L46 chain regression', result: content.includes('command_completed:L24-L46 chain regression=true') && content.includes('L24-L46 chain regression passed.') ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected' },
+              { command: 'Docker API E2E', result: commandCompleted(content, 'Docker API E2E') },
+              { command: 'Admin typecheck config', result: commandCompleted(content, 'Admin typecheck config check') },
+              { command: 'Admin full typecheck', result: commandCompleted(content, 'Admin typecheck') },
+              { command: 'raw compliance scan', result: commandCompleted(content, 'raw compliance scan') },
+              { command: 'Stage workflow', result: commandCompleted(content, 'Stage workflow') }
+            ];
+          }
+"""
+              text = text[:l45_branch] + l46_block + text[l45_branch:]
+          validate_anchor = 'function validateReportInputs() {'
+          validate_start = text.index(validate_anchor) + len(validate_anchor)
+          if 'L46 must track eight verification rows' not in text[validate_start:text.index('if (isL45Stage)', validate_start)]:
+              validation = """
+            if (isL46Stage && verifyOutput.exists) {
+              assertReportQuality(verifyOutput.rows.length === 8, 'L46 must track eight verification rows');
+              assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), `All L46 verification rows must pass rows=${verifyOutput.rows.map((row) => `${row.command}:${row.result}`).join(',')}`);
+            }"""
+              text = text[:validate_start] + validation + text[validate_start:]
+          path.write_text(text)
+          PY
+          rm -f .github/workflows/apply-report-l46-generator-rows.yml \
+            .github/workflows/diagnose-report-l46-generator-rows.yml \
+            .github/workflows/fix-report-l46-generator-by-boundary.yml \
+            .work-trigger-l46-generator .work-trigger-l46-generator-2 \
+            .work-diagnostic-l46-generator.txt
+          git diff --check
+          git add -A
+          git commit -m "feat(report): generate complete L46 verification rows"
+          git push origin HEAD:work/report-l46-generator-rows
+      - name: Remove orchestrator
+        shell: bash
+        run: |
+          git switch -C work/report-l46-workflow-evidence origin/work/report-l46-workflow-evidence
+          rm .github/workflows/apply-remaining-report-work.yml
+          git add -A
+          git commit -m "chore(work): remove report work orchestrator"
+          git push origin HEAD:work/report-l46-workflow-evidence
