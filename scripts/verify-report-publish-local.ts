@@ -4,6 +4,7 @@ import { resolveReportSource, type ResolvedReportSource } from './stage-report-s
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
+import { extractMarkdownFilePaths as extractSharedMarkdownFilePaths } from './report-markdown.ts';
 const stage = parseStageArg(process.argv.slice(2));
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -24,17 +25,7 @@ function gitDiffFiles(base: string, head: string) {
 }
 
 function extractMarkdownFilePaths(report: string) {
-  const section = report.split('## 2. 本阶段变更范围')[1]?.split('## 3. API 变化')[0] ?? '';
-  const files: string[] = [];
-  for (const line of section.split('\n')) {
-    if (!line.startsWith('|')) continue;
-    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-    if (cells.length < 3) continue;
-    const file = cells[1];
-    if (file === '文件' || file === '---') continue;
-    if (file.includes('/') || file === 'docker-compose.yml') files.push(file);
-  }
-  return Array.from(new Set(files)).sort();
+  return extractSharedMarkdownFilePaths(report);
 }
 
 function isFixtureTodoScannerImplementationLine(file: string, lineNumber: number, sourceLines: string[]) {
@@ -57,7 +48,7 @@ function fixtureTodoItems(file: string, source: string) {
   const notImplementedKeyword = 'NOT_' + 'IMPLEMENTED';
   const pendingCn = '待' + '实现';
   const placeholderCn = '功能' + '占位';
-  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\([\`'"]Not implemented[\`'"]\)|${pendingCn}|${placeholderCn})`, 'i');
+  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\\([\\`'\"]Not implemented[\\`'\"]\\)|${pendingCn}|${placeholderCn})`, 'i');
   const lines = source.split('\n');
   const rows: string[] = [];
   lines.forEach((line, index) => {
