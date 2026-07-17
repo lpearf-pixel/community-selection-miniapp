@@ -48,7 +48,7 @@ function fixtureTodoItems(file: string, source: string) {
   const notImplementedKeyword = 'NOT_' + 'IMPLEMENTED';
   const pendingCn = '待' + '实现';
   const placeholderCn = '功能' + '占位';
-  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\\([\\`'\"]Not implemented[\\`'\"]\\)|${pendingCn}|${placeholderCn})`, 'i');
+  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\([\`'\"]Not implemented[\`'\"]\)|${pendingCn}|${placeholderCn})`, 'i');
   const lines = source.split('\n');
   const rows: string[] = [];
   lines.forEach((line, index) => {
