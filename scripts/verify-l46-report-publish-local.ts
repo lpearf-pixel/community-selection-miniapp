@@ -113,6 +113,23 @@ const generatorImportIndex = entrySource.indexOf("import './generate-stage-repor
 const evidenceApplyIndex = entrySource.indexOf('applyL46ReportEvidence()');
 assert(generatorImportIndex >= 0 && evidenceApplyIndex > generatorImportIndex, 'L46 report entry must explicitly apply evidence after the base generator completes');
 for (const forbidden of ['beforeExit', 'process.once', 'process.argv[1]']) assert(!evidenceSource.includes(forbidden), `L46 evidence module must not depend on ${forbidden}`);
+assert(/if\s*\(\s*stage\s*===\s*['"]L46['"]\s*\)\s*applyL46ReportEvidence\s*\(\s*\)/.test(entrySource), 'L46 report entry must only apply evidence for L46');
+
+const workflowSource = read('scripts/stage-workflow.ts');
+const compactWorkflow = workflowSource.replace(/\s+/g, ' ');
+const reportStageStart = compactWorkflow.indexOf('function runReportStage');
+const reportStageEnd = compactWorkflow.indexOf('function runReportVerifier', reportStageStart);
+const reportVerifierStart = compactWorkflow.indexOf('function runReportVerifier');
+const reportVerifierEnd = compactWorkflow.indexOf('function runReportPublish', reportVerifierStart);
+assert(reportStageStart >= 0 && reportStageEnd > reportStageStart, 'Workflow report generation block must have stable boundaries');
+assert(reportVerifierStart >= 0 && reportVerifierEnd > reportVerifierStart, 'Workflow report verifier block must have stable boundaries');
+const reportStageBlock = compactWorkflow.slice(reportStageStart, reportStageEnd);
+const reportVerifierBlock = compactWorkflow.slice(reportVerifierStart, reportVerifierEnd);
+assert(/stage\s*===\s*['"]L46['"]/.test(reportStageBlock) && reportStageBlock.includes('scripts/generate-stage-report-entry.ts'), 'Workflow must route L46 report generation through the explicit entry');
+assert(reportStageBlock.includes("args: ['report:stage', '--', `--stage=${stage}`]"), 'Workflow must preserve the historical report generator path');
+assert(/stage\s*===\s*['"]L46['"]/.test(reportVerifierBlock) && reportVerifierBlock.includes('scripts/verify-l46-report-publish-local.ts'), 'Workflow must route L46 through its strict publish gate');
+assert(reportVerifierBlock.includes('scripts/verify-report-publish-local.ts'), 'Workflow must preserve the historical report publish verifier');
+assert(workflowSource.includes('L46 tax-record DB scope verifier'), 'Workflow must preserve the stable L46 DB scope evidence title');
 
 const transformedPass = transformL46Report(reportFixture(), completeVerifyOutput());
 assert(transformedPass.includes('Codex 自评结论：passed'), 'Complete L46 evidence fixture must pass');
