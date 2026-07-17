@@ -26,45 +26,77 @@ type ParsedArgs = {
 const reportsDir = join(process.cwd(), 'reports');
 const latestVerifyOutput = join(reportsDir, 'latest-verify-output.txt');
 
-const stageVerifiers: Record<string, CommandSpec> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier!] }]));
+const stageVerifiers: Record<string, CommandSpec> = Object.fromEntries(
+  STAGE_REGISTRY.map((stage) => [
+    stage.id,
+    { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier!] },
+  ]),
+);
+
 function additionalVerifierTitle(stageId: string, verifier: string): string {
   if (verifier === 'scripts/verify-l46-tax-record-db-scope-local.ts') return 'L46 tax-record DB scope verifier';
   return `${stageId} additional verifier`;
 }
-const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, (stage.additionalVerifiers ?? []).map((verifier) => ({ title: additionalVerifierTitle(stage.id, verifier), command: 'pnpm', args: ['exec', 'tsx', verifier] }))]));
-const regressionChains: Record<string, string[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, [...getStageChain(stage.id), ...(stage.number >= 43 ? ['RAW_COMPLIANCE_SCAN'] : []), ...(stage.number >= 38 ? ['DOCKER_API_E2E', 'ADMIN_TYPECHECK'] : [])]]));
+
+const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(
+  STAGE_REGISTRY.map((stage) => [
+    stage.id,
+    (stage.additionalVerifiers ?? []).map((verifier) => ({
+      title: additionalVerifierTitle(stage.id, verifier),
+      command: 'pnpm',
+      args: ['exec', 'tsx', verifier],
+    })),
+  ]),
+);
+
+const regressionChains: Record<string, string[]> = Object.fromEntries(
+  STAGE_REGISTRY.map((stage) => [
+    stage.id,
+    [
+      ...getStageChain(stage.id),
+      ...(stage.number >= 43 ? ['RAW_COMPLIANCE_SCAN'] : []),
+      ...(stage.number >= 38 ? ['DOCKER_API_E2E', 'ADMIN_TYPECHECK'] : []),
+    ],
+  ]),
+);
 
 const dockerApiE2E: CommandSpec = {
   title: 'Docker API E2E',
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-docker-api-e2e-local.ts', '--debug'],
-  env: { API_BASE_URL: 'http://127.0.0.1:13080' }
+  env: { API_BASE_URL: 'http://127.0.0.1:13080' },
 };
-
 
 const rawComplianceScan: CommandSpec = {
   title: 'raw compliance scan',
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'],
-  successMessage: 'raw compliance scan passed.'
+  successMessage: 'raw compliance scan passed.',
 };
 
 const adminTypeConfigCheck: CommandSpec = {
   title: 'Admin typecheck config check',
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-admin-type-config-local.ts'],
-  successMessage: 'Admin typecheck config check passed.'
+  successMessage: 'Admin typecheck config check passed.',
 };
 
 const adminTypecheck: CommandSpec = {
   title: 'Admin typecheck',
   command: 'pnpm',
   args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false'],
-  successMessage: 'Admin typecheck passed.'
+  successMessage: 'Admin typecheck passed.',
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const parsed: ParsedArgs = { verify: false, publish: false, push: false, all: false, debug: false, skipSourceSyncCheck: true };
+  const parsed: ParsedArgs = {
+    verify: false,
+    publish: false,
+    push: false,
+    all: false,
+    debug: false,
+    skipSourceSyncCheck: true,
+  };
   for (const arg of argv) {
     if (arg === '--verify') parsed.verify = true;
     else if (arg === '--publish') parsed.publish = true;
@@ -90,7 +122,9 @@ function normalizeStage(value: string): string {
   return value.trim().toUpperCase();
 }
 
-function latestRegisteredStage(): string { return latestStageDefinition().id; }
+function latestRegisteredStage(): string {
+  return latestStageDefinition().id;
+}
 
 function assertRegisteredStage(stage: string): void {
   const verifier = stageVerifiers[stage];
@@ -111,7 +145,6 @@ function validateArgs(args: ParsedArgs): void {
   if (args.stage) assertRegisteredStage(args.stage);
 }
 
-
 function appendOutput(content: string): void {
   if (!content) return;
   appendFileSync(latestVerifyOutput, content);
@@ -129,7 +162,7 @@ function runCommand(spec: CommandSpec): void {
   const result = spawnSync(spec.command, spec.args, {
     cwd: process.cwd(),
     env: { ...process.env, ...(spec.env ?? {}) },
-    encoding: 'utf8'
+    encoding: 'utf8',
   });
   printAndAppend(result.stdout ?? '');
   if (result.stderr) {
@@ -144,11 +177,25 @@ function runCommand(spec: CommandSpec): void {
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
-  if (scope === 'all') return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
+  if (scope === 'all') {
+    return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
+  }
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
   if (scope === 'stage') return [stageVerifiers[args.stage], ...stageAdditionalVerifiers[args.stage]];
-  const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'RAW_COMPLIANCE_SCAN' ? [rawComplianceScan] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
-  return chainCommands.flatMap((command) => command === stageVerifiers[args.stage] ? [command, ...stageAdditionalVerifiers[args.stage]] : [command]);
+  const chainCommands = regressionChains[args.stage].flatMap((stage) =>
+    stage === 'DOCKER_API_E2E'
+      ? [dockerApiE2E]
+      : stage === 'RAW_COMPLIANCE_SCAN'
+        ? [rawComplianceScan]
+        : stage === 'ADMIN_TYPECHECK'
+          ? [adminTypeConfigCheck, adminTypecheck]
+          : [stageVerifiers[stage]],
+  );
+  return chainCommands.flatMap((command) =>
+    command === stageVerifiers[args.stage]
+      ? [command, ...stageAdditionalVerifiers[args.stage]]
+      : [command],
+  );
 }
 
 function prepareLatestOutput(): void {
@@ -181,11 +228,35 @@ function runVerify(args: ParsedArgs, publishMode = false): void {
 }
 
 function runReportStage(stage: string): void {
-  runCommand({ title: `report:stage ${stage}`, command: 'pnpm', args: ['report:stage', '--', `--stage=${stage}`] });
+  if (stage === 'L46') {
+    runCommand({
+      title: `report:stage ${stage}`,
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`],
+    });
+    return;
+  }
+  runCommand({
+    title: `report:stage ${stage}`,
+    command: 'pnpm',
+    args: ['report:stage', '--', `--stage=${stage}`],
+  });
 }
 
 function runReportVerifier(stage: string): void {
-  runCommand({ title: 'report publish verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts', `--stage=${stage}`] });
+  if (stage === 'L46') {
+    runCommand({
+      title: 'report publish verifier',
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`],
+    });
+  } else {
+    runCommand({
+      title: 'report publish verifier',
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts', `--stage=${stage}`],
+    });
+  }
   const latestOutput = readFileSync(latestVerifyOutput, 'utf8');
   if (!latestOutput.includes('Report publish verification passed.')) {
     throw new Error('Report publish verifier did not emit required success marker: Report publish verification passed.');
