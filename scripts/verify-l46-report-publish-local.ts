@@ -88,6 +88,11 @@ function reportFixture(unfinished = '暂无自动发现，需人工 review'): st
     '',
     'fixture',
     '',
+    '## 9. 风险点',
+    '',
+    '- 高风险：暂无自动发现，需人工 review',
+    '- 中风险：暂无自动发现，需人工 review',
+    '',
     '## 10. 未完成项',
     '',
     unfinished,
@@ -113,6 +118,7 @@ const transformedPass = transformL46Report(reportFixture(), completeVerifyOutput
 assert(transformedPass.includes('Codex 自评结论：passed'), 'Complete L46 evidence fixture must pass');
 assert(!section(transformedPass, '## 5. 核心业务验收点', '## 6. 验收脚本').includes('- [ ]'), 'Complete L46 evidence fixture must check every checklist item');
 assert(section(transformedPass, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明') === '暂无自动发现', 'Complete L46 evidence fixture must clear the generic unfinished placeholder');
+assert(!section(transformedPass, '## 9. 风险点', '## 10. 未完成项').includes('需人工 review'), 'Complete L46 evidence fixture must clear generic risk placeholders');
 
 const transformedPartial = transformL46Report(reportFixture(), completeVerifyOutput().replace('command_completed:raw compliance scan=true', ''));
 assert(transformedPartial.includes('Codex 自评结论：partial'), 'Missing L46 evidence fixture must remain partial');
@@ -150,6 +156,9 @@ for (const label of L46_REPORT_EVIDENCE_LABELS) {
   const matchingRows = verificationSection.split('\n').filter((line) => line.includes(`| ${label} |`));
   assert(matchingRows.length === 1 && matchingRows[0].includes(`| ${label} | passed |`), `L46 report verification row must pass: ${label}`);
 }
+const riskSection = section(report, '## 9. 风险点', '## 10. 未完成项');
+assert(riskSection.includes('- 高风险：暂无自动发现') && riskSection.includes('- 中风险：暂无自动发现'), 'L46 report risks must be normalized after complete evidence');
+assert(!riskSection.includes('需人工 review'), 'L46 report risks must not retain generic manual-review placeholders');
 assert(section(report, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明') === '暂无自动发现', 'L46 report unfinished section must be empty');
 assert(!report.includes('undefined'), 'L46 report must not contain undefined');
 
