@@ -1,0 +1,85 @@
+name: Fix L46 generator by boundaries
+
+on:
+  push:
+    branches:
+      - work/report-l46-generator-rows
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/report-l46-generator-rows
+      - name: Patch, diagnose, and commit
+        shell: bash
+        run: |
+          set +e
+          python3 - <<'PY' >/tmp/patch.log 2>&1
+          from pathlib import Path
+
+          path = Path('scripts/generate-stage-report.ts')
+          text = path.read_text()
+
+          flag_anchor = "const isL45Stage = stage.toUpperCase() === 'L45';"
+          if "const isL46Stage = stage.toUpperCase() === 'L46';" not in text:
+              flag_index = text.index(flag_anchor) + len(flag_anchor)
+              text = text[:flag_index] + "\nconst isL46Stage = stage.toUpperCase() === 'L46';" + text[flag_index:]
+
+          verify_start = text.index('function stageVerifyChecks(content: string)')
+          l45_branch = text.index('  if (isL45Stage) {', verify_start)
+          l46_block = """  if (isL46Stage) {
+            return [
+              { command: 'L46 verifier', result: commandCompleted(content, 'L46 verifier') },
+              { command: 'L46 tax-record DB scope verifier', result: commandCompleted(content, 'L46 tax-record DB scope verifier') },
+              { command: 'L24-L46 chain regression', result: content.includes('command_completed:L24-L46 chain regression=true') && content.includes('L24-L46 chain regression passed.') ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected' },
+              { command: 'Docker API E2E', result: commandCompleted(content, 'Docker API E2E') },
+              { command: 'Admin typecheck config', result: commandCompleted(content, 'Admin typecheck config check') },
+              { command: 'Admin full typecheck', result: commandCompleted(content, 'Admin typecheck') },
+              { command: 'raw compliance scan', result: commandCompleted(content, 'raw compliance scan') },
+              { command: 'Stage workflow', result: commandCompleted(content, 'Stage workflow') }
+            ];
+          }
+"""
+          if "{ command: 'L46 verifier'" not in text[verify_start:l45_branch]:
+              text = text[:l45_branch] + l46_block + text[l45_branch:]
+
+          validate_anchor = 'function validateReportInputs() {'
+          validate_start = text.index(validate_anchor) + len(validate_anchor)
+          validation = """
+            if (isL46Stage && verifyOutput.exists) {
+              assertReportQuality(verifyOutput.rows.length === 8, 'L46 must track eight verification rows');
+              assertReportQuality(verifyOutput.rows.every((row) => row.result === 'passed'), `All L46 verification rows must pass rows=${verifyOutput.rows.map((row) => `${row.command}:${row.result}`).join(',')}`);
+            }"""
+          if 'L46 must track eight verification rows' not in text[validate_start:text.index('if (isL45Stage)', validate_start)]:
+              text = text[:validate_start] + validation + text[validate_start:]
+
+          l46_start = text.index('  if (isL46Stage) {', verify_start)
+          l46_end = text.index('  if (isL45Stage) {', l46_start)
+          branch = text[l46_start:l46_end]
+          rows = ['L46 verifier','L46 tax-record DB scope verifier','L24-L46 chain regression','Docker API E2E','Admin typecheck config','Admin full typecheck','raw compliance scan','Stage workflow']
+          for row in rows:
+              assert branch.count(f"command: '{row}'") == 1, f'bad L46 row count: {row}'
+          path.write_text(text)
+          PY
+          status=$?
+          cat /tmp/patch.log
+          rm -f .github/workflows/apply-report-l46-generator-rows.yml .github/workflows/diagnose-report-l46-generator-rows.yml .github/workflows/fix-report-l46-generator-by-boundary.yml .work-trigger-l46-generator .work-trigger-l46-generator-2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/patch.log .work-diagnostic-l46-generator.txt
+            git add -A
+            git commit -m "chore(work): record L46 generator boundary error"
+            git push origin HEAD:work/report-l46-generator-rows
+            exit 0
+          fi
+          rm -f .work-diagnostic-l46-generator.txt
+          git diff --check
+          git add -A
+          git commit -m "feat(report): generate complete L46 verification rows"
+          git push origin HEAD:work/report-l46-generator-rows
