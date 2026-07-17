@@ -198,9 +198,21 @@ function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandS
   );
 }
 
+function currentHeadCommit(): string {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`git rev-parse HEAD failed with exit code ${result.status ?? 'unknown'}`);
+  const commit = (result.stdout ?? '').trim();
+  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`Unable to resolve a full HEAD commit: ${commit || 'empty'}`);
+  return commit;
+}
+
 function prepareLatestOutput(): void {
   mkdirSync(reportsDir, { recursive: true });
-  writeFileSync(latestVerifyOutput, '');
+  writeFileSync(latestVerifyOutput, `verification_source_commit:${currentHeadCommit()}\n`);
 }
 
 function resolvedScope(args: ParsedArgs, publishMode: boolean): Scope {
