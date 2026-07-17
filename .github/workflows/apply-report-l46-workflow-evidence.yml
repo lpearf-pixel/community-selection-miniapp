@@ -1,0 +1,100 @@
+name: Apply L46 workflow evidence patch
+
+on:
+  push:
+    branches:
+      - work/report-l46-workflow-evidence
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/report-l46-workflow-evidence
+      - name: Apply scoped patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/stage-workflow.ts')
+          text = path.read_text()
+
+          old_additional = "const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, (stage.additionalVerifiers ?? []).map((verifier) => ({ title: `${stage.id} additional verifier`, command: 'pnpm', args: ['exec', 'tsx', verifier] }))]));"
+          new_additional = """function additionalVerifierTitle(stageId: string, verifier: string): string {
+            if (verifier === 'scripts/verify-l46-tax-record-db-scope-local.ts') return 'L46 tax-record DB scope verifier';
+            return `${stageId} additional verifier`;
+          }
+          const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(STAGE_REGISTRY.map((stage) => [stage.id, (stage.additionalVerifiers ?? []).map((verifier) => ({ title: additionalVerifierTitle(stage.id, verifier), command: 'pnpm', args: ['exec', 'tsx', verifier] }))]));"""
+          if old_additional not in text:
+              raise SystemExit('stageAdditionalVerifiers baseline not found')
+          text = text.replace(old_additional, new_additional, 1)
+
+          old_run_verify = """function runVerify(args: ParsedArgs, publishMode = false): void {
+            prepareLatestOutput();
+            for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
+            if (args.stage === 'L45' && (args.scope ?? (publishMode ? 'chain' : 'stage')) === 'chain') {
+              printAndAppend('command_completed:L24-L45 chain regression=true\\n');
+              printAndAppend('L24-L45 chain regression passed.\\n');
+            }
+            printAndAppend('command_completed:Stage workflow=true\\n');
+            printAndAppend('\\nStage workflow verification passed.\\n');
+          }"""
+          new_run_verify = """function resolvedScope(args: ParsedArgs, publishMode: boolean): Scope {
+            return args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
+          }
+
+          function chainRegressionLabel(stageId: string): string {
+            const chain = getStageChain(stageId);
+            const firstStage = chain.at(-1) ?? stageId;
+            const lastStage = chain[0] ?? stageId;
+            return `${firstStage}-${lastStage} chain regression`;
+          }
+
+          function runVerify(args: ParsedArgs, publishMode = false): void {
+            prepareLatestOutput();
+            const scope = resolvedScope(args, publishMode);
+            for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
+            if (args.stage && scope === 'chain') {
+              const label = chainRegressionLabel(args.stage);
+              printAndAppend(`command_completed:${label}=true\\n`);
+              printAndAppend(`${label} passed.\\n`);
+            }
+            printAndAppend('command_completed:Stage workflow=true\\n');
+            printAndAppend('\\nStage workflow verification passed.\\n');
+          }"""
+          if old_run_verify not in text:
+              raise SystemExit('runVerify baseline not found')
+          text = text.replace(old_run_verify, new_run_verify, 1)
+
+          for required in [
+              'L46 tax-record DB scope verifier',
+              'command_completed:${label}=true',
+              '${label} passed.',
+              'runReportStage(args.stage!)',
+              'runReportVerifier(args.stage!)',
+              'runReportPublish(args)',
+          ]:
+              if required not in text:
+                  raise SystemExit(f'missing required marker after patch: {required}')
+          if "args.stage === 'L45'" in text:
+              raise SystemExit('L45-only chain marker branch must be removed')
+
+          path.write_text(text)
+          Path('.github/workflows/apply-report-l46-workflow-evidence.yml').unlink()
+          PY
+          git diff --check
+          git diff -- scripts/stage-workflow.ts
+      - name: Commit result
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/stage-workflow.ts .github/workflows/apply-report-l46-workflow-evidence.yml
+          git commit -m "feat(report): emit dynamic chain evidence markers"
+          git push origin HEAD:work/report-l46-workflow-evidence
