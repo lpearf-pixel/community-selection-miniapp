@@ -56,4 +56,31 @@ assert(commonValidator.includes('!report.includes'), 'Legacy report validation m
 assert(commonValidator.includes('has no configured report source'), 'Legacy report validation must detect unresolved report-source output');
 assert(commonValidator.includes('报告生成 commit：${gitOutput'), 'Common report validation must check the report generation commit');
 assert(/gitOutput\s*\(\s*\[\s*['\"]rev-parse['\"]\s*,\s*['\"]HEAD['\"]\s*\]\s*\)/.test(commonValidator), 'Common report validation must compare generation commit with HEAD');
+const l43ValidatorStart = compactVerifier.indexOf('function validateL43Report');
+const l43ValidatorEnd = compactVerifier.indexOf('function validateL44Report', l43ValidatorStart);
+const l44ValidatorStart = compactVerifier.indexOf('function validateL44Report');
+const l44ValidatorEnd = compactVerifier.indexOf('function validateL45Report', l44ValidatorStart);
+const l45ValidatorStart = compactVerifier.indexOf('function validateL45Report');
+const l45ValidatorEnd = compactVerifier.indexOf('function validateL46Report', l45ValidatorStart);
+const l46ValidatorStart = compactVerifier.indexOf('function validateL46Report');
+const l46ValidatorEnd = compactVerifier.indexOf('const scannerDefinitionFixture', l46ValidatorStart);
+for (const [start, end, name] of [[l43ValidatorStart, l43ValidatorEnd, 'L43'], [l44ValidatorStart, l44ValidatorEnd, 'L44'], [l45ValidatorStart, l45ValidatorEnd, 'L45'], [l46ValidatorStart, l46ValidatorEnd, 'L46']] as const) {
+  assert(start >= 0, `${name} report validator must exist`);
+  assert(end > start, `${name} report validator must have an end boundary`);
+}
+const l43Validator = compactVerifier.slice(l43ValidatorStart, l43ValidatorEnd);
+const l44Validator = compactVerifier.slice(l44ValidatorStart, l44ValidatorEnd);
+const l45Validator = compactVerifier.slice(l45ValidatorStart, l45ValidatorEnd);
+const l46Validator = compactVerifier.slice(l46ValidatorStart, l46ValidatorEnd);
+for (const [validator, stageId] of [[l43Validator, 'L43'], [l44Validator, 'L44'], [l45Validator, 'L45'], [l46Validator, 'L46']] as const) {
+  assert(validator.includes(`resolveReportSource('${stageId}')`), `${stageId} report validator must resolve its report source`);
+  assert(!/reportContract\s*\??\s*\.\s*businessBase(?:Branch|Commit)/.test(validator), `${stageId} report validator must not directly read reportContract base fields`);
+}
+assert(/getStageDefinition\s*\(\s*['\"]L46['\"]\s*\)/.test(l46Validator), 'L46 report validator must read its Registry definition');
+assert(l46Validator.includes('definition.title'), 'L46 report validator must use the registered title');
+assert((l46Validator.match(/\$\{definition\.title\}/g) ?? []).length === 2, 'L46 report validator must interpolate the registered title for title and goal');
+assert(/source\.sourceMode\s*===\s*['\"]git_diff['\"]/.test(l46Validator), 'L46 report validator must require a git_diff source');
+assert(l46Validator.includes('source.businessBaseBranch') && l46Validator.includes('${source.businessBaseBranch}'), 'L46 report validator must interpolate the resolved business base branch');
+assert(l46Validator.includes('source.businessBaseCommit') && l46Validator.includes('${source.businessBaseCommit}'), 'L46 report validator must interpolate the resolved business base commit');
+for (const value of [l46Definition.title, l46Source.businessBaseBranch, l46Source.businessBaseCommit]) assert(!l46Validator.includes(value), 'L46 report validator must not hardcode Registry or resolver metadata');
 console.log('Report stage routing checks passed.');
