@@ -28,7 +28,9 @@ assert(genericVerifier.includes("from './report-markdown.ts'"), 'Historical repo
 assert(l46Verifier.includes("from './report-markdown.ts'"), 'L46 report publish verifier must reuse the shared Markdown parser');
 
 const verifyAll = readFileSync('scripts/verify-all-local.sh', 'utf8');
-assert(verifyAll.includes('scripts/verify-l46-report-publish-local.ts'), 'verify:all must route L46 to its strict report publish verifier');
+const l46Case = verifyAll.split('L46)')[1]?.split(';;')[0] ?? '';
+assert(l46Case.includes('scripts/stage-workflow.ts') && l46Case.includes('--stage=L46') && l46Case.includes('--publish') && l46Case.includes('--scope=chain'), 'verify:all must fail closed and direct L46 report verification to stage-workflow');
+assert(!l46Case.includes('scripts/verify-report-publish-local.ts'), 'verify:all must not route L46 through the historical report verifier');
 assert(verifyAll.includes('scripts/verify-report-publish-local.ts'), 'verify:all must preserve historical report publish verification');
 
 console.log('Report Markdown and verify:all routing checks passed.');
