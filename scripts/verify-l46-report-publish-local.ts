@@ -36,10 +36,21 @@ function extractMarkdownFilePaths(report: string): string[] {
     if (cells.length < 3) continue;
     const file = cells[1];
     if (file === '文件' || file === '---') continue;
-    if (file.includes('/') || file === 'docker-compose.yml') files.push(file);
+    if (file) files.push(file);
   }
   return Array.from(new Set(files)).sort();
 }
+
+const rootFileReportFixture = [
+  '## 2. 本阶段变更范围',
+  '',
+  '| 类型 | 文件 | 说明 |',
+  '|---|---|---|',
+  '| 配置 | package.json | canonical report entry |',
+  '',
+  '## 3. API 变化',
+].join('\n');
+assert(extractMarkdownFilePaths(rootFileReportFixture).includes('package.json'), 'Report changed-file parser must retain repository-root files');
 
 function assertSetEqual(expected: string[], actual: string[], label: string): void {
   const missing = expected.filter((file) => !actual.includes(file));
