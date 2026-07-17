@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -45,7 +46,18 @@ function chainCompleted(content: string): EvidenceStatus {
   return hasExplicitFailure(content) ? 'failed' : 'not detected';
 }
 
-export function l46EvidenceRows(content: string): EvidenceRow[] {
+export function verificationSourceCommit(content: string): string | undefined {
+  const matches = Array.from(content.matchAll(/^verification_source_commit:([0-9a-f]{40})$/gm));
+  return matches.length === 1 ? matches[0][1] : undefined;
+}
+
+function unboundRows(content: string): EvidenceRow[] {
+  const result: EvidenceStatus = hasExplicitFailure(content) ? 'failed' : 'not detected';
+  return L46_REPORT_EVIDENCE_LABELS.map((command) => ({ command, result }));
+}
+
+export function l46EvidenceRows(content: string, expectedCommit?: string): EvidenceRow[] {
+  if (expectedCommit && verificationSourceCommit(content) !== expectedCommit) return unboundRows(content);
   return [
     { command: 'L46 verifier', result: completed(content, 'L46 verifier') },
     { command: 'L46 tax-record DB scope verifier', result: completed(content, 'L46 tax-record DB scope verifier') },
@@ -96,8 +108,8 @@ function normalizeUnfinishedSection(report: string, allPassed: boolean): string 
   return replaceSection(report, '## 10. 未完成项', '## 11. Codex 给人工 reviewer 的说明', '## 10. 未完成项\n\n暂无自动发现');
 }
 
-export function transformL46Report(report: string, verifyOutput: string): string {
-  const rows = l46EvidenceRows(verifyOutput);
+export function transformL46Report(report: string, verifyOutput: string, expectedCommit?: string): string {
+  const rows = l46EvidenceRows(verifyOutput, expectedCommit);
   const allPassed = rows.length === L46_REPORT_EVIDENCE_LABELS.length && rows.every((row) => row.result === 'passed');
 
   let updated = replaceSection(report, '## 5. 核心业务验收点', '## 6. 验收脚本', renderChecklistSection(rows));
@@ -120,6 +132,12 @@ export function transformL46Report(report: string, verifyOutput: string): string
   return updated;
 }
 
+function currentHeadCommit(): string {
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`Unable to resolve a full HEAD commit: ${commit || 'empty'}`);
+  return commit;
+}
+
 export function applyL46ReportEvidence(): void {
   const reportsDir = join(process.cwd(), 'reports');
   const verifyPath = join(reportsDir, 'latest-verify-output.txt');
@@ -129,5 +147,5 @@ export function applyL46ReportEvidence(): void {
   }
   const verifyOutput = existsSync(verifyPath) ? readFileSync(verifyPath, 'utf8') : '';
   const report = readFileSync(reportPath, 'utf8');
-  writeFileSync(reportPath, transformL46Report(report, verifyOutput));
+  writeFileSync(reportPath, transformL46Report(report, verifyOutput, currentHeadCommit()));
 }
