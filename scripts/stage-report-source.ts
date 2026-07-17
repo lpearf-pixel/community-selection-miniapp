@@ -2,6 +2,9 @@ import {
   getStageDefinition,
   type ReportContract,
 } from './stage-registry.ts';
+import { installL46ReportEvidenceHook } from './l46-report-evidence-hook.ts';
+
+installL46ReportEvidenceHook();
 
 export type LegacyReportSource = {
   businessBaseBranch?: string;

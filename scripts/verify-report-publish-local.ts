@@ -267,6 +267,12 @@ function validateL46Report(report: string) {
   const source = resolveReportSource('L46'); assert(source.sourceMode === 'git_diff', 'L46 report source must use git_diff');
   assert(report.includes(`- 业务稳定分支：${source.businessBaseBranch}`), 'L46 report must use the registered business base branch');
   assert(report.includes(`- 业务稳定 commit：${source.businessBaseCommit}`), 'L46 report must use the registered business base commit');
+  const verificationSection = report.split('## 7. 阶段验证执行结果')[1]?.split('## 8. 合规边界检查')[0] ?? '';
+  const requiredVerificationRows = ['L46 verifier', 'L46 tax-record DB scope verifier', 'L24-L46 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow'];
+  for (const item of requiredVerificationRows) {
+    const matchingRows = verificationSection.split('\n').filter((line) => line.includes(`| ${item} |`));
+    assert(matchingRows.length === 1 && matchingRows[0].includes(`| ${item} | passed |`), `L46 report verification row must pass: ${item}`);
+  }
 }
 
 const scannerDefinitionFixture = `function isVerifierTodoTestString() { return /${'TO' + 'DO'}|${'FIX' + 'ME'}|${'T' + 'BD'}|${'NOT_' + 'IMPLEMENTED'}/.test(''); }`;
