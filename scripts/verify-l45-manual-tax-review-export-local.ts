@@ -99,7 +99,8 @@ for (const requiredRollback of ['manual_reference', 'processed_at', 'processed_b
 assert(e2e.includes('l45_tax_list_stable_pagination=true') && e2e.includes('stableCreatedAt') && e2e.includes('repeatPage1') && e2e.includes('repeatPage2'), 'L45 E2E must verify stable list pagination with tied created_at records');
 assert(e2e.includes('l45_mark_paid_not_found_404=true') && e2e.includes("markPaidMissing.success === false") && e2e.includes("markPaidMissing.message === '提现申请不存在'"), 'L45 E2E must verify mark-paid missing Withdrawal 404 envelope');
 assert(report.includes('apiRows.length === L45_API_CONTRACT_LIST.length'), 'L45 report API row count must come from contract length');
-assert(reportVerifier.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID') && reportVerifier.includes('L45 known medium risk must be in risk section') , 'Report verifier must accept documented L45 medium risk');
+const l45ReportValidator = reportVerifier.split('function validateL45Report(report: string)')[1]?.split('function validateL46Report(report: string)')[0] ?? '';
+assert(l45ReportValidator.includes("report.split('## 9. 风险')") && l45ReportValidator.includes("split('## 10. 未完成项')") && l45ReportValidator.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID'), 'Report verifier must accept documented L45 medium risk in the risk section');
 assert(!existsSync('scripts/l45-api-contract.js') && existsSync('scripts/l45-api-contract.ts'), 'L45 API contract must have a single TypeScript source');
 assert(existsSync('docs/api/l45-admin-tax-review-api.md'), 'Human-readable L45 API spec must exist');
 assert(e2e.includes('l45_admin_scope_runtime=true') && e2e.includes('resolveAdminAccessContext'), 'E2E must include runtime admin scope source tests');
