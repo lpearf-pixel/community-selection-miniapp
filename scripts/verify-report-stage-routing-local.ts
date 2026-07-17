@@ -36,4 +36,10 @@ assert(/function\s+resolvePublishReportSource\s*\(\s*stageId:\s*string\s*\)/.tes
 assert(/const\s+definition\s*=\s*getStageDefinition\s*\(\s*stageId\s*\)/.test(compactVerifier), 'Publish source routing must read the requested Stage definition');
 assert(/definition\.reportContract\s*\?\s*resolveReportSource\s*\(\s*definition\.id\s*\)/.test(compactVerifier), 'Contracted Stage must resolve source from Registry contract');
 assert(/:\s*resolveReportSource\s*\(\s*definition\.id\s*,\s*\{\s*\}\s*\)/.test(compactVerifier), 'Legacy Stage must explicitly opt into manifest source');
+assert(/function\s+changedFilesForStage\s*\(\s*stageId:\s*string\s*\)\s*:\s*PublishChangedFiles/.test(compactVerifier), 'Publish verifier must define changed-files source routing');
+assert(/const\s+source\s*=\s*resolvePublishReportSource\s*\(\s*stageId\s*\)/.test(compactVerifier), 'Changed-files routing must use resolvePublishReportSource');
+assert(/source\.sourceMode\s*===\s*['\"]git_diff['\"]/.test(compactVerifier), 'Changed-files routing must branch on git_diff source mode');
+assert(/base\s*:\s*source\.businessBaseCommit/.test(compactVerifier), 'git_diff changed-files base must use resolved business base commit');
+assert(/gitDiffFiles\s*\(\s*source\.businessBaseCommit\s*,\s*['\"]HEAD['\"]\s*\)/.test(compactVerifier), 'git_diff changed-files must compare resolved base to HEAD');
+assert(/return\s*\{\s*sourceMode\s*:\s*['\"]legacy_manifest['\"]\s*\}/.test(compactVerifier), 'Legacy changed-files routing must return only legacy_manifest mode');
 console.log('Report stage routing checks passed.');
