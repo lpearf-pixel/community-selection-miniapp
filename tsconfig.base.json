@@ -14,10 +14,10 @@
     "resolveJsonModule": true,
     "paths": {
       "@community-selection/shared": [
-        "packages/shared/dist/index.js"
+        "packages/shared/dist/index.d.ts"
       ],
       "@community-selection/config": [
-        "packages/config/dist/index.js"
+        "packages/config/dist/index.d.ts"
       ]
     }
   }
