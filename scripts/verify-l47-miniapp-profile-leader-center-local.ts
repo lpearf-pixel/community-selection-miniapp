@@ -54,6 +54,8 @@ function verifyBackend(): void {
   const publicRoutes = readRequired('apps/api/src/routes/public/index.ts');
   const meRoute = readRequired('apps/api/src/routes/me/center.ts');
   const leaderRoute = readRequired('apps/api/src/routes/leaders/center.ts');
+  const routeSecurity = readRequired('apps/api/src/modules/me-center/me-center-route-security.ts');
+  const routeTests = readRequired('apps/api/src/modules/me-center/me-center-routes.test.ts');
   const service = readRequired('apps/api/src/modules/me-center/me-center-service.ts');
   const types = readRequired('apps/api/src/modules/me-center/me-center-types.ts');
 
@@ -61,6 +63,34 @@ function verifyBackend(): void {
   assert(/registerLeaderCenterRoutes\s*\(\s*app\s*\)/.test(publicRoutes), 'Leader center route must be registered');
   assert(meRoute.includes('/api/me/center-summary'), 'Personal center endpoint missing');
   assert(leaderRoute.includes('/api/leaders/me/center-summary'), 'Leader center endpoint missing');
+  assert(
+    meRoute.includes('assertCenterIdentityHeader(request.headers)') &&
+      leaderRoute.includes('assertCenterIdentityHeader(request.headers)'),
+    'Both center routes must reject query-only identities before resolving users',
+  );
+  assert(
+    meRoute.includes("mapCenterRouteError(error, '个人中心加载失败')") &&
+      leaderRoute.includes("mapCenterRouteError(error, '团长中心加载失败')"),
+    'Both center routes must sanitize unexpected failures',
+  );
+  assert(
+    routeSecurity.includes("headers['x-user-id']") &&
+      routeSecurity.includes("headers['x-openid']") &&
+      routeSecurity.includes('statusCode: 401'),
+    'Center identity guard must require a user identity header',
+  );
+  assert(
+    routeSecurity.includes('statusCode: 500') &&
+      routeSecurity.includes('message: fallbackMessage'),
+    'Center route error mapping must hide unexpected internal errors behind HTTP 500',
+  );
+  assert(
+    routeTests.includes('rejects query-only identities') &&
+      routeTests.includes('sanitizes unexpected personal-center failures') &&
+      routeTests.includes('sanitizes unexpected leader-center failures') &&
+      routeTests.includes("not.toContain('Prisma')"),
+    'Center route security regression tests are missing',
+  );
   assert(
     leaderRoute.includes('export function assertLeaderRole') &&
       leaderRoute.includes('statusCode: 403') &&
