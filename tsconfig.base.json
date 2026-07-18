@@ -11,14 +11,6 @@
     "esModuleInterop": true,
     "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "paths": {
-      "@community-selection/shared": [
-        "packages/shared/dist/index.d.ts"
-      ],
-      "@community-selection/config": [
-        "packages/config/dist/index.d.ts"
-      ]
-    }
+    "resolveJsonModule": true
   }
 }
