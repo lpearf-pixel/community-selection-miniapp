@@ -1,6 +1,8 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
+assertStageRegistered('L39', 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts');
 function read(file: string) { return readFileSync(file, 'utf8'); }
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function includesAll(file: string, needles: string[]) { const text = read(file); for (const needle of needles) assert(text.includes(needle), `${file} missing ${needle}`); }
@@ -132,8 +134,6 @@ assert(expectedPercentReward(baseRewardCase) === 1000, 'Initial reward must be 1
 assert(expectedPercentReward({ ...baseRewardCase, delivery_refund_amount_cents: 500, refund_amount_cents: 500 }) === 1000, 'Delivery-fee-only refund must not change reward');
 assert(expectedPercentReward({ ...baseRewardCase, product_refund_amount_cents: 3000, delivery_refund_amount_cents: 500, refund_amount_cents: 3500 }) === 700, 'Product refund must recalculate reward to 700 even when total refund includes delivery fee');
 assert(expectedPercentReward({ ...baseRewardCase, product_refund_amount_cents: 10000, refund_amount_cents: 10500 }) === 0, 'Full product refund must zero reward');
-includesAll('scripts/verify-all-local.sh', ['pnpm exec tsx scripts/verify-l39-delivery-refund-finance-baseline-local.ts']);
-includesAll('scripts/stage-workflow.ts', ['L39', 'verify-l39-delivery-refund-finance-baseline-local.ts', "'L39', 'L38', 'L37'"]);
 includesAll('scripts/generate-stage-report.ts', ['const l39Manifest', 'L39 delivery refund finance baseline', 'POST /api/after-sales', 'GET /api/admin/finance/refund-ledger/export.csv', 'scripts/verify-docker-api-e2e-local.ts']);
 includesAll('scripts/verify-docker-api-e2e-local.ts', ['base_fee_cents: 500', 'requested_product_refund_cents: 100', 'requested_delivery_refund_cents: 200', 'approved_product_refund_cents: 100', 'approved_delivery_refund_cents: 200', 'total_product_refund_amount_cents >= 100', 'total_delivery_refund_amount_cents >= 200', 'product_refund_amount_cents', 'delivery_refund_amount_cents', 'store delivery refund must fail']);
 includesAll('docs/reviews/l39-delivery-refund-finance-baseline.md', ['配送费退款策略', '总退款金额必须等于商品退款金额加配送费退款金额', '不启用、不调用、不纳入 L39 行为与验收']);

@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
 
+assertStageRegistered('L27', 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts');
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };

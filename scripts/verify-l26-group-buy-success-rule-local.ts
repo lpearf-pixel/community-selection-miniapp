@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scanComplianceFiles } from './lib/compliance-scan';
 
+assertStageRegistered('L26', 'scripts/verify-l26-group-buy-success-rule-local.ts');
 const repoRoot = process.cwd();
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);

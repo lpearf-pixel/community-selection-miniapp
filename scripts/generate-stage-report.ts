@@ -1,3 +1,5 @@
+import { getStageDefinition } from './stage-registry.ts';
+import { resolveReportSource, type ResolvedReportSource } from './stage-report-source.ts';
 import { execFileSync } from 'node:child_process';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -34,6 +36,9 @@ function argValue(name: string) {
 }
 
 const stage = argValue('stage') ?? 'unknown';
+const stageDefinition = getStageDefinition(stage);
+if (!stageDefinition) throw new Error(`Stage ${stage} is not registered`);
+const registryReportSource: ResolvedReportSource | undefined = stageDefinition.reportContract ? resolveReportSource(stage) : undefined;
 
 function l45ApiVerified(api: (typeof L45_API_CONTRACT_LIST)[number]) {
   return api.runtime_markers_required.every((marker) => latestVerifyOutputForManifest.includes(marker));
@@ -797,9 +802,7 @@ function safeRead(path: string) {
 }
 
 function getStageBaseRef() {
-  if (isL45Stage) return l45Manifest.businessBaseCommit || l45Manifest.businessBaseBranch;
-  if (isL44Stage) return l44Manifest.businessBaseCommit || l44Manifest.businessBaseBranch;
-  if (isL43Stage) return l43Manifest.businessBaseCommit || l43Manifest.businessBaseBranch;
+  if (registryReportSource?.sourceMode === 'git_diff') return registryReportSource.businessBaseCommit;
   return '';
 }
 
@@ -843,9 +846,7 @@ function getChangedFiles() {
   if (isL30Stage) return { files: l30Manifest.files, error: '' };
   if (isL29Stage) return { files: l29Manifest.files, error: '' };
   if (isL28Stage) return { files: l28Manifest.files, error: '' };
-  const diff = runGit(['diff', '--name-only', 'HEAD~1..HEAD']);
-  if (!diff.ok) return { baseRef: 'HEAD~1', files: [] as string[], error: diff.output };
-  return { baseRef: 'HEAD~1', files: parseChangedFiles(diff.output), error: '' };
+  return { files: [] as string[], error: `Stage ${stage} has no configured report source` };
 }
 
 function classifyFile(file: string): FileRow {
@@ -1561,6 +1562,10 @@ function validateReportInputs() {
 
 validateReportInputs();
 
+const stageManifest = isL45Stage ? l45Manifest : isL44Stage ? l44Manifest : isL43Stage ? l43Manifest : isL42Stage ? l42Manifest : isL41Stage ? l41Manifest : isL40Stage ? l40Manifest : isL39Stage ? l39Manifest : undefined;
+const businessBaseBranch = stageManifest?.businessBaseBranch ?? registryReportSource?.businessBaseBranch ?? '未配置';
+const businessBaseCommit = stageManifest?.businessBaseCommit ?? registryReportSource?.businessBaseCommit ?? '未配置';
+const stageGoal = stageManifest?.title ?? stageDefinition.title;
 const highRiskSummary = highRisks.length ? highRisks.join('；') : (isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
 const l45TaxRecordScopeRisk = 'L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID 到内存再构造 TaxRecord source_id IN (...)，后续阶段应改造为数据库 EXISTS/JOIN 查询以避免大范围数据内存压力。';
 const mediumRiskSummary = isL45Stage ? l45TaxRecordScopeRisk : todos.length ? '本阶段改动文件存在 TODO / FIXME / TBD / NOT_IMPLEMENTED 等未完成标记，详见未完成项。' : (isL45Stage || isL44Stage) ? '暂无自动发现' : '暂无自动发现，需人工 review';
@@ -1571,14 +1576,15 @@ const report = `# 阶段验收报告：${stage}
 ## 1. 阶段结论
 
 - 阶段：${stage}
-- 业务稳定分支：${isL45Stage ? l45Manifest.businessBaseBranch : isL44Stage ? l44Manifest.businessBaseBranch : isL43Stage ? l43Manifest.businessBaseBranch : isL42Stage ? l42Manifest.businessBaseBranch : isL41Stage ? l41Manifest.businessBaseBranch : isL40Stage ? l40Manifest.businessBaseBranch : '未配置'}
-- 业务稳定 commit：${isL45Stage ? l45Manifest.businessBaseCommit : isL44Stage ? l44Manifest.businessBaseCommit : isL43Stage ? l43Manifest.businessBaseCommit : isL42Stage ? l42Manifest.businessBaseCommit : isL41Stage ? l41Manifest.businessBaseCommit : isL40Stage ? l40Manifest.businessBaseCommit : '未配置'}
+- 业务稳定分支：${businessBaseBranch}
+- 业务稳定 commit：${businessBaseCommit}
 - 报告生成分支：${branch.ok ? branch.output : `无法自动获取：${branch.output}`}
 - 报告生成 commit：${commit.ok ? commit.output : `无法自动获取：${commit.output}`}
 - 分支：${branch.ok ? `${branch.output}（报告生成环境）` : `无法自动获取：${branch.output}`}
 - 生成时间：${generatedAt}
 - 当前 commit：${commit.ok ? `${commit.output}（报告生成环境）` : `无法自动获取：${commit.output}`}
-- 本阶段目标：${isL45Stage ? l45Manifest.title : isL44Stage ? l44Manifest.title : isL43Stage ? l43Manifest.title : isL42Stage ? l42Manifest.title : isL41Stage ? l41Manifest.title : isL40Stage ? l40Manifest.title : isL39Stage ? l39Manifest.title : stage === 'unknown' ? '未传入 --stage，需人工补充' : `${stage} 阶段目标，需结合阶段说明人工确认`}
+- 注册阶段标题：${stageDefinition.title}
+- 本阶段目标：${stageGoal}
 - Codex 自评结论：${conclusion}
 
 ## 2. 本阶段变更范围

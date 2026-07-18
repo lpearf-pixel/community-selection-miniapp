@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveAdminDataScope } from '../apps/api/src/modules/admin-access/admin-access-control.ts';
 
+assertStageRegistered('L34', 'scripts/verify-l34-admin-data-scope-baseline-local.ts');
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }

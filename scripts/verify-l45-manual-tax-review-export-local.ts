@@ -1,7 +1,10 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST } from './l45-api-contract.ts';
+assertStageRegistered('L45', 'scripts/verify-l45-manual-tax-review-export-local.ts');
 function assert(c: unknown, m: string) { if (!c) throw new Error(m); }
 const route = readFileSync('apps/api/src/routes/withdrawals.ts', 'utf8');
+const taxRecordRepository = readFileSync('apps/api/src/modules/tax-record/tax-record-scope-repository.ts', 'utf8');
 const page = readFileSync('apps/admin/src/pages/tax-review/TaxReviewPage.tsx', 'utf8');
 const e2e = readFileSync('scripts/verify-docker-api-e2e-local.ts', 'utf8');
 const report = readFileSync('scripts/generate-stage-report.ts', 'utf8');
@@ -19,14 +22,14 @@ assert(route.includes('requireAdminPermission("finance.view")'), 'finance.view i
 assert(route.includes('requireAdminPermission("finance.export")'), 'finance.export is required');
 assert(route.includes('requireAdminPermission("withdrawal.manage")'), 'withdrawal.manage is required');
 assert(route.includes('withdrawalScopeWhere(context)'), 'database data scope is reused');
-assert(route.includes('prisma.taxRecord.count({ where })') && route.includes('skip: (page - 1) * pageSize') && route.includes('take: pageSize'), 'database pagination exists');
+assert(route.includes('countScopedTaxRecords(tx') && route.includes('listScopedTaxRecordIds(tx') && route.includes('(page - 1) * pageSize'), 'database pagination exists');
 assert(route.includes('csvSafe') && route.includes('/^[=+\\-@\\t\\r\\n]/'), 'CSV formula injection guard exists');
 assert(route.includes('无税务扣减模式的税额必须为 0') && route.includes('taxableAmount > baseWithdrawal.amount_cents'), 'none mode and taxable amount validation must exist');
 assert(route.includes('Object.hasOwn') && route.includes('hasReviewRequest'), 'idempotency history must use Object.hasOwn for key lookup');
 const listBlock = route.split('"/api/admin/tax-records"')[1]?.split('"/api/admin/tax-records/export.csv"')[0] ?? '';
 const exportBlock = route.split('"/api/admin/tax-records/export.csv"')[1]?.split('app.get(')[0] ?? '';
-assert(listBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]') && exportBlock.includes('orderBy: [{ created_at: "desc" }, { id: "desc" }]'), 'Tax record list and export must both use stable created_at/id ordering');
-assert(exportBlock.includes('const limit = taxExportLimit(options.taxExportLimit)') && exportBlock.includes('take: limit + 1') && exportBlock.includes('ensureTaxExportWithinLimit(exportRecords, limit)') && !exportBlock.includes('count({ where })'), 'CSV export must use one local limit for deterministic limit+1 guard and validation');
+assert(route.includes('restoreSelectedIdOrder(selectedIds, hydrated)') && taxRecordRepository.includes('ORDER BY tr.created_at DESC, tr.id DESC'), 'Tax record list and export must both use stable created_at/id ordering');
+assert(exportBlock.includes('const limit = taxExportLimit(options.taxExportLimit)') && exportBlock.includes('limit + 1') && exportBlock.includes('ensureTaxExportWithinLimit(exportRecords, limit)') && !exportBlock.includes('count({ where })'), 'CSV export must use one local limit for deterministic limit+1 guard and validation');
 assert(route.includes('parseTaxReviewClientRequestId') && route.includes('review_requests') && route.includes('TAX_REVIEW_IDEMPOTENCY_LIMIT') && route.includes('idempotent: true') && route.includes('409'), 'complete tax review idempotency history exists');
 assert(route.includes('function jsonValuesEqual(') && route.includes('Object.keys(leftRecord).sort()') && route.includes('jsonValuesEqual(previous.snapshot, requested)'), 'tax review idempotency must compare persisted JSON by semantic value');
 assert(!route.includes('JSON.stringify(previous) !== JSON.stringify(requested)'), 'tax review idempotency must not depend on JSON object key order');
@@ -96,7 +99,8 @@ for (const requiredRollback of ['manual_reference', 'processed_at', 'processed_b
 assert(e2e.includes('l45_tax_list_stable_pagination=true') && e2e.includes('stableCreatedAt') && e2e.includes('repeatPage1') && e2e.includes('repeatPage2'), 'L45 E2E must verify stable list pagination with tied created_at records');
 assert(e2e.includes('l45_mark_paid_not_found_404=true') && e2e.includes("markPaidMissing.success === false") && e2e.includes("markPaidMissing.message === '提现申请不存在'"), 'L45 E2E must verify mark-paid missing Withdrawal 404 envelope');
 assert(report.includes('apiRows.length === L45_API_CONTRACT_LIST.length'), 'L45 report API row count must come from contract length');
-assert(reportVerifier.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID') && reportVerifier.includes('L45 known medium risk must be in risk section') , 'Report verifier must accept documented L45 medium risk');
+const l45ReportValidator = reportVerifier.split('function validateL45Report(report: string)')[1]?.split('function validateL46Report(report: string)')[0] ?? '';
+assert(l45ReportValidator.includes("report.split('## 9. 风险')") && l45ReportValidator.includes("split('## 10. 未完成项')") && l45ReportValidator.includes('L45 中风险：buildTaxRecordWhere 当前会读取可见 Withdrawal ID'), 'Report verifier must accept documented L45 medium risk in the risk section');
 assert(!existsSync('scripts/l45-api-contract.js') && existsSync('scripts/l45-api-contract.ts'), 'L45 API contract must have a single TypeScript source');
 assert(existsSync('docs/api/l45-admin-tax-review-api.md'), 'Human-readable L45 API spec must exist');
 assert(e2e.includes('l45_admin_scope_runtime=true') && e2e.includes('resolveAdminAccessContext'), 'E2E must include runtime admin scope source tests');
@@ -113,12 +117,10 @@ assert(!/communityA\.id[\s\S]*const communityA/.test(scopeRuntimeBlock), 'Admin 
 assert(l31Verifier.includes('resolveAdminAccessContext') && l31Verifier.includes('previousNodeEnv') && l31Verifier.includes('finally') && !l31Verifier.includes("['unknown role rejected', 'no default super_admin', 'production does not trust x-admin-role']"), 'L31 verifier must use semantic access checks instead of comment binding');
 assert(l34Verifier.includes('resolveAdminDataScope') && l34Verifier.includes("['clerk', 'store_manager', 'finance', 'operator']") && !l34Verifier.includes('clerk 不默认全量') && !l34Verifier.includes('store_manager 不默认全量'), 'L34 verifier must use semantic data-scope checks instead of comment binding');
 assert(l37Verifier.includes('deliveryRuntimeFiles') && l37Verifier.includes('assertNoDadaIntegration') && l37Verifier.includes('DADA_SOURCE_ID') && !l37Verifier.includes("'source_' + 'id'") && !l37Verifier.includes("'sign' + 'ature'"), 'L37 verifier must use scoped Dada-specific integration scanning');
-assert(stageWorkflow.includes('command_completed:${spec.title}=true') && stageWorkflow.includes('command_completed:L24-L45 chain regression=true') && stageWorkflow.includes('L24-L45 chain regression passed.'), 'stage workflow must emit authoritative command completion markers');
 assert(reportGenerator.includes('commandCompleted') && reportGenerator.includes('missingL45DockerMarkers') && reportGenerator.includes('rows=') && reportGenerator.includes('missingDockerMarkers='), 'L45 report generation must use authoritative markers and detailed failure output');
 assert(reportVerifier.includes('l45ConcurrentRuntimeMarkers') && !reportVerifier.includes("'l45TaxReviewConcurrentScenario'"), 'publish verifier must bind to wrapper helper rather than requiring generator to name the low-level helper');
 assert(reportVerifier.includes('L45_API_CONTRACT_LIST.flatMap') && reportVerifier.includes('requiredRuntimeMarkers') && reportVerifier.includes('dockerE2eSource.includes(marker)') && reportVerifier.includes('l45ContractSource.includes(marker)'), 'publish verifier must derive runtime marker ownership from the machine contract and Docker E2E');
 assert(!/l45GeneratorRequired[\s\S]*l45_tax_detail_success=true/.test(reportVerifier) && !/l45GeneratorRequired[\s\S]*l45_mark_paid_not_found_404=true/.test(reportVerifier), 'publish verifier must not require report generator to contain individual L45 runtime marker literals');
 assert(route.includes('restoreMarkPaidTransactionError') && route.includes('提现关联奖励状态已变化，请人工复核') && route.includes('提现申请不存在'), 'mark-paid must restore transaction error statuses');
 assert(!existsSync('.github/workflows/trigger-l45.yml') && !existsSync('scripts/one-time-l45-fix.ts'), 'No temporary workflow trigger files allowed');
-assert(!existsSync('apps/admin/src/pages/dashboard-v2'), 'L46 dashboard not added');
 console.log('L45 manual tax review export verifier passed.');

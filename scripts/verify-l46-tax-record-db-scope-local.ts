@@ -1,0 +1,28 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
+import { existsSync, readFileSync } from 'node:fs';
+
+assertStageRegistered('L46', 'scripts/verify-l46-tax-record-db-scope-local.ts');
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(`L46 tax-record verifier: ${message}`);
+}
+
+const repositoryPath = 'apps/api/src/modules/tax-record/tax-record-scope-repository.ts';
+const routePath = 'apps/api/src/routes/withdrawals.ts';
+assert(existsSync(repositoryPath) && existsSync(routePath), 'tax record repository and route must exist');
+const repository = readFileSync(repositoryPath, 'utf8');
+const route = readFileSync(routePath, 'utf8');
+
+for (const marker of ['type TaxRecordDbClient = Prisma.TransactionClient | typeof prisma', 'db.$queryRaw', 'buildScopedTaxRecordSql', 'escapeLikePattern', 'bigintToSafeNumber', 'Number.isSafeInteger', 'restoreSelectedIdOrder', 'TaxRecord hydration snapshot mismatch']) assert(repository.includes(marker), `missing ${marker}`);
+assert(!/function listScopedTaxRecordIds\([^)]*\)\s*\{\s*return prisma\./.test(repository), 'repository query must use passed db client');
+assert(repository.includes('EXISTS (SELECT 1 FROM "WithdrawalCommission"') && repository.includes('NOT EXISTS (SELECT 1 FROM "WithdrawalCommission"'), 'scope must require some and every linked order');
+assert(repository.includes("], ' OR ')") && repository.includes("Prisma.join(parts, ' AND ')"), 'Prisma.join separators must be static strings');
+assert(repository.includes("], ' OR ')") && repository.includes('Prisma.sql`FALSE`'), 'mixed scope must OR and empty scope must fail closed');
+assert(repository.includes("invoiceStatus: 'pending'") && repository.includes('w.invoice_required = true'), 'pending invoice must use invoice_required and pending status');
+assert(repository.includes("'tax_review_pending' | 'invoice_pending'") && repository.includes('UNION ALL') && repository.includes("tr.tax_status = 'pending'") && repository.includes('w.invoice_required = true'), 'tax and invoice alerts must be independently database scoped');
+assert(repository.includes('createdAtToInclusive') && repository.includes('createdAtToExclusive') && repository.includes('TaxRecord time filter cannot contain both inclusive and exclusive to'), 'inclusive L45 and exclusive dashboard boundaries must be distinct');
+assert(route.includes('prisma.$transaction(async (tx) =>') && route.includes('countScopedTaxRecords(tx') && route.includes('listScopedTaxRecordIds(tx'), 'list must select/count in a transaction');
+assert(route.includes('restoreSelectedIdOrder(selectedIds, hydrated)'), 'list/export must restore selected ID order');
+assert(route.includes('createdAtToInclusive:dates.created_at?.lte') && route.includes('Prisma.TransactionIsolationLevel.RepeatableRead'), 'L45 must retain inclusive to and repeatable-read snapshot');
+assert(route.includes('limit + 1') && route.includes('ensureTaxExportWithinLimit') && route.includes('x-export-total') && route.includes('x-export-truncated'), 'L45 CSV limit and headers must remain');
+assert(route.includes('csvSafe') && route.includes('"\\ufeff"'), 'L45 CSV BOM and formula guard must remain');
+console.log('L46 tax record transaction/scope checks passed.');

@@ -150,7 +150,6 @@ function ensureReportBranch(branch: string) {
   runGit(['commit', '-m', 'chore: initialize stage reports branch'], { cwd: worktreePath });
 }
 
-
 function copyReportFiles(input: { stage: string; branch: string; sourceBranch: string; sourceCommit: string; timestamp: string; reportFile: string; verifyOutputFile: string }) {
   const stageDir = join(worktreePath, 'reports', input.stage);
   const historyDir = join(stageDir, 'history');
@@ -175,7 +174,6 @@ function copyReportFiles(input: { stage: string; branch: string; sourceBranch: s
   writeFileSync(join(stageDir, 'metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
-
 function ensureReportBranchSafeToPush(branch: string) {
   const remoteExists = fetchReportBranch(branch);
   if (!remoteExists) return;
@@ -183,6 +181,19 @@ function ensureReportBranchSafeToPush(branch: string) {
   if (counts.behind > 0) {
     throw new Error(`${branch} 分支在提交报告后又落后远端，禁止 push。请重新执行 publish。`);
   }
+}
+
+function runStageReport(stage: string) {
+  if (stage === 'L46') {
+    run('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`], { stdio: 'inherit' });
+    return;
+  }
+  run('pnpm', ['report:stage', '--', `--stage=${stage}`], { stdio: 'inherit' });
+}
+
+function verifyStageReportBeforeCopy(stage: string) {
+  if (stage !== 'L46') return;
+  run('pnpm', ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
 }
 
 function main() {
@@ -199,11 +210,19 @@ function main() {
   mkdirSync(reportsDir, { recursive: true });
   const verifyOutputFile = join(reportsDir, 'latest-verify-output.txt');
   if (!existsSync(verifyOutputFile)) {
-    console.error(`请先运行：\n\nmkdir -p reports\npnpm verify:all 2>&1 | tee reports/latest-verify-output.txt\n\n然后再执行：\n\npnpm report:publish -- --stage=${stage}`);
+    console.error(`请先运行：
+
+mkdir -p reports
+pnpm verify:all 2>&1 | tee reports/latest-verify-output.txt
+
+然后再执行：
+
+pnpm report:publish -- --stage=${stage}`);
     process.exit(1);
   }
 
-  run('pnpm', ['report:stage', '--', `--stage=${stage}`], { stdio: 'inherit' });
+  runStageReport(stage);
+  verifyStageReportBeforeCopy(stage);
   const reportFile = join(reportsDir, `stage-${stage}-report.md`);
   if (!existsSync(reportFile)) throw new Error(`阶段报告不存在：${reportFile}`);
 
@@ -227,7 +246,15 @@ function main() {
     ensureReportBranchSafeToPush(branch);
     runGit(['push', 'origin', branch], { cwd: worktreePath, stdio: 'inherit' });
   } else {
-    console.log(`如需上传远端，请运行：\n\ngit push origin ${branch}\n\n默认采用 ${noPushCliFlag}，不会上传远端。可用 ${pullSourceCliFlag} 自动快进当前分支，或用 ${skipSourceSyncCheckCliFlag} 跳过 source sync 检查。\n\n或者下次使用：\n\npnpm report:publish -- --stage=${stage} --push`);
+    console.log(`如需上传远端，请运行：
+
+git push origin ${branch}
+
+默认采用 ${noPushCliFlag}，不会上传远端。可用 ${pullSourceCliFlag} 自动快进当前分支，或用 ${skipSourceSyncCheckCliFlag} 跳过 source sync 检查。
+
+或者下次使用：
+
+pnpm report:publish -- --stage=${stage} --push`);
   }
 
   runGit(['worktree', 'remove', relative(repoRoot, worktreePath), '--force'], { allowFailure: true });

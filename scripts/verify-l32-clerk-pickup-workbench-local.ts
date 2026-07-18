@@ -1,7 +1,9 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+assertStageRegistered('L32', 'scripts/verify-l32-clerk-pickup-workbench-local.ts');
 const repoRoot = process.cwd();
 const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -52,9 +54,6 @@ function main() {
   assert(app.includes('PickupWorkbenchPage') && app.includes('自提工作台'), 'App must register pickup workbench page/menu');
 
   ['apps/api/src/routes/admin/pickup.ts','apps/admin/src/api/pickupWorkbench.ts','apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx'].forEach((file) => assertNoSensitiveOutput(file, read(file)));
-  assert(workflow.includes('L32') && workflow.includes('verify-l32-clerk-pickup-workbench-local.ts'), 'stage workflow must register L32');
-  assert(workflow.includes("'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'"), 'L32 chain must include L32..L24');
-  assert(verifyAll.includes('verify-l32-clerk-pickup-workbench-local.ts'), 'verify-all must include L32 verifier');
   assert(report.includes('l32Manifest') && report.includes('l32-clerk-pickup-workbench.md'), 'stage report manifest must include L32');
 
   console.log('Compliance scan passed.');

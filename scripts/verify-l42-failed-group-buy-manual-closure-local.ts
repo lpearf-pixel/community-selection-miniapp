@@ -1,9 +1,11 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync } from 'node:fs';
 import { prisma } from '../apps/api/src/db.js';
 import { buildApp } from '../apps/api/src/app.js';
 import { deductInventoryForPaidOrder } from '../apps/api/src/modules/inventory/inventory-order-service.js';
 import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGroupBuyRefundHandled, getFailedGroupBuyClosureSummary, listFailedGroupBuyPendingRefundOrders, markGroupBuyFailed } from '../apps/api/src/modules/group-buy/group-buy-expiry-service.js';
 
+assertStageRegistered('L42', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts');
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 function read(path: string): string { return readFileSync(path, 'utf8'); }
 function assertSafeL42Payload(payload: unknown, label: string) {

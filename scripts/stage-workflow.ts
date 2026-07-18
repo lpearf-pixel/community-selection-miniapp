@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { getStageChain, getStageDefinition, latestRegisteredStage as latestStageDefinition, STAGE_REGISTRY } from './stage-registry.ts';
 
 type Scope = 'stage' | 'chain' | 'all';
 type CommandSpec = {
@@ -25,87 +26,77 @@ type ParsedArgs = {
 const reportsDir = join(process.cwd(), 'reports');
 const latestVerifyOutput = join(reportsDir, 'latest-verify-output.txt');
 
-const stageVerifiers: Record<string, CommandSpec> = {
-  L24: { title: 'L24 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l24-miniapp-cart-local.ts'] },
-  L25: { title: 'L25 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l25-order-confirm-quantity-guard-local.ts'] },
-  L26: { title: 'L26 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l26-group-buy-success-rule-local.ts'] },
-  L27: { title: 'L27 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l27-group-buy-expiry-manual-refund-local.ts'] },
-  L28: { title: 'L28 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l28-refund-ledger-finance-check-local.ts'] },
-  L29: { title: 'L29 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l29-admin-refund-ledger-page-local.ts'] },
-  L30: { title: 'L30 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l30-refund-payment-risk-idempotency-local.ts'] },
-  L31: { title: 'L31 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l31-admin-access-control-baseline-local.ts'] },
-  L32: { title: 'L32 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l32-clerk-pickup-workbench-local.ts'] },
-  L33: { title: 'L33 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts'] },
-  L34: { title: 'L34 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l34-admin-data-scope-baseline-local.ts'] },
-  L35: { title: 'L35 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l35-user-delivery-option-baseline-local.ts'] },
-  L36: { title: 'L36 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l36-delivery-fee-window-range-baseline-local.ts'] },
-  L37: { title: 'L37 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts'] },
-  L38: { title: 'L38 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts'] },
-  L39: { title: 'L39 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts'] },
-  L40: { title: 'L40 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts'] },
-  L41: { title: 'L41 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l41-inventory-deduct-restore-local.ts'] },
-  L42: { title: 'L42 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l42-failed-group-buy-manual-closure-local.ts'] },
-  L43: { title: 'L43 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts'] },
-  L44: { title: 'L44 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l44-manual-withdrawal-review-local.ts'] },
-  L45: { title: 'L45 verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-l45-manual-tax-review-export-local.ts'] }
-};
+const stageVerifiers: Record<string, CommandSpec> = Object.fromEntries(
+  STAGE_REGISTRY.map((stage) => [
+    stage.id,
+    { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier!] },
+  ]),
+);
 
-const regressionChains: Record<string, string[]> = {
-  L24: ['L24'],
-  L25: ['L25', 'L24'],
-  L26: ['L26', 'L25', 'L24'],
-  L27: ['L27', 'L26', 'L25', 'L24'],
-  L28: ['L28', 'L27', 'L26', 'L25', 'L24'],
-  L29: ['L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L30: ['L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L31: ['L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L32: ['L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L33: ['L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L34: ['L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L35: ['L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L36: ['L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L37: ['L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24'],
-  L38: ['L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L39: ['L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L40: ['L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L41: ['L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L42: ['L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L43: ['L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L44: ['L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK'],
-  L45: ['L45', 'L44', 'L43', 'L42', 'L41', 'L40', 'L39', 'L38', 'L37', 'L36', 'L35', 'L34', 'L33', 'L32', 'L31', 'L30', 'L29', 'L28', 'L27', 'L26', 'L25', 'L24', 'RAW_COMPLIANCE_SCAN', 'DOCKER_API_E2E', 'ADMIN_TYPECHECK']
-};
+function additionalVerifierTitle(stageId: string, verifier: string): string {
+  if (verifier === 'scripts/verify-l46-tax-record-db-scope-local.ts') return 'L46 tax-record DB scope verifier';
+  return `${stageId} additional verifier`;
+}
+
+const stageAdditionalVerifiers: Record<string, CommandSpec[]> = Object.fromEntries(
+  STAGE_REGISTRY.map((stage) => [
+    stage.id,
+    (stage.additionalVerifiers ?? []).map((verifier) => ({
+      title: additionalVerifierTitle(stage.id, verifier),
+      command: 'pnpm',
+      args: ['exec', 'tsx', verifier],
+    })),
+  ]),
+);
+
+const regressionChains: Record<string, string[]> = Object.fromEntries(
+  STAGE_REGISTRY.map((stage) => [
+    stage.id,
+    [
+      ...getStageChain(stage.id),
+      ...(stage.number >= 43 ? ['RAW_COMPLIANCE_SCAN'] : []),
+      ...(stage.number >= 38 ? ['DOCKER_API_E2E', 'ADMIN_TYPECHECK'] : []),
+    ],
+  ]),
+);
 
 const dockerApiE2E: CommandSpec = {
   title: 'Docker API E2E',
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-docker-api-e2e-local.ts', '--debug'],
-  env: { API_BASE_URL: 'http://127.0.0.1:13080' }
+  env: { API_BASE_URL: 'http://127.0.0.1:13080' },
 };
-
 
 const rawComplianceScan: CommandSpec = {
   title: 'raw compliance scan',
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'],
-  successMessage: 'raw compliance scan passed.'
+  successMessage: 'raw compliance scan passed.',
 };
 
 const adminTypeConfigCheck: CommandSpec = {
   title: 'Admin typecheck config check',
   command: 'pnpm',
   args: ['exec', 'tsx', 'scripts/verify-admin-type-config-local.ts'],
-  successMessage: 'Admin typecheck config check passed.'
+  successMessage: 'Admin typecheck config check passed.',
 };
 
 const adminTypecheck: CommandSpec = {
   title: 'Admin typecheck',
   command: 'pnpm',
   args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false'],
-  successMessage: 'Admin typecheck passed.'
+  successMessage: 'Admin typecheck passed.',
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const parsed: ParsedArgs = { verify: false, publish: false, push: false, all: false, debug: false, skipSourceSyncCheck: true };
+  const parsed: ParsedArgs = {
+    verify: false,
+    publish: false,
+    push: false,
+    all: false,
+    debug: false,
+    skipSourceSyncCheck: true,
+  };
   for (const arg of argv) {
     if (arg === '--verify') parsed.verify = true;
     else if (arg === '--publish') parsed.publish = true;
@@ -132,9 +123,7 @@ function normalizeStage(value: string): string {
 }
 
 function latestRegisteredStage(): string {
-  return Object.keys(stageVerifiers)
-    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
-    .at(-1)!;
+  return latestStageDefinition().id;
 }
 
 function assertRegisteredStage(stage: string): void {
@@ -156,7 +145,6 @@ function validateArgs(args: ParsedArgs): void {
   if (args.stage) assertRegisteredStage(args.stage);
 }
 
-
 function appendOutput(content: string): void {
   if (!content) return;
   appendFileSync(latestVerifyOutput, content);
@@ -174,7 +162,7 @@ function runCommand(spec: CommandSpec): void {
   const result = spawnSync(spec.command, spec.args, {
     cwd: process.cwd(),
     env: { ...process.env, ...(spec.env ?? {}) },
-    encoding: 'utf8'
+    encoding: 'utf8',
   });
   printAndAppend(result.stdout ?? '');
   if (result.stderr) {
@@ -189,35 +177,98 @@ function runCommand(spec: CommandSpec): void {
 
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
-  if (scope === 'all') return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
+  if (scope === 'all') {
+    return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
+  }
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
-  if (scope === 'stage') return [stageVerifiers[args.stage]];
-  const chainCommands = regressionChains[args.stage].flatMap((stage) => stage === 'DOCKER_API_E2E' ? [dockerApiE2E] : stage === 'RAW_COMPLIANCE_SCAN' ? [rawComplianceScan] : stage === 'ADMIN_TYPECHECK' ? [adminTypeConfigCheck, adminTypecheck] : [stageVerifiers[stage]]);
-  return chainCommands;
+  if (scope === 'stage') return [stageVerifiers[args.stage], ...stageAdditionalVerifiers[args.stage]];
+  const chainCommands = regressionChains[args.stage].flatMap((stage) =>
+    stage === 'DOCKER_API_E2E'
+      ? [dockerApiE2E]
+      : stage === 'RAW_COMPLIANCE_SCAN'
+        ? [rawComplianceScan]
+        : stage === 'ADMIN_TYPECHECK'
+          ? [adminTypeConfigCheck, adminTypecheck]
+          : [stageVerifiers[stage]],
+  );
+  return chainCommands.flatMap((command) =>
+    command === stageVerifiers[args.stage]
+      ? [command, ...stageAdditionalVerifiers[args.stage]]
+      : [command],
+  );
+}
+
+function currentHeadCommit(): string {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`git rev-parse HEAD failed with exit code ${result.status ?? 'unknown'}`);
+  const commit = (result.stdout ?? '').trim();
+  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`Unable to resolve a full HEAD commit: ${commit || 'empty'}`);
+  return commit;
 }
 
 function prepareLatestOutput(): void {
   mkdirSync(reportsDir, { recursive: true });
-  writeFileSync(latestVerifyOutput, '');
+  writeFileSync(latestVerifyOutput, `verification_source_commit:${currentHeadCommit()}\n`);
+}
+
+function resolvedScope(args: ParsedArgs, publishMode: boolean): Scope {
+  return args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
+}
+
+function chainRegressionLabel(stageId: string): string {
+  const chain = getStageChain(stageId);
+  const firstStage = chain.at(-1) ?? stageId;
+  const lastStage = chain[0] ?? stageId;
+  return `${firstStage}-${lastStage} chain regression`;
 }
 
 function runVerify(args: ParsedArgs, publishMode = false): void {
   prepareLatestOutput();
+  const scope = resolvedScope(args, publishMode);
   for (const command of resolveVerifyCommands(args, publishMode)) runCommand(command);
-  if (args.stage === 'L45' && (args.scope ?? (publishMode ? 'chain' : 'stage')) === 'chain') {
-    printAndAppend('command_completed:L24-L45 chain regression=true\n');
-    printAndAppend('L24-L45 chain regression passed.\n');
+  if (args.stage && scope === 'chain') {
+    const label = chainRegressionLabel(args.stage);
+    printAndAppend(`command_completed:${label}=true\n`);
+    printAndAppend(`${label} passed.\n`);
   }
   printAndAppend('command_completed:Stage workflow=true\n');
   printAndAppend('\nStage workflow verification passed.\n');
 }
 
 function runReportStage(stage: string): void {
-  runCommand({ title: `report:stage ${stage}`, command: 'pnpm', args: ['report:stage', '--', `--stage=${stage}`] });
+  if (stage === 'L46') {
+    runCommand({
+      title: `report:stage ${stage}`,
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`],
+    });
+    return;
+  }
+  runCommand({
+    title: `report:stage ${stage}`,
+    command: 'pnpm',
+    args: ['report:stage', '--', `--stage=${stage}`],
+  });
 }
 
-function runReportVerifier(): void {
-  runCommand({ title: 'report publish verifier', command: 'pnpm', args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts'] });
+function runReportVerifier(stage: string): void {
+  if (stage === 'L46') {
+    runCommand({
+      title: 'report publish verifier',
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`],
+    });
+  } else {
+    runCommand({
+      title: 'report publish verifier',
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/verify-report-publish-local.ts', `--stage=${stage}`],
+    });
+  }
   const latestOutput = readFileSync(latestVerifyOutput, 'utf8');
   if (!latestOutput.includes('Report publish verification passed.')) {
     throw new Error('Report publish verifier did not emit required success marker: Report publish verification passed.');
@@ -241,7 +292,7 @@ function main(): void {
   if (args.publish) {
     runVerify(args, true);
     runReportStage(args.stage!);
-    runReportVerifier();
+    runReportVerifier(args.stage!);
     runReportPublish(args);
     return;
   }

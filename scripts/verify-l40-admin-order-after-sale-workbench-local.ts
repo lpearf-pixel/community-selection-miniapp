@@ -1,3 +1,4 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -93,7 +94,7 @@ assert(dockerAuthSources.includes('inactive admin') && dockerAuthSources.include
 assert(dockerAuthSources.includes('insufficient permission') && dockerAuthSources.includes('expectedStatus: 403') && dockerAuthSources.includes('ADMIN_FORBIDDEN'), 'Docker E2E permission-denied 403 coverage missing');
 assert(dockerAuthSources.includes('cross pickup scope') && dockerAuthSources.includes('expectedStatus: 403') && dockerAuthSources.includes('ADMIN_SCOPE_FORBIDDEN'), 'Docker E2E data-scope 403 coverage missing');
 assert(dockerE2e.includes('reviewed_by_admin_id') && dockerE2e.includes('resolved_by_admin_id') && dockerE2e.includes('DOCKER_E2E_ADMIN_ID'), 'Docker E2E deterministic reviewer/resolver coverage missing');
-assert(stageWorkflow.includes('L40') && stageWorkflow.includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'L40 must be registered in stage workflow');
-assert(read('scripts/verify-all-local.sh').includes('verify-l40-admin-order-after-sale-workbench-local.ts'), 'verify-all must include L40');
+assertStageRegistered('L40', 'scripts/verify-l40-admin-order-after-sale-workbench-local.ts');
+assert(read('scripts/verify-all-local.sh').includes('run-registered-stage-verifiers.ts'), 'verify-all must call registry runner');
 assert(existsSync(join(process.cwd(), 'docs/reviews/l40-admin-order-after-sale-workbench.md')), 'L40 review doc missing');
 console.log('L40 admin order after sale workbench verification passed.');

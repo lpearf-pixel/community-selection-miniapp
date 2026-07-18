@@ -20,7 +20,7 @@
     "seed:check": "tsx scripts/check-seed-data.ts",
     "db:backup": "bash scripts/pg-backup.sh",
     "db:restore": "bash scripts/pg-restore.sh",
-    "report:stage": "tsx scripts/generate-stage-report.ts",
+    "report:stage": "tsx scripts/generate-stage-report-entry.ts",
     "report:publish": "tsx scripts/publish-stage-report.ts"
   },
   "devDependencies": {

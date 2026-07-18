@@ -29,7 +29,23 @@ pnpm build
 pnpm exec tsx scripts/validate-env.ts
 pnpm exec tsx scripts/check-migrations.ts
 pnpm exec tsx scripts/compliance-scan.ts
-pnpm exec tsx scripts/verify-report-publish-local.ts
+
+# Report publish verification is Stage-specific. L46 requires commit-bound Stage
+# workflow evidence and must never fall back to the historical report verifier.
+if [[ -n "${REPORT_PUBLISH_STAGE:-}" ]]; then
+  REPORT_PUBLISH_STAGE_NORMALIZED="$(printf '%s' "${REPORT_PUBLISH_STAGE}" | tr '[:lower:]' '[:upper:]')"
+  case "${REPORT_PUBLISH_STAGE_NORMALIZED}" in
+    L46)
+      echo "REPORT_PUBLISH_STAGE=L46 cannot run inside verify:all because the strict gate requires commit-bound Stage workflow evidence." >&2
+      echo "Run: pnpm exec tsx scripts/stage-workflow.ts --stage=L46 --publish --scope=chain" >&2
+      exit 2
+      ;;
+    *)
+      pnpm exec tsx scripts/verify-report-publish-local.ts --stage="${REPORT_PUBLISH_STAGE_NORMALIZED}"
+      ;;
+  esac
+fi
+
 pnpm exec tsx scripts/verify-l10-security-local.ts
 pnpm exec tsx scripts/verify-l11-admin-auth-local.ts
 pnpm exec tsx scripts/verify-l12-fulfillment-local.ts
@@ -46,41 +62,4 @@ pnpm exec tsx scripts/verify-l20-miniapp-e2e-release-local.ts
 pnpm exec tsx scripts/verify-l21-miniapp-location-selection-local.ts
 pnpm exec tsx scripts/verify-l22-miniapp-order-center-local.ts
 pnpm exec tsx scripts/verify-l23-mvp-release-readiness-local.ts
-pnpm exec tsx scripts/verify-l24-miniapp-cart-local.ts
-pnpm exec tsx scripts/verify-l25-order-confirm-quantity-guard-local.ts
-pnpm exec tsx scripts/verify-l26-group-buy-success-rule-local.ts
-pnpm exec tsx scripts/verify-l27-group-buy-expiry-manual-refund-local.ts
-scripts/verify-l1-l2-l3-local.sh
-pnpm exec tsx scripts/verify-l4-admin-basic-local.ts
-scripts/verify-l1-l2-l3-l4-l5-l6-l7-local.sh
-scripts/verify-l1-l2-l3-l4-l5-l6-l7-logs-local.sh
-scripts/verify-l1-l2-l3-l4-l5-l6-l7-l8-local.sh
-scripts/verify-l1-l2-l3-l4-l5-l6-l7-l8-l9-local.sh
-
-pnpm exec tsx scripts/verify-docker-compose-local.ts
-
-pnpm exec tsx scripts/verify-l28-refund-ledger-finance-check-local.ts
-pnpm exec tsx scripts/verify-l29-admin-refund-ledger-page-local.ts
-pnpm exec tsx scripts/verify-l30-refund-payment-risk-idempotency-local.ts
-pnpm exec tsx scripts/verify-l31-admin-access-control-baseline-local.ts
-
-pnpm exec tsx scripts/verify-l32-clerk-pickup-workbench-local.ts
-
-pnpm exec tsx scripts/verify-l34-admin-data-scope-baseline-local.ts
-pnpm exec tsx scripts/verify-l33-pickup-navigation-delivery-reservation-local.ts
-
-pnpm exec tsx scripts/verify-l35-user-delivery-option-baseline-local.ts
-
-pnpm exec tsx scripts/verify-l36-delivery-fee-window-range-baseline-local.ts
-pnpm exec tsx scripts/verify-l37-delivery-rule-config-baseline-local.ts
-
-pnpm exec tsx scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts
-pnpm exec tsx scripts/verify-l39-delivery-refund-finance-baseline-local.ts
-pnpm exec tsx scripts/verify-l40-admin-order-after-sale-workbench-local.ts
-pnpm exec tsx scripts/verify-l41-inventory-deduct-restore-local.ts
-pnpm exec tsx scripts/verify-l42-failed-group-buy-manual-closure-local.ts
-pnpm exec tsx scripts/verify-l43-reward-ledger-t3-refund-deduct-local.ts
-
-# L44 verifier registered via stage-workflow.ts
-pnpm exec tsx scripts/verify-l44-manual-withdrawal-review-local.ts
-pnpm exec tsx scripts/verify-l45-manual-tax-review-export-local.ts
+pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L46

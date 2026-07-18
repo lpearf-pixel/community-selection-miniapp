@@ -1,6 +1,8 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { globSync } from 'node:fs';
 
+assertStageRegistered('L38', 'scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts');
 function exists(file: string) { return existsSync(file); }
 function read(file: string) { return readFileSync(file, 'utf8'); }
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }

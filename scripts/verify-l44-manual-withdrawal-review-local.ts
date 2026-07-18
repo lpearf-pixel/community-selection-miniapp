@@ -1,5 +1,7 @@
+import { assertStageRegistered } from './stage-verifier-registration.ts';
 import { readFileSync, existsSync } from 'node:fs';
 
+assertStageRegistered('L44', 'scripts/verify-l44-manual-withdrawal-review-local.ts');
 function read(path: string) { return readFileSync(path, 'utf8'); }
 function assert(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(message); }
 
@@ -130,13 +132,11 @@ assert(route.includes('reply.code((error as { statusCode?: number }).statusCode 
 assert(route.includes('commission_links') && route.includes('linksInScope'), 'admin list/detail use persistent links for data scope');
 assert(route.includes('requireAdminPermission("finance.view")'), 'tax records keep finance.view semantics');
 const taxRecordsRoute = routeBlock(route, 'get', '/api/admin/tax-records');
-const taxWhereHelper = functionSlice(route, 'buildTaxRecordWhere');
-assert(taxRecordsRoute.includes('buildTaxRecordWhere(query, context)'), 'tax records must build scoped where before count and pagination');
-assert(taxRecordsRoute.includes('prisma.taxRecord.count({ where })'), 'tax records must count with the scoped database where');
-assert(taxRecordsRoute.includes('skip: (page - 1) * pageSize') && taxRecordsRoute.includes('take: pageSize'), 'tax records must paginate in the database after applying scope');
-assert(taxWhereHelper.includes('withdrawalScopeWhere(context)'), 'tax records helper must apply withdrawal data scope');
-assert(taxWhereHelper.includes('prisma.withdrawal.findMany') && taxWhereHelper.includes('select: { id: true }'), 'tax records helper must resolve authorized withdrawal ids');
-assert(taxWhereHelper.includes('source_id: { in:'), 'tax records helper must constrain source ids before count/take');
+const taxRepository = read('apps/api/src/modules/tax-record/tax-record-scope-repository.ts');
+assert(taxRecordsRoute.includes('countScopedTaxRecords(tx') && taxRecordsRoute.includes('listScopedTaxRecordIds(tx'), 'tax records must use scoped repository count and ordered selection');
+assert(taxRecordsRoute.includes('restoreSelectedIdOrder'), 'tax record hydration must preserve database selection order');
+assert(taxRepository.includes('db.$queryRaw') && taxRepository.includes('Prisma.sql`FALSE`'), 'repository scope SQL must be parameterized and fail closed');
+assert(taxRepository.includes('ORDER BY tr.created_at DESC, tr.id DESC'), 'tax record repository must provide stable ordering');
 assert(!taxRecordsRoute.includes('for (const record of records)'), 'tax records must not filter data scope after take');
 
 const l44Function = functionSlice(e2e, 'runL44WithdrawalScenario');

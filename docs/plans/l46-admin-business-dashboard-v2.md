@@ -37,3 +37,7 @@ Operations 要求任一 `operations.view`、`order.view`、`pickup.verify`、`af
 
 ## 明确不做
 不做自动打款、报税、审核、退款、采购或调库存；不接第三方 BI/税务/银行/配送平台；不做 L47 功能或任何多级收益。
+
+## Product and batch scope basis
+
+Product and ProductBatch inventory metrics use `related_group_buy` scope basis. A product is visible only when it has at least one GroupBuy visible to the effective admin scope; batches inherit that product scope. Products without a scoped GroupBuy fail closed. This is not a store-level independent inventory claim: `Product.stock` remains a global product field. Super administrators see all products only without an explicit filter; explicit filters use related GroupBuy scope.
