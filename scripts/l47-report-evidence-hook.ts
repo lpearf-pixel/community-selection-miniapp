@@ -89,6 +89,13 @@ function replaceSection(report: string, startHeader: string, endHeader: string, 
   return `${report.slice(0, start)}${replacement}\n\n${report.slice(end)}`;
 }
 
+function inputDbHeader(report: string): string {
+  for (const header of ['## 4. 数据库变化', '## 4. DB 变化']) {
+    if (report.includes(header)) return header;
+  }
+  throw new Error('L47 report DB section header is missing');
+}
+
 function apiPurpose(path: string): string {
   return path.startsWith('/api/leaders/')
     ? '团长开团、奖励与人工提现摘要'
@@ -172,9 +179,10 @@ export function transformL47Report(
     rows.length === L47_REPORT_EVIDENCE_LABELS.length &&
     rows.every((row) => row.result === 'passed') &&
     markersPassed;
+  const dbHeader = inputDbHeader(report);
 
-  let updated = replaceSection(report, '## 3. API 变化', '## 4. DB 变化', renderApiSection());
-  updated = replaceSection(updated, '## 4. DB 变化', '## 5. 核心业务验收点', renderDbSection());
+  let updated = replaceSection(report, '## 3. API 变化', dbHeader, renderApiSection());
+  updated = replaceSection(updated, dbHeader, '## 5. 核心业务验收点', renderDbSection());
   updated = replaceSection(
     updated,
     '## 5. 核心业务验收点',
