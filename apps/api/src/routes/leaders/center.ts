@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { getLeaderCenterSummary } from '../../modules/me-center/me-center-service.js';
+import {
+  assertCenterIdentityHeader,
+  mapCenterRouteError,
+} from '../../modules/me-center/me-center-route-security.js';
 import { resolveUserIdentity } from '../../modules/user-orders/user-order-service.js';
 
 export function assertLeaderRole(role: string): void {
@@ -12,12 +16,14 @@ export function assertLeaderRole(role: string): void {
 export function registerLeaderCenterRoutes(app: FastifyInstance): void {
   app.get('/api/leaders/me/center-summary', async (request, reply) => {
     try {
+      assertCenterIdentityHeader(request.headers);
       const user = await resolveUserIdentity(request);
       assertLeaderRole(user.role);
       return ok(await getLeaderCenterSummary(user.id));
     } catch (error) {
-      reply.code((error as { statusCode?: number }).statusCode ?? 400);
-      return fail(error instanceof Error ? error.message : '团长中心加载失败');
+      const mapped = mapCenterRouteError(error, '团长中心加载失败');
+      reply.code(mapped.statusCode);
+      return fail(mapped.message);
     }
   });
 }
