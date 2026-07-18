@@ -1,9 +1,9 @@
 {
   "stage": "L45",
   "source_branch": "work/report-l46-integration",
-  "source_commit": "e6b44fedbcc997888224e3f5f7688ce03ef56e04",
+  "source_commit": "2c36bae39ea116df13266024cbac6b9105f7545f",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-18T02:35:53.737Z",
+  "generated_at": "2026-07-18T10:37:40.627Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
