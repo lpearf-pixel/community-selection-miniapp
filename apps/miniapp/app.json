@@ -17,6 +17,7 @@
     "pages/pickup/code/index",
     "pages/after-sales/apply/index",
     "pages/after-sales/detail/index",
+    "pages/leader/center/index",
     "pages/leader/withdrawals/index"
   ],
   "window": {
