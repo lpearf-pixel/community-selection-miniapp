@@ -3,7 +3,7 @@
   "source_branch": "work/report-l46-integration",
   "source_commit": "2c36bae39ea116df13266024cbac6b9105f7545f",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-18T10:37:40.627Z",
+  "generated_at": "2026-07-18T10:38:29.265Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
