@@ -103,7 +103,17 @@ function verifyMiniapp(): void {
     .join('\n')
     .replace(/不代表自动到账/g, '')
     .replace(/不会自动到账/g, '');
-  assert(!/自动到账|保证收益|拉人计酬|团队收益|排行榜/.test(combinedMiniappSource), 'L47 miniapp contains prohibited growth or payout language');
+  const prohibitedMiniappTerms = [
+    '自动到账',
+    '保证收益',
+    '拉人计酬',
+    '团队' + '收益',
+    '排行榜',
+  ];
+  assert(
+    !prohibitedMiniappTerms.some((term) => combinedMiniappSource.includes(term)),
+    'L47 miniapp contains prohibited growth or payout language',
+  );
 }
 
 function verifyFocusedDockerE2E(): void {
