@@ -78,37 +78,37 @@ const historicalStages = [
   ['L45', 'Manual Tax Review Export', 'scripts/verify-l45-manual-tax-review-export-local.ts'],
 ] as const;
 
-export const STAGE_REGISTRY = historicalStages
-  .map(([id, title, verifier]) => ({
+const stageDefinitions: StageDefinition[] = [
+  ...historicalStages.map(([id, title, verifier]) => ({
     id,
     number: Number(id.slice(1)),
     title,
     verifier,
-  }))
-  .concat([
-    {
-      id: 'L46',
-      number: 46,
-      title: 'Admin Business Dashboard V2',
-      verifier: 'scripts/verify-l46-admin-business-dashboard-v2-local.ts',
-      additionalVerifiers: ['scripts/verify-l46-tax-record-db-scope-local.ts'],
-    },
-    {
-      id: 'L47',
-      number: 47,
-      title: 'Miniapp Profile V2 and Leader Center',
-      verifier: 'scripts/verify-l47-miniapp-profile-leader-center-local.ts',
-      additionalVerifiers: [
-        'scripts/run-l47-center-docker-api-e2e-local.ts',
-        'scripts/verify-l47-report-routing-local.ts',
-      ],
-      runtimeMarkers: L47_RUNTIME_MARKERS,
-    },
-  ])
-  .map((stage) => ({
-    ...stage,
-    reportContract: REPORT_CONTRACTS[stage.id],
-  })) as readonly StageDefinition[];
+  })),
+  {
+    id: 'L46',
+    number: 46,
+    title: 'Admin Business Dashboard V2',
+    verifier: 'scripts/verify-l46-admin-business-dashboard-v2-local.ts',
+    additionalVerifiers: ['scripts/verify-l46-tax-record-db-scope-local.ts'],
+  },
+  {
+    id: 'L47',
+    number: 47,
+    title: 'Miniapp Profile V2 and Leader Center',
+    verifier: 'scripts/verify-l47-miniapp-profile-leader-center-local.ts',
+    additionalVerifiers: [
+      'scripts/run-l47-center-docker-api-e2e-local.ts',
+      'scripts/verify-l47-report-routing-local.ts',
+    ],
+    runtimeMarkers: L47_RUNTIME_MARKERS,
+  },
+];
+
+export const STAGE_REGISTRY = stageDefinitions.map((stage) => ({
+  ...stage,
+  reportContract: REPORT_CONTRACTS[stage.id],
+})) as readonly StageDefinition[];
 
 export function getStageDefinition(id: string) {
   return STAGE_REGISTRY.find((stage) => stage.id === id.toUpperCase());
