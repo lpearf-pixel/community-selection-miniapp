@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { getStageDefinition } from './stage-registry.ts';
 import { resolveReportSource } from './stage-report-source.ts';
+import { transformL47Report } from './l47-report-evidence-hook.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -17,6 +18,57 @@ const source = resolveReportSource('L47');
 assert(source.sourceMode === 'git_diff', 'L47 report source must use git_diff');
 assert(source.businessBaseBranch === 'stable/l46-business-base', 'L47 report base branch mismatch');
 assert(source.businessBaseCommit === 'dbb25ca2cf2e6d91af69a24454120f006a9422b0', 'L47 report base commit mismatch');
+
+const generatedTemplateFixture = [
+  '# 阶段验收报告：L47',
+  '',
+  '## 1. 阶段结论',
+  '',
+  '- Codex 自评结论：partial',
+  '',
+  '## 3. API 变化',
+  '',
+  'fixture',
+  '',
+  '## 4. 数据库变化',
+  '',
+  'fixture',
+  '',
+  '## 5. 核心业务验收点',
+  '',
+  '- [ ] fixture',
+  '',
+  '## 6. 验收脚本',
+  '',
+  'fixture',
+  '',
+  '## 7. 阶段验证执行结果',
+  '',
+  'fixture',
+  '',
+  '## 8. 合规边界检查',
+  '',
+  'fixture',
+  '',
+  '## 9. 风险点',
+  '',
+  '- 高风险：暂无自动发现，需人工 review',
+  '- 中风险：暂无自动发现，需人工 review',
+  '',
+  '## 10. 未完成项',
+  '',
+  '暂无自动发现，需人工 review',
+  '',
+  '## 11. Codex 给人工 reviewer 的说明',
+  '',
+  'fixture',
+].join('\n');
+const transformedGeneratedTemplate = transformL47Report(generatedTemplateFixture, '');
+assert(
+  transformedGeneratedTemplate.includes('/api/me/center-summary') &&
+    transformedGeneratedTemplate.includes('/api/leaders/me/center-summary'),
+  'L47 evidence hook must transform the canonical generated report template',
+);
 
 const entry = read('scripts/generate-stage-report-entry.ts');
 assert(entry.includes("import { applyL47ReportEvidence } from './l47-report-evidence-hook.ts'"), 'Canonical report entry must import L47 evidence hook');
