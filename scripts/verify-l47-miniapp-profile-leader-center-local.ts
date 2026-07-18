@@ -9,6 +9,7 @@ import {
   L47_RUNTIME_MARKERS,
   isL47AllowedChangedPath,
 } from './l47-center-contract.ts';
+import { resolveReportSource } from './stage-report-source.ts';
 
 const repoRoot = process.cwd();
 
@@ -23,9 +24,11 @@ function readRequired(relativePath: string): string {
 }
 
 function changedFiles(): string[] {
+  const source = resolveReportSource('L47');
+  assert(source.sourceMode === 'git_diff', 'L47 changed-file verification requires a git_diff report source');
   const output = execFileSync(
     'git',
-    ['diff', '--name-only', 'stable/l46-business-base...HEAD'],
+    ['diff', '--name-only', `${source.businessBaseCommit}...HEAD`],
     { cwd: repoRoot, encoding: 'utf8' },
   );
   return output.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
