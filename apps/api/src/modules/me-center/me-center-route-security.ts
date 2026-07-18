@@ -1,3 +1,5 @@
+import { prisma } from '../../db.js';
+
 type CenterRouteError = {
   statusCode: number;
   message: string;
@@ -24,6 +26,26 @@ export function assertCenterIdentityHeader(headers: Record<string, unknown>): vo
   if (!userId && !openid) {
     throw Object.assign(new Error('缺少用户身份'), { statusCode: 401 });
   }
+}
+
+export async function resolveCenterUserIdentity(headers: Record<string, unknown>) {
+  assertCenterIdentityHeader(headers);
+
+  const userId = headerValue(headers['x-user-id']);
+  if (userId) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw Object.assign(new Error('用户不存在'), { statusCode: 404 });
+    return user;
+  }
+
+  const openid = headerValue(headers['x-openid']);
+  if (openid) {
+    const user = await prisma.user.findUnique({ where: { openid } });
+    if (!user) throw Object.assign(new Error('用户不存在'), { statusCode: 404 });
+    return user;
+  }
+
+  throw Object.assign(new Error('缺少用户身份'), { statusCode: 401 });
 }
 
 export function mapCenterRouteError(error: unknown, fallbackMessage: string): CenterRouteError {
