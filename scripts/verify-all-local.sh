@@ -30,14 +30,14 @@ pnpm exec tsx scripts/validate-env.ts
 pnpm exec tsx scripts/check-migrations.ts
 pnpm exec tsx scripts/compliance-scan.ts
 
-# Report publish verification is Stage-specific. L46 requires commit-bound Stage
-# workflow evidence and must never fall back to the historical report verifier.
+# Commit-bound report publication for L46/L47 requires Stage workflow evidence.
+# It must never fall back to the historical report verifier inside verify:all.
 if [[ -n "${REPORT_PUBLISH_STAGE:-}" ]]; then
   REPORT_PUBLISH_STAGE_NORMALIZED="$(printf '%s' "${REPORT_PUBLISH_STAGE}" | tr '[:lower:]' '[:upper:]')"
   case "${REPORT_PUBLISH_STAGE_NORMALIZED}" in
-    L46)
-      echo "REPORT_PUBLISH_STAGE=L46 cannot run inside verify:all because the strict gate requires commit-bound Stage workflow evidence." >&2
-      echo "Run: pnpm exec tsx scripts/stage-workflow.ts --stage=L46 --publish --scope=chain" >&2
+    L46|L47)
+      echo "REPORT_PUBLISH_STAGE=${REPORT_PUBLISH_STAGE_NORMALIZED} cannot run inside verify:all because the strict gate requires commit-bound Stage workflow evidence." >&2
+      echo "Run: pnpm exec tsx scripts/stage-workflow.ts --stage=${REPORT_PUBLISH_STAGE_NORMALIZED} --publish --scope=chain" >&2
       exit 2
       ;;
     *)
@@ -62,4 +62,4 @@ pnpm exec tsx scripts/verify-l20-miniapp-e2e-release-local.ts
 pnpm exec tsx scripts/verify-l21-miniapp-location-selection-local.ts
 pnpm exec tsx scripts/verify-l22-miniapp-order-center-local.ts
 pnpm exec tsx scripts/verify-l23-mvp-release-readiness-local.ts
-pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L46
+pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L47
