@@ -5,6 +5,53 @@ import { assertLeaderRole } from '../../routes/leaders/center.js';
 
 const openedApps: ReturnType<typeof buildApp>[] = [];
 
+const headerCustomer = {
+  id: 'l47-header-customer',
+  openid: 'l47-header-customer-openid',
+  nickname: 'Header Customer',
+  avatar_url: null,
+  role: 'customer',
+};
+
+const queryLeader = {
+  id: 'l47-query-leader',
+  openid: 'l47-query-leader-openid',
+  nickname: 'Query Leader',
+  avatar_url: null,
+  role: 'leader',
+};
+
+function mockConflictingIdentityUsers(): void {
+  vi.spyOn(prisma.user, 'findUnique').mockImplementation(async (args: any) => {
+    const where = args?.where ?? {};
+    if (where.id === headerCustomer.id || where.openid === headerCustomer.openid) {
+      return headerCustomer as any;
+    }
+    if (where.id === queryLeader.id || where.openid === queryLeader.openid) {
+      return queryLeader as any;
+    }
+    return null;
+  });
+}
+
+function mockPersonalCenterAggregates(): void {
+  vi.spyOn(prisma.order, 'count').mockResolvedValue(0);
+  vi.spyOn(prisma.afterSaleCase, 'count').mockResolvedValue(0);
+}
+
+function mockLeaderCenterAggregates(): void {
+  vi.spyOn(prisma.groupBuy, 'count').mockResolvedValue(0);
+  vi.spyOn(prisma.commission, 'aggregate').mockResolvedValue({
+    _sum: { final_amount_cents: null },
+  } as any);
+  vi.spyOn(prisma.rewardLedger, 'groupBy').mockResolvedValue([] as any);
+  vi.spyOn(prisma.withdrawal, 'aggregate').mockResolvedValue({
+    _sum: { amount_cents: null },
+  } as any);
+  vi.spyOn(prisma.withdrawal, 'count').mockResolvedValue(0);
+  vi.spyOn(prisma.withdrawal, 'findMany').mockResolvedValue([]);
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(openedApps.splice(0).map((app) => app.close()));
@@ -49,6 +96,51 @@ describe('L47 center routes', () => {
     expect(leaderResponse.statusCode).toBe(401);
     expect(meResponse.json()).toMatchObject({ success: false, message: '缺少用户身份' });
     expect(leaderResponse.json()).toMatchObject({ success: false, message: '缺少用户身份' });
+  });
+
+  it('uses the x-openid identity instead of a conflicting query user_id for the personal center', async () => {
+    mockConflictingIdentityUsers();
+    mockPersonalCenterAggregates();
+    const app = buildApp();
+    openedApps.push(app);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/me/center-summary?user_id=${queryLeader.id}`,
+      headers: { 'x-openid': headerCustomer.openid },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: true,
+      data: {
+        profile: {
+          user_id: headerCustomer.id,
+          role: 'user',
+        },
+      },
+    });
+  });
+
+  it('does not let a conflicting query user_id upgrade an x-openid customer into a leader', async () => {
+    mockConflictingIdentityUsers();
+    mockLeaderCenterAggregates();
+    const app = buildApp();
+    openedApps.push(app);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/leaders/me/center-summary?user_id=${queryLeader.id}`,
+      headers: { 'x-openid': headerCustomer.openid },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: '仅开团人可访问团长中心',
+    });
   });
 
   it('sanitizes unexpected personal-center failures as HTTP 500', async () => {
