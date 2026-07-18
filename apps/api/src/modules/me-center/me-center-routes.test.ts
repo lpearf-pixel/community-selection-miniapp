@@ -4,6 +4,7 @@ import { prisma } from '../../db.js';
 import { assertLeaderRole } from '../../routes/leaders/center.js';
 
 const openedApps: ReturnType<typeof buildApp>[] = [];
+type UserFindUniqueResult = ReturnType<typeof prisma.user.findUnique>;
 
 const headerCustomer = {
   id: 'l47-header-customer',
@@ -21,16 +22,20 @@ const queryLeader = {
   role: 'leader',
 };
 
+function prismaUserResult(value: unknown): UserFindUniqueResult {
+  return Promise.resolve(value) as unknown as UserFindUniqueResult;
+}
+
 function mockConflictingIdentityUsers(): void {
-  vi.spyOn(prisma.user, 'findUnique').mockImplementation(async (args: any) => {
+  vi.spyOn(prisma.user, 'findUnique').mockImplementation((args: any) => {
     const where = args?.where ?? {};
     if (where.id === headerCustomer.id || where.openid === headerCustomer.openid) {
-      return headerCustomer as any;
+      return prismaUserResult(headerCustomer);
     }
     if (where.id === queryLeader.id || where.openid === queryLeader.openid) {
-      return queryLeader as any;
+      return prismaUserResult(queryLeader);
     }
-    return null;
+    return prismaUserResult(null);
   });
 }
 
