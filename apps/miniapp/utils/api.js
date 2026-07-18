@@ -34,6 +34,13 @@ function buildUrl(path, params) {
   return `${url}${url.includes('?') ? '&' : '?'}${query}`;
 }
 
+function apiError(message, statusCode, body) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.responseData = body && Object.prototype.hasOwnProperty.call(body, 'data') ? body.data : null;
+  return error;
+}
+
 function request(options) {
   const opts = options || {};
   const headers = opts.headers || opts.header || {};
@@ -49,18 +56,18 @@ function request(options) {
         if (statusCode >= 400) {
           const message = body.message || `HTTP ${statusCode}`;
           wx.showToast({ title: message, icon: 'none' });
-          reject(new Error(message));
+          reject(apiError(message, statusCode, body));
           return;
         }
         if (body.success === false) {
           const message = body.message || '请求失败';
           wx.showToast({ title: message, icon: 'none' });
-          reject(new Error(message));
+          reject(apiError(message, statusCode, body));
           return;
         }
         resolve(body.data);
       },
-      fail: reject
+      fail: (error) => reject(apiError(error.errMsg || '网络请求失败', 0, null))
     });
   });
 }
