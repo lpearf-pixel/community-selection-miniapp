@@ -1,9 +1,9 @@
 {
   "stage": "L47",
   "source_branch": "work/l47-miniapp-profile-leader-center-v2",
-  "source_commit": "d51cc5dad800195686a3bab93ecf1af679d06473",
+  "source_commit": "37b3f44ee5e5c3d35c1ef33a3e606b3cb50050e1",
   "report_branch": "stage-reports",
-  "generated_at": "2026-07-18T16:31:45.212Z",
+  "generated_at": "2026-07-18T17:16:36.894Z",
   "latest_report": "latest.md",
   "latest_verify_output": "latest-verify-output.txt"
 }
