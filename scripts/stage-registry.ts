@@ -43,7 +43,7 @@ export const REPORT_CONTRACTS: Record<string, ReportContract> = {
   L47: {
     sourceMode: 'git_diff',
     businessBaseBranch: 'stable/l46-business-base',
-    businessBaseCommit: 'fe7b8c185816912d5e198dc960f8b979b532525f',
+    businessBaseCommit: 'dbb25ca2cf2e6d91af69a24454120f006a9422b0',
   },
 };
 
