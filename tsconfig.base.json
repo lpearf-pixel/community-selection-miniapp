@@ -11,14 +11,6 @@
     "esModuleInterop": true,
     "skipLibCheck": false,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "paths": {
-      "@community-selection/shared": [
-        "packages/shared/dist/index.js"
-      ],
-      "@community-selection/config": [
-        "packages/config/dist/index.js"
-      ]
-    }
+    "resolveJsonModule": true
   }
 }
