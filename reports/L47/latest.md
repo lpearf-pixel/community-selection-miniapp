@@ -1,0 +1,139 @@
+# 阶段验收报告：L47
+
+## 1. 阶段结论
+
+- 阶段：L47
+- 业务稳定分支：stable/l46-business-base
+- 业务稳定 commit：dbb25ca2cf2e6d91af69a24454120f006a9422b0
+- 报告生成分支：work/l47-miniapp-profile-leader-center-v2
+- 报告生成 commit：f5d4ed39a035402dbdaf5b68781180d65826f7ef
+- 分支：work/l47-miniapp-profile-leader-center-v2（报告生成环境）
+- 生成时间：2026-07-18T15:48:09.747Z
+- 当前 commit：f5d4ed39a035402dbdaf5b68781180d65826f7ef（报告生成环境）
+- 注册阶段标题：Miniapp Profile V2 and Leader Center
+- 本阶段目标：Miniapp Profile V2 and Leader Center
+- Codex 自评结论：passed
+
+## 2. 本阶段变更范围
+
+| 类型 | 文件 | 说明 |
+|---|---|---|
+| API Module | apps/api/src/modules/me-center/me-center-routes.test.ts | API 领域模块服务或模块边界 |
+| API Module | apps/api/src/modules/me-center/me-center-service.test.ts | API 领域模块服务或模块边界 |
+| API Module | apps/api/src/modules/me-center/me-center-service.ts | API 领域模块服务或模块边界 |
+| API Module | apps/api/src/modules/me-center/me-center-types.ts | API 领域模块服务或模块边界 |
+| API Route | apps/api/src/routes/leaders/center.ts | API 路由或路由注册边界 |
+| API Route | apps/api/src/routes/me/center.ts | API 路由或路由注册边界 |
+| API Route | apps/api/src/routes/public/index.ts | API 路由或路由注册边界 |
+| Other | apps/miniapp/app.json | 其他变更 |
+| Other | apps/miniapp/pages/leader/center/index.js | 其他变更 |
+| Other | apps/miniapp/pages/leader/center/index.json | 其他变更 |
+| Other | apps/miniapp/pages/leader/center/index.wxml | 其他变更 |
+| Other | apps/miniapp/pages/leader/center/index.wxss | 其他变更 |
+| Other | apps/miniapp/pages/mine/index.js | 其他变更 |
+| Other | apps/miniapp/pages/mine/index.json | 其他变更 |
+| Other | apps/miniapp/pages/mine/index.wxml | 其他变更 |
+| Other | apps/miniapp/pages/mine/index.wxss | 其他变更 |
+| Other | apps/miniapp/utils/api.js | 其他变更 |
+| Other | apps/miniapp/utils/center.js | 其他变更 |
+| Review Document | docs/reviews/l47-miniapp-profile-leader-center.md | 阶段 review / audit 文档 |
+| Business Document | docs/superpowers/plans/2026-07-18-l47-miniapp-profile-leader-center.md | 业务说明或验收文档 |
+| Business Document | docs/superpowers/specs/2026-07-18-l47-miniapp-profile-leader-center-design.md | 业务说明或验收文档 |
+| Script | scripts/generate-stage-report-entry.ts | 验收、检查或工具脚本 |
+| Script | scripts/l47-center-contract.ts | 验收、检查或工具脚本 |
+| Script | scripts/l47-report-evidence-hook.ts | 验收、检查或工具脚本 |
+| Script | scripts/publish-stage-report.ts | 验收、检查或工具脚本 |
+| Script | scripts/run-l47-center-docker-api-e2e-local.ts | 验收、检查或工具脚本 |
+| Script | scripts/stage-registry.ts | 验收、检查或工具脚本 |
+| Stage Workflow | scripts/stage-workflow.ts | 阶段验证工作流编排 |
+| Verify Entry | scripts/verify-all-local.sh | 本地总体验证入口 |
+| Verifier | scripts/verify-l47-center-docker-api-e2e-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-l47-miniapp-profile-leader-center-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-l47-report-publish-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-l47-report-routing-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-report-source-resolver-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-stage-registry-local.ts | 阶段验收或防回归 verifier |
+| Verifier | scripts/verify-stage-verifier-architecture-local.ts | 阶段验收或防回归 verifier |
+
+## 3. API 变化
+
+| 方法 | 路径 | 权限 | 用途 | 验证 |
+|---|---|---|---|---|
+| GET | /api/me/center-summary | current user | 用户身份、订单履约与售后摘要 | passed |
+| GET | /api/leaders/me/center-summary | current leader | 团长开团、奖励与人工提现摘要 | passed |
+
+## 4. DB 变化
+
+- 无新增表
+- 无新增字段
+- 无新增 migration
+- 复用 User、Order、AfterSaleCase、GroupBuy、Commission、RewardLedger、Withdrawal
+
+## 5. 核心业务验收点
+
+- [x] L47 verifier（machine evidence: passed）
+- [x] L47 center Docker E2E（machine evidence: passed）
+- [x] L47 report routing verifier（machine evidence: passed）
+- [x] L24-L47 chain regression（machine evidence: passed）
+- [x] Docker API E2E（machine evidence: passed）
+- [x] Admin typecheck config（machine evidence: passed）
+- [x] Admin full typecheck（machine evidence: passed）
+- [x] raw compliance scan（machine evidence: passed）
+- [x] Stage workflow（machine evidence: passed）
+- [x] L47 十个运行 marker 完整（machine evidence: passed）
+
+## 6. 验收脚本
+
+| 脚本 | 是否存在 | 是否已加入 verify-all | 说明 |
+|---|---|---|---|
+| scripts/verify-l47-center-docker-api-e2e-local.ts | yes | no | L47 阶段验收脚本 |
+| scripts/verify-l47-miniapp-profile-leader-center-local.ts | yes | no | L47 阶段验收脚本 |
+| scripts/verify-l47-report-publish-local.ts | yes | no | L47 阶段验收脚本 |
+| scripts/verify-l47-report-routing-local.ts | yes | no | L47 阶段验收脚本 |
+| scripts/verify-report-source-resolver-local.ts | yes | no | 相关验收脚本 |
+| scripts/verify-stage-registry-local.ts | yes | no | 相关验收脚本 |
+| scripts/verify-stage-verifier-architecture-local.ts | yes | no | 相关验收脚本 |
+
+## 7. 阶段验证执行结果
+
+| 命令 | 结果 |
+|---|---|
+| L47 verifier | passed |
+| L47 center Docker E2E | passed |
+| L47 report routing verifier | passed |
+| L24-L47 chain regression | passed |
+| Docker API E2E | passed |
+| Admin typecheck config | passed |
+| Admin full typecheck | passed |
+| raw compliance scan | passed |
+| Stage workflow | passed |
+| L47 十个运行 marker | passed |
+
+## 8. 合规边界检查
+
+- [x] 没有新增多级分销
+- [x] 没有新增团队收益
+- [x] 没有新增代理收益
+- [x] 没有新增 parent_leader_id / upline_id / downline / team_id / level
+- [x] 开团服务奖励仍只来自开团人自己的真实有效团购订单
+- [x] 用户可见文案仍为“开团服务奖励”
+- [x] 没有接真实打款
+- [x] 没有自动报税
+- [x] 没有新增优惠券/会员/营销玩法，除非当前阶段明确要求
+
+## 9. 风险点
+
+- 高风险：暂无自动发现
+- 中风险：暂无自动发现
+- 低风险：报告生成器基于 git diff 和文本扫描，API 用途/验收状态可能需要人工复核。
+
+## 10. 未完成项
+
+暂无自动发现
+
+## 11. Codex 给人工 reviewer 的说明
+
+- 本阶段做了什么：根据 L47 的最近一次提交 diff 生成验收报告，自动汇总文件范围、API、数据库模型、验收脚本、本地命令输出、合规边界和风险点。
+- 确定完成：报告文件已生成；若 git 信息可用，则已自动带出分支、commit 与文件清单。
+- 需要人工重点看：API 用途、核心验收点、风险点和未完成项均为文本启发式结果，应结合 PR diff 和实际 verify 输出复核。
+- 是否建议进入下一阶段：仅当 verify-all、合规扫描和人工 review 均通过后再进入下一阶段。
