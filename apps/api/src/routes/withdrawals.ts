@@ -308,7 +308,7 @@ function parseRequiredMoneyCents(body: Record<string, unknown>, fieldName: "taxa
   return value;
 }
 
-type ReviewRequestHistory = Record<string, { snapshot: unknown; reviewed_at: string; reviewed_by_admin_id: string }>;
+type ReviewRequestHistory = Record<string, { snapshot: Prisma.InputJsonValue | null; reviewed_at: string; reviewed_by_admin_id: string }>;
 function reviewRequestsFromPayload(payload: Record<string, any>): ReviewRequestHistory {
   const value = payload.review_requests;
   return value && typeof value === "object" && !Array.isArray(value) ? value as ReviewRequestHistory : {};
@@ -337,7 +337,7 @@ function taxPayload(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 }
 
-function taxReviewSnapshot(input: { tax_mode: string; tax_status: string; taxable_amount_cents: number; tax_amount_cents: number; tax_rate_basis: string | null; invoice_required: boolean; invoice_status: string; tax_remark: string | null }) {
+function taxReviewSnapshot(input: { tax_mode: string; tax_status: string; taxable_amount_cents: number; tax_amount_cents: number; tax_rate_basis: string | null; invoice_required: boolean; invoice_status: string; tax_remark: string | null }): Prisma.InputJsonObject {
   return input;
 }
 
@@ -367,8 +367,8 @@ function csvSafe(value: unknown) {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
-export function taxExportLimit(configuredLimit?: number) {
-  if (Number.isInteger(configuredLimit) && configuredLimit > 0) return configuredLimit;
+export function taxExportLimit(configuredLimit?: number): number {
+  if (typeof configuredLimit === "number" && Number.isInteger(configuredLimit) && configuredLimit > 0) return configuredLimit;
   const configured = Number.parseInt(process.env.TAX_RECORD_EXPORT_LIMIT ?? "", 10);
   return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_TAX_EXPORT_LIMIT;
 }
@@ -977,8 +977,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
             });
             if (claimed.count !== 1) throw httpError("提现税务状态已变化，请刷新后重试", 409);
             const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
-            const nextRequests = { ...reviewRequests, [clientRequestId]: { snapshot: requested, reviewed_at: new Date().toISOString(), reviewed_by_admin_id: context.admin_user_id } };
-            const recordPayload = { ...existingPayload, ...requested, client_request_id: clientRequestId, review_snapshot: requested, review_requests: nextRequests, notice: "仅供内部人工核对，不构成税务申报结果。系统不会自动报税，不会连接外部税务平台，不会自动发起打款。" };
+            const nextRequests: ReviewRequestHistory = { ...reviewRequests, [clientRequestId]: { snapshot: requested, reviewed_at: new Date().toISOString(), reviewed_by_admin_id: context.admin_user_id } };
+            const recordPayload: Prisma.InputJsonObject = { ...existingPayload, ...requested, client_request_id: clientRequestId, review_snapshot: requested, review_requests: nextRequests, notice: "仅供内部人工核对，不构成税务申报结果。系统不会自动报税，不会连接外部税务平台，不会自动发起打款。" };
             const taxRecord = await tx.taxRecord.upsert({
               where: { source_type_source_id: { source_type: "withdrawal", source_id: withdrawal.id } },
               update: { leader_user_id: withdrawal.leader_user_id, tax_mode: taxMode, tax_status: taxStatus, amount_cents: withdrawal.amount_cents, payload: recordPayload },
