@@ -1,7 +1,12 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { getStageChain, getStageDefinition, latestRegisteredStage as latestStageDefinition, STAGE_REGISTRY } from './stage-registry.ts';
+import {
+  getStageChain,
+  getStageDefinition,
+  latestRegisteredStage as latestStageDefinition,
+  STAGE_REGISTRY,
+} from './stage-registry.ts';
 
 type Scope = 'stage' | 'chain' | 'all';
 type CommandSpec = {
@@ -29,12 +34,20 @@ const latestVerifyOutput = join(reportsDir, 'latest-verify-output.txt');
 const stageVerifiers: Record<string, CommandSpec> = Object.fromEntries(
   STAGE_REGISTRY.map((stage) => [
     stage.id,
-    { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier!] },
+    { title: `${stage.id} verifier`, command: 'pnpm', args: ['exec', 'tsx', stage.verifier] },
   ]),
 );
 
 function additionalVerifierTitle(stageId: string, verifier: string): string {
-  if (verifier === 'scripts/verify-l46-tax-record-db-scope-local.ts') return 'L46 tax-record DB scope verifier';
+  if (verifier === 'scripts/verify-l46-tax-record-db-scope-local.ts') {
+    return 'L46 tax-record DB scope verifier';
+  }
+  if (verifier === 'scripts/run-l47-center-docker-api-e2e-local.ts') {
+    return 'L47 center Docker E2E';
+  }
+  if (verifier === 'scripts/verify-l47-report-routing-local.ts') {
+    return 'L47 report routing verifier';
+  }
   return `${stageId} additional verifier`;
 }
 
@@ -84,7 +97,17 @@ const adminTypeConfigCheck: CommandSpec = {
 const adminTypecheck: CommandSpec = {
   title: 'Admin typecheck',
   command: 'pnpm',
-  args: ['--filter', '@community-selection/admin', 'exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false'],
+  args: [
+    '--filter',
+    '@community-selection/admin',
+    'exec',
+    'tsc',
+    '-p',
+    'tsconfig.json',
+    '--noEmit',
+    '--pretty',
+    'false',
+  ],
   successMessage: 'Admin typecheck passed.',
 };
 
@@ -130,18 +153,26 @@ function assertRegisteredStage(stage: string): void {
   const verifier = stageVerifiers[stage];
   const chain = regressionChains[stage];
   if (!verifier || !chain) {
-    throw new Error(`Stage ${stage} is not registered on this branch.\nCurrent latest registered stage: ${latestRegisteredStage()}.`);
+    throw new Error(
+      `Stage ${stage} is not registered on this branch.\nCurrent latest registered stage: ${latestRegisteredStage()}.`,
+    );
   }
   const verifierScript = verifier.args.at(-1);
   if (!verifierScript || !existsSync(join(process.cwd(), verifierScript))) {
-    throw new Error(`Stage ${stage} verifier file is missing: ${verifierScript ?? 'unknown'}\nCurrent latest registered stage: ${latestRegisteredStage()}.`);
+    throw new Error(
+      `Stage ${stage} verifier file is missing: ${verifierScript ?? 'unknown'}\nCurrent latest registered stage: ${latestRegisteredStage()}.`,
+    );
   }
 }
 
 function validateArgs(args: ParsedArgs): void {
-  if (args.all && args.stage) throw new Error('Do not pass --all and --stage together; choose one to avoid ambiguity.');
+  if (args.all && args.stage) {
+    throw new Error('Do not pass --all and --stage together; choose one to avoid ambiguity.');
+  }
   if (args.publish && !args.stage) throw new Error('--publish requires --stage=Lxx.');
-  if (!args.verify && !args.publish) throw new Error('Nothing to do. Pass --verify, --publish, or --all.');
+  if (!args.verify && !args.publish) {
+    throw new Error('Nothing to do. Pass --verify, --publish, or --all.');
+  }
   if (args.stage) assertRegisteredStage(args.stage);
 }
 
@@ -170,7 +201,9 @@ function runCommand(spec: CommandSpec): void {
     appendOutput(result.stderr);
   }
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
+  if (result.status !== 0) {
+    throw new Error(`${spec.title} failed with exit code ${result.status ?? 'unknown'}`);
+  }
   printAndAppend(`command_completed:${spec.title}=true\n`);
   if (spec.successMessage) printAndAppend(`${spec.successMessage}\n`);
 }
@@ -178,10 +211,18 @@ function runCommand(spec: CommandSpec): void {
 function resolveVerifyCommands(args: ParsedArgs, publishMode: boolean): CommandSpec[] {
   const scope: Scope = args.all ? 'all' : (args.scope ?? (publishMode ? 'chain' : 'stage'));
   if (scope === 'all') {
-    return [...Object.values(stageVerifiers), rawComplianceScan, dockerApiE2E, adminTypeConfigCheck, adminTypecheck];
+    return [
+      ...Object.values(stageVerifiers),
+      rawComplianceScan,
+      dockerApiE2E,
+      adminTypeConfigCheck,
+      adminTypecheck,
+    ];
   }
   if (!args.stage) throw new Error(`--scope=${scope} requires --stage=Lxx unless --all is used.`);
-  if (scope === 'stage') return [stageVerifiers[args.stage], ...stageAdditionalVerifiers[args.stage]];
+  if (scope === 'stage') {
+    return [stageVerifiers[args.stage], ...stageAdditionalVerifiers[args.stage]];
+  }
   const chainCommands = regressionChains[args.stage].flatMap((stage) =>
     stage === 'DOCKER_API_E2E'
       ? [dockerApiE2E]
@@ -204,9 +245,13 @@ function currentHeadCommit(): string {
     encoding: 'utf8',
   });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`git rev-parse HEAD failed with exit code ${result.status ?? 'unknown'}`);
+  if (result.status !== 0) {
+    throw new Error(`git rev-parse HEAD failed with exit code ${result.status ?? 'unknown'}`);
+  }
   const commit = (result.stdout ?? '').trim();
-  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`Unable to resolve a full HEAD commit: ${commit || 'empty'}`);
+  if (!/^[0-9a-f]{40}$/.test(commit)) {
+    throw new Error(`Unable to resolve a full HEAD commit: ${commit || 'empty'}`);
+  }
   return commit;
 }
 
@@ -248,6 +293,14 @@ function runReportStage(stage: string): void {
     });
     return;
   }
+  if (stage === 'L47') {
+    runCommand({
+      title: `report:stage ${stage}`,
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`],
+    });
+    return;
+  }
   runCommand({
     title: `report:stage ${stage}`,
     command: 'pnpm',
@@ -262,6 +315,12 @@ function runReportVerifier(stage: string): void {
       command: 'pnpm',
       args: ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`],
     });
+  } else if (stage === 'L47') {
+    runCommand({
+      title: 'report publish verifier',
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/verify-l47-report-publish-local.ts', `--stage=${stage}`],
+    });
   } else {
     runCommand({
       title: 'report publish verifier',
@@ -271,7 +330,9 @@ function runReportVerifier(stage: string): void {
   }
   const latestOutput = readFileSync(latestVerifyOutput, 'utf8');
   if (!latestOutput.includes('Report publish verification passed.')) {
-    throw new Error('Report publish verifier did not emit required success marker: Report publish verification passed.');
+    throw new Error(
+      'Report publish verifier did not emit required success marker: Report publish verification passed.',
+    );
   }
 }
 
@@ -286,9 +347,7 @@ function runReportPublish(args: ParsedArgs): void {
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   validateArgs(args);
-  if (args.debug) {
-    console.log(`Stage workflow args: ${JSON.stringify(args)}`);
-  }
+  if (args.debug) console.log(`Stage workflow args: ${JSON.stringify(args)}`);
   if (args.publish) {
     runVerify(args, true);
     runReportStage(args.stage!);
