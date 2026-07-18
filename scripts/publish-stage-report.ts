@@ -188,12 +188,21 @@ function runStageReport(stage: string) {
     run('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`], { stdio: 'inherit' });
     return;
   }
+  if (stage === 'L47') {
+    run('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`], { stdio: 'inherit' });
+    return;
+  }
   run('pnpm', ['report:stage', '--', `--stage=${stage}`], { stdio: 'inherit' });
 }
 
 function verifyStageReportBeforeCopy(stage: string) {
-  if (stage !== 'L46') return;
-  run('pnpm', ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
+  if (stage === 'L46') {
+    run('pnpm', ['exec', 'tsx', 'scripts/verify-l46-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
+    return;
+  }
+  if (stage === 'L47') {
+    run('pnpm', ['exec', 'tsx', 'scripts/verify-l47-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
+  }
 }
 
 function main() {
