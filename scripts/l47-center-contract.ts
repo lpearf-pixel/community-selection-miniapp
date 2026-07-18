@@ -84,6 +84,7 @@ export const L47_ALLOWED_CHANGED_PATHS = [
   'scripts/verify-all-local.sh',
   'scripts/generate-stage-report.ts',
   'scripts/verify-report-publish-local.ts',
+  'scripts/verify-report-source-resolver-local.ts',
   'scripts/verify-report-stage-routing-local.ts',
   'scripts/verify-stage-registry-local.ts',
   'scripts/verify-stage-verifier-architecture-local.ts',
