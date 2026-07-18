@@ -64,9 +64,13 @@ function verifyBackend(): void {
   assert(meRoute.includes('/api/me/center-summary'), 'Personal center endpoint missing');
   assert(leaderRoute.includes('/api/leaders/me/center-summary'), 'Leader center endpoint missing');
   assert(
-    meRoute.includes('assertCenterIdentityHeader(request.headers)') &&
-      leaderRoute.includes('assertCenterIdentityHeader(request.headers)'),
-    'Both center routes must reject query-only identities before resolving users',
+    meRoute.includes('resolveCenterUserIdentity(request.headers)') &&
+      leaderRoute.includes('resolveCenterUserIdentity(request.headers)'),
+    'Both center routes must resolve identity exclusively from request headers',
+  );
+  assert(
+    !meRoute.includes('resolveUserIdentity') && !leaderRoute.includes('resolveUserIdentity'),
+    'Center routes must not use the shared query-capable identity resolver',
   );
   assert(
     meRoute.includes("mapCenterRouteError(error, '个人中心加载失败')") &&
@@ -77,7 +81,13 @@ function verifyBackend(): void {
     routeSecurity.includes("headers['x-user-id']") &&
       routeSecurity.includes("headers['x-openid']") &&
       routeSecurity.includes('statusCode: 401'),
-    'Center identity guard must require a user identity header',
+    'Center identity resolver must require a user identity header',
+  );
+  assert(
+    routeSecurity.includes('export async function resolveCenterUserIdentity') &&
+      routeSecurity.includes('where: { id: userId }') &&
+      routeSecurity.includes('where: { openid }'),
+    'Center identity resolver must query users only from header-derived values',
   );
   assert(
     routeSecurity.includes('statusCode: 500') &&
@@ -86,6 +96,8 @@ function verifyBackend(): void {
   );
   assert(
     routeTests.includes('rejects query-only identities') &&
+      routeTests.includes('uses the x-openid identity instead of a conflicting query user_id') &&
+      routeTests.includes('does not let a conflicting query user_id upgrade an x-openid customer into a leader') &&
       routeTests.includes('sanitizes unexpected personal-center failures') &&
       routeTests.includes('sanitizes unexpected leader-center failures') &&
       routeTests.includes("not.toContain('Prisma')"),
