@@ -72,6 +72,7 @@ export const L47_ALLOWED_CHANGED_PATHS = [
   'scripts/l47-center-contract.ts',
   'scripts/verify-l47-miniapp-profile-leader-center-local.ts',
   'scripts/verify-l47-center-docker-api-e2e-local.ts',
+  'scripts/run-l47-center-docker-api-e2e-local.ts',
   'scripts/verify-docker-api-e2e-local.ts',
   'scripts/stage-registry.ts',
   'scripts/verify-all-local.sh',
