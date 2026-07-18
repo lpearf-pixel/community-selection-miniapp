@@ -1,1 +1,57 @@
-<view class="page"><view class="title">我的</view><view class="card"><view>昵称：{{user.nickname}}</view><view>OpenID：{{user.openid}}</view></view><view class="card"><view>当前社区：{{community.name || '未选择'}}</view><view>当前自提点：{{pickupStore.name || '未选择'}}</view></view><view class="card actions"><button type="primary" bindtap="goOrders">我的订单</button><button bindtap="goCart">我的购物车（{{cartCount}}）</button><button bindtap="goCommunities">选择社区</button><button bindtap="goPickupStores">选择自提点</button></view></view>
+<view class="page">
+  <view class="page-title">个人中心</view>
+
+  <view wx:if="{{loading && !summary}}" class="state-card">正在加载个人中心…</view>
+  <view wx:elif="{{error && !summary}}" class="state-card error-state">
+    <view>{{error}}</view>
+    <button size="mini" bindtap="retrySummary">重新加载</button>
+  </view>
+
+  <block wx:if="{{summary}}">
+    <view class="card profile-card">
+      <image wx:if="{{summary.profile.avatar_url}}" class="avatar" mode="aspectFill" src="{{summary.profile.avatar_url}}" />
+      <view wx:else class="avatar avatar-placeholder">社</view>
+      <view class="profile-copy">
+        <view class="profile-name">{{summary.profile.nickname || '社区用户'}}</view>
+        <view class="muted">{{profileRoleText}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{error}}" class="refresh-warning">
+      <text>{{error}}</text>
+      <text class="retry-link" bindtap="retrySummary">重试</text>
+    </view>
+
+    <view class="section-title">我的订单</view>
+    <view class="card metric-grid" bindtap="goOrders">
+      <view class="metric-item"><view class="metric-value">{{summary.orders.unpaid_count}}</view><view class="muted">待付款</view></view>
+      <view class="metric-item"><view class="metric-value">{{summary.orders.pending_fulfillment_count}}</view><view class="muted">待履约</view></view>
+      <view class="metric-item"><view class="metric-value">{{summary.orders.ready_for_pickup_count}}</view><view class="muted">待取货</view></view>
+      <view class="metric-item"><view class="metric-value">{{summary.orders.in_delivery_count}}</view><view class="muted">配送中</view></view>
+      <view class="metric-item"><view class="metric-value">{{summary.orders.completed_count}}</view><view class="muted">已完成</view></view>
+    </view>
+
+    <view class="card action-row" bindtap="goAfterSales">
+      <view>
+        <view class="action-title">售后服务</view>
+        <view class="muted">查看申请与处理进度</view>
+      </view>
+      <view class="badge">{{summary.after_sales.pending_count}}</view>
+    </view>
+
+    <view wx:if="{{leaderCenterAvailable}}" class="card leader-entry" bindtap="goLeaderCenter">
+      <view>
+        <view class="action-title">团长中心</view>
+        <view class="muted">查看开团、奖励与人工提现</view>
+      </view>
+      <view class="arrow">›</view>
+    </view>
+
+    <view class="section-title">常用服务</view>
+    <view class="card actions">
+      <button bindtap="goCart">我的购物车（{{cartCount}}）</button>
+      <button bindtap="goCommunities">当前社区：{{community.name || '未选择'}}</button>
+      <button bindtap="goPickupStores">当前自提点：{{pickupStore.name || '未选择'}}</button>
+    </view>
+  </block>
+</view>
