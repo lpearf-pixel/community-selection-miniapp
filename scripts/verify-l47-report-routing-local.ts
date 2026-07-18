@@ -16,7 +16,7 @@ assert(definition.reportContract, 'L47 report contract must be registered');
 const source = resolveReportSource('L47');
 assert(source.sourceMode === 'git_diff', 'L47 report source must use git_diff');
 assert(source.businessBaseBranch === 'stable/l46-business-base', 'L47 report base branch mismatch');
-assert(source.businessBaseCommit === 'fe7b8c185816912d5e198dc960f8b979b532525f', 'L47 report base commit mismatch');
+assert(source.businessBaseCommit === 'dbb25ca2cf2e6d91af69a24454120f006a9422b0', 'L47 report base commit mismatch');
 
 const entry = read('scripts/generate-stage-report-entry.ts');
 assert(entry.includes("import { applyL47ReportEvidence } from './l47-report-evidence-hook.ts'"), 'Canonical report entry must import L47 evidence hook');
