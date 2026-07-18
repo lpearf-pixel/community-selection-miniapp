@@ -130,7 +130,7 @@ E2E 必须输出十个 marker：
 - `scripts/l47-report-evidence-hook.ts`
 - `scripts/verify-l47-report-publish-local.ts`
 - L47 报告源：`stable/l46-business-base`
-- L47 报告基线 commit：`fe7b8c185816912d5e198dc960f8b979b532525f`
+- L47 报告基线 commit：`dbb25ca2cf2e6d91af69a24454120f006a9422b0`
 
 L47 报告必须绑定当前 HEAD。不同 commit 的验证输出、缺少任意命令 evidence 或缺少任意 runtime marker 时，报告保持 `partial`，不得发布为 `passed`。
 
