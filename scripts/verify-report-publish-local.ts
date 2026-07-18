@@ -4,6 +4,7 @@ import { resolveReportSource, type ResolvedReportSource } from './stage-report-s
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { L45_API_CONTRACT_LIST, l45ConcurrentRuntimeMarkers } from './l45-api-contract.ts';
+import { extractMarkdownFilePaths as extractSharedMarkdownFilePaths } from './report-markdown.ts';
 const stage = parseStageArg(process.argv.slice(2));
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -13,7 +14,6 @@ function assert(condition: unknown, message: string): asserts condition {
 function read(path: string) {
   return readFileSync(path, 'utf8');
 }
-
 
 function gitOutput(args: string[]) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
@@ -25,19 +25,8 @@ function gitDiffFiles(base: string, head: string) {
 }
 
 function extractMarkdownFilePaths(report: string) {
-  const section = report.split('## 2. 本阶段变更范围')[1]?.split('## 3. API 变化')[0] ?? '';
-  const files: string[] = [];
-  for (const line of section.split('\n')) {
-    if (!line.startsWith('|')) continue;
-    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-    if (cells.length < 3) continue;
-    const file = cells[1];
-    if (file === '文件' || file === '---') continue;
-    if (file.includes('/') || file === 'docker-compose.yml') files.push(file);
-  }
-  return Array.from(new Set(files)).sort();
+  return extractSharedMarkdownFilePaths(report);
 }
-
 
 function isFixtureTodoScannerImplementationLine(file: string, lineNumber: number, sourceLines: string[]) {
   if (file !== 'scripts/generate-stage-report.ts') return false;
@@ -59,7 +48,7 @@ function fixtureTodoItems(file: string, source: string) {
   const notImplementedKeyword = 'NOT_' + 'IMPLEMENTED';
   const pendingCn = '待' + '实现';
   const placeholderCn = '功能' + '占位';
-  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\([\`'"]Not implemented[\`'"]\)|${pendingCn}|${placeholderCn})`, 'i');
+  const todoKeywords = new RegExp(`(${todoKeyword}:|${fixmeKeyword}:|${tbdKeyword}:|${notImplementedKeyword}|throw new Error\([\`'\"]Not implemented[\`'\"]\)|${pendingCn}|${placeholderCn})`, 'i');
   const lines = source.split('\n');
   const rows: string[] = [];
   lines.forEach((line, index) => {
@@ -86,7 +75,7 @@ assert(existsSync(publishPath), 'publish-stage-report.ts should exist');
 assert(existsSync(docsPath), 'docs/dev/reporting.md should exist');
 
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
-assert(packageJson.scripts?.['report:stage'] === 'tsx scripts/generate-stage-report.ts', 'package.json should expose report:stage');
+assert(packageJson.scripts?.['report:stage'] === 'tsx scripts/generate-stage-report-entry.ts', 'package.json should expose the canonical report:stage entry');
 assert(packageJson.scripts?.['report:publish'] === 'tsx scripts/publish-stage-report.ts', 'package.json should expose report:publish');
 
 const publishSource = read(publishPath);
@@ -190,7 +179,6 @@ for (const required of ['runL45TaxReviewScenario', 'POST /api/admin/withdrawals/
   assert(dockerE2eSource.includes(required), `L45 Docker E2E should include real runtime evidence: ${required}`);
 }
 
-
 assert(generateSource.includes('RewardLedger') && generateSource.includes('idempotency_key') && generateSource.includes('affects_available_balance'), 'L43 report must describe RewardLedger concrete fields');
 assert(!generateSource.includes("change: 'L43 manifest'"), 'L43 DB rows must not use L43 manifest placeholders');
 assert(generateSource.includes('todos.length === 0'), 'passed report must require todos.length === 0');
@@ -225,7 +213,7 @@ function changedFilesForStage(stageId: string): PublishChangedFiles {
 function validateCommonReport(stageId: string) {
   const definition = getStageDefinition(stageId);
   assert(definition, `stage registry must define ${stageId}`);
-  execFileSync(process.execPath, ['scripts/generate-stage-report.ts', `--stage=${definition.id}`], { stdio: 'pipe' });
+  execFileSync('pnpm', ['report:stage', '--', `--stage=${definition.id}`], { stdio: 'pipe' });
   const report = read(`reports/stage-${definition.id}-report.md`);
   const changedFiles = changedFilesForStage(definition.id);
   const reportFiles = extractMarkdownFilePaths(report);
@@ -267,6 +255,12 @@ function validateL46Report(report: string) {
   const source = resolveReportSource('L46'); assert(source.sourceMode === 'git_diff', 'L46 report source must use git_diff');
   assert(report.includes(`- 业务稳定分支：${source.businessBaseBranch}`), 'L46 report must use the registered business base branch');
   assert(report.includes(`- 业务稳定 commit：${source.businessBaseCommit}`), 'L46 report must use the registered business base commit');
+  const verificationSection = report.split('## 7. 阶段验证执行结果')[1]?.split('## 8. 合规边界检查')[0] ?? '';
+  const requiredVerificationRows = ['L46 verifier', 'L46 tax-record DB scope verifier', 'L24-L46 chain regression', 'Docker API E2E', 'Admin typecheck config', 'Admin full typecheck', 'raw compliance scan', 'Stage workflow'];
+  for (const item of requiredVerificationRows) {
+    const matchingRows = verificationSection.split('\n').filter((line) => line.includes(`| ${item} |`));
+    assert(matchingRows.length === 1 && matchingRows[0].includes(`| ${item} | passed |`), `L46 report verification row must pass: ${item}`);
+  }
 }
 
 const scannerDefinitionFixture = `function isVerifierTodoTestString() { return /${'TO' + 'DO'}|${'FIX' + 'ME'}|${'T' + 'BD'}|${'NOT_' + 'IMPLEMENTED'}/.test(''); }`;

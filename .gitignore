@@ -55,3 +55,8 @@ TestResults.xml
 certs/
 *.pem
 *.key
+
+# Generated stage verification artifacts
+# Final reports are published to the independent stage-reports branch.
+/reports/
+/.tmp/
