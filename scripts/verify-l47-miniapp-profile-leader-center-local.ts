@@ -58,7 +58,12 @@ function verifyBackend(): void {
   assert(/registerLeaderCenterRoutes\s*\(\s*app\s*\)/.test(publicRoutes), 'Leader center route must be registered');
   assert(meRoute.includes('/api/me/center-summary'), 'Personal center endpoint missing');
   assert(leaderRoute.includes('/api/leaders/me/center-summary'), 'Leader center endpoint missing');
-  assert(/\.role\s*!==\s*['"]leader['"]/.test(leaderRoute), 'Leader role guard missing');
+  assert(
+    leaderRoute.includes('export function assertLeaderRole') &&
+      leaderRoute.includes('statusCode: 403') &&
+      leaderRoute.includes('assertLeaderRole(user.role)'),
+    'Leader role guard missing',
+  );
   assert(service.includes('prisma.order.count'), 'Personal center must use database count queries');
   assert(service.includes('prisma.groupBuy.count'), 'Leader center must use database group-buy counts');
   assert(service.includes('prisma.rewardLedger.groupBy'), 'Leader center must aggregate available rewards from the ledger');
