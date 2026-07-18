@@ -103,6 +103,21 @@ function verifyMiniapp(): void {
   assert(!/自动到账|保证收益|拉人计酬|团队收益|排行榜/.test(combinedMiniappSource), 'L47 miniapp contains prohibited growth or payout language');
 }
 
+function verifyFocusedDockerE2E(): void {
+  const source = readRequired('scripts/verify-l47-center-docker-api-e2e-local.ts');
+  assert(source.includes("'/api/me/center-summary'"), 'Focused Docker E2E must call the personal center API');
+  assert(source.includes("'/api/leaders/me/center-summary'"), 'Focused Docker E2E must call the leader center API');
+  assert(source.includes('waitForApiReady'), 'Focused Docker E2E must wait for /api/health');
+  assert(source.includes('new PrismaClient'), 'Focused Docker E2E must build deterministic database fixtures');
+  assert(source.includes('expectedStatus: 403'), 'Focused Docker E2E must verify the non-leader boundary');
+  for (const marker of L47_RUNTIME_MARKERS) {
+    assert(source.includes(marker), `Focused Docker E2E missing marker: ${marker}`);
+  }
+  for (const key of L47_PROHIBITED_RESPONSE_KEYS) {
+    assert(source.includes('L47_PROHIBITED_RESPONSE_KEYS'), `Focused Docker E2E must import prohibited response keys for ${key}`);
+  }
+}
+
 function verifyChangedFiles(): void {
   const files = changedFiles();
   assert(files.length > 0, 'L47 changed-file list must not be empty');
@@ -118,6 +133,7 @@ function verifyChangedFiles(): void {
 verifyContract();
 verifyBackend();
 verifyMiniapp();
+verifyFocusedDockerE2E();
 verifyChangedFiles();
 
 console.log('L47 miniapp profile and leader center verification passed.');
