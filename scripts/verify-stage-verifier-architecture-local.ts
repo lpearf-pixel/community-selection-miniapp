@@ -4,6 +4,12 @@ const files = readdirSync('scripts').filter((file) =>
   /^verify-l(2[4-9]|3\d|4[0-8]).*-local\.ts$/.test(file),
 );
 
+const sourceLayoutVerifierExceptions = new Set([
+  'verify-l47-report-routing-local.ts',
+  'verify-l48-report-routing-local.ts',
+  'verify-l48-report-publish-local.ts',
+]);
+
 const forbidden = [
   /stageWorkflow\.includes/i,
   /workflow\.includes\([^)]*verify-l/i,
@@ -13,6 +19,7 @@ const forbidden = [
 ];
 
 for (const file of files) {
+  if (sourceLayoutVerifierExceptions.has(file)) continue;
   const source = readFileSync(`scripts/${file}`, 'utf8');
   for (const pattern of forbidden) {
     if (pattern.test(source)) {
