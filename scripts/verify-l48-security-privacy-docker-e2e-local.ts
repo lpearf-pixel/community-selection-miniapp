@@ -555,6 +555,20 @@ async function createFixtures() {
         effective_at: now,
       },
       {
+        id: `${prefix}-reward-ledger-withdrawable-a`,
+        leader_user_id: leaderA.id,
+        commission_id: withdrawableCommissionA.id,
+        order_id: withdrawableOrderA.id,
+        idempotency_key: `${prefix}-reward-ledger-withdrawable-a-key`,
+        event_type: 'l48_fixture_available',
+        entry_type: 'commission_available',
+        direction: 'in',
+        amount_cents: 300,
+        affects_available_balance: true,
+        balance_after_cents: 1300,
+        effective_at: now,
+      },
+      {
         id: `${prefix}-reward-ledger-b`,
         leader_user_id: leaderB.id,
         commission_id: commissionB.id,
@@ -789,6 +803,34 @@ async function runScenario(): Promise<void> {
         (item: { commission_id: string }) => item.commission_id !== fixtures.commissionB.id,
       ),
       'Leader B commission leaked into leader A withdrawable list',
+    );
+
+    const withdrawalRequestId = `${prefix}-body-conflict-withdrawal`;
+    const createdWithdrawal = await requestJson<any>(
+      '/api/leaders/me/withdrawals',
+      {
+        method: 'POST',
+        headers: leaderHeaders,
+        body: {
+          leader_user_id: fixtures.leaderB.id,
+          openid: fixtures.leaderB.openid,
+          client_request_id: withdrawalRequestId,
+          commission_ids: [fixtures.withdrawableCommissionA.id],
+          amount_cents: 300,
+        },
+      },
+    );
+    assert(
+      createdWithdrawal.body.data.applied === true &&
+        createdWithdrawal.body.data.amount_cents === 300,
+      'Leader withdrawal body-conflict request did not create the expected withdrawal',
+    );
+    const persistedWithdrawal = await prisma.withdrawal.findUnique({
+      where: { client_request_id: withdrawalRequestId },
+    });
+    assert(
+      persistedWithdrawal?.leader_user_id === fixtures.leaderA.id,
+      'Body identity changed persisted withdrawal owner',
     );
 
     await requestJson(`/api/leaders/me/withdrawals/${fixtures.withdrawalB.id}`, {
