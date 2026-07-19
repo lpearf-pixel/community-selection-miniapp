@@ -18,13 +18,13 @@ assert(
   'stage numbers must be monotonic',
 );
 assertStageRegistryFiles();
-assert(latestRegisteredStage().id === 'L47', 'L47 must be latest registered stage');
+assert(latestRegisteredStage().id === 'L48', 'L48 must be latest registered stage');
 assert(
-  ['L44', 'L45', 'L46', 'L47'].every((id) => getStageChain('L47').includes(id)),
-  'L47 chain must include L44/L45/L46/L47',
+  ['L44', 'L45', 'L46', 'L47', 'L48'].every((id) => getStageChain('L48').includes(id)),
+  'L48 chain must include L44/L45/L46/L47/L48',
 );
-assert(getStageChain('L47')[0] === 'L47', 'L47 chain must start with L47');
-assert(getStageChain('L47').at(-1) === 'L24', 'L47 chain must end with L24');
+assert(getStageChain('L48')[0] === 'L48', 'L48 chain must start with L48');
+assert(getStageChain('L48').at(-1) === 'L24', 'L48 chain must end with L24');
 
 for (const file of [
   'scripts/stage-workflow.ts',
@@ -36,12 +36,13 @@ for (const file of [
 
 assert(!existsSync('scripts/l46-stage-registry.ts'), 'second L46 registry is forbidden');
 assert(!existsSync('scripts/l47-stage-registry.ts'), 'second L47 registry is forbidden');
+assert(!existsSync('scripts/l48-stage-registry.ts'), 'second L48 registry is forbidden');
 
 const registrySource = readFileSync('scripts/stage-registry.ts', 'utf8');
 assert(!registrySource.includes('readdirSync'), 'registry must not auto-discover verifiers');
 assert(
   STAGE_REGISTRY.map((stage) => stage.number).every((number, index) => number === 24 + index),
-  'L24-L47 numbers must be continuous',
+  'L24-L48 numbers must be continuous',
 );
 assert(
   getStageDefinition('L46')?.additionalVerifiers?.includes('scripts/verify-l46-tax-record-db-scope-local.ts'),
@@ -68,6 +69,27 @@ assert(
   'L47 report base commit mismatch',
 );
 
+const l48 = getStageDefinition('L48');
+assert(l48, 'L48 definition missing');
+assert(l48.title === 'Security and Privacy Hardening', 'L48 title mismatch');
+assert(
+  l48.additionalVerifiers?.includes('scripts/run-l48-security-privacy-docker-e2e-local.ts'),
+  'L48 isolated security privacy E2E missing',
+);
+assert(
+  l48.additionalVerifiers?.includes('scripts/verify-l48-report-routing-local.ts'),
+  'L48 report routing verifier missing',
+);
+assert(l48.runtimeMarkers?.length === 10, 'L48 runtime marker registry must contain ten markers');
+assert(
+  l48.reportContract?.businessBaseBranch === 'stable/l47-business-base',
+  'L48 report base branch mismatch',
+);
+assert(
+  l48.reportContract?.businessBaseCommit === '030d06aebe75373600338a2eff92f4fb8e25a607',
+  'L48 report base commit mismatch',
+);
+
 assert(
   readFileSync('scripts/run-registered-stage-verifiers.ts', 'utf8').includes('stage-registry.ts'),
   'runner must import registry',
@@ -75,8 +97,8 @@ assert(
 const verifyAll = readFileSync('scripts/verify-all-local.sh', 'utf8');
 assert(
   verifyAll.includes('run-registered-stage-verifiers.ts') &&
-    !/verify-l(2[4-9]|3\d|4[0-7]).*-local\.ts/.test(verifyAll),
-  'verify-all must use runner only for L24-L47',
+    !/verify-l(2[4-9]|3\d|4[0-8]).*-local\.ts/.test(verifyAll),
+  'verify-all must use runner only for L24-L48',
 );
 
 console.log('Stage registry checks passed.');
