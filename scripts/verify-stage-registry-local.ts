@@ -86,7 +86,7 @@ assert(
   'L48 report base branch mismatch',
 );
 assert(
-  l48.reportContract?.businessBaseCommit === '030d06aebe75373600338a2eff92f4fb8e25a607',
+  l48.reportContract?.businessBaseCommit === 'a23401df53cfae1cd41fd47f94c59f3f974d1e60',
   'L48 report base commit mismatch',
 );
 
