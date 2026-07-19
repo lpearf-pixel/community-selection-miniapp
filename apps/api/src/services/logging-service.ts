@@ -337,7 +337,7 @@ export async function resolveOpsAlert(
     where: { id: input.id },
     data: {
       status: input.status,
-      resolved_by: '[FILTERED]',
+      resolved_by: input.resolved_by,
       resolution_note: sanitizeLogText(input.resolution_note),
       resolved_at: new Date(),
     },
