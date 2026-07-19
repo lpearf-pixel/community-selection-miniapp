@@ -36,7 +36,7 @@ function run(command: string, args: string[], options: RunOptions = {}) {
     return execFileSync(command, args, {
       cwd: options.cwd ?? repoRoot,
       encoding: 'utf8',
-      stdio: options.stdio === 'inherit' ? 'inherit' : ['ignore', 'pipe', 'pipe']
+      stdio: options.stdio === 'inherit' ? 'inherit' : ['ignore', 'pipe', 'pipe'],
     })?.toString().trim() ?? '';
   } catch (error) {
     if (options.allowFailure) return '';
@@ -126,9 +126,7 @@ function ensureReportBranch(branch: string) {
   const remoteExists = fetchReportBranch(branch);
   const localExists = Boolean(runGit(['rev-parse', '--verify', branch], { allowFailure: true }));
 
-  if (remoteExists && !localExists) {
-    runGit(['branch', branch, `origin/${branch}`]);
-  }
+  if (remoteExists && !localExists) runGit(['branch', branch, `origin/${branch}`]);
 
   if (remoteExists || localExists) {
     runGit(['worktree', 'add', relative(repoRoot, worktreePath), branch]);
@@ -169,7 +167,7 @@ function copyReportFiles(input: { stage: string; branch: string; sourceBranch: s
     report_branch: input.branch,
     generated_at: new Date().toISOString(),
     latest_report: 'latest.md',
-    latest_verify_output: 'latest-verify-output.txt'
+    latest_verify_output: 'latest-verify-output.txt',
   };
   writeFileSync(join(stageDir, 'metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 }
@@ -184,11 +182,7 @@ function ensureReportBranchSafeToPush(branch: string) {
 }
 
 function runStageReport(stage: string) {
-  if (stage === 'L46') {
-    run('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`], { stdio: 'inherit' });
-    return;
-  }
-  if (stage === 'L47') {
+  if (stage === 'L46' || stage === 'L47' || stage === 'L48') {
     run('pnpm', ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`], { stdio: 'inherit' });
     return;
   }
@@ -202,6 +196,10 @@ function verifyStageReportBeforeCopy(stage: string) {
   }
   if (stage === 'L47') {
     run('pnpm', ['exec', 'tsx', 'scripts/verify-l47-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
+    return;
+  }
+  if (stage === 'L48') {
+    run('pnpm', ['exec', 'tsx', 'scripts/verify-l48-report-publish-local.ts', `--stage=${stage}`], { stdio: 'inherit' });
   }
 }
 
