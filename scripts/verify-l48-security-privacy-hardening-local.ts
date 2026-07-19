@@ -131,12 +131,13 @@ function verifyRequiredArchitecture(): void {
   const orderSecurityTests = readRequired('apps/api/src/routes/me/orders-security.test.ts');
   const commissionSecurityTests = readRequired('apps/api/src/routes/leader-commissions-security.test.ts');
   const withdrawalSecurityTests = readRequired('apps/api/src/routes/leader-withdrawals-security.test.ts');
+  const withdrawalRoutes = readRequired('apps/api/src/routes/withdrawals.ts');
   const rewardSecurityTests = readRequired('apps/api/src/routes/leader-reward-conversion-security.test.ts');
   const httpLogPrivacy = readRequired('apps/api/src/services/http-log-privacy.ts');
   const httpLogPrivacyTests = readRequired('apps/api/src/services/http-log-privacy.test.ts');
   const businessLogPrivacyTests = readRequired('apps/api/src/services/logging-service-privacy.test.ts');
   const dockerE2E = readRequired('scripts/verify-l48-security-privacy-docker-e2e-local.ts');
-  readRequired('scripts/run-l48-security-privacy-docker-e2e-local.ts');
+  const dockerRunner = readRequired('scripts/run-l48-security-privacy-docker-e2e-local.ts');
 
   assert(securityCore.includes('export async function resolveCurrentUser'), 'Shared current-user resolver missing');
   assert(securityCore.includes('export function requireCurrentLeader'), 'Shared leader role guard missing');
@@ -152,6 +153,13 @@ function verifyRequiredArchitecture(): void {
   assert(commissionSecurityTests.includes('fixed 500'), 'Commission unknown-error regression test missing');
   assert(commissionSecurityTests.includes('public DTO'), 'Commission response privacy regression test missing');
   assert(withdrawalSecurityTests.includes('query-only'), 'Withdrawal identity regression test missing');
+  assert(withdrawalSecurityTests.includes('message-prefixed ledger mismatch'), 'Withdrawal typed mismatch regression test missing');
+  assert(withdrawalRoutes.includes('class WithdrawalLedgerMismatchError'), 'Typed withdrawal ledger mismatch error missing');
+  assert(
+    !withdrawalRoutes.includes('.message.startsWith("LEDGER_MISMATCH:")') &&
+      !withdrawalRoutes.includes(".message.startsWith('LEDGER_MISMATCH:')"),
+    'Withdrawal ledger mismatch must not use broad message-prefix matching',
+  );
   assert(rewardSecurityTests.includes('leader_user_id'), 'Reward ownership regression test missing');
   assert(httpLogPrivacy.includes('serializeHttpRequest'), 'HTTP request privacy serializer missing');
   assert(httpLogPrivacyTests.includes('unique-marker'), 'HTTP log unique-marker test missing');
@@ -159,6 +167,22 @@ function verifyRequiredArchitecture(): void {
   assert(businessLogPrivacyTests.includes('unique-db-host-secret'), 'Business log fallback privacy test missing');
   assert(businessLogPrivacyTests.includes('resolution audit actor'), 'Structured audit actor regression test missing');
   assert(dockerE2E.includes('L48_PROHIBITED_RESPONSE_KEYS'), 'Docker E2E must scan response keys');
+  assert(
+    dockerE2E.includes("{ path: '/api/leaders/me/commissions' }"),
+    'Docker E2E must verify non-leader commission access',
+  );
+  assert(
+    dockerE2E.includes("requestJson('/api/leaders/me/commissions'"),
+    'Docker E2E must include the leader commission response in privacy scanning',
+  );
+  assert(
+    !dockerE2E.includes('console.error = (...args'),
+    'Docker E2E must not derive business-log evidence from a console monkeypatch',
+  );
+  assert(
+    dockerRunner.includes('verifyBusinessLogEvidence(api.logs.value'),
+    'Docker runner must verify business-log evidence from captured API-process logs',
+  );
   for (const marker of L48_RUNTIME_MARKERS) {
     assert(dockerE2E.includes(marker), `Docker E2E missing runtime marker: ${marker}`);
   }
