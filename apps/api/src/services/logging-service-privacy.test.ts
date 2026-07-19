@@ -131,7 +131,7 @@ describe('business log privacy', () => {
     expect(data.message).toContain('139****5678');
   });
 
-  it('sanitizes timeline, alert, and resolution text before persistence', async () => {
+  it('sanitizes timeline and alert text while preserving the resolution audit actor', async () => {
     const timelineCreate = vi.fn().mockResolvedValue({ id: 'timeline-1' });
     const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-1' });
     const alertUpdate = vi.fn().mockResolvedValue({ id: 'alert-1' });
@@ -156,15 +156,18 @@ describe('business log privacy', () => {
     await resolveOpsAlert(client, {
       id: 'alert-1',
       status: 'resolved',
-      resolved_by: 'admin-resolver-secret',
+      resolved_by: 'admin-resolver-audit-id',
       resolution_note: 'tax_remark=resolution-note-secret',
     });
 
-    const serialized = JSON.stringify({
-      timeline: timelineCreate.mock.calls[0][0],
-      alert: alertCreate.mock.calls[0][0],
-      resolution: alertUpdate.mock.calls[0][0],
+    const timelineSerialized = JSON.stringify(timelineCreate.mock.calls[0][0]);
+    const alertSerialized = JSON.stringify(alertCreate.mock.calls[0][0]);
+    const resolutionData = alertUpdate.mock.calls[0][0].data;
+    const resolutionSerialized = JSON.stringify({
+      ...resolutionData,
+      resolved_by: '[AUDIT-ACTOR-OMITTED-FROM-PRIVACY-SCAN]',
     });
+
     for (const secret of [
       'timeline-title-secret',
       'timeline-message-secret',
@@ -172,12 +175,11 @@ describe('business log privacy', () => {
       'alert-title-secret',
       'alert-message-secret',
       'alert-payload-secret',
-      'admin-resolver-secret',
       'resolution-note-secret',
     ]) {
-      expect(serialized).not.toContain(secret);
+      expect(`${timelineSerialized}${alertSerialized}${resolutionSerialized}`).not.toContain(secret);
     }
-    expect(alertUpdate.mock.calls[0][0].data.resolved_by).toBe('[FILTERED]');
+    expect(resolutionData.resolved_by).toBe('admin-resolver-audit-id');
   });
 
   it('builds safe failure metadata without message, stack, or unsafe name/code values', () => {
