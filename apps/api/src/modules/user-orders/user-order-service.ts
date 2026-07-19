@@ -27,6 +27,47 @@ const orderInclude = {
   after_sale_cases: { orderBy: { created_at: 'desc' as const } },
 };
 
+const USER_AFTER_SALE_BAD_REQUEST_MESSAGES = new Set([
+  '售后类型不合法',
+  '缺少售后必填字段',
+  '申请退款金额必须大于 0',
+  '申请商品退款金额必须大于 0',
+  '申请配送费退款金额必须大于 0',
+  '申请商品退款金额与配送费退款金额之和必须等于总退款金额',
+  '商品退款金额与配送费退款金额之和必须等于总退款金额',
+  '商品退款金额超过商品可退金额',
+  '配送费退款金额超过配送费可退金额',
+  '退款金额超过订单实付金额',
+  '售后凭证必须是图片 URL 字符串数组',
+]);
+
+const USER_AFTER_SALE_NOT_FOUND_MESSAGES = new Set([
+  '订单不存在',
+  '售后商品不存在',
+]);
+
+const USER_AFTER_SALE_CONFLICT_MESSAGES = new Set([
+  '当前订单状态不可提交售后',
+  '同一订单商品问题已有处理中售后',
+]);
+
+function rethrowPublicUserAfterSaleError(error: unknown): never {
+  if (!(error instanceof Error)) throw error;
+  if (USER_AFTER_SALE_BAD_REQUEST_MESSAGES.has(error.message)) {
+    throw publicCurrentUserError(error.message, 400);
+  }
+  if (USER_AFTER_SALE_NOT_FOUND_MESSAGES.has(error.message)) {
+    throw publicCurrentUserError(error.message, 404);
+  }
+  if (error.message === '不能为无关订单提交售后') {
+    throw publicCurrentUserError(error.message, 403);
+  }
+  if (USER_AFTER_SALE_CONFLICT_MESSAGES.has(error.message)) {
+    throw publicCurrentUserError(error.message, 409);
+  }
+  throw error;
+}
+
 function productOf(order: any) {
   return order.group_buy?.product ?? order.product;
 }
@@ -326,18 +367,22 @@ export async function createUserOrderAfterSale(
   if (!body.type || !body.reason) {
     throw publicCurrentUserError('缺少售后必填字段', 400);
   }
-  const afterSaleCase = await createAfterSaleCase({
-    order_id: orderId,
-    user_id: userId,
-    type: body.type,
-    reason: body.reason,
-    description: body.description ?? null,
-    requested_refund_cents: body.requested_refund_cents ?? null,
-    requested_product_refund_cents: body.requested_product_refund_cents ?? null,
-    requested_delivery_refund_cents: body.requested_delivery_refund_cents ?? null,
-    evidence_image_urls: body.evidence_image_urls ?? null,
-  });
-  return mapAfterSale(afterSaleCase);
+  try {
+    const afterSaleCase = await createAfterSaleCase({
+      order_id: orderId,
+      user_id: userId,
+      type: body.type,
+      reason: body.reason,
+      description: body.description ?? null,
+      requested_refund_cents: body.requested_refund_cents ?? null,
+      requested_product_refund_cents: body.requested_product_refund_cents ?? null,
+      requested_delivery_refund_cents: body.requested_delivery_refund_cents ?? null,
+      evidence_image_urls: body.evidence_image_urls ?? null,
+    });
+    return mapAfterSale(afterSaleCase);
+  } catch (error) {
+    rethrowPublicUserAfterSaleError(error);
+  }
 }
 
 export async function getUserOrderPickupCode(userId: string, orderId: string) {
