@@ -1,21 +1,26 @@
 name: L48 Apply Withdrawal Patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - work/l48-security-privacy-hardening
+      - stable/l47-business-base
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   apply-patch:
-    if: github.actor != 'github-actions[bot]'
+    if: startsWith(github.event.pull_request.title, '[internal]')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout head branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Validate patch script syntax
@@ -43,4 +48,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add apps/api/src/routes/withdrawals.ts scripts/apply-l48-withdrawal-patch.mjs .github/workflows/l48-apply-withdrawal-patch.yml
           git commit -m 'fix: secure leader withdrawal identity and responses'
-          git push origin HEAD:work/l48-security-privacy-hardening
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
