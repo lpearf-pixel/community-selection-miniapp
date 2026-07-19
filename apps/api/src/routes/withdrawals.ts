@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { fail, ok } from "@community-selection/shared";
+import { publicCurrentUserError } from "../modules/current-user/current-user-security.js";
+import { withCurrentLeader } from "./current-user-route.js";
 import { prisma } from "../db.js";
 import { countScopedTaxRecords, listScopedTaxRecordIds, restoreSelectedIdOrder } from "../modules/tax-record/tax-record-scope-repository.js";
 import {
@@ -19,8 +21,6 @@ import {
 } from "../modules/admin-access/admin-access-control.js";
 
 type WithdrawBody = {
-  leader_user_id?: string;
-  openid?: string;
   amount_cents?: number;
   client_request_id?: string;
   commission_ids?: string[];
@@ -49,29 +49,6 @@ type TaxRecordQuery = {
   tax_status?: string; tax_mode?: string; invoice_status?: string; from?: string; to?: string;
 };
 
-async function resolveCurrentLeader(request: {
-  headers: Record<string, unknown>;
-}) {
-  const openid =
-    typeof request.headers["x-openid"] === "string"
-      ? request.headers["x-openid"].trim()
-      : "";
-  if (!openid)
-    throw Object.assign(new Error("LEADER_UNAUTHORIZED: 缺少身份"), {
-      statusCode: 401,
-    });
-  const user = await prisma.user.findUnique({ where: { openid } });
-  if (!user)
-    throw Object.assign(new Error("LEADER_UNAUTHORIZED: 用户不存在"), {
-      statusCode: 401,
-    });
-  if (user.role !== "leader")
-    throw Object.assign(new Error("LEADER_FORBIDDEN: 仅开团人可操作"), {
-      statusCode: 403,
-    });
-  return user;
-}
-
 function maskPhone(phone?: string | null) {
   return phone ? phone.replace(/^(\d{3})\d+(\d{4})$/, "$1****$2") : null;
 }
@@ -94,7 +71,7 @@ function statusText(status: string) {
     )[status] ?? status
   );
 }
-function leaderWithdrawalDto(w: any, commissionCount = 0) {
+export function toLeaderWithdrawalDto(w: any, commissionCount = 0) {
   return {
     withdrawal_id: w.id,
     client_request_id: w.client_request_id,
@@ -105,7 +82,7 @@ function leaderWithdrawalDto(w: any, commissionCount = 0) {
     created_at: w.created_at,
     reviewed_at: w.reviewed_at,
     processed_at: w.processed_at,
-    rejection_reason: w.status === "rejected" ? w.admin_remark : undefined,
+    rejection_reason: w.status === "rejected" ? "提现申请未通过，请联系平台" : undefined,
     manual_reference_masked: maskReference(w.manual_reference),
   };
 }
@@ -222,9 +199,9 @@ async function persistLedgerMismatch(leaderUserId: string, payload: Record<strin
 async function idempotentWithdrawalByClientRequest(clientRequestId: string, leaderUserId: string) {
   const existing = await prisma.withdrawal.findUnique({ where: { client_request_id: clientRequestId } });
   if (!existing) return null;
-  if (existing.leader_user_id !== leaderUserId) throw httpError("client_request_id 已被使用", 409);
+  if (existing.leader_user_id !== leaderUserId) throw publicCurrentUserError("client_request_id 已被使用", 409);
   const count = await prisma.withdrawalCommission.count({ where: { withdrawal_id: existing.id } });
-  return { ...leaderWithdrawalDto(existing, count), applied: false, idempotent: true };
+  return { ...toLeaderWithdrawalDto(existing, count), applied: false, idempotent: true };
 }
 
 async function loadWithdrawalOrThrow(tx: Prisma.TransactionClient, id: string) {
@@ -255,7 +232,7 @@ function restoreMarkPaidTransactionError(error: unknown) {
 function parseAmount(value: unknown) {
   const amount = Number(value);
   if (!Number.isInteger(amount) || amount <= 0)
-    throw new Error("提现金额必须大于 0");
+    throw publicCurrentUserError("提现金额必须大于 0", 400);
   return amount;
 }
 
@@ -532,9 +509,8 @@ async function writeAdminAuditLog(
 }
 
 export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExportLimit?: number } = {}) {
-  app.get("/api/leaders/me/withdrawals", async (request, reply) => {
-    try {
-      const leader = await resolveCurrentLeader(request);
+  app.get("/api/leaders/me/withdrawals", (request, reply) =>
+    withCurrentLeader(request, reply, "查询提现申请失败", async (leader) => {
       const withdrawals = await prisma.withdrawal.findMany({
         where: { leader_user_id: leader.id },
         orderBy: { created_at: "desc" },
@@ -545,125 +521,245 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
         _count: { _all: true },
       });
       const countMap = new Map(counts.map((c) => [c.withdrawal_id, c._count._all]));
-      return ok(
-        withdrawals.map((w) => leaderWithdrawalDto(w, countMap.get(w.id) ?? 0)),
+      return withdrawals.map((w) =>
+        toLeaderWithdrawalDto(w, countMap.get(w.id) ?? 0),
       );
-    } catch (error) {
-      reply.code((error as { statusCode?: number }).statusCode ?? 400);
-      return fail(error instanceof Error ? error.message : "查询提现申请失败");
-    }
-  });
+    }),
+  );
 
-  app.get("/api/leaders/me/withdrawals/:id", async (request, reply) => {
-    try {
-      const leader = await resolveCurrentLeader(request);
+  app.get("/api/leaders/me/withdrawals/:id", (request, reply) =>
+    withCurrentLeader(request, reply, "查询提现申请失败", async (leader) => {
       const { id } = request.params as { id: string };
-      const w = await prisma.withdrawal.findFirst({
+      const withdrawal = await prisma.withdrawal.findFirst({
         where: { id, leader_user_id: leader.id },
       });
-      if (!w) {
-        reply.code(404);
-        return fail("提现申请不存在");
+      if (!withdrawal) {
+        throw publicCurrentUserError("提现申请不存在", 404);
       }
-      const count = await prisma.withdrawalCommission.count({ where: { withdrawal_id: id } });
-      return ok(leaderWithdrawalDto(w, count));
-    } catch (error) {
-      reply.code((error as { statusCode?: number }).statusCode ?? 400);
-      return fail(error instanceof Error ? error.message : "查询提现申请失败");
-    }
-  });
+      const count = await prisma.withdrawalCommission.count({
+        where: { withdrawal_id: id },
+      });
+      return toLeaderWithdrawalDto(withdrawal, count);
+    }),
+  );
 
   app.get(
     "/api/leaders/me/withdrawable-commissions",
-    async (request, reply) => {
-      try {
-        const leader = await resolveCurrentLeader(request);
-        const commissions = await prisma.commission.findMany({
-          where: {
-            leader_user_id: leader.id,
-            status: "available",
-            withdrawal_id: null,
-            final_amount_cents: { gt: 0 },
-          },
-          include: { order: { include: { product: true, community: true } } },
-          orderBy: { created_at: "asc" },
-        });
-        const balance = await getAvailableRewardBalance(prisma, leader.id);
-        return ok({
-          available_balance_cents: balance,
-          commission_count: commissions.length,
-          items: commissions.map((c) => ({
-            commission_id: c.id,
-            order_no: c.order.order_no,
-            product_name: c.order.product?.name ?? "",
-            final_amount_cents: c.final_amount_cents,
-            available_at: c.available_at,
-            community_name: c.order.community?.name ?? "",
-          })),
-        });
-      } catch (error) {
-        reply.code((error as { statusCode?: number }).statusCode ?? 400);
-        return fail(
-          error instanceof Error ? error.message : "查询可提现开团服务奖励失败",
-        );
-      }
-    },
+    (request, reply) =>
+      withCurrentLeader(
+        request,
+        reply,
+        "查询可提现开团服务奖励失败",
+        async (leader) => {
+          const commissions = await prisma.commission.findMany({
+            where: {
+              leader_user_id: leader.id,
+              status: "available",
+              withdrawal_id: null,
+              final_amount_cents: { gt: 0 },
+            },
+            include: { order: { include: { product: true, community: true } } },
+            orderBy: { created_at: "asc" },
+          });
+          const balance = await getAvailableRewardBalance(prisma, leader.id);
+          return {
+            available_balance_cents: balance,
+            commission_count: commissions.length,
+            items: commissions.map((commission) => ({
+              commission_id: commission.id,
+              order_no: commission.order.order_no,
+              product_name: commission.order.product?.name ?? "",
+              final_amount_cents: commission.final_amount_cents,
+              available_at: commission.available_at,
+              community_name: commission.order.community?.name ?? "",
+            })),
+          };
+        },
+      ),
   );
 
-  app.post("/api/leaders/me/withdrawals", async (request, reply) => {
-    try {
-      const leader = await resolveCurrentLeader(request);
+  app.post("/api/leaders/me/withdrawals", (request, reply) =>
+    withCurrentLeader(request, reply, "提交提现申请失败", async (leader) => {
       const body = request.body as WithdrawBody;
       const clientRequestId = String(body.client_request_id ?? "").trim();
-      if (!clientRequestId || clientRequestId.length > 80) throw new Error("client_request_id 必填且长度不能超过 80");
-      const quick = await idempotentWithdrawalByClientRequest(clientRequestId, leader.id);
-      if (quick) return ok(quick);
-      const ids = Array.from(new Set((body.commission_ids ?? []).map(String).filter(Boolean)));
-      if (ids.length === 0) throw new Error("commission_ids 至少选择一条");
+      if (!clientRequestId || clientRequestId.length > 80) {
+        throw publicCurrentUserError(
+          "client_request_id 必填且长度不能超过 80",
+          400,
+        );
+      }
+      const quick = await idempotentWithdrawalByClientRequest(
+        clientRequestId,
+        leader.id,
+      );
+      if (quick) return quick;
+
+      const ids = Array.from(
+        new Set((body.commission_ids ?? []).map(String).filter(Boolean)),
+      );
+      if (ids.length === 0) {
+        throw publicCurrentUserError("commission_ids 至少选择一条", 400);
+      }
 
       try {
-        const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-          const selected = await tx.commission.findMany({ where: { id: { in: ids }, leader_user_id: leader.id, status: "available", withdrawal_id: null, final_amount_cents: { gt: 0 } }, orderBy: { created_at: "asc" } });
-          if (selected.length !== ids.length) throw new Error("存在不可提现或已占用的开团服务奖励");
-          const amount = selected.reduce((sum, item) => sum + item.final_amount_cents, 0);
-          if (body.amount_cents !== undefined && parseAmount(body.amount_cents) !== amount) throw new Error("提现金额必须精确匹配整笔开团服务奖励合计");
+        const result = await prisma.$transaction(
+          async (tx: Prisma.TransactionClient) => {
+            const selected = await tx.commission.findMany({
+              where: {
+                id: { in: ids },
+                leader_user_id: leader.id,
+                status: "available",
+                withdrawal_id: null,
+                final_amount_cents: { gt: 0 },
+              },
+              orderBy: { created_at: "asc" },
+            });
+            if (selected.length !== ids.length) {
+              throw publicCurrentUserError(
+                "存在不可提现或已占用的开团服务奖励",
+                409,
+              );
+            }
+            const amount = selected.reduce(
+              (sum, item) => sum + item.final_amount_cents,
+              0,
+            );
+            if (
+              body.amount_cents !== undefined &&
+              parseAmount(body.amount_cents) !== amount
+            ) {
+              throw publicCurrentUserError(
+                "提现金额必须精确匹配整笔开团服务奖励合计",
+                400,
+              );
+            }
 
-          const mismatches: Array<{ commission_id: string; expected_cents: number; ledger_net_cents: number }> = [];
-          for (const item of selected) {
-            const net = await getCommissionAvailableNet(tx, item.id);
-            if (net !== item.final_amount_cents) mismatches.push({ commission_id: item.id, expected_cents: item.final_amount_cents, ledger_net_cents: net });
-          }
-          if (mismatches.length > 0) throw httpError(`LEDGER_MISMATCH:${JSON.stringify({ mismatches, requested_amount_cents: amount })}`, 409);
+            const mismatches: Array<{
+              commission_id: string;
+              expected_cents: number;
+              ledger_net_cents: number;
+            }> = [];
+            for (const item of selected) {
+              const net = await getCommissionAvailableNet(tx, item.id);
+              if (net !== item.final_amount_cents) {
+                mismatches.push({
+                  commission_id: item.id,
+                  expected_cents: item.final_amount_cents,
+                  ledger_net_cents: net,
+                });
+              }
+            }
+            if (mismatches.length > 0) {
+              throw httpError(
+                `LEDGER_MISMATCH:${JSON.stringify({
+                  mismatches,
+                  requested_amount_cents: amount,
+                })}`,
+                409,
+              );
+            }
 
-          const availableBalance = await getAvailableRewardBalance(tx, leader.id);
-          if (availableBalance < amount) throw httpError(`LEDGER_MISMATCH:${JSON.stringify({ available_balance_cents: availableBalance, requested_amount_cents: amount })}`, 409);
+            const availableBalance = await getAvailableRewardBalance(
+              tx,
+              leader.id,
+            );
+            if (availableBalance < amount) {
+              throw httpError(
+                `LEDGER_MISMATCH:${JSON.stringify({
+                  available_balance_cents: availableBalance,
+                  requested_amount_cents: amount,
+                })}`,
+                409,
+              );
+            }
 
-          const created = await tx.withdrawal.create({ data: { leader_user_id: leader.id, client_request_id: clientRequestId, amount_cents: amount, status: "pending", taxable_amount_cents: amount, tax_amount_cents: 0, payable_amount_cents: amount, tax_mode: "pending_review", tax_status: "pending", invoice_required: false, invoice_status: "not_required" } });
-          const claimed = await tx.commission.updateMany({ where: { id: { in: ids }, status: "available", withdrawal_id: null }, data: { status: "withdrawing", withdrawal_id: created.id } });
-          if (claimed.count !== ids.length) throw httpError("开团服务奖励已被其他提现申请占用", 409);
-          await tx.withdrawalCommission.createMany({ data: selected.map((item) => ({ withdrawal_id: created.id, commission_id: item.id, amount_cents: item.final_amount_cents })), skipDuplicates: true });
-          await appendRewardLedgerEntry(tx, { leader_user_id: leader.id, withdrawal_id: created.id, event_type: "withdrawal_reserved", entry_type: "withdrawal_reserved", direction: "out", amount_cents: amount, affects_available_balance: true, idempotency_key: `withdrawal-reserved:${created.id}` });
-          await logWithdrawalEvent(tx, { event_type: "withdrawal_requested", withdrawal: created, commissionIds: ids, orderIds: selected.map((i) => i.order_id), after: created });
-          return created;
-        });
-        return ok({ ...leaderWithdrawalDto(result, ids.length), applied: true, idempotent: false });
+            const created = await tx.withdrawal.create({
+              data: {
+                leader_user_id: leader.id,
+                client_request_id: clientRequestId,
+                amount_cents: amount,
+                status: "pending",
+                taxable_amount_cents: amount,
+                tax_amount_cents: 0,
+                payable_amount_cents: amount,
+                tax_mode: "pending_review",
+                tax_status: "pending",
+                invoice_required: false,
+                invoice_status: "not_required",
+              },
+            });
+            const claimed = await tx.commission.updateMany({
+              where: {
+                id: { in: ids },
+                status: "available",
+                withdrawal_id: null,
+              },
+              data: { status: "withdrawing", withdrawal_id: created.id },
+            });
+            if (claimed.count !== ids.length) {
+              throw publicCurrentUserError(
+                "开团服务奖励已被其他提现申请占用",
+                409,
+              );
+            }
+            await tx.withdrawalCommission.createMany({
+              data: selected.map((item) => ({
+                withdrawal_id: created.id,
+                commission_id: item.id,
+                amount_cents: item.final_amount_cents,
+              })),
+              skipDuplicates: true,
+            });
+            await appendRewardLedgerEntry(tx, {
+              leader_user_id: leader.id,
+              withdrawal_id: created.id,
+              event_type: "withdrawal_reserved",
+              entry_type: "withdrawal_reserved",
+              direction: "out",
+              amount_cents: amount,
+              affects_available_balance: true,
+              idempotency_key: `withdrawal-reserved:${created.id}`,
+            });
+            await logWithdrawalEvent(tx, {
+              event_type: "withdrawal_requested",
+              withdrawal: created,
+              commissionIds: ids,
+              orderIds: selected.map((item) => item.order_id),
+              after: created,
+            });
+            return created;
+          },
+        );
+        return {
+          ...toLeaderWithdrawalDto(result, ids.length),
+          applied: true,
+          idempotent: false,
+        };
       } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          const existing = await idempotentWithdrawalByClientRequest(clientRequestId, leader.id);
-          if (existing) return ok(existing);
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          const existing = await idempotentWithdrawalByClientRequest(
+            clientRequestId,
+            leader.id,
+          );
+          if (existing) return existing;
         }
-        if (error instanceof Error && error.message.startsWith("LEDGER_MISMATCH:")) {
-          const payload = JSON.parse(error.message.slice("LEDGER_MISMATCH:".length));
+        if (
+          error instanceof Error &&
+          error.message.startsWith("LEDGER_MISMATCH:")
+        ) {
+          const payload = JSON.parse(
+            error.message.slice("LEDGER_MISMATCH:".length),
+          );
           await persistLedgerMismatch(leader.id, payload);
-          throw new Error("奖励账本待人工复核");
+          throw publicCurrentUserError("奖励账本待人工复核", 409);
         }
         throw error;
       }
-    } catch (error) {
-      reply.code((error as { statusCode?: number }).statusCode ?? 400);
-      return fail(error instanceof Error ? error.message : "提交提现申请失败");
-    }
-  });
+    }),
+  );
 
   app.get(
     "/api/admin/withdrawals",
