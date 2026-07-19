@@ -195,19 +195,49 @@ assert(
   'L48 report hook must be registered in generate-stage-report-entry.ts',
 );
 
-const workflow = readFileSync('scripts/stage-workflow.ts', 'utf8');
+const workflowSource = readFileSync('scripts/stage-workflow.ts', 'utf8').replace(/\s+/g, ' ');
+const reportStage = workflowSource.slice(
+  workflowSource.indexOf('function runReportStage'),
+  workflowSource.indexOf('function runReportVerifier'),
+);
+const reportVerifier = workflowSource.slice(
+  workflowSource.indexOf('function runReportVerifier'),
+  workflowSource.indexOf('function runReportPublish'),
+);
 assert(
-  workflow.includes('L48 security privacy Docker E2E') &&
-    workflow.includes('L48 report routing verifier') &&
-    workflow.includes("stage === 'L48'") &&
-    workflow.includes('verify-l48-report-publish-local.ts'),
-  'L48 report generation/verifier routing must be registered in stage-workflow.ts',
+  /stage\s*===\s*['"]L48['"]/.test(reportStage) &&
+    reportStage.includes('scripts/generate-stage-report-entry.ts'),
+  'L48 report generation must use the canonical entry in stage-workflow.ts',
+);
+assert(
+  /stage\s*===\s*['"]L48['"]/.test(reportVerifier) &&
+    reportVerifier.includes('scripts/verify-l48-report-publish-local.ts'),
+  'L48 strict report gate must be registered in stage-workflow.ts',
+);
+assert(
+  workflowSource.includes('L48 security privacy Docker E2E') &&
+    workflowSource.includes('L48 report routing verifier'),
+  'L48 additional verifier labels must be registered in stage-workflow.ts',
 );
 
-const publisher = readFileSync('scripts/publish-stage-report.ts', 'utf8');
+const publisherSource = readFileSync('scripts/publish-stage-report.ts', 'utf8').replace(/\s+/g, ' ');
+const publisherReport = publisherSource.slice(
+  publisherSource.indexOf('function runStageReport'),
+  publisherSource.indexOf('function verifyStageReportBeforeCopy'),
+);
+const publisherVerifier = publisherSource.slice(
+  publisherSource.indexOf('function verifyStageReportBeforeCopy'),
+  publisherSource.indexOf('function main'),
+);
 assert(
-  publisher.includes('verify-l48-report-publish-local.ts'),
-  'L48 strict publish verifier must be registered in publish-stage-report.ts',
+  /stage\s*===\s*['"]L48['"]/.test(publisherReport) &&
+    publisherReport.includes('scripts/generate-stage-report-entry.ts'),
+  'L48 publisher must regenerate through the canonical entry',
+);
+assert(
+  /stage\s*===\s*['"]L48['"]/.test(publisherVerifier) &&
+    publisherVerifier.includes('scripts/verify-l48-report-publish-local.ts'),
+  'L48 publisher must run the strict gate before copy',
 );
 
 console.log('L48 report routing verification passed.');
