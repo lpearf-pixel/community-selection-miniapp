@@ -9,10 +9,7 @@ import {
 } from './l48-security-privacy-contract.ts';
 
 export type L48EvidenceStatus = 'passed' | 'failed' | 'not detected';
-export type L48EvidenceRow = {
-  command: string;
-  result: L48EvidenceStatus;
-};
+export type L48EvidenceRow = { command: string; result: L48EvidenceStatus };
 
 export const L48_REPORT_EVIDENCE_LABELS = [
   'L48 verifier',
@@ -37,18 +34,20 @@ export const L48_SECURITY_EVIDENCE_LABELS = [
 ] as const;
 
 function hasExplicitFailure(content: string): boolean {
-  return [
-    'ERR_PNPM',
-    'Command failed',
-    'ELIFECYCLE',
-    'failed with exit code',
-    'exit code 1',
-    'exit code 2',
-    'MODULE_NOT_FOUND',
-    'TypeScript error TS',
-    'PrismaClientKnownRequestError',
-    'ReferenceError',
-  ].some((marker) => content.includes(marker)) || /\berror TS\d{4}\b/.test(content);
+  return (
+    [
+      'ERR_PNPM',
+      'Command failed',
+      'ELIFECYCLE',
+      'failed with exit code',
+      'exit code 1',
+      'exit code 2',
+      'MODULE_NOT_FOUND',
+      'TypeScript error TS',
+      'PrismaClientKnownRequestError',
+      'ReferenceError',
+    ].some((marker) => content.includes(marker)) || /\berror TS\d{4}\b/.test(content)
+  );
 }
 
 function completed(content: string, title: string): L48EvidenceStatus {
@@ -56,14 +55,12 @@ function completed(content: string, title: string): L48EvidenceStatus {
   return hasExplicitFailure(content) ? 'failed' : 'not detected';
 }
 
-function chainCompleted(content: string): L48EvidenceStatus {
-  if (
-    content.includes('command_completed:L24-L48 chain regression=true') &&
-    content.includes('L24-L48 chain regression passed.')
-  ) {
-    return 'passed';
-  }
-  return hasExplicitFailure(content) ? 'failed' : 'not detected';
+function occurrenceCount(content: string, token: string): number {
+  return content.split(token).length - 1;
+}
+
+function markerPassed(content: string, marker: string): boolean {
+  return occurrenceCount(content, marker) === 1;
 }
 
 export function l48VerificationSourceCommit(content: string): string | undefined {
@@ -73,17 +70,11 @@ export function l48VerificationSourceCommit(content: string): string | undefined
   return matches.length === 1 ? matches[0][1] : undefined;
 }
 
-function occurrenceCount(content: string, token: string): number {
-  return content.split(token).length - 1;
-}
-
 export function hasExactL48RuntimeMarkers(content: string): boolean {
-  return L48_RUNTIME_MARKERS.every(
-    (marker) => occurrenceCount(content, marker) === 1,
-  );
+  return L48_RUNTIME_MARKERS.every((marker) => markerPassed(content, marker));
 }
 
-function unboundRows(content: string): L48EvidenceRow[] {
+function unresolvedRows(content: string): L48EvidenceRow[] {
   const result: L48EvidenceStatus = hasExplicitFailure(content)
     ? 'failed'
     : 'not detected';
@@ -94,12 +85,17 @@ export function l48EvidenceRows(
   content: string,
   expectedCommit?: string,
 ): L48EvidenceRow[] {
-  if (
-    expectedCommit &&
-    l48VerificationSourceCommit(content) !== expectedCommit
-  ) {
-    return unboundRows(content);
+  if (expectedCommit && l48VerificationSourceCommit(content) !== expectedCommit) {
+    return unresolvedRows(content);
   }
+  const chainPassed =
+    content.includes('command_completed:L24-L48 chain regression=true') &&
+    content.includes('L24-L48 chain regression passed.');
+  const chainResult: L48EvidenceStatus = chainPassed
+    ? 'passed'
+    : hasExplicitFailure(content)
+      ? 'failed'
+      : 'not detected';
   return [
     { command: 'L48 verifier', result: completed(content, 'L48 verifier') },
     {
@@ -110,7 +106,7 @@ export function l48EvidenceRows(
       command: 'L48 report routing verifier',
       result: completed(content, 'L48 report routing verifier'),
     },
-    { command: 'L24-L48 chain regression', result: chainCompleted(content) },
+    { command: 'L24-L48 chain regression', result: chainResult },
     { command: 'Docker API E2E', result: completed(content, 'Docker API E2E') },
     {
       command: 'Admin typecheck config',
@@ -124,45 +120,37 @@ export function l48EvidenceRows(
       command: 'raw compliance scan',
       result: completed(content, 'raw compliance scan'),
     },
-    {
-      command: 'Stage workflow',
-      result: completed(content, 'Stage workflow'),
-    },
+    { command: 'Stage workflow', result: completed(content, 'Stage workflow') },
   ];
 }
 
-function markerPassed(content: string, marker: string): boolean {
-  return occurrenceCount(content, marker) === 1;
-}
-
 function securityEvidenceRows(content: string): L48EvidenceRow[] {
-  const routeInventoryPassed = completed(content, 'L48 verifier') === 'passed';
-  const identityPassed = [
-    'l48_query_only_identity_rejected=true',
-    'l48_header_identity_wins=true',
-    'l48_inactive_user_forbidden=true',
-    'l48_non_leader_forbidden=true',
-  ].every((marker) => markerPassed(content, marker));
-  const ownerScopePassed = [
-    'l48_reward_owner_scope_verified=true',
-    'l48_withdrawal_owner_scope_verified=true',
-  ].every((marker) => markerPassed(content, marker));
-
   const status = (passed: boolean): L48EvidenceStatus =>
     passed ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected';
-
   return [
     {
       command: L48_SECURITY_EVIDENCE_LABELS[0],
-      result: status(routeInventoryPassed),
+      result: status(completed(content, 'L48 verifier') === 'passed'),
     },
     {
       command: L48_SECURITY_EVIDENCE_LABELS[1],
-      result: status(identityPassed),
+      result: status(
+        [
+          'l48_query_only_identity_rejected=true',
+          'l48_header_identity_wins=true',
+          'l48_inactive_user_forbidden=true',
+          'l48_non_leader_forbidden=true',
+        ].every((marker) => markerPassed(content, marker)),
+      ),
     },
     {
       command: L48_SECURITY_EVIDENCE_LABELS[2],
-      result: status(ownerScopePassed),
+      result: status(
+        [
+          'l48_reward_owner_scope_verified=true',
+          'l48_withdrawal_owner_scope_verified=true',
+        ].every((marker) => markerPassed(content, marker)),
+      ),
     },
     {
       command: L48_SECURITY_EVIDENCE_LABELS[3],
@@ -199,6 +187,18 @@ function replaceSection(
   return `${report.slice(0, start)}${replacement}\n\n${report.slice(end)}`;
 }
 
+function replaceFinalSection(
+  report: string,
+  startHeader: string,
+  replacement: string,
+): string {
+  const start = report.indexOf(startHeader);
+  if (start < 0) {
+    throw new Error(`L48 final report section is missing: ${startHeader}`);
+  }
+  return `${report.slice(0, start)}${replacement}\n`;
+}
+
 function inputDbHeader(report: string): string {
   for (const header of ['## 4. 数据库变化', '## 4. DB 变化']) {
     if (report.includes(header)) return header;
@@ -225,8 +225,8 @@ function apiPurpose(method: string, path: string): string {
     return '当前团长提交人工提现申请';
   }
   if (path === '/api/leaders/me/withdrawals') return '当前团长提现列表';
-  if (path.endsWith('/withdrawable-commissions')) return '当前团长可提现奖励';
   if (path.includes('/withdrawals/:id')) return '当前团长提现详情';
+  if (path.endsWith('/withdrawable-commissions')) return '当前团长可提现奖励';
   if (path.endsWith('/rewards/convert-credit')) return '当前团长奖励转消费额度';
   return '当前用户订单详情';
 }
@@ -264,11 +264,7 @@ function renderChecklistSection(
   return [
     '## 5. 核心业务验收点',
     '',
-    ...commandRows.map(
-      (row) =>
-        `- [${row.result === 'passed' ? 'x' : ' '}] ${row.command}（machine evidence: ${row.result}）`,
-    ),
-    ...securityRows.map(
+    ...[...commandRows, ...securityRows].map(
       (row) =>
         `- [${row.result === 'passed' ? 'x' : ' '}] ${row.command}（machine evidence: ${row.result}）`,
     ),
@@ -286,8 +282,9 @@ function renderEvidenceSection(
     '',
     '| 证据 | 结果 |',
     '|---|---|',
-    ...commandRows.map((row) => `| ${row.command} | ${row.result} |`),
-    ...securityRows.map((row) => `| ${row.command} | ${row.result} |`),
+    ...[...commandRows, ...securityRows].map(
+      (row) => `| ${row.command} | ${row.result} |`,
+    ),
     `| L48 十个运行 marker 各出现一次 | ${markersPassed ? 'passed' : 'not detected'} |`,
   ].join('\n');
 }
@@ -316,14 +313,6 @@ function renderRiskSection(allPassed: boolean): string {
     `- 高风险：${allPassed ? '暂无自动发现' : '机器证据未全部通过，禁止发布'}`,
     `- 中风险：${allPassed ? '暂无自动发现' : '需完成缺失的验证与人工复核'}`,
     '- 低风险：当前仍信任 x-user-id / x-openid 请求头；它们不是完整认证机制。非 /api/me/** 与 /api/leaders/me/** 的其他身份型接口不在 L48 改造范围。',
-  ].join('\n');
-}
-
-function renderUnfinishedSection(allPassed: boolean): string {
-  return [
-    '## 10. 未完成项',
-    '',
-    allPassed ? '暂无自动发现' : '机器证据未全部通过，详见第 7 节。',
   ].join('\n');
 }
 
@@ -390,12 +379,11 @@ export function transformL48Report(
     updated,
     '## 10. 未完成项',
     '## 11. Codex 给人工 reviewer 的说明',
-    renderUnfinishedSection(allPassed),
+    `## 10. 未完成项\n\n${allPassed ? '暂无自动发现' : '机器证据未全部通过，详见第 7 节。'}`,
   );
-  updated = replaceSection(
+  updated = replaceFinalSection(
     updated,
     '## 11. Codex 给人工 reviewer 的说明',
-    '',
     renderReviewerSection(),
   );
 
@@ -406,7 +394,6 @@ export function transformL48Report(
     /- Codex 自评结论：(passed|partial)/,
     `- Codex 自评结论：${allPassed ? 'passed' : 'partial'}`,
   );
-
   if (!updated.includes(`- 业务稳定分支：${L48_BUSINESS_BASE_BRANCH}`)) {
     throw new Error('L48 report business base branch mismatch');
   }
