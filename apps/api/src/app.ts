@@ -3,15 +3,19 @@ import { fail, ok } from '@community-selection/shared';
 import { registerPublicRoutes } from './routes/public/index.js';
 import { registerAdminRoutes } from './routes/admin/index.js';
 import { requireAdminSession } from './routes/admin-auth.js';
+import { HTTP_LOGGER_OPTIONS } from './services/http-log-privacy.js';
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: HTTP_LOGGER_OPTIONS });
 
   app.addHook('preHandler', async (request, reply) => {
     if (!request.url.startsWith('/api/admin')) return;
     if (request.url.startsWith('/api/admin/auth/login')) return;
-    const authMode = process.env.ADMIN_AUTH_MODE ?? (process.env.NODE_ENV === 'production' ? 'session' : 'token');
-    const adminAuthEnabled = process.env.ADMIN_AUTH_ENABLED === 'true' || authMode === 'session';
+    const authMode =
+      process.env.ADMIN_AUTH_MODE ??
+      (process.env.NODE_ENV === 'production' ? 'session' : 'token');
+    const adminAuthEnabled =
+      process.env.ADMIN_AUTH_ENABLED === 'true' || authMode === 'session';
     if (!adminAuthEnabled) return;
     if (authMode === 'token') {
       const token = request.headers['x-admin-token'];
