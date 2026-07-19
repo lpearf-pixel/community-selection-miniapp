@@ -150,7 +150,21 @@ for (const marker of ['scoped_finance_release_due_403','scoped_finance_settle_40
   assert(docker.includes(marker), `Docker API E2E missing global reward auth marker ${marker}`);
 }
 assert(commissions.includes('/api/admin/rewards/release-due') && commissions.includes('/api/admin/rewards/:id/review'), 'admin rewards endpoints missing');
-assert(rewards.includes('getAvailableRewardBalance') && rewards.includes('affects_available_balance') && rewards.includes('convert-credit:${body.client_request_id}'), 'convert credit ledger compatibility missing');
+const hasLegacyConvertCreditIdempotencyKey = rewards.includes(
+  'convert-credit:${body.client_request_id}',
+);
+const hasNormalizedConvertCreditIdempotencyKey =
+  /const\s+clientRequestId\s*=\s*String\(\s*body\.client_request_id\s*\?\?\s*''\s*\)\.trim\(\);/.test(
+    rewards,
+  ) &&
+  /idempotency_key:\s*`convert-credit:\$\{clientRequestId\}`/.test(rewards);
+assert(
+  rewards.includes('getAvailableRewardBalance') &&
+    rewards.includes('affects_available_balance') &&
+    (hasLegacyConvertCreditIdempotencyKey ||
+      hasNormalizedConvertCreditIdempotencyKey),
+  'convert credit ledger compatibility missing',
+);
 ['开团服务奖励','待可用','已可用','退款扣减','待人工复核','完成后第 3 天可用'].forEach((needle) => assert(adminPage.includes(needle), `admin page missing ${needle}`));
 assert(docker.includes('Reward ledger:') && docker.includes('initial_amount_cents=1000') && docker.includes('delivery_refund_adjusted_amount_cents=1000') && docker.includes('delivery_refund_deduct_ledger_count=0') && docker.includes('product_refund_adjusted_amount_cents=700') && docker.includes('refund_deduct_ledger_count=1'), 'Docker API E2E L43 reward markers missing');
 for (const nonzeroMarker of ['available_balance_after_release_cents=','available_balance_after_delivery_refund_cents=','available_balance_after_partial_product_refund_cents=','available_balance_after_full_product_refund_cents=','release_due_matched_count=','release_due_released_count=','release_due_ledger_created_count=','release_due_repeat_ledger_created_count=','release_due_fixture_status=','release_due_fixture_ledger_count=','release_due_fixture_balance_verified=','settle_matched_count=','settle_released_count=','settle_ledger_created_count=','settle_repeat_ledger_created_count=','settle_fixture_status=','settle_fixture_ledger_count=','settle_fixture_balance_verified=','backfill_matched_count=','backfill_ledger_created_count=','backfill_repeat_ledger_created_count=','backfill_fixture_ledger_count=','backfill_fixture_balance_verified=']) {
