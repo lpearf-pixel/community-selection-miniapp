@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 
 const files = readdirSync('scripts').filter((file) =>
-  /^verify-l(2[4-9]|3\d|4[0-7]).*-local\.ts$/.test(file),
+  /^verify-l(2[4-9]|3\d|4[0-8]).*-local\.ts$/.test(file),
 );
 
 const forbidden = [
