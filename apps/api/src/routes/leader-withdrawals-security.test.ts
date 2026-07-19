@@ -240,6 +240,38 @@ describe('L48 leader withdrawal route security', () => {
     expect(response.body).not.toContain('unique-withdrawal-db-secret');
   });
 
+  it('maps a message-prefixed ledger mismatch from an unknown error to the fixed 500 boundary', async () => {
+    mockIdentityUsers();
+    vi.spyOn(prisma.withdrawal, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma, '$transaction').mockImplementation(
+      (async () => {
+        throw new Error(
+          'LEDGER_MISMATCH:{"mismatches":[{"commission_id":"unknown-secret"}]}',
+        );
+      }) as any,
+    );
+    const app = buildApp();
+    openedApps.push(app);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/leaders/me/withdrawals',
+      headers: { 'x-user-id': leaderA.id },
+      payload: {
+        client_request_id: 'l48-unknown-ledger-prefix',
+        commission_ids: ['l48-commission-a'],
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: '提交提现申请失败',
+    });
+    expect(response.body).not.toContain('unknown-secret');
+  });
+
   it('returns a safe leader DTO without admin, tax, or raw reference fields', async () => {
     mockIdentityUsers();
     vi.spyOn(prisma.withdrawal, 'findMany').mockResolvedValue([
