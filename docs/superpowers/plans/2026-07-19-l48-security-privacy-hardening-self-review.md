@@ -4,7 +4,7 @@ This document is a normative correction to `2026-07-19-l48-security-privacy-hard
 
 ## 1. Route inventory and verifier parsing
 
-The current L48 route inventory contains 12 route registrations across five production files:
+The final L48 route inventory contains 13 route registrations across six production files:
 
 - `apps/api/src/routes/me/center.ts`
   - `GET /api/me/center-summary`
@@ -16,6 +16,8 @@ The current L48 route inventory contains 12 route registrations across five prod
   - `GET /api/me/orders/:id/pickup-code`
 - `apps/api/src/routes/leaders/center.ts`
   - `GET /api/leaders/me/center-summary`
+- `apps/api/src/routes/commissions.ts`
+  - `GET /api/leaders/me/commissions`
 - `apps/api/src/routes/withdrawals.ts`
   - `GET /api/leaders/me/withdrawals`
   - `GET /api/leaders/me/withdrawals/:id`
@@ -24,7 +26,7 @@ The current L48 route inventory contains 12 route registrations across five prod
 - `apps/api/src/routes/rewards.ts`
   - `POST /api/leaders/me/rewards/convert-credit`
 
-The verifier must discover routes rather than hard-code only this list, but this list is the minimum expected inventory.
+The verifier must discover routes rather than hard-code only this list, but this list is the minimum expected inventory. The commissions route was found by the final automatic inventory review and is normative for L48 completion.
 
 The recursive scan must exclude:
 
@@ -32,7 +34,7 @@ The recursive scan must exclude:
 file.endsWith('.test.ts') || file.endsWith('.spec.ts') || file.endsWith('.d.ts')
 ```
 
-`withdrawals.ts` contains both leader and Admin routes. Therefore the verifier must inspect individual route-registration blocks, not reject an entire file because an Admin block contains legacy Admin error handling.
+`withdrawals.ts` and `commissions.ts` contain both current-leader and Admin routes. Therefore the verifier must inspect individual route-registration blocks, not reject an entire file because an Admin block contains legacy Admin error handling.
 
 Use a route-registration matcher equivalent to:
 
@@ -47,13 +49,14 @@ Each current-user route block must contain `withCurrentUser(` or `withCurrentLea
 ```ts
 resolveUserIdentity
 resolveCurrentLeader(request)
+resolveLeaderId
 statusCode ?? 400
 fail(error instanceof Error ? error.message
 ```
 
 Admin route blocks are outside this L48 assertion and remain governed by existing Admin verifiers.
 
-## 2. L47 compatibility module decision
+## 2. L43/L44/L47 compatibility decisions
 
 Do not delete `apps/api/src/modules/me-center/me-center-route-security.ts` during L48.
 
@@ -67,6 +70,8 @@ export {
 ```
 
 The two center routes themselves must import and use `withCurrentUser` / `withCurrentLeader`, not the compatibility aliases. Update the L47 verifier to validate the shared implementation while preserving all L47 security requirements.
+
+Update the L43 and L44 historical verifiers to require the shared `withCurrentLeader` boundary and explicitly prohibit the removed `resolveLeaderId` / `resolveCurrentLeader(request)` patterns. These verifier changes preserve historical business rules; they do not alter Admin permissions or data scope.
 
 ## 3. Withdrawal body compatibility decision
 
@@ -115,7 +120,13 @@ function maskReceiverAddress(value?: string | null) {
 
 The L48 order security tests and Docker E2E must recursively assert that raw receiver keys are absent.
 
-## 5. Wrapper logging decision
+Leader commission and reward-conversion responses must use explicit public DTOs and must not expose `leader_user_id`, review/admin notes, admin actor IDs, tax-record objects, ledger objects, or payload snapshots.
+
+## 5. HTTP and business log decisions
+
+HTTP request logs retain only request ID, method, and query-free path. Do not persist client IP, request headers, body, query, cookies, or session values. HTTP response logs retain only status code; Fastify may retain its normal response-time field outside the response serializer.
+
+Business-log payloads, snapshots, free text, and safe-fallback console output are sanitized. Dedicated structured audit association columns remain intact, including top-level business IDs, `actor_user_id`, and `OpsAlertLog.resolved_by`.
 
 For a mapped 500, wrappers may log only:
 
@@ -130,4 +141,4 @@ The second argument is the fixed route fallback text, never `error.message`. The
 
 ## 6. Execution rule
 
-Execute the main implementation plan task-by-task with this self-review document loaded. These decisions remove all remaining implementation alternatives; no task may reintroduce query/body identity ownership, file-wide false positives against Admin code, raw receiver fields, or deletion of the L47 compatibility module.
+Execute the main implementation plan task-by-task with this self-review document loaded. These decisions remove all remaining implementation alternatives; no task may reintroduce query/body identity ownership, file-wide false positives against Admin code, raw receiver fields, client-IP logging, destruction of structured audit actor fields, or deletion of the L47 compatibility module.
