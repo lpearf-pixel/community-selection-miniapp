@@ -7,6 +7,53 @@ import {
 const repoRoot = process.cwd();
 const unknownErrorMarker = 'l48_unknown_error_sanitized=true';
 const httpLogMarkerEvidence = 'l48_http_log_privacy_verified=true';
+const businessLogMarkerEvidence = 'l48_business_log_privacy_verified=true';
+
+const isolatedApiBootstrap = `
+import { buildApp } from './apps/api/src/app.ts';
+import { safeRecordBusinessEvent } from './apps/api/src/services/logging-service.ts';
+
+const app = buildApp();
+app.post('/__l48/business-log-fallback', async (request, reply) => {
+  const token = request.headers['x-l48-probe-token'];
+  if (!process.env.L48_LOG_PROBE_TOKEN || token !== process.env.L48_LOG_PROBE_TOKEN) {
+    reply.code(404);
+    return { success: false, data: null, message: 'Not found' };
+  }
+
+  const body = request.body as {
+    error_marker?: string;
+    stack_marker?: string;
+    payload_marker?: string;
+  };
+  const failure = Object.assign(new Error(String(body.error_marker ?? 'missing-error')), {
+    name: 'PrismaClientKnownRequestError',
+    code: 'P9999',
+    stack: String(body.stack_marker ?? 'missing-stack'),
+  });
+  const failingClient = {
+    businessEventLog: {
+      create: async () => {
+        throw failure;
+      },
+    },
+  } as any;
+
+  await safeRecordBusinessEvent(failingClient, {
+    event_type: 'l48_logging_failure_test',
+    event_source: 'l48-e2e',
+    payload: { secret_input: String(body.payload_marker ?? 'missing-payload') },
+  });
+  return { success: true, data: { triggered: true }, message: '' };
+});
+
+void app
+  .listen({ host: '127.0.0.1', port: Number(process.env.PORT) })
+  .catch((error) => {
+    console.error('isolated API startup failed', error);
+    process.exitCode = 1;
+  });
+`;
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -93,14 +140,14 @@ function runFocusedTests(): Promise<void> {
   });
 }
 
-function startApiServer(port: number): {
+function startApiServer(port: number, logProbeToken: string): {
   child: ChildProcessWithoutNullStreams;
   logs: { value: string };
 } {
   const logs = { value: '' };
   const child = spawn(
     'pnpm',
-    ['exec', 'tsx', 'apps/api/src/server.ts'],
+    ['exec', 'tsx', '-e', isolatedApiBootstrap],
     {
       cwd: repoRoot,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -108,6 +155,7 @@ function startApiServer(port: number): {
         ...process.env,
         PORT: String(port),
         NODE_ENV: 'test',
+        L48_LOG_PROBE_TOKEN: logProbeToken,
         MOCK_WECHAT_PAY: 'true',
         WECHAT_PAY_MODE: 'mock',
         ADMIN_AUTH_ENABLED: 'false',
@@ -132,9 +180,11 @@ function runScenario(
   runToken: string,
   requestMarker: string,
   requestPhone: string,
+  logProbeToken: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let stdout = '';
+    let stderr = '';
     const child = spawn(
       'pnpm',
       [
@@ -151,6 +201,7 @@ function runScenario(
           L48_RUN_TOKEN: runToken,
           L48_HTTP_LOG_MARKER: requestMarker,
           L48_HTTP_LOG_PHONE: requestPhone,
+          L48_LOG_PROBE_TOKEN: logProbeToken,
           NO_PROXY: noProxyValue(),
           no_proxy: noProxyValue(),
         },
@@ -159,7 +210,9 @@ function runScenario(
     child.stdout.on('data', (chunk: Buffer | string) => {
       stdout += chunk.toString();
     });
-    child.stderr.resume();
+    child.stderr.on('data', (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
     child.once('error', reject);
     child.once('exit', (code, signal) => {
       if (code === 0) {
@@ -168,7 +221,7 @@ function runScenario(
       }
       reject(
         new Error(
-          `L48 isolated scenario exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`,
+          `L48 isolated scenario exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}: ${stderr.slice(-4_000)}`,
         ),
       );
     });
@@ -223,6 +276,25 @@ function verifyHttpLogs(logs: string, requestMarker: string, requestPhone: strin
   }
 }
 
+function verifyBusinessLogEvidence(logs: string, runToken: string) {
+  const prefix = `l48-${runToken}`;
+  assert(
+    logs.includes('recordBusinessEvent'),
+    'L48 API logs do not contain safe business-log operation metadata',
+  );
+  assert(
+    logs.includes('P9999'),
+    'L48 API logs do not contain the stable business-log error code',
+  );
+  for (const secret of [
+    `${prefix}-unique-db-host-secret`,
+    `${prefix}-unique-stack-secret`,
+    `${prefix}-unique-payload-secret`,
+  ]) {
+    assert(!logs.includes(secret), 'L48 API business-log fallback exposed a forbidden token');
+  }
+}
+
 function occurrenceCount(text: string, token: string): number {
   return text.split(token).length - 1;
 }
@@ -239,7 +311,8 @@ async function main(): Promise<void> {
   const runToken = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const requestMarker = `l48-http-${runToken}-unique-secret`;
   const requestPhone = '13948000000';
-  const api = startApiServer(port);
+  const logProbeToken = `l48-log-probe-${runToken}`;
+  const api = startApiServer(port, logProbeToken);
   let stopping = false;
 
   const earlyServerExit = new Promise<never>((_, reject) => {
@@ -261,6 +334,7 @@ async function main(): Promise<void> {
         runToken,
         requestMarker,
         requestPhone,
+        logProbeToken,
       ),
       earlyServerExit,
     ]);
@@ -271,11 +345,13 @@ async function main(): Promise<void> {
   }
 
   verifyHttpLogs(api.logs.value, requestMarker, requestPhone);
+  verifyBusinessLogEvidence(api.logs.value, runToken);
 
   const finalOutput = [
     scenarioOutput.trim(),
     unknownErrorMarker,
     httpLogMarkerEvidence,
+    businessLogMarkerEvidence,
     'L48 security privacy Docker API E2E verification passed.',
   ]
     .filter(Boolean)
