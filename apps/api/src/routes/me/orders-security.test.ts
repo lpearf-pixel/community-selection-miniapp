@@ -218,6 +218,27 @@ describe('L48 user order route security', () => {
     });
   });
 
+  it('preserves known after-sale validation errors as public 400 responses', async () => {
+    mockUserLookup();
+    mockOwnedOrder(deliveryOrder);
+    const app = buildApp();
+    openedApps.push(app);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/me/orders/${deliveryOrder.id}/after-sales`,
+      headers: { 'x-user-id': activeUserA.id },
+      payload: { type: 'invalid-type', reason: '测试原因' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: '售后类型不合法',
+    });
+  });
+
   it('omits raw receiver keys from list, detail, and pickup-code responses', async () => {
     mockUserLookup();
     mockOrderList();
