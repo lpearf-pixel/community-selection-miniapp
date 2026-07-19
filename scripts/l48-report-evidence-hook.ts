@@ -11,6 +11,8 @@ import {
 export type L48EvidenceStatus = 'passed' | 'failed' | 'not detected';
 export type L48EvidenceRow = { command: string; result: L48EvidenceStatus };
 
+const routeCount = L48_MINIMUM_CURRENT_USER_ROUTES.length;
+
 export const L48_REPORT_EVIDENCE_LABELS = [
   'L48 verifier',
   'L48 security privacy Docker E2E',
@@ -24,9 +26,9 @@ export const L48_REPORT_EVIDENCE_LABELS = [
 ] as const;
 
 export const L48_SECURITY_EVIDENCE_LABELS = [
-  '12 条 current-user 路由完整使用共享安全边界',
+  `${routeCount} 条 current-user 路由完整使用共享安全边界`,
   'header-only 身份、优先级、inactive 与 leader 角色边界',
-  '奖励转换与提现均按当前团长归属',
+  '奖励查询、转换与提现均按当前团长归属',
   '响应递归隐私扫描',
   'HTTP 请求与响应日志隐私扫描',
   '业务日志与失败兜底隐私扫描',
@@ -88,6 +90,7 @@ export function l48EvidenceRows(
   if (expectedCommit && l48VerificationSourceCommit(content) !== expectedCommit) {
     return unresolvedRows(content);
   }
+
   const chainPassed =
     content.includes('command_completed:L24-L48 chain regression=true') &&
     content.includes('L24-L48 chain regression passed.');
@@ -96,6 +99,7 @@ export function l48EvidenceRows(
     : hasExplicitFailure(content)
       ? 'failed'
       : 'not detected';
+
   return [
     { command: 'L48 verifier', result: completed(content, 'L48 verifier') },
     {
@@ -127,6 +131,7 @@ export function l48EvidenceRows(
 function securityEvidenceRows(content: string): L48EvidenceRow[] {
   const status = (passed: boolean): L48EvidenceStatus =>
     passed ? 'passed' : hasExplicitFailure(content) ? 'failed' : 'not detected';
+
   return [
     {
       command: L48_SECURITY_EVIDENCE_LABELS[0],
@@ -221,6 +226,7 @@ function apiPurpose(method: string, path: string): string {
   if (path.endsWith('/after-sales')) {
     return method === 'POST' ? '当前用户提交订单售后' : '当前用户订单售后列表';
   }
+  if (path === '/api/leaders/me/commissions') return '当前团长奖励明细与可用余额';
   if (path === '/api/leaders/me/withdrawals' && method === 'POST') {
     return '当前团长提交人工提现申请';
   }
@@ -294,12 +300,12 @@ function renderComplianceSection(allPassed: boolean): string {
   return [
     '## 8. 合规边界检查',
     '',
-    `- [${mark}] 12 条 /api/me/** 与 /api/leaders/me/** 路由统一使用 header-only 当前用户安全边界。`,
+    `- [${mark}] ${routeCount} 条 /api/me/** 与 /api/leaders/me/** 路由统一使用 header-only 当前用户安全边界。`,
     `- [${mark}] query/body 身份字段不决定订单、奖励、提现和转换归属。`,
     `- [${mark}] 未知异常统一固定 500；客户端与日志均不出现原始 message 或 stack。`,
     `- [${mark}] current-user 响应不返回原始身份、联系方式、详细地址、账户、人工流水、税务或管理员备注。`,
-    `- [${mark}] HTTP 日志不记录 query、敏感 headers、body、cookies 或 session。`,
-    `- [${mark}] 业务日志 payload、snapshot、message/title 与失败兜底均执行脱敏。`,
+    `- [${mark}] HTTP 日志不记录 query、敏感 headers、body、cookies、session 或客户端 IP。`,
+    `- [${mark}] 业务日志 payload、snapshot、message/title 与失败兜底均执行脱敏，同时保留结构化审计关联字段。`,
     `- [${mark}] 无依赖、数据库 schema 或 migration 变化。`,
     '- 可信 header 是当前项目边界，不等同于 JWT/OAuth 或微信 session 认证。',
     '- 本阶段未实现加密、限流、CORS 重构、数据删除机制、自动打款或自动报税。',
@@ -321,9 +327,9 @@ function renderReviewerSection(): string {
     '## 11. Codex 给人工 reviewer 的说明',
     '',
     '- 本阶段统一 current-user 身份边界、错误映射、响应 DTO 与 HTTP/业务日志隐私。',
-    '- 人工重点检查 12 条路由是否全部使用共享 wrapper，query/body 冲突是否无法切换归属。',
-    '- 人工重点检查提现混合路由文件中的 Admin 路由权限与 data scope 未被改变。',
-    '- 人工重点检查响应键、日志唯一 marker、固定 500 与奖励/提现跨团长归属测试。',
+    `- 人工重点检查 ${routeCount} 条路由是否全部使用共享 wrapper，query/body 冲突是否无法切换归属。`,
+    '- 人工重点检查 commissions/withdrawals 混合路由文件中的 Admin 权限与 data scope 未被改变。',
+    '- 人工重点检查响应键、日志唯一 marker、固定 500 与奖励查询/转换/提现跨团长归属测试。',
     '- 可信 header 仍不是完整认证；该限制必须保留在发布说明中。',
     '- Reviewer 清单：docs/reviews/l48-security-privacy-hardening.md。',
     '- 只有最终报告绑定当前业务 HEAD、全部机器证据通过且人工 review 无高/中风险时，才建议创建不自动合并的 PR。',
