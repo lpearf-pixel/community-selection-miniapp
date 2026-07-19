@@ -130,7 +130,7 @@ describe('current-user security core', () => {
     ).toEqual({ statusCode: 500, message: '操作失败' });
   });
 
-  it('returns safe error log metadata without message, stack, or unsafe codes', () => {
+  it('returns safe error log metadata without message, stack, or unsafe names and codes', () => {
     const error = Object.assign(new Error('database-host-secret'), {
       code: 'P1001',
       stack: 'secret-stack',
@@ -161,5 +161,17 @@ describe('current-user security core', () => {
       error_code: 'UNKNOWN',
     });
     expect(JSON.stringify(unsafeCodeMetadata)).not.toContain('secret-db');
+
+    const unsafeNameError = Object.assign(new Error('third-secret'), {
+      name: 'DatabaseError@secret-host',
+      code: 'P1001',
+    });
+    const unsafeNameMetadata = safeErrorLogMetadata('resolve-user', unsafeNameError);
+    expect(unsafeNameMetadata).toEqual({
+      operation: 'resolve-user',
+      error_name: 'UnknownError',
+      error_code: 'P1001',
+    });
+    expect(JSON.stringify(unsafeNameMetadata)).not.toContain('secret-host');
   });
 });
