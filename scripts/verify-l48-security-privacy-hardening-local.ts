@@ -176,6 +176,10 @@ function verifyRequiredArchitecture(): void {
     'Docker E2E must include the leader commission response in privacy scanning',
   );
   assert(
+    dockerE2E.includes('Body identity changed persisted withdrawal owner'),
+    'Docker E2E must verify withdrawal body identity cannot change ownership',
+  );
+  assert(
     !dockerE2E.includes('console.error = (...args'),
     'Docker E2E must not derive business-log evidence from a console monkeypatch',
   );
