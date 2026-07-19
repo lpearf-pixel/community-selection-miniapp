@@ -132,7 +132,13 @@ assert(rewardAmount({ ...base, product_refund_amount_cents: 3000, delivery_refun
 assert(1000 - rewardAmount({ ...base, product_refund_amount_cents: 3000, delivery_refund_amount_cents: 500, refund_amount_cents: 3500 }) === 300, 'product refund deduct amount must be 300');
 assert(rewardAmount({ ...base, product_refund_amount_cents: 10000, refund_amount_cents: 10500 }) === 0, 'full product refund must zero reward');
 
-assert(commissions.includes('/api/leaders/me/commissions') && commissions.includes('x-openid') && commissions.includes('禁止查看其他开团人的开团服务奖励'), 'leader API ownership missing');
+assert(
+  commissions.includes('/api/leaders/me/commissions') &&
+    commissions.includes("withCurrentLeader(") &&
+    !commissions.includes('resolveLeaderId') &&
+    !commissions.includes('query.openid'),
+  'leader API ownership must use the shared header-only current-leader boundary',
+);
 assert(commissions.includes("requireAdminPermission('reward.view')") && commissions.includes("requireAdminPermission('reward.manage')") && commissions.includes('ADMIN_SCOPE_FORBIDDEN'), 'admin reward permission/scope missing');
 assert(commissions.includes('function requireGlobalRewardOperationAccess') && commissions.includes('if (!context.is_super_admin)') && !commissions.includes("context.role === 'finance' && hasAllCommunityScope(context)"), 'global reward operation helper must be super_admin-only');
 for (const route of ["/api/admin/rewards/release-due", "/api/admin/commissions/settle", "/api/admin/rewards/backfill"]) {
