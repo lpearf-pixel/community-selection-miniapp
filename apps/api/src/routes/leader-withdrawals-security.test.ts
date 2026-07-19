@@ -240,6 +240,49 @@ describe('L48 leader withdrawal route security', () => {
     expect(response.body).not.toContain('unique-withdrawal-db-secret');
   });
 
+  it('maps a typed ledger mismatch to the fixed public 409 response', async () => {
+    mockIdentityUsers();
+    vi.spyOn(prisma.withdrawal, 'findUnique').mockResolvedValue(null);
+    vi.spyOn(prisma.businessEventLog, 'create').mockResolvedValue({ id: 'l48-audit' } as any);
+    const fakeTx = {
+      commission: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'l48-commission-a',
+            final_amount_cents: 300,
+            order_id: 'l48-order-a',
+          },
+        ]),
+      },
+      rewardLedger: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    } as any;
+    vi.spyOn(prisma, '$transaction').mockImplementation(
+      (async (callback: (tx: any) => Promise<unknown>) => callback(fakeTx)) as any,
+    );
+    const app = buildApp();
+    openedApps.push(app);
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/leaders/me/withdrawals',
+      headers: { 'x-user-id': leaderA.id },
+      payload: {
+        client_request_id: 'l48-typed-ledger-mismatch',
+        commission_ids: ['l48-commission-a'],
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: '奖励账本待人工复核',
+    });
+    expect(prisma.businessEventLog.create).toHaveBeenCalled();
+  });
+
   it('maps a message-prefixed ledger mismatch from an unknown error to the fixed 500 boundary', async () => {
     mockIdentityUsers();
     vi.spyOn(prisma.withdrawal, 'findUnique').mockResolvedValue(null);
