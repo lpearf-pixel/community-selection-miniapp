@@ -4,7 +4,7 @@ This document is a normative correction to `2026-07-19-l48-security-privacy-hard
 
 ## 1. Route inventory and verifier parsing
 
-The final L48 route inventory contains 13 route registrations across six production files:
+The final L48 route inventory contains 14 route registrations across seven production files:
 
 - `apps/api/src/routes/me/center.ts`
   - `GET /api/me/center-summary`
@@ -16,6 +16,8 @@ The final L48 route inventory contains 13 route registrations across six product
   - `GET /api/me/orders/:id/pickup-code`
 - `apps/api/src/routes/leaders/center.ts`
   - `GET /api/leaders/me/center-summary`
+- `apps/api/src/routes/group-buys.ts`
+  - `GET /api/leaders/me/dashboard`
 - `apps/api/src/routes/commissions.ts`
   - `GET /api/leaders/me/commissions`
 - `apps/api/src/routes/withdrawals.ts`
@@ -26,7 +28,7 @@ The final L48 route inventory contains 13 route registrations across six product
 - `apps/api/src/routes/rewards.ts`
   - `POST /api/leaders/me/rewards/convert-credit`
 
-The verifier must discover routes rather than hard-code only this list, but this list is the minimum expected inventory. The commissions route was found by the final automatic inventory review and is normative for L48 completion.
+The verifier must discover routes rather than hard-code only this list, but this list is the minimum expected inventory. The commissions and dashboard routes were found by the final automatic inventory review and are normative for L48 completion.
 
 The recursive scan must exclude:
 

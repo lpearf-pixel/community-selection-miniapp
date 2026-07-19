@@ -10,7 +10,7 @@
 
 ## 1. Current-user route inventory
 
-Confirm that all 13 routes use `withCurrentUser` or `withCurrentLeader` and no route-local/query-capable identity resolver remains:
+Confirm that all 14 routes use `withCurrentUser` or `withCurrentLeader` and no route-local/query-capable identity resolver remains:
 
 1. `GET /api/me/center-summary`
 2. `GET /api/me/orders`
@@ -19,12 +19,13 @@ Confirm that all 13 routes use `withCurrentUser` or `withCurrentLeader` and no r
 5. `POST /api/me/orders/:id/after-sales`
 6. `GET /api/me/orders/:id/pickup-code`
 7. `GET /api/leaders/me/center-summary`
-8. `GET /api/leaders/me/commissions`
-9. `GET /api/leaders/me/withdrawals`
-10. `GET /api/leaders/me/withdrawals/:id`
-11. `GET /api/leaders/me/withdrawable-commissions`
-12. `POST /api/leaders/me/withdrawals`
-13. `POST /api/leaders/me/rewards/convert-credit`
+8. `GET /api/leaders/me/dashboard`
+9. `GET /api/leaders/me/commissions`
+10. `GET /api/leaders/me/withdrawals`
+11. `GET /api/leaders/me/withdrawals/:id`
+12. `GET /api/leaders/me/withdrawable-commissions`
+13. `POST /api/leaders/me/withdrawals`
+14. `POST /api/leaders/me/rewards/convert-credit`
 
 ## 2. Identity and authorization
 
@@ -67,6 +68,7 @@ Confirm that all 13 routes use `withCurrentUser` or `withCurrentLeader` and no r
 
 - In `withdrawals.ts`, only the four `/api/leaders/me/**` blocks and their leader DTO/helpers changed; `/api/admin/**` withdrawal/tax routes retain permission, data scope, transaction, audit, and DTO behavior.
 - In `commissions.ts`, only `GET /api/leaders/me/commissions` changed identity/error wrapping; Admin reward permission, data scope, global-operation, review, freeze/unfreeze, and backfill behavior remain unchanged.
+- In `group-buys.ts`, only `GET /api/leaders/me/dashboard` changed identity/error wrapping; public order/group-buy routes and Admin routes retain their existing behavior.
 - The exact withdrawal patch safeguard reported an unchanged Admin suffix; the temporary patch script must not remain in the final business diff.
 - Query/body identity fields are removed or ignored and all current-user reads/writes use the wrapper-provided user or leader ID.
 

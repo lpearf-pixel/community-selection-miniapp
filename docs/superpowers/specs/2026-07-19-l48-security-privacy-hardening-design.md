@@ -82,6 +82,7 @@ L48 verifier 必须扫描代码生成真实路由清单。最低包含：
 - `/api/me/orders/:id/after-sales`
 - `/api/me/orders/:id/pickup-code`
 - `/api/leaders/me/center-summary`
+- `/api/leaders/me/dashboard`
 - `/api/leaders/me/rewards/convert-credit`
 - 代码库中其他所有 `/api/me/**`、`/api/leaders/me/**`
 

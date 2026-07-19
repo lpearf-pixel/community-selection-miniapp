@@ -86,7 +86,7 @@ function verifyContract(): void {
   assert(L48_BUSINESS_BASE_COMMIT.length === 40, 'L48 business base commit must be a full SHA');
   assert(L48_RUNTIME_MARKERS.length === 10, 'L48 must define exactly ten runtime markers');
   assert(new Set(L48_RUNTIME_MARKERS).size === L48_RUNTIME_MARKERS.length, 'L48 runtime markers must be unique');
-  assert(L48_MINIMUM_CURRENT_USER_ROUTES.length === 13, 'L48 must register all thirteen current-user routes');
+  assert(L48_MINIMUM_CURRENT_USER_ROUTES.length === 14, 'L48 must register all fourteen current-user routes');
   assert(L48_PROHIBITED_RESPONSE_KEYS.includes('receiver_name'), 'L48 response privacy contract must prohibit raw receiver_name');
   assert(L48_PROHIBITED_RESPONSE_KEYS.includes('manual_reference'), 'L48 response privacy contract must prohibit raw manual_reference');
   assert(L48_ALLOWED_CHANGED_PATHS.length > 0, 'L48 changed-path allow-list must not be empty');
@@ -130,6 +130,7 @@ function verifyRequiredArchitecture(): void {
   const routeWrapperTests = readRequired('apps/api/src/routes/current-user-route.test.ts');
   const orderSecurityTests = readRequired('apps/api/src/routes/me/orders-security.test.ts');
   const commissionSecurityTests = readRequired('apps/api/src/routes/leader-commissions-security.test.ts');
+  const dashboardSecurityTests = readRequired('apps/api/src/routes/leader-dashboard-security.test.ts');
   const withdrawalSecurityTests = readRequired('apps/api/src/routes/leader-withdrawals-security.test.ts');
   const withdrawalRoutes = readRequired('apps/api/src/routes/withdrawals.ts');
   const rewardSecurityTests = readRequired('apps/api/src/routes/leader-reward-conversion-security.test.ts');
@@ -152,6 +153,12 @@ function verifyRequiredArchitecture(): void {
   assert(commissionSecurityTests.includes('query-only leader identity'), 'Commission identity regression test missing');
   assert(commissionSecurityTests.includes('fixed 500'), 'Commission unknown-error regression test missing');
   assert(commissionSecurityTests.includes('public DTO'), 'Commission response privacy regression test missing');
+  assert(dashboardSecurityTests.includes('query-only identity'), 'Dashboard identity regression test missing');
+  assert(
+    dashboardSecurityTests.includes('header leader when query identity conflicts'),
+    'Dashboard conflicting-identity regression test missing',
+  );
+  assert(dashboardSecurityTests.includes('fixed 500'), 'Dashboard unknown-error regression test missing');
   assert(withdrawalSecurityTests.includes('query-only'), 'Withdrawal identity regression test missing');
   assert(withdrawalSecurityTests.includes('message-prefixed ledger mismatch'), 'Withdrawal typed mismatch regression test missing');
   assert(withdrawalRoutes.includes('class WithdrawalLedgerMismatchError'), 'Typed withdrawal ledger mismatch error missing');
@@ -172,8 +179,18 @@ function verifyRequiredArchitecture(): void {
     'Docker E2E must verify non-leader commission access',
   );
   assert(
-    dockerE2E.includes("requestJson('/api/leaders/me/commissions'"),
+    dockerE2E.includes("{ path: '/api/leaders/me/dashboard' }"),
+    'Docker E2E must verify non-leader dashboard access',
+  );
+  assert(
+    /requestJson(?:<[\s\S]{0,200}?>)?\s*\(\s*['"]\/api\/leaders\/me\/commissions['"]/.test(
+      dockerE2E,
+    ),
     'Docker E2E must include the leader commission response in privacy scanning',
+  );
+  assert(
+    dockerE2E.includes("requestJson('/api/leaders/me/dashboard'"),
+    'Docker E2E must include the leader dashboard response in privacy scanning',
   );
   assert(
     dockerE2E.includes('Body identity changed persisted withdrawal owner'),

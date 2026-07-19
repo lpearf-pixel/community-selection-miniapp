@@ -36,6 +36,7 @@
 - `apps/api/src/routes/current-user-route.ts`：`withCurrentUser`、`withCurrentLeader` 路由包装器。
 - `apps/api/src/routes/current-user-route.test.ts`：包装器响应与异常映射测试。
 - `apps/api/src/routes/me/orders-security.test.ts`：订单接口身份与异常回归测试。
+- `apps/api/src/routes/leader-dashboard-security.test.ts`：团长看板身份、角色与异常回归测试。
 - `apps/api/src/routes/leader-withdrawals-security.test.ts`：团长提现接口身份、DTO 和异常回归测试。
 - `apps/api/src/routes/leader-reward-conversion-security.test.ts`：奖励转换归属和隐私回归测试。
 - `apps/api/src/services/http-log-privacy.ts`：HTTP request serializer 与安全日志配置。
@@ -50,6 +51,7 @@
 - `apps/api/src/modules/user-orders/user-order-service.ts`：删除 query-capable `resolveUserIdentity`，把已知业务错误改为显式公开错误。
 - `apps/api/src/routes/me/center.ts`：使用 `withCurrentUser`。
 - `apps/api/src/routes/leaders/center.ts`：使用 `withCurrentLeader`。
+- `apps/api/src/routes/group-buys.ts`：只迁移 `/api/leaders/me/dashboard`；公开下单、开团与 Admin 路由保持原边界。
 - `apps/api/src/routes/me/orders.ts`：使用 `withCurrentUser`，禁止原始异常回传。
 - `apps/api/src/routes/withdrawals.ts`：只迁移 `/api/leaders/me/**` 段；Admin 路由保持原权限模型。
 - `apps/api/src/routes/rewards.ts`：奖励转换使用当前团长身份和显式响应 DTO。

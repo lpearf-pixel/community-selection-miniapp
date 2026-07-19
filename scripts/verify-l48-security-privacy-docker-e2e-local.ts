@@ -719,6 +719,7 @@ async function runScenario(): Promise<void> {
       body?: unknown;
     }> = [
       { path: '/api/leaders/me/center-summary' },
+      { path: '/api/leaders/me/dashboard' },
       { path: '/api/leaders/me/commissions' },
       { path: '/api/leaders/me/withdrawals' },
       { path: `/api/leaders/me/withdrawals/${fixtures.withdrawalA.id}` },
@@ -754,6 +755,9 @@ async function runScenario(): Promise<void> {
     }
 
     await requestJson('/api/leaders/me/center-summary', {
+      headers: leaderHeaders,
+    });
+    await requestJson('/api/leaders/me/dashboard', {
       headers: leaderHeaders,
     });
     const commissionList = await requestJson<{

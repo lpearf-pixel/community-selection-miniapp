@@ -221,6 +221,7 @@ function apiPurpose(method: string, path: string): string {
   if (path.endsWith('/center-summary')) {
     return path.startsWith('/api/leaders/') ? '团长中心只读摘要' : '个人中心只读摘要';
   }
+  if (path === '/api/leaders/me/dashboard') return '当前团长业务看板';
   if (path === '/api/me/orders') return '当前用户订单列表';
   if (path.endsWith('/pickup-code')) return '当前用户订单自提凭证';
   if (path.endsWith('/after-sales')) {
