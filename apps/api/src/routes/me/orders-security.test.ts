@@ -261,7 +261,7 @@ describe('L48 user order route security', () => {
       data: {
         items: [
           {
-            receiver_address_masked: '南京市***号',
+            receiver_address_masked: '南京市***8号',
           },
         ],
       },
@@ -271,7 +271,7 @@ describe('L48 user order route security', () => {
         receiver: {
           receiver_name_masked: '张*',
           receiver_phone_masked: '139****5678',
-          receiver_address_masked: '南京市***号',
+          receiver_address_masked: '南京市***8号',
         },
       },
     });
