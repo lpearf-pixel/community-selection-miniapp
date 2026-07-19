@@ -7,6 +7,7 @@ import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGroupBuyRefundHandled, getFailedGroupBuyClosureSummary, listExpiredPendingGroupBuys, listFailedGroupBuyPendingRefundOrders, markExpiredGroupBuyFailed, markGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
 import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, canAccessOrderDataScope, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { withCurrentLeader } from './current-user-route.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -295,13 +296,8 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/leaders/me/dashboard', async (request, reply) => {
-    try {
-      const query = request.query as { leader_user_id?: string; openid?: string };
-      const leader = query.leader_user_id
-        ? await prisma.user.findUnique({ where: { id: query.leader_user_id } })
-        : await prisma.user.findUnique({ where: { openid: query.openid ?? '' } });
-      if (!leader || leader.role !== 'leader') throw new Error('开团人不存在');
+  app.get('/api/leaders/me/dashboard', (request, reply) =>
+    withCurrentLeader(request, reply, '查询开团人看板失败', async (leader) => {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -314,7 +310,7 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
       const effectiveAmount = (order: { pay_amount_cents: number; refund_amount_cents: number }) => Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
       const todayOrders = orders.filter((order) => order.created_at >= todayStart && order.created_at < todayEnd);
       const sumCommission = (status: string) => commissions.filter((item) => item.status === status).reduce((sum, item) => sum + item.final_amount_cents, 0);
-      return ok({
+      return {
         active_group_buys: activeGroupBuys,
         today_orders: todayOrders.length,
         today_amount_cents: todayOrders.reduce((sum, order) => sum + effectiveAmount(order), 0),
@@ -325,12 +321,9 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
         withdrawing_commission_cents: sumCommission('withdrawing'),
         withdrawn_commission_cents: sumCommission('withdrawn'),
         converted_credit_cents: conversions.reduce((sum, item) => sum + item.amount_cents, 0)
-      });
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '查询开团人看板失败');
-    }
-  });
+      };
+    }),
+  );
 
   app.post('/api/orders', async (request, reply) => {
     try {

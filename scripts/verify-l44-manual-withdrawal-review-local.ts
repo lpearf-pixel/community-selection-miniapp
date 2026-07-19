@@ -67,21 +67,23 @@ assert(existsSync('prisma/migrations/20260714000200_l44_withdrawal_commission_li
 for (const required of ['getCommissionAvailableNet', 'persistLedgerMismatch', 'withdrawal_ledger_mismatch', 'PrismaClientKnownRequestError', 'P2002', 'withdrawalCommission.createMany', 'skipDuplicates', 'updateMany({ where: { id, status: "pending"', 'updateMany({ where: { id, status: "approved"', 'requireWithdrawalDataScope']) {
   assert(route.includes(required), `route includes ${required}`);
 }
+assert(route.includes('import { withCurrentLeader } from "./current-user-route.js"'), 'Leader withdrawal routes must import shared current-leader wrapper');
+assert(!route.includes('resolveCurrentLeader(request)'), 'Legacy leader resolver must not return');
 
 const leaderWithdrawableRoute = routeBlock(route, 'get', '/api/leaders/me/withdrawable-commissions');
-assert(leaderWithdrawableRoute.includes('resolveCurrentLeader(request)'), 'Leader withdrawable commissions must use current identity');
+assert(leaderWithdrawableRoute.includes('withCurrentLeader('), 'Leader withdrawable commissions must use shared current identity boundary');
 assert(leaderWithdrawableRoute.includes('getAvailableRewardBalance'), 'Leader withdrawable commissions must use RewardLedger balance');
 
 const leaderWithdrawalListRoute = routeBlock(route, 'get', '/api/leaders/me/withdrawals');
-assert(leaderWithdrawalListRoute.includes('resolveCurrentLeader(request)'), 'Leader withdrawal list must use current identity');
+assert(leaderWithdrawalListRoute.includes('withCurrentLeader('), 'Leader withdrawal list must use shared current identity boundary');
 assert(leaderWithdrawalListRoute.includes('withdrawalCommission'), 'Leader withdrawal list must count persistent commission links');
 
 const leaderWithdrawalDetailRoute = routeBlock(route, 'get', '/api/leaders/me/withdrawals/:id');
-assert(leaderWithdrawalDetailRoute.includes('resolveCurrentLeader(request)'), 'Leader withdrawal detail must use current identity');
+assert(leaderWithdrawalDetailRoute.includes('withCurrentLeader('), 'Leader withdrawal detail must use shared current identity boundary');
 assert(leaderWithdrawalDetailRoute.includes('leader_user_id: leader.id'), 'Leader withdrawal detail must be scoped to current leader');
 
 const createWithdrawalRoute = routeBlock(route, 'post', '/api/leaders/me/withdrawals');
-assert(createWithdrawalRoute.includes('resolveCurrentLeader(request)'), 'Leader withdrawal creation must use current identity');
+assert(createWithdrawalRoute.includes('withCurrentLeader('), 'Leader withdrawal creation must use shared current identity boundary');
 assert(createWithdrawalRoute.includes('client_request_id'), 'Leader withdrawal creation must require client_request_id');
 assert(createWithdrawalRoute.includes('getCommissionAvailableNet'), 'Leader withdrawal creation must validate each commission ledger net');
 assert(createWithdrawalRoute.includes('withdrawalCommission.createMany'), 'Leader withdrawal creation must persist commission links');
@@ -128,7 +130,7 @@ assert(markPaidRoute.includes('updateMany({ where: { id, status: "approved"'), '
 assert(markPaidRoute.includes('withdrawal_paid'), 'Mark-paid route must write paid audit ledger');
 assert(markPaidRoute.includes('affects_available_balance: false'), 'Mark-paid ledger must not affect available balance');
 
-assert(route.includes('reply.code((error as { statusCode?: number }).statusCode ?? 400)'), 'route catch preserves status codes');
+assert(route.includes('reply.code((error as { statusCode?: number }).statusCode ?? 400)'), 'Admin route catches preserve status codes');
 assert(route.includes('commission_links') && route.includes('linksInScope'), 'admin list/detail use persistent links for data scope');
 assert(route.includes('requireAdminPermission("finance.view")'), 'tax records keep finance.view semantics');
 const taxRecordsRoute = routeBlock(route, 'get', '/api/admin/tax-records');

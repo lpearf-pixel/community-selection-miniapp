@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { L47_RUNTIME_MARKERS } from './l47-center-contract.ts';
+import { L48_RUNTIME_MARKERS } from './l48-security-privacy-contract.ts';
 
 export type ReportContract = {
   sourceMode: 'git_diff';
@@ -44,6 +45,11 @@ export const REPORT_CONTRACTS: Record<string, ReportContract> = {
     sourceMode: 'git_diff',
     businessBaseBranch: 'stable/l46-business-base',
     businessBaseCommit: 'dbb25ca2cf2e6d91af69a24454120f006a9422b0',
+  },
+  L48: {
+    sourceMode: 'git_diff',
+    businessBaseBranch: 'stable/l47-business-base',
+    businessBaseCommit: 'a23401df53cfae1cd41fd47f94c59f3f974d1e60',
   },
 };
 
@@ -102,6 +108,17 @@ const stageDefinitions: StageDefinition[] = [
       'scripts/verify-l47-report-routing-local.ts',
     ],
     runtimeMarkers: L47_RUNTIME_MARKERS,
+  },
+  {
+    id: 'L48',
+    number: 48,
+    title: 'Security and Privacy Hardening',
+    verifier: 'scripts/verify-l48-security-privacy-hardening-local.ts',
+    additionalVerifiers: [
+      'scripts/run-l48-security-privacy-docker-e2e-local.ts',
+      'scripts/verify-l48-report-routing-local.ts',
+    ],
+    runtimeMarkers: L48_RUNTIME_MARKERS,
   },
 ];
 

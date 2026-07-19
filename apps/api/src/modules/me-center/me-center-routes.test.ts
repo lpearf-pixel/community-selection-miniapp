@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { prisma } from '../../db.js';
-import { assertLeaderRole } from '../../routes/leaders/center.js';
+import { requireCurrentLeader } from '../current-user/current-user-security.js';
 
 const openedApps: ReturnType<typeof buildApp>[] = [];
 type UserFindUniqueResult = ReturnType<typeof prisma.user.findUnique>;
@@ -12,6 +12,7 @@ const headerCustomer = {
   nickname: 'Header Customer',
   avatar_url: null,
   role: 'customer',
+  status: 'active',
 };
 
 const queryLeader = {
@@ -20,6 +21,7 @@ const queryLeader = {
   nickname: 'Query Leader',
   avatar_url: null,
   role: 'leader',
+  status: 'active',
 };
 
 function prismaUserResult(value: unknown): UserFindUniqueResult {
@@ -144,7 +146,7 @@ describe('L47 center routes', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({
       success: false,
-      message: '仅开团人可访问团长中心',
+      message: '仅开团人可访问',
     });
   });
 
@@ -189,14 +191,14 @@ describe('L47 center routes', () => {
   });
 
   it('rejects non-leaders with 403 and accepts leaders', () => {
-    expect(() => assertLeaderRole('customer')).toThrowError('仅开团人可访问团长中心');
+    expect(() => requireCurrentLeader(headerCustomer as any)).toThrowError('仅开团人可访问');
 
     try {
-      assertLeaderRole('customer');
+      requireCurrentLeader(headerCustomer as any);
     } catch (error) {
       expect((error as { statusCode?: number }).statusCode).toBe(403);
     }
 
-    expect(() => assertLeaderRole('leader')).not.toThrow();
+    expect(() => requireCurrentLeader(queryLeader as any)).not.toThrow();
   });
 });

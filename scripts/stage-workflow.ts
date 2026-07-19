@@ -48,6 +48,12 @@ function additionalVerifierTitle(stageId: string, verifier: string): string {
   if (verifier === 'scripts/verify-l47-report-routing-local.ts') {
     return 'L47 report routing verifier';
   }
+  if (verifier === 'scripts/run-l48-security-privacy-docker-e2e-local.ts') {
+    return 'L48 security privacy Docker E2E';
+  }
+  if (verifier === 'scripts/verify-l48-report-routing-local.ts') {
+    return 'L48 report routing verifier';
+  }
   return `${stageId} additional verifier`;
 }
 
@@ -285,15 +291,7 @@ function runVerify(args: ParsedArgs, publishMode = false): void {
 }
 
 function runReportStage(stage: string): void {
-  if (stage === 'L46') {
-    runCommand({
-      title: `report:stage ${stage}`,
-      command: 'pnpm',
-      args: ['exec', 'tsx', 'scripts/generate-stage-report-entry.ts', `--stage=${stage}`],
-    });
-    return;
-  }
-  if (stage === 'L47') {
+  if (stage === 'L46' || stage === 'L47' || stage === 'L48') {
     runCommand({
       title: `report:stage ${stage}`,
       command: 'pnpm',
@@ -320,6 +318,12 @@ function runReportVerifier(stage: string): void {
       title: 'report publish verifier',
       command: 'pnpm',
       args: ['exec', 'tsx', 'scripts/verify-l47-report-publish-local.ts', `--stage=${stage}`],
+    });
+  } else if (stage === 'L48') {
+    runCommand({
+      title: 'report publish verifier',
+      command: 'pnpm',
+      args: ['exec', 'tsx', 'scripts/verify-l48-report-publish-local.ts', `--stage=${stage}`],
     });
   } else {
     runCommand({

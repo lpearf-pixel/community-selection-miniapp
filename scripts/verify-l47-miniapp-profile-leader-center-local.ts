@@ -12,6 +12,7 @@ import {
 import { resolveReportSource } from './stage-report-source.ts';
 
 const repoRoot = process.cwd();
+const L47_STABLE_SOURCE_COMMIT = '030d06aebe75373600338a2eff92f4fb8e25a607';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -28,7 +29,7 @@ function changedFiles(): string[] {
   assert(source.sourceMode === 'git_diff', 'L47 changed-file verification requires a git_diff report source');
   const output = execFileSync(
     'git',
-    ['diff', '--name-only', `${source.businessBaseCommit}...HEAD`],
+    ['diff', '--name-only', `${source.businessBaseCommit}...${L47_STABLE_SOURCE_COMMIT}`],
     { cwd: repoRoot, encoding: 'utf8' },
   );
   return output.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
@@ -54,7 +55,9 @@ function verifyBackend(): void {
   const publicRoutes = readRequired('apps/api/src/routes/public/index.ts');
   const meRoute = readRequired('apps/api/src/routes/me/center.ts');
   const leaderRoute = readRequired('apps/api/src/routes/leaders/center.ts');
-  const routeSecurity = readRequired('apps/api/src/modules/me-center/me-center-route-security.ts');
+  const compatibilitySecurity = readRequired('apps/api/src/modules/me-center/me-center-route-security.ts');
+  const currentUserSecurity = readRequired('apps/api/src/modules/current-user/current-user-security.ts');
+  const currentUserRoute = readRequired('apps/api/src/routes/current-user-route.ts');
   const routeTests = readRequired('apps/api/src/modules/me-center/me-center-routes.test.ts');
   const service = readRequired('apps/api/src/modules/me-center/me-center-service.ts');
   const types = readRequired('apps/api/src/modules/me-center/me-center-types.ts');
@@ -64,35 +67,52 @@ function verifyBackend(): void {
   assert(meRoute.includes('/api/me/center-summary'), 'Personal center endpoint missing');
   assert(leaderRoute.includes('/api/leaders/me/center-summary'), 'Leader center endpoint missing');
   assert(
-    meRoute.includes('resolveCenterUserIdentity(request.headers)') &&
-      leaderRoute.includes('resolveCenterUserIdentity(request.headers)'),
-    'Both center routes must resolve identity exclusively from request headers',
+    meRoute.includes('withCurrentUser(') && leaderRoute.includes('withCurrentLeader('),
+    'Both center routes must use the shared current-user wrappers',
   );
   assert(
-    !meRoute.includes('resolveUserIdentity') && !leaderRoute.includes('resolveUserIdentity'),
-    'Center routes must not use the shared query-capable identity resolver',
+    !meRoute.includes('resolveUserIdentity') &&
+      !leaderRoute.includes('resolveUserIdentity') &&
+      !meRoute.includes('resolveCenterUserIdentity') &&
+      !leaderRoute.includes('resolveCenterUserIdentity'),
+    'Center routes must not use legacy identity resolvers',
   );
   assert(
-    meRoute.includes("mapCenterRouteError(error, '个人中心加载失败')") &&
-      leaderRoute.includes("mapCenterRouteError(error, '团长中心加载失败')"),
-    'Both center routes must sanitize unexpected failures',
+    meRoute.includes("'个人中心加载失败'") &&
+      leaderRoute.includes("'团长中心加载失败'"),
+    'Both center routes must define fixed fallback messages',
   );
   assert(
-    routeSecurity.includes("headers['x-user-id']") &&
-      routeSecurity.includes("headers['x-openid']") &&
-      routeSecurity.includes('statusCode: 401'),
-    'Center identity resolver must require a user identity header',
+    compatibilitySecurity.includes('resolveCurrentUser as resolveCenterUserIdentity') &&
+      compatibilitySecurity.includes('mapCurrentUserRouteError as mapCenterRouteError'),
+    'L47 compatibility aliases must point to the shared current-user core',
   );
   assert(
-    routeSecurity.includes('export async function resolveCenterUserIdentity') &&
-      routeSecurity.includes('where: { id: userId }') &&
-      routeSecurity.includes('where: { openid }'),
-    'Center identity resolver must query users only from header-derived values',
+    currentUserSecurity.includes("headers['x-user-id']") &&
+      currentUserSecurity.includes("headers['x-openid']") &&
+      currentUserSecurity.includes("publicCurrentUserError('缺少用户身份', 401)"),
+    'Shared identity resolver must require an approved identity header',
   );
   assert(
-    routeSecurity.includes('statusCode: 500') &&
-      routeSecurity.includes('message: fallbackMessage'),
-    'Center route error mapping must hide unexpected internal errors behind HTTP 500',
+    currentUserSecurity.includes('export async function resolveCurrentUser') &&
+      currentUserSecurity.includes('where: { id: userId }') &&
+      currentUserSecurity.includes('where: { openid: openid! }'),
+    'Shared identity resolver must query users only from header-derived values',
+  );
+  assert(
+    currentUserSecurity.includes("user.status !== 'active'") &&
+      currentUserSecurity.includes("publicCurrentUserError('用户状态不可用', 403)"),
+    'Shared identity resolver must reject inactive users',
+  );
+  assert(
+    currentUserSecurity.includes('statusCode: 500') &&
+      currentUserSecurity.includes('message: fallbackMessage'),
+    'Shared route error mapping must hide unexpected internal errors behind HTTP 500',
+  );
+  assert(
+    currentUserRoute.includes('mapCurrentUserRouteError(error, fallbackMessage)') &&
+      currentUserRoute.includes("safeErrorLogMetadata('current-user-route', error)"),
+    'Shared wrappers must sanitize and safely log unexpected failures',
   );
   assert(
     routeTests.includes('rejects query-only identities') &&
@@ -104,10 +124,9 @@ function verifyBackend(): void {
     'Center route security regression tests are missing',
   );
   assert(
-    leaderRoute.includes('export function assertLeaderRole') &&
-      leaderRoute.includes('statusCode: 403') &&
-      leaderRoute.includes('assertLeaderRole(user.role)'),
-    'Leader role guard missing',
+    currentUserRoute.includes('requireCurrentLeader(user)') &&
+      currentUserSecurity.includes("publicCurrentUserError('仅开团人可访问', 403)"),
+    'Shared leader role guard missing',
   );
   assert(service.includes('prisma.order.count'), 'Personal center must use database count queries');
   assert(service.includes('prisma.groupBuy.count'), 'Leader center must use database group-buy counts');
