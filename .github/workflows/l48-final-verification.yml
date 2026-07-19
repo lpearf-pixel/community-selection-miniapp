@@ -1,0 +1,76 @@
+name: L48 Final Verification
+
+on:
+  push:
+    branches:
+      - work/l48-security-privacy-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout L48 branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/l48-security-privacy-hardening
+          fetch-depth: 0
+
+      - name: Remove one-shot workflow before verification
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/l48-final-verification.yml
+          git commit -m 'chore: remove one-shot L48 verification workflow'
+          git push origin HEAD:work/l48-security-privacy-hardening
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.4 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate --schema prisma/schema.prisma
+
+      - name: Verify clean L48 scope
+        run: |
+          git diff --check stable/l47-business-base...HEAD
+          pnpm exec tsx scripts/verify-l48-security-privacy-hardening-local.ts
+
+      - name: Run focused API security and privacy tests
+        run: |
+          pnpm --filter @community-selection/api exec vitest run \
+            src/modules/current-user/current-user-security.test.ts \
+            src/routes/current-user-route.test.ts \
+            src/modules/me-center/me-center-routes.test.ts \
+            src/routes/me/orders-security.test.ts \
+            src/routes/leader-commissions-security.test.ts \
+            src/routes/leader-withdrawals-security.test.ts \
+            src/routes/leader-reward-conversion-security.test.ts \
+            src/services/http-log-privacy.test.ts \
+            src/services/logging-service-privacy.test.ts
+
+      - name: Run API typecheck and report routing gates
+        run: |
+          pnpm --filter @community-selection/api typecheck
+          pnpm exec tsx scripts/verify-l47-miniapp-profile-leader-center-local.ts
+          pnpm exec tsx scripts/verify-stage-registry-local.ts
+          pnpm exec tsx scripts/verify-report-source-resolver-local.ts
+          pnpm exec tsx scripts/verify-stage-verifier-architecture-local.ts
+          pnpm exec tsx scripts/verify-l48-report-routing-local.ts
+
+      - name: Run full L24-L48 chain and publish report
+        run: |
+          pnpm exec tsx scripts/stage-workflow.ts \
+            --stage=L48 \
+            --publish \
+            --scope=chain \
+            --push
