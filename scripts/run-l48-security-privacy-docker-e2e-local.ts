@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:net';
-import { L48_RUNTIME_MARKERS } from './l48-security-privacy-contract.ts';
+import {
+  L48_RUNTIME_MARKERS,
+} from './l48-security-privacy-contract.ts';
 
 const repoRoot = process.cwd();
 const unknownErrorMarker = 'l48_unknown_error_sanitized=true';
@@ -48,6 +50,7 @@ function runFocusedTests(): Promise<void> {
     'src/routes/current-user-route.test.ts',
     'src/modules/me-center/me-center-routes.test.ts',
     'src/routes/me/orders-security.test.ts',
+    'src/routes/leader-commissions-security.test.ts',
     'src/routes/leader-withdrawals-security.test.ts',
     'src/routes/leader-reward-conversion-security.test.ts',
     'src/services/http-log-privacy.test.ts',
@@ -95,22 +98,26 @@ function startApiServer(port: number): {
   logs: { value: string };
 } {
   const logs = { value: '' };
-  const child = spawn('pnpm', ['exec', 'tsx', 'apps/api/src/server.ts'], {
-    cwd: repoRoot,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      PORT: String(port),
-      NODE_ENV: 'test',
-      MOCK_WECHAT_PAY: 'true',
-      WECHAT_PAY_MODE: 'mock',
-      ADMIN_AUTH_ENABLED: 'false',
-      AUTO_PAYOUT_ENABLED: 'false',
-      AUTO_TAX_FILING_ENABLED: 'false',
-      NO_PROXY: noProxyValue(),
-      no_proxy: noProxyValue(),
+  const child = spawn(
+    'pnpm',
+    ['exec', 'tsx', 'apps/api/src/server.ts'],
+    {
+      cwd: repoRoot,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PORT: String(port),
+        NODE_ENV: 'test',
+        MOCK_WECHAT_PAY: 'true',
+        WECHAT_PAY_MODE: 'mock',
+        ADMIN_AUTH_ENABLED: 'false',
+        AUTO_PAYOUT_ENABLED: 'false',
+        AUTO_TAX_FILING_ENABLED: 'false',
+        NO_PROXY: noProxyValue(),
+        no_proxy: noProxyValue(),
+      },
     },
-  });
+  );
   child.stdout.on('data', (chunk: Buffer | string) => {
     logs.value += chunk.toString();
   });
@@ -152,9 +159,7 @@ function runScenario(
     child.stdout.on('data', (chunk: Buffer | string) => {
       stdout += chunk.toString();
     });
-    child.stderr.on('data', () => {
-      // Drain diagnostics without replaying potentially sensitive fixture values.
-    });
+    child.stderr.resume();
     child.once('error', reject);
     child.once('exit', (code, signal) => {
       if (code === 0) {
@@ -163,7 +168,7 @@ function runScenario(
       }
       reject(
         new Error(
-          `L48 isolated scenario exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}; run the scenario command directly for local diagnostics`,
+          `L48 isolated scenario exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`,
         ),
       );
     });
@@ -171,9 +176,7 @@ function runScenario(
 }
 
 function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return Promise.resolve();
-  }
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
     let settled = false;
     const finish = () => {
@@ -193,11 +196,7 @@ function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
   });
 }
 
-function verifyHttpLogs(
-  logs: string,
-  requestMarker: string,
-  requestPhone: string,
-): void {
+function verifyHttpLogs(logs: string, requestMarker: string, requestPhone: string) {
   assert(logs.length > 0, 'L48 API produced no logs to inspect');
   assert(
     logs.includes('"path":"/api/me/orders"'),
@@ -208,23 +207,19 @@ function verifyHttpLogs(
     'L48 HTTP logs do not contain the sanitized response status code',
   );
 
-  const forbiddenTokens = [
-    { label: 'request marker', value: requestMarker },
-    { label: 'phone marker', value: requestPhone },
-    { label: 'query string', value: '?user_id=' },
-    { label: 'authorization header name', value: 'authorization' },
-    { label: 'user-id header name', value: 'x-user-id' },
-    { label: 'openid header name', value: 'x-openid' },
-    { label: 'admin-token header name', value: 'x-admin-token' },
-    { label: 'address body key', value: 'receiver_address' },
-    { label: 'phone body key', value: 'receiver_phone' },
-    { label: 'session cookie', value: 'session=' },
-  ];
-  for (const token of forbiddenTokens) {
-    assert(
-      !logs.includes(token.value),
-      `L48 HTTP logs exposed forbidden ${token.label}`,
-    );
+  for (const secret of [
+    requestMarker,
+    requestPhone,
+    '?user_id=',
+    'authorization',
+    'x-user-id',
+    'x-openid',
+    'x-admin-token',
+    'receiver_address',
+    'receiver_phone',
+    'session=',
+  ]) {
+    assert(!logs.includes(secret), 'L48 HTTP logs exposed a forbidden token');
   }
 }
 
