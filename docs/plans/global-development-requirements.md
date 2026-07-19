@@ -1,6 +1,6 @@
 # 全局开发要求
 
-本文件是 `docs/plans/next-stage-development-plan.md` 的强制补充。自 L40 起，Codex、人工开发和后续阶段 PR 均必须同时遵守本文件与阶段计划；两者冲突时，以更严格者为准。
+本文件是 `docs/plans/next-stage-development-plan.md` 的强制补充。自 L40 起，Codex、人工开发和后续阶段 PR 均必须同时遵守本文件、阶段计划与 `docs/plans/global-risk-register.md`；三者冲突时，以更严格者为准。
 
 ## 1. 稳定基线与分支
 
@@ -36,17 +36,18 @@
 每个阶段开始前必须执行：
 
 1. 读取 `docs/plans/next-stage-development-plan.md` 与本文件。
-2. 确认当前阶段已在计划中定义，且不提前开发下一阶段。
-3. 确认当前稳定分支 Admin typecheck 为零错误。
-4. 确认当前稳定分支 Docker API E2E 通过。
-5. 确认当前阶段之前的 chain regression 通过。
-6. 检查当前分支相对稳定基线是否意外修改：
+2. 读取 `docs/plans/global-risk-register.md`，确认未解决风险、当前阶段影响与清零计划。
+3. 确认当前阶段已在计划中定义，且不提前开发下一阶段。
+4. 确认当前稳定分支 Admin typecheck 为零错误。
+5. 确认当前稳定分支 Docker API E2E 通过。
+6. 确认当前阶段之前的 chain regression 通过。
+7. 检查当前分支相对稳定基线是否意外修改：
    - `package.json`
    - `pnpm-lock.yaml`
    - `tsconfig*.json`
    - `**/*.d.ts`
    - Prisma schema 与 migration
-7. 发现基础类型、依赖、Docker 或 verify 问题时，必须暂停业务功能开发，先在独立治理任务中解决。
+8. 发现基础类型、依赖、Docker 或 verify 问题时，必须暂停业务功能开发，先在独立治理任务中解决。
 
 ## 4. 新功能开发要求
 
