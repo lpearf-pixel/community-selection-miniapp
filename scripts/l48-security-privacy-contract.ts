@@ -83,6 +83,7 @@ export const L48_ALLOWED_CHANGED_PATHS = [
   'scripts/run-l48-security-privacy-docker-e2e-local.ts',
   'scripts/stage-registry.ts',
   'scripts/stage-workflow.ts',
+  'scripts/verify-l44-manual-withdrawal-review-local.ts',
   'scripts/verify-l47-miniapp-profile-leader-center-local.ts',
   'scripts/verify-l48-report-publish-local.ts',
   'scripts/verify-l48-report-routing-local.ts',
