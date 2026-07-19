@@ -98,3 +98,26 @@ export function isL48AllowedChangedPath(path: string): boolean {
     allowed.endsWith('/') ? path.startsWith(allowed) : path === allowed,
   );
 }
+
+export function findProhibitedResponsePaths(
+  value: unknown,
+  path = '$',
+): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      findProhibitedResponsePaths(item, `${path}[${index}]`),
+    );
+  }
+  if (!value || typeof value !== 'object') return [];
+
+  return Object.entries(value as Record<string, unknown>).flatMap(
+    ([key, child]) => [
+      ...(L48_PROHIBITED_RESPONSE_KEYS.includes(
+        key as (typeof L48_PROHIBITED_RESPONSE_KEYS)[number],
+      )
+        ? [`${path}.${key}`]
+        : []),
+      ...findProhibitedResponsePaths(child, `${path}.${key}`),
+    ],
+  );
+}
