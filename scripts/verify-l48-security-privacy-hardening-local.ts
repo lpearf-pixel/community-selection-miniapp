@@ -86,6 +86,7 @@ function verifyContract(): void {
   assert(L48_BUSINESS_BASE_COMMIT.length === 40, 'L48 business base commit must be a full SHA');
   assert(L48_RUNTIME_MARKERS.length === 10, 'L48 must define exactly ten runtime markers');
   assert(new Set(L48_RUNTIME_MARKERS).size === L48_RUNTIME_MARKERS.length, 'L48 runtime markers must be unique');
+  assert(L48_MINIMUM_CURRENT_USER_ROUTES.length === 13, 'L48 must register all thirteen current-user routes');
   assert(L48_PROHIBITED_RESPONSE_KEYS.includes('receiver_name'), 'L48 response privacy contract must prohibit raw receiver_name');
   assert(L48_PROHIBITED_RESPONSE_KEYS.includes('manual_reference'), 'L48 response privacy contract must prohibit raw manual_reference');
   assert(L48_ALLOWED_CHANGED_PATHS.length > 0, 'L48 changed-path allow-list must not be empty');
@@ -113,6 +114,7 @@ function verifyCurrentUserRouteBlocks(): void {
     );
     assert(!route.block.includes('resolveUserIdentity'), `Legacy identity resolver remains: ${label}`);
     assert(!route.block.includes('resolveCurrentLeader(request)'), `Legacy leader resolver remains: ${label}`);
+    assert(!route.block.includes('resolveLeaderId'), `Legacy commission identity resolver remains: ${label}`);
     assert(!/statusCode\s*\?\?\s*400/.test(route.block), `Unknown error defaults to 400: ${label}`);
     assert(
       !/fail\(\s*error instanceof Error\s*\?\s*error\.message/.test(route.block),
@@ -127,6 +129,7 @@ function verifyRequiredArchitecture(): void {
   const routeWrapper = readRequired('apps/api/src/routes/current-user-route.ts');
   const routeWrapperTests = readRequired('apps/api/src/routes/current-user-route.test.ts');
   const orderSecurityTests = readRequired('apps/api/src/routes/me/orders-security.test.ts');
+  const commissionSecurityTests = readRequired('apps/api/src/routes/leader-commissions-security.test.ts');
   const withdrawalSecurityTests = readRequired('apps/api/src/routes/leader-withdrawals-security.test.ts');
   const rewardSecurityTests = readRequired('apps/api/src/routes/leader-reward-conversion-security.test.ts');
   const httpLogPrivacy = readRequired('apps/api/src/services/http-log-privacy.ts');
@@ -145,11 +148,16 @@ function verifyRequiredArchitecture(): void {
   assert(securityCoreTests.includes('query-only identity'), 'Core query-only identity regression test missing');
   assert(routeWrapperTests.includes('fixed 500'), 'Wrapper unknown-error regression test missing');
   assert(orderSecurityTests.includes('query-only'), 'Order identity regression test missing');
+  assert(commissionSecurityTests.includes('query-only leader identity'), 'Commission identity regression test missing');
+  assert(commissionSecurityTests.includes('fixed 500'), 'Commission unknown-error regression test missing');
+  assert(commissionSecurityTests.includes('public DTO'), 'Commission response privacy regression test missing');
   assert(withdrawalSecurityTests.includes('query-only'), 'Withdrawal identity regression test missing');
   assert(rewardSecurityTests.includes('leader_user_id'), 'Reward ownership regression test missing');
   assert(httpLogPrivacy.includes('serializeHttpRequest'), 'HTTP request privacy serializer missing');
   assert(httpLogPrivacyTests.includes('unique-marker'), 'HTTP log unique-marker test missing');
+  assert(httpLogPrivacyTests.includes('remote_address'), 'HTTP log test must explicitly reject remote address output');
   assert(businessLogPrivacyTests.includes('unique-db-host-secret'), 'Business log fallback privacy test missing');
+  assert(businessLogPrivacyTests.includes('resolution audit actor'), 'Structured audit actor regression test missing');
   assert(dockerE2E.includes('L48_PROHIBITED_RESPONSE_KEYS'), 'Docker E2E must scan response keys');
   for (const marker of L48_RUNTIME_MARKERS) {
     assert(dockerE2E.includes(marker), `Docker E2E missing runtime marker: ${marker}`);
