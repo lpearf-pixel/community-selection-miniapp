@@ -2,7 +2,7 @@
 
 ## Review scope
 
-- Business base: `stable/l47-business-base@030d06aebe75373600338a2eff92f4fb8e25a607`.
+- Business base: `stable/l47-business-base@a23401df53cfae1cd41fd47f94c59f3f974d1e60`.
 - Business branch: `work/l48-security-privacy-hardening`.
 - This stage hardens only `/api/me/**` and `/api/leaders/me/**`, their response DTOs, and HTTP/business logging.
 - This stage does not add JWT/OAuth, WeChat session authentication, encryption, rate limiting, CORS redesign, data deletion, automatic payout, or automatic tax filing.
