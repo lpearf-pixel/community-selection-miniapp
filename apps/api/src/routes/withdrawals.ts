@@ -25,6 +25,13 @@ type WithdrawBody = {
   client_request_id?: string;
   commission_ids?: string[];
 };
+
+class WithdrawalLedgerMismatchError extends Error {
+  constructor(readonly auditPayload: Record<string, unknown>) {
+    super("Withdrawal reward ledger mismatch");
+    this.name = "WithdrawalLedgerMismatchError";
+  }
+}
 type ReviewBody = {
   admin_user_id?: string;
   reason?: string;
@@ -650,13 +657,10 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
               }
             }
             if (mismatches.length > 0) {
-              throw httpError(
-                `LEDGER_MISMATCH:${JSON.stringify({
-                  mismatches,
-                  requested_amount_cents: amount,
-                })}`,
-                409,
-              );
+              throw new WithdrawalLedgerMismatchError({
+                mismatches,
+                requested_amount_cents: amount,
+              });
             }
 
             const availableBalance = await getAvailableRewardBalance(
@@ -664,13 +668,10 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
               leader.id,
             );
             if (availableBalance < amount) {
-              throw httpError(
-                `LEDGER_MISMATCH:${JSON.stringify({
-                  available_balance_cents: availableBalance,
-                  requested_amount_cents: amount,
-                })}`,
-                409,
-              );
+              throw new WithdrawalLedgerMismatchError({
+                available_balance_cents: availableBalance,
+                requested_amount_cents: amount,
+              });
             }
 
             const created = await tx.withdrawal.create({
@@ -746,14 +747,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
           );
           if (existing) return existing;
         }
-        if (
-          error instanceof Error &&
-          error.message.startsWith("LEDGER_MISMATCH:")
-        ) {
-          const payload = JSON.parse(
-            error.message.slice("LEDGER_MISMATCH:".length),
-          );
-          await persistLedgerMismatch(leader.id, payload);
+        if (error instanceof WithdrawalLedgerMismatchError) {
+          await persistLedgerMismatch(leader.id, error.auditPayload);
           throw publicCurrentUserError("奖励账本待人工复核", 409);
         }
         throw error;
