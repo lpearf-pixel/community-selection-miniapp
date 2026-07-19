@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 稳定基线必须是 `stable/l47-business-base@030d06aebe75373600338a2eff92f4fb8e25a607`。
+- 稳定基线必须是 `stable/l47-business-base@a23401df53cfae1cd41fd47f94c59f3f974d1e60`。
 - 工作分支必须是 `work/l48-security-privacy-hardening`。
 - 严格 TDD：生产行为改变前必须先提交并实际观察对应 RED。
 - 当前用户身份只读取 `x-user-id`、`x-openid`；两者同时存在时 `x-user-id` 优先。
@@ -92,7 +92,7 @@
 
 ```ts
 export const L48_BUSINESS_BASE_BRANCH = 'stable/l47-business-base';
-export const L48_BUSINESS_BASE_COMMIT = '030d06aebe75373600338a2eff92f4fb8e25a607';
+export const L48_BUSINESS_BASE_COMMIT = 'a23401df53cfae1cd41fd47f94c59f3f974d1e60';
 
 export const L48_PROHIBITED_RESPONSE_KEYS = [
   'openid',
@@ -967,7 +967,7 @@ Add expectations that:
 ```ts
 getStageDefinition('L48')?.title === 'Security and Privacy Hardening'
 resolveReportSource('L48').businessBaseBranch === 'stable/l47-business-base'
-resolveReportSource('L48').businessBaseCommit === '030d06aebe75373600338a2eff92f4fb8e25a607'
+resolveReportSource('L48').businessBaseCommit === 'a23401df53cfae1cd41fd47f94c59f3f974d1e60'
 ```
 
 Run the existing registry/source tests and confirm RED because L48 is unregistered.
