@@ -98,6 +98,7 @@ function runFocusedTests(): Promise<void> {
     'src/modules/me-center/me-center-routes.test.ts',
     'src/routes/me/orders-security.test.ts',
     'src/routes/leader-commissions-security.test.ts',
+    'src/routes/leader-dashboard-security.test.ts',
     'src/routes/leader-withdrawals-security.test.ts',
     'src/routes/leader-reward-conversion-security.test.ts',
     'src/services/http-log-privacy.test.ts',

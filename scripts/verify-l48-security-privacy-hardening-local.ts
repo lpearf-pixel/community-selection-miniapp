@@ -214,6 +214,10 @@ function verifyRequiredArchitecture(): void {
     dockerRunner.includes('verifyBusinessLogEvidence(api.logs.value'),
     'Docker runner must verify business-log evidence from captured API-process logs',
   );
+  assert(
+    dockerRunner.includes("'src/routes/leader-dashboard-security.test.ts'"),
+    'Docker runner must execute the dashboard security regression tests',
+  );
   for (const marker of L48_RUNTIME_MARKERS) {
     assert(dockerE2E.includes(marker), `Docker E2E missing runtime marker: ${marker}`);
   }
