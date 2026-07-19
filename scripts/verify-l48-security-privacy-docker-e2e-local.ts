@@ -7,7 +7,6 @@ import {
   PrismaClient,
   WithdrawalStatus,
 } from '@prisma/client';
-import { safeRecordBusinessEvent } from '../apps/api/src/services/logging-service.js';
 import {
   L48_PROHIBITED_RESPONSE_KEYS,
   L48_RUNTIME_MARKERS,
@@ -54,6 +53,7 @@ const RUN_TOKEN = process.env.L48_RUN_TOKEN ?? `${Date.now()}`;
 const HTTP_LOG_MARKER =
   process.env.L48_HTTP_LOG_MARKER ?? `l48-http-log-${RUN_TOKEN}-secret`;
 const HTTP_LOG_PHONE = process.env.L48_HTTP_LOG_PHONE ?? '13948000000';
+const LOG_PROBE_TOKEN = process.env.L48_LOG_PROBE_TOKEN ?? '';
 const prefix = `l48-${RUN_TOKEN}`;
 const prisma = new PrismaClient();
 const capturedBodies: unknown[] = [];
@@ -619,48 +619,6 @@ async function createFixtures() {
   };
 }
 
-async function verifyBusinessLogFallback(): Promise<void> {
-  const errorMarker = `${prefix}-unique-db-host-secret`;
-  const stackMarker = `${prefix}-unique-stack-secret`;
-  const payloadMarker = `${prefix}-unique-payload-secret`;
-  const captured: unknown[][] = [];
-  const originalConsoleError = console.error;
-  console.error = (...args: unknown[]) => {
-    captured.push(args);
-  };
-
-  try {
-    const failure = Object.assign(new Error(errorMarker), {
-      name: 'PrismaClientKnownRequestError',
-      code: 'P9999',
-      stack: stackMarker,
-    });
-    const failingClient = {
-      businessEventLog: {
-        create: async () => {
-          throw failure;
-        },
-      },
-    } as any;
-    await safeRecordBusinessEvent(failingClient, {
-      event_type: 'l48_logging_failure_test',
-      event_source: 'l48-e2e',
-      trace_id: `${prefix}-trace`,
-      request_id: `${prefix}-request`,
-      payload: { secret_input: payloadMarker },
-    });
-  } finally {
-    console.error = originalConsoleError;
-  }
-
-  const serialized = JSON.stringify(captured);
-  assert(serialized.includes('recordBusinessEvent'), 'Safe log fallback operation missing');
-  assert(serialized.includes('P9999'), 'Safe log fallback stable error code missing');
-  for (const secret of [errorMarker, stackMarker, payloadMarker]) {
-    assert(!serialized.includes(secret), `Safe log fallback exposed ${secret}`);
-  }
-}
-
 function verifyResponsePrivacy(forbiddenValues: string[]): void {
   const prohibitedPaths = capturedBodies.flatMap((body, index) =>
     findProhibitedResponsePaths(body, `$responses[${index}]`),
@@ -925,7 +883,16 @@ async function runScenario(): Promise<void> {
       `${prefix}-manual-reference-secret-88`,
     ]);
 
-    await verifyBusinessLogFallback();
+    assert(LOG_PROBE_TOKEN.length > 0, 'L48 business-log probe token is required');
+    await requestJson('/__l48/business-log-fallback', {
+      method: 'POST',
+      headers: { 'x-l48-probe-token': LOG_PROBE_TOKEN },
+      body: {
+        error_marker: `${prefix}-unique-db-host-secret`,
+        stack_marker: `${prefix}-unique-stack-secret`,
+        payload_marker: `${prefix}-unique-payload-secret`,
+      },
+    });
 
     emitMarker(markers.queryOnlyIdentity);
     emitMarker(markers.headerIdentityWins);
@@ -934,7 +901,6 @@ async function runScenario(): Promise<void> {
     emitMarker(markers.rewardOwnerScope);
     emitMarker(markers.withdrawalOwnerScope);
     emitMarker(markers.responsePrivacy);
-    emitMarker(markers.businessLogPrivacy);
     console.log('L48 security privacy API scenario passed.');
   } finally {
     await cleanup();
