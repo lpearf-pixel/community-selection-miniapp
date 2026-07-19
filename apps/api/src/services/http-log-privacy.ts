@@ -2,11 +2,9 @@ type HttpRequestLogInput = {
   id?: unknown;
   method?: unknown;
   url?: unknown;
-  ip?: unknown;
   raw?: {
     method?: unknown;
     url?: unknown;
-    socket?: { remoteAddress?: unknown };
   };
 };
 
@@ -35,14 +33,11 @@ export function requestPath(url: string): string {
 export function serializeHttpRequest(request: HttpRequestLogInput) {
   const method = text(request.method) ?? text(request.raw?.method) ?? 'UNKNOWN';
   const url = text(request.url) ?? text(request.raw?.url) ?? '/';
-  const remoteAddress =
-    text(request.ip) ?? text(request.raw?.socket?.remoteAddress) ?? 'unknown';
 
   return {
     request_id: text(request.id) ?? 'unknown',
     method,
     path: requestPath(url),
-    remote_address: remoteAddress,
   };
 }
 
