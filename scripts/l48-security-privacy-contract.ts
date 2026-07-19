@@ -1,5 +1,5 @@
 export const L48_BUSINESS_BASE_BRANCH = 'stable/l47-business-base';
-export const L48_BUSINESS_BASE_COMMIT = '030d06aebe75373600338a2eff92f4fb8e25a607';
+export const L48_BUSINESS_BASE_COMMIT = 'a23401df53cfae1cd41fd47f94c59f3f974d1e60';
 
 export const L48_MINIMUM_CURRENT_USER_ROUTES = [
   { method: 'GET', path: '/api/me/center-summary' },
