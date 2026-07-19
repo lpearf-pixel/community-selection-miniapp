@@ -4,7 +4,7 @@
 
 - 阶段：L48
 - 稳定基线：`stable/l47-business-base`
-- 基线 commit：`030d06aebe75373600338a2eff92f4fb8e25a607`
+- 基线 commit：`a23401df53cfae1cd41fd47f94c59f3f974d1e60`
 - 工作分支：`work/l48-security-privacy-hardening`
 - 状态：待人工确认
 
