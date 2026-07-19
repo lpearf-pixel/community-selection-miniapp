@@ -125,6 +125,20 @@ export function mapCurrentUserRouteError(
 }
 
 const STABLE_ERROR_CODE_PATTERN = /^(?:[A-Z][A-Z0-9_]{0,63}|[0-9]{1,10})$/;
+const SAFE_ERROR_NAMES = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'URIError',
+  'EvalError',
+  'PrismaClientKnownRequestError',
+  'PrismaClientUnknownRequestError',
+  'PrismaClientRustPanicError',
+  'PrismaClientInitializationError',
+  'PrismaClientValidationError',
+]);
 
 function stableErrorCode(error: unknown): string {
   if (!error || typeof error !== 'object' || !('code' in error)) {
@@ -143,16 +157,18 @@ function stableErrorCode(error: unknown): string {
   return 'UNKNOWN';
 }
 
+function safeErrorName(error: unknown): string {
+  if (!(error instanceof Error)) return 'UnknownError';
+  return SAFE_ERROR_NAMES.has(error.name) ? error.name : 'UnknownError';
+}
+
 export function safeErrorLogMetadata(
   operation: string,
   error: unknown,
 ): SafeErrorLogMetadata {
   return {
     operation,
-    error_name:
-      error instanceof Error && error.name.trim()
-        ? error.name
-        : 'UnknownError',
+    error_name: safeErrorName(error),
     error_code: stableErrorCode(error),
   };
 }
