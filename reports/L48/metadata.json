@@ -1,0 +1,9 @@
+{
+  "stage": "L48",
+  "source_branch": "work/l48-security-privacy-hardening",
+  "source_commit": "c4cd5ae755777d32db54c0e4be6d2941e270eebf",
+  "report_branch": "stage-reports",
+  "generated_at": "2026-07-19T13:17:37.369Z",
+  "latest_report": "latest.md",
+  "latest_verify_output": "latest-verify-output.txt"
+}
