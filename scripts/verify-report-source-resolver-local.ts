@@ -20,7 +20,7 @@ function assertThrows(callback: () => unknown, expectedMessage: string): void {
   );
 }
 
-function verifyRegistrySource(stageId: 'L45' | 'L46' | 'L47'): void {
+function verifyRegistrySource(stageId: 'L45' | 'L46' | 'L47' | 'L48'): void {
   const definition = getStageDefinition(stageId);
   assert(definition, `${stageId} must be registered`);
   assert(definition.reportContract, `${stageId} report contract must be registered`);
@@ -39,6 +39,7 @@ function verifyRegistrySource(stageId: 'L45' | 'L46' | 'L47'): void {
 verifyRegistrySource('L45');
 verifyRegistrySource('L46');
 verifyRegistrySource('L47');
+verifyRegistrySource('L48');
 
 const l25LegacySource = resolveReportSource('L25', {});
 assert(l25LegacySource.sourceMode === 'legacy_manifest', 'L25 must support manifest-only legacy source');
