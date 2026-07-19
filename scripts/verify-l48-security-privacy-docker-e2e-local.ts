@@ -747,6 +747,7 @@ async function runScenario(): Promise<void> {
       body?: unknown;
     }> = [
       { path: '/api/leaders/me/center-summary' },
+      { path: '/api/leaders/me/commissions' },
       { path: '/api/leaders/me/withdrawals' },
       { path: `/api/leaders/me/withdrawals/${fixtures.withdrawalA.id}` },
       { path: '/api/leaders/me/withdrawable-commissions' },
@@ -783,6 +784,23 @@ async function runScenario(): Promise<void> {
     await requestJson('/api/leaders/me/center-summary', {
       headers: leaderHeaders,
     });
+    const commissionList = await requestJson<{
+      items: Array<{ commission_id: string }>;
+    }>('/api/leaders/me/commissions', {
+      headers: leaderHeaders,
+    });
+    assert(
+      commissionList.body.data.items.some(
+        (item) => item.commission_id === fixtures.commissionA.id,
+      ),
+      'Leader A commission list must contain the owned commission',
+    );
+    assert(
+      commissionList.body.data.items.every(
+        (item) => item.commission_id !== fixtures.commissionB.id,
+      ),
+      'Leader B commission leaked into leader A commission list',
+    );
     const withdrawalList = await requestJson<any[]>(
       '/api/leaders/me/withdrawals',
       { headers: leaderHeaders },
