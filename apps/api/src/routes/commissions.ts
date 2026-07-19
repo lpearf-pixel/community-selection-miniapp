@@ -4,16 +4,7 @@ import { prisma } from '../db.js';
 import { backfillAvailableRewardLedgers, getAvailableRewardBalance, releaseDueCommissions, toLeaderCommissionDto, appendRewardLedgerEntry } from '../services/commission-service.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, canAccessOrderDataScope, hasAllCommunityScope, hasAllPickupStoreScope, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
-
-async function resolveLeaderId(request: { headers: Record<string, unknown>; query: unknown }) {
-  const query = request.query as { leader_user_id?: string; openid?: string };
-  const openid = typeof request.headers['x-openid'] === 'string' ? request.headers['x-openid'] : query.openid;
-  if (!openid) throw Object.assign(new Error('缺少开团人身份'), { statusCode: 401 });
-  const user = await prisma.user.findUnique({ where: { openid } });
-  if (!user || user.role !== 'leader') throw Object.assign(new Error('开团人不存在'), { statusCode: 401 });
-  if (query.leader_user_id && query.leader_user_id !== user.id) throw Object.assign(new Error('禁止查看其他开团人的开团服务奖励'), { statusCode: 403 });
-  return user.id;
-}
+import { withCurrentLeader } from './current-user-route.js';
 
 function scopeWhere(context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>) {
   if (context.is_super_admin || hasAllCommunityScope(context) || hasAllPickupStoreScope(context)) return {};
@@ -49,15 +40,19 @@ function adminDto(c: Awaited<ReturnType<typeof requireCommissionScope>>, ledgerC
 }
 
 export function registerCommissionRoutes(app: FastifyInstance) {
-  app.get('/api/leaders/me/commissions', async (request, reply) => {
-    try {
-      const leaderUserId = await resolveLeaderId(request);
-      const commissions = await prisma.commission.findMany({ where: { leader_user_id: leaderUserId }, include: { order: { select: { order_no: true } }, group_buy: { include: { product: { select: { name: true } }, community: { select: { name: true } } } } }, orderBy: { created_at: 'desc' } });
-      const balance = await prisma.$transaction((tx) => getAvailableRewardBalance(tx, leaderUserId));
-      const summary = commissions.reduce((acc, item) => { if (item.status === 'estimated') acc.estimated_amount_cents += item.final_amount_cents; if (item.status === 'pending') acc.pending_amount_cents += item.final_amount_cents; if (item.status === 'cancelled') acc.cancelled_amount_cents += item.estimated_amount_cents; if (item.status === 'converted') acc.converted_amount_cents += item.final_amount_cents; if (item.status === 'withdrawn') acc.withdrawn_amount_cents += item.final_amount_cents; acc.deducted_amount_cents += item.deduct_amount_cents; if (item.status === 'frozen' || item.status === 'withdrawing') acc.locked_amount_cents += item.final_amount_cents; return acc; }, { estimated_amount_cents: 0, pending_amount_cents: 0, available_amount_cents: Math.max(0, balance), withdrawable_amount_cents: Math.max(0, balance), deducted_amount_cents: 0, cancelled_amount_cents: 0, locked_amount_cents: 0, converted_amount_cents: 0, withdrawn_amount_cents: 0 });
-      return ok({ summary, items: commissions.map(toLeaderCommissionDto) });
-    } catch (error) { reply.code((error as { statusCode?: number }).statusCode ?? 400); return fail(error instanceof Error ? error.message : '查询开团服务奖励失败'); }
-  });
+  app.get('/api/leaders/me/commissions', (request, reply) =>
+    withCurrentLeader(
+      request,
+      reply,
+      '查询开团服务奖励失败',
+      async (leader) => {
+        const commissions = await prisma.commission.findMany({ where: { leader_user_id: leader.id }, include: { order: { select: { order_no: true } }, group_buy: { include: { product: { select: { name: true } }, community: { select: { name: true } } } } }, orderBy: { created_at: 'desc' } });
+        const balance = await prisma.$transaction((tx) => getAvailableRewardBalance(tx, leader.id));
+        const summary = commissions.reduce((acc, item) => { if (item.status === 'estimated') acc.estimated_amount_cents += item.final_amount_cents; if (item.status === 'pending') acc.pending_amount_cents += item.final_amount_cents; if (item.status === 'cancelled') acc.cancelled_amount_cents += item.estimated_amount_cents; if (item.status === 'converted') acc.converted_amount_cents += item.final_amount_cents; if (item.status === 'withdrawn') acc.withdrawn_amount_cents += item.final_amount_cents; acc.deducted_amount_cents += item.deduct_amount_cents; if (item.status === 'frozen' || item.status === 'withdrawing') acc.locked_amount_cents += item.final_amount_cents; return acc; }, { estimated_amount_cents: 0, pending_amount_cents: 0, available_amount_cents: Math.max(0, balance), withdrawable_amount_cents: Math.max(0, balance), deducted_amount_cents: 0, cancelled_amount_cents: 0, locked_amount_cents: 0, converted_amount_cents: 0, withdrawn_amount_cents: 0 });
+        return { summary, items: commissions.map(toLeaderCommissionDto) };
+      },
+    ),
+  );
 
   app.get('/api/admin/rewards', { preHandler: requireAdminPermission('reward.view') }, async (request, reply) => {
     const context = resolveAdminAccessContext(request)!; const sw = scopeWhere(context); if (sw === null) { reply.code(403); return fail(ADMIN_SCOPE_FORBIDDEN); }
