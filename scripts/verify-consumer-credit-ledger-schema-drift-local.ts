@@ -1,18 +1,18 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 const schema = readFileSync('prisma/schema.prisma', 'utf8');
-const migrationsRoot = 'prisma/migrations';
-const migrationSql = readdirSync(migrationsRoot, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) =>
-    readFileSync(join(migrationsRoot, entry.name, 'migration.sql'), 'utf8'),
-  )
-  .join('\n');
+const migrationSql = readFileSync(
+  'prisma/migrations/202607190001_consumer_credit_ledger_balance_flag/migration.sql',
+  'utf8',
+);
+const executableMigrationSql = migrationSql
+  .replace(/--.*$/gm, '')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 const consumerCreditModel = schema.match(
   /model ConsumerCreditLedger \{[\s\S]*?\n\}/,
@@ -26,10 +26,9 @@ assert(
   'ConsumerCreditLedger schema balance flag is missing',
 );
 assert(
-  /ALTER TABLE "ConsumerCreditLedger"[\s\S]*?ADD COLUMN IF NOT EXISTS "affects_available_balance" BOOLEAN NOT NULL DEFAULT true/.test(
-    migrationSql,
-  ),
-  'ConsumerCreditLedger.affects_available_balance has no deployable migration',
+  executableMigrationSql ===
+    'ALTER TABLE "ConsumerCreditLedger" ADD COLUMN IF NOT EXISTS "affects_available_balance" BOOLEAN NOT NULL DEFAULT true;',
+  'ConsumerCreditLedger balance flag migration must contain exactly one deployable ALTER TABLE statement',
 );
 
 console.log('ConsumerCreditLedger schema drift verification passed.');
