@@ -75,6 +75,8 @@ The two center routes themselves must import and use `withCurrentUser` / `withCu
 
 Update the L43 and L44 historical verifiers to require the shared `withCurrentLeader` boundary and explicitly prohibit the removed `resolveLeaderId` / `resolveCurrentLeader(request)` patterns. These verifier changes preserve historical business rules; they do not alter Admin permissions or data scope.
 
+Update the L12 fulfillment verifier's dashboard request to use `x-user-id` while preserving its aggregate assertions. The old query-only request is intentionally invalid after L48 and must not make `verify-all-local.sh` fail for the wrong reason.
+
 ## 3. Withdrawal body compatibility decision
 
 Remove `leader_user_id` and `openid` from `WithdrawBody`. The current miniapp sends only `client_request_id` and `commission_ids`, so there is no compatibility need to retain identity fields.

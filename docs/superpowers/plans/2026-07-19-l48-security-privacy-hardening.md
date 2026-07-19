@@ -70,6 +70,7 @@
 
 ### Existing verification/report files to modify
 
+- `scripts/verify-l12-fulfillment-local.ts`：团长看板历史验收改用 `x-user-id`，保持 L12 聚合断言并适配 header-only 边界。
 - `scripts/verify-l47-miniapp-profile-leader-center-local.ts`：允许 L47 安全能力迁移到共享 current-user 模块，保持原语义检查。
 - `scripts/stage-registry.ts`：注册 L48 和 `stable/l47-business-base` 报告合同。
 - `scripts/verify-stage-registry-local.ts`、`scripts/verify-report-source-resolver-local.ts`、`scripts/verify-stage-verifier-architecture-local.ts`：补 L48 回归。

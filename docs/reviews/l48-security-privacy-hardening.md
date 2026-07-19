@@ -77,6 +77,7 @@ Confirm that all 14 routes use `withCurrentUser` or `withCurrentLeader` and no r
 - No changes to `package.json`, `pnpm-lock.yaml`, `prisma/schema.prisma`, or migrations.
 - The business branch tracks no `reports/**`, `.tmp/**`, or temporary workflow/patch artifacts.
 - L43, L44, and L47 compatibility verifiers validate the shared identity implementation without requiring removed route-local resolvers.
+- The L12 fulfillment verifier calls the leader dashboard with `x-user-id`, not the removed query-only identity path.
 - The final L48 report is bound to the final business HEAD and exact stable base.
 - All nine command evidence rows are `passed` and all ten runtime markers occur exactly once.
 - The report keeps the trusted-header limitation and contains no claims of complete authentication, encryption, rate limiting, automatic payout, automatic tax filing, zero risk, or absolute security.

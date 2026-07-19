@@ -84,7 +84,13 @@ async function main() {
   ]);
   assert(timeline && businessEvent && auditLog, 'pickup verify should write timeline, business event and admin audit');
 
-  const dashboard = await json(await app.inject({ method: 'GET', url: `/api/leaders/me/dashboard?leader_user_id=${leader.id}` }));
+  const dashboard = await json(
+    await app.inject({
+      method: 'GET',
+      url: '/api/leaders/me/dashboard',
+      headers: { 'x-user-id': leader.id },
+    }),
+  );
   assert(dashboard.total_orders >= 1 && dashboard.total_amount_cents >= 0, 'leader dashboard should aggregate orders and amount');
   assert('available_commission_cents' in dashboard && 'converted_credit_cents' in dashboard, 'leader dashboard should include commission fields');
 

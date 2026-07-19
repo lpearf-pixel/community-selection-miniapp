@@ -137,6 +137,7 @@ function verifyRequiredArchitecture(): void {
   const httpLogPrivacy = readRequired('apps/api/src/services/http-log-privacy.ts');
   const httpLogPrivacyTests = readRequired('apps/api/src/services/http-log-privacy.test.ts');
   const businessLogPrivacyTests = readRequired('apps/api/src/services/logging-service-privacy.test.ts');
+  const l12Fulfillment = readRequired('scripts/verify-l12-fulfillment-local.ts');
   const dockerE2E = readRequired('scripts/verify-l48-security-privacy-docker-e2e-local.ts');
   const dockerRunner = readRequired('scripts/run-l48-security-privacy-docker-e2e-local.ts');
 
@@ -173,6 +174,15 @@ function verifyRequiredArchitecture(): void {
   assert(httpLogPrivacyTests.includes('remote_address'), 'HTTP log test must explicitly reject remote address output');
   assert(businessLogPrivacyTests.includes('unique-db-host-secret'), 'Business log fallback privacy test missing');
   assert(businessLogPrivacyTests.includes('resolution audit actor'), 'Structured audit actor regression test missing');
+  assert(
+    l12Fulfillment.includes("url: '/api/leaders/me/dashboard'") &&
+      l12Fulfillment.includes("headers: { 'x-user-id': leader.id }"),
+    'L12 dashboard compatibility verifier must use header identity',
+  );
+  assert(
+    !l12Fulfillment.includes('/api/leaders/me/dashboard?leader_user_id='),
+    'L12 dashboard compatibility verifier must not use query identity',
+  );
   assert(dockerE2E.includes('L48_PROHIBITED_RESPONSE_KEYS'), 'Docker E2E must scan response keys');
   assert(
     dockerE2E.includes("{ path: '/api/leaders/me/commissions' }"),
