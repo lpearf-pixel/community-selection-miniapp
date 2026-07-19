@@ -17,12 +17,13 @@ describe('HTTP log privacy', () => {
     expect(requestPath('')).toBe('/');
   });
 
-  it('serializes only request id, method, path, and remote address', () => {
+  it('serializes only request id, method, and path', () => {
     const request = {
       id: 'req-1',
       method: 'POST',
       url: '/api/me/orders?identity=unique-marker',
-      ip: '127.0.0.1',
+      ip: '203.0.113.99',
+      raw: { socket: { remoteAddress: '203.0.113.100' } },
       headers: {
         'x-user-id': 'unique-marker',
         authorization: 'Bearer unique-marker',
@@ -41,19 +42,21 @@ describe('HTTP log privacy', () => {
       request_id: 'req-1',
       method: 'POST',
       path: '/api/me/orders',
-      remote_address: '127.0.0.1',
     });
 
     const serialized = JSON.stringify(serializeHttpRequest(request));
     for (const forbidden of [
       'unique-marker',
       '13900000000',
+      '203.0.113.99',
+      '203.0.113.100',
       'authorization',
       'cookie',
       'headers',
       'body',
       'query',
       'session',
+      'remote_address',
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
