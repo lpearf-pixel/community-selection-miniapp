@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   verify-and-publish:
-    if: startsWith(github.event.pull_request.title, '[internal]')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
