@@ -1,0 +1,46 @@
+name: L48 Apply Withdrawal Patch
+
+on:
+  push:
+    branches:
+      - work/l48-security-privacy-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate patch script syntax
+        run: node --check scripts/apply-l48-withdrawal-patch.mjs
+
+      - name: Apply exact withdrawal patch
+        run: node scripts/apply-l48-withdrawal-patch.mjs
+
+      - name: Validate diff
+        run: |
+          git diff --check
+          git diff --exit-code -- . ':(exclude)apps/api/src/routes/withdrawals.ts' ':(exclude)scripts/apply-l48-withdrawal-patch.mjs' ':(exclude).github/workflows/l48-apply-withdrawal-patch.yml'
+          grep -q 'withCurrentLeader(request, reply, "查询提现申请失败"' apps/api/src/routes/withdrawals.ts
+          grep -q 'export function toLeaderWithdrawalDto' apps/api/src/routes/withdrawals.ts
+          ! grep -q 'resolveCurrentLeader(request)' apps/api/src/routes/withdrawals.ts
+
+      - name: Remove one-time patch files
+        run: |
+          rm scripts/apply-l48-withdrawal-patch.mjs
+          rm .github/workflows/l48-apply-withdrawal-patch.yml
+
+      - name: Commit patched route
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api/src/routes/withdrawals.ts scripts/apply-l48-withdrawal-patch.mjs .github/workflows/l48-apply-withdrawal-patch.yml
+          git commit -m 'fix: secure leader withdrawal identity and responses'
+          git push origin HEAD:work/l48-security-privacy-hardening
