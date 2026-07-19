@@ -124,6 +124,8 @@ export function mapCurrentUserRouteError(
   };
 }
 
+const STABLE_ERROR_CODE_PATTERN = /^(?:[A-Z][A-Z0-9_]{0,63}|[0-9]{1,10})$/;
+
 function stableErrorCode(error: unknown): string {
   if (!error || typeof error !== 'object' || !('code' in error)) {
     return 'UNKNOWN';
@@ -132,9 +134,9 @@ function stableErrorCode(error: unknown): string {
   const code = (error as { code?: unknown }).code;
   if (typeof code === 'string') {
     const trimmed = code.trim();
-    return trimmed || 'UNKNOWN';
+    return STABLE_ERROR_CODE_PATTERN.test(trimmed) ? trimmed : 'UNKNOWN';
   }
-  if (typeof code === 'number' && Number.isFinite(code)) {
+  if (typeof code === 'number' && Number.isSafeInteger(code) && code >= 0) {
     return String(code);
   }
 
