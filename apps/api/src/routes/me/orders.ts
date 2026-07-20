@@ -5,6 +5,7 @@ import {
   getUserOrderPickupCode,
   listUserOrderAfterSales,
   listUserOrders,
+  type UserAfterSaleSubmission,
   type UserOrderQuery,
 } from '../../modules/user-orders/user-order-service.js';
 import { withCurrentUser } from '../current-user-route.js';
@@ -33,7 +34,7 @@ export function registerUserOrderRoutes(app: FastifyInstance) {
       createUserOrderAfterSale(
         user.id,
         (request.params as { id: string }).id,
-        request.body as any,
+        request.body as UserAfterSaleSubmission,
       ),
     ),
   );
