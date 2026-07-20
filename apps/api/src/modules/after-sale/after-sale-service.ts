@@ -39,6 +39,7 @@ export type CreateAfterSaleInput = {
   type: string;
   reason: string;
   description?: string | null;
+  requested_refund_mode?: 'full_remaining';
   requested_refund_cents?: number | null;
   requested_product_refund_cents?: number | null;
   requested_delivery_refund_cents?: number | null;
@@ -142,17 +143,19 @@ async function recordAfterSaleLog(tx: Prisma.TransactionClient, afterSaleCase: A
 
 
 function ensureRefundSplitWithinOrder(order: { product_amount_cents: number | null; total_amount_cents: number; delivery_fee_cents: number; product_refund_amount_cents: number; delivery_refund_amount_cents: number; pay_amount_cents: number; refund_amount_cents: number }, productRefundCents: number | null, deliveryRefundCents: number | null, totalRefundCents: number | null) {
+  const totalRemaining = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
+  if (totalRefundCents != null && totalRefundCents > totalRemaining) {
+    throw new Error('退款金额超过订单剩余可退金额');
+  }
   if (productRefundCents == null && deliveryRefundCents == null) return;
   const productRefund = productRefundCents ?? 0;
   const deliveryRefund = deliveryRefundCents ?? 0;
   const totalRefund = totalRefundCents ?? productRefund + deliveryRefund;
   const productRemaining = Math.max(0, (order.product_amount_cents ?? order.total_amount_cents) - order.product_refund_amount_cents);
   const deliveryRemaining = Math.max(0, (order.delivery_fee_cents ?? 0) - order.delivery_refund_amount_cents);
-  const totalRemaining = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
   if (productRefund + deliveryRefund !== totalRefund) throw new Error('商品退款金额与配送费退款金额之和必须等于总退款金额');
   if (productRefund > productRemaining) throw new Error('商品退款金额超过商品可退金额');
   if (deliveryRefund > deliveryRemaining) throw new Error('配送费退款金额超过配送费可退金额');
-  if (totalRefund > totalRemaining) throw new Error('退款金额超过订单实付金额');
 }
 
 
@@ -186,13 +189,20 @@ function normalizeEvidence(value: string[] | null | undefined) {
 export async function createAfterSaleCase(input: CreateAfterSaleInput) {
   const type = ensureIn(input.type, afterSaleTypes, '售后类型不合法') as AfterSaleType;
   if (!input.order_id || !input.reason) throw new Error('缺少售后必填字段');
-  const requestedRefundCents = input.requested_refund_cents == null ? null : ensurePositiveInteger(input.requested_refund_cents, '申请退款金额必须大于 0');
+  const explicitRequestedRefundCents = input.requested_refund_cents == null ? null : ensurePositiveInteger(input.requested_refund_cents, '申请退款金额必须大于 0');
   const requestedProductRefundCents = input.requested_product_refund_cents == null ? null : ensurePositiveInteger(input.requested_product_refund_cents, '申请商品退款金额必须大于 0');
   const requestedDeliveryRefundCents = input.requested_delivery_refund_cents == null ? null : ensurePositiveInteger(input.requested_delivery_refund_cents, '申请配送费退款金额必须大于 0');
-  if ((requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0) > 0 && requestedRefundCents !== (requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0)) throw new Error('申请商品退款金额与配送费退款金额之和必须等于总退款金额');
+  if ((requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0) > 0 && explicitRequestedRefundCents !== (requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0)) throw new Error('申请商品退款金额与配送费退款金额之和必须等于总退款金额');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true, product: true } });
     if (!order) throw new Error('订单不存在');
+    const remainingRefundableCents = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
+    const requestedRefundCents = input.requested_refund_mode === 'full_remaining'
+      ? remainingRefundableCents
+      : explicitRequestedRefundCents;
+    if (input.requested_refund_mode === 'full_remaining' && (requestedRefundCents == null || requestedRefundCents <= 0)) {
+      throw new Error('订单没有可退金额');
+    }
     ensureRefundSplitWithinOrder(order, requestedProductRefundCents, requestedDeliveryRefundCents, requestedRefundCents);
     if (input.user_id && input.user_id !== order.user_id) throw new Error('不能为无关订单提交售后');
     if (order.pay_status !== 'paid' || ['unpaid', 'closed', 'refunded'].includes(order.order_status)) throw new Error('当前订单状态不可提交售后');

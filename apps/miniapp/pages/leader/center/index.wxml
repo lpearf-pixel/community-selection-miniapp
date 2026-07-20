@@ -50,7 +50,7 @@
     <view class="section-title">最近提现申请</view>
     <view class="card">
       <view wx:if="{{!summary.withdrawals.latest.length}}" class="empty-text">暂无提现申请</view>
-      <block wx:else wx:for="{{summary.withdrawals.latest}}" wx:key="withdrawal_id">
+      <block wx:else><block wx:for="{{summary.withdrawals.latest}}" wx:key="withdrawal_id">
         <view class="withdrawal-row">
           <view>
             <view class="withdrawal-amount">{{item.amount_text}}</view>
@@ -58,6 +58,7 @@
           </view>
           <view class="status-text">{{item.status_text}}</view>
         </view>
+      </block>
       </block>
     </view>
 

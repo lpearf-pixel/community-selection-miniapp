@@ -108,7 +108,7 @@ async function seedPaidOrder(scope: string) {
 
 async function main() {
   const adminPassword = `${prefix}-AdminPass123!`;
-  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'operator', status: 'active' } });
+  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'super_admin', status: 'active' } });
   const login = await app.inject({ method: 'POST', url: '/api/admin/auth/login', payload: { username: adminUser.username, password: adminPassword } });
   assert(login.statusCode === 200, 'admin login should succeed');
   const setCookie = login.headers['set-cookie'];
@@ -123,7 +123,7 @@ async function main() {
     type: 'bad_quality',
     reason: '叶菜坏果',
     description: '收到时已有明显腐烂',
-    requested_refund_cents: 800,
+    requested_refund_cents: 2000,
     evidence_image_urls: ['https://example.com/l15-after-sale.jpg']
   };
 
@@ -132,6 +132,24 @@ async function main() {
 
   const duplicate = await app.inject({ method: 'POST', url: '/api/after-sales', payload: submitPayload });
   assert(duplicate.statusCode === 400, 'duplicate active after-sale should be rejected');
+
+  const overLimit = await seedPaidOrder('over-limit-total-only');
+  const overLimitResponse = await app.inject({
+    method: 'POST',
+    url: '/api/after-sales',
+    payload: {
+      order_id: overLimit.order.id,
+      product_id: overLimit.product.id,
+      type: 'bad_quality',
+      reason: '总申请金额超过剩余可退金额',
+      requested_refund_cents: 2001,
+    },
+  });
+  assert(overLimitResponse.statusCode === 400, 'total-only over-limit after-sale must be rejected');
+  assert(
+    !(await prisma.afterSaleCase.findFirst({ where: { order_id: overLimit.order.id } })),
+    'total-only over-limit after-sale must not create a case',
+  );
 
   const list = await json(await app.inject({ method: 'GET', url: `/api/after-sales?order_id=${primary.order.id}` }));
   assert(list.some((item: any) => item.id === afterSale.id), 'public after-sale list should include submitted case');
@@ -152,7 +170,12 @@ async function main() {
     headers: adminHeaders,
     payload: { status: 'approved', approved_refund_cents: 800, resolution_type: 'partial_refund', responsibility: 'supplier', admin_note: '按坏果比例部分退款' }
   }));
-  assert(reviewed.status === 'approved' && reviewed.approved_refund_cents === 800, 'after-sale review should approve partial refund');
+  assert(
+    reviewed.status === 'approved' &&
+      reviewed.approved_refund_cents === 800 &&
+      reviewed.approved_refund_cents < afterSale.requested_refund_cents,
+    'admin should be able to approve less than the requested full amount',
+  );
 
   const resolved = await adminJson(await app.inject({
     method: 'POST',

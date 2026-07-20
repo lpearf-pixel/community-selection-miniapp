@@ -9,13 +9,10 @@ export type UserOrderQuery = {
   page_size?: string | number;
 };
 
-type AfterSaleInput = {
+export type UserAfterSaleSubmission = {
   type?: string;
   reason?: string;
   description?: string;
-  requested_refund_cents?: number;
-  requested_product_refund_cents?: number;
-  requested_delivery_refund_cents?: number;
   evidence_image_urls?: string[];
 };
 
@@ -38,6 +35,8 @@ const USER_AFTER_SALE_BAD_REQUEST_MESSAGES = new Set([
   '商品退款金额超过商品可退金额',
   '配送费退款金额超过配送费可退金额',
   '退款金额超过订单实付金额',
+  '订单没有可退金额',
+  '退款金额超过订单剩余可退金额',
   '售后凭证必须是图片 URL 字符串数组',
 ]);
 
@@ -361,7 +360,7 @@ export async function listUserOrderAfterSales(userId: string, orderId: string) {
 export async function createUserOrderAfterSale(
   userId: string,
   orderId: string,
-  body: AfterSaleInput,
+  body: UserAfterSaleSubmission,
 ) {
   await ownedOrder(userId, orderId);
   if (!body.type || !body.reason) {
@@ -374,10 +373,8 @@ export async function createUserOrderAfterSale(
       type: body.type,
       reason: body.reason,
       description: body.description ?? null,
-      requested_refund_cents: body.requested_refund_cents ?? null,
-      requested_product_refund_cents: body.requested_product_refund_cents ?? null,
-      requested_delivery_refund_cents: body.requested_delivery_refund_cents ?? null,
       evidence_image_urls: body.evidence_image_urls ?? null,
+      requested_refund_mode: 'full_remaining',
     });
     return mapAfterSale(afterSaleCase);
   } catch (error) {
