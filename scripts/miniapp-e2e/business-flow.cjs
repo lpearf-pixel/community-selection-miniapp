@@ -106,8 +106,8 @@ async function findByTestId(page, testId, timeout = 15000) {
   throw new Error(`Missing Mini Program element ${selector} on ${page.path}`);
 }
 
-async function findByTestIdAndDataId(page, testId, dataId, timeout = 15000) {
-  const selector = `[data-testid="${testId}"][data-id="${dataId}"]`;
+async function findProductBuyAction(page, productId, timeout = 15000) {
+  const selector = `#product-normal-buy-${productId}`;
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const element = await withOperationTimeout(
@@ -120,18 +120,16 @@ async function findByTestIdAndDataId(page, testId, dataId, timeout = 15000) {
   throw new Error(`Missing Mini Program element ${selector} on ${page.path}`);
 }
 
-async function openProductAndFindBuyAction(miniProgram, productId, timeout = 20000) {
+async function openProductAndFindBuyAction(miniProgram, product, timeout = 20000) {
+  const productId = product.product_id || product.id;
+  const keyword = encodeURIComponent(String(product.name || ''));
+  const route = `/pages/products/index${keyword ? `?keyword=${keyword}` : ''}`;
   const page = await withOperationTimeout(
-    () => miniProgram.reLaunch('/pages/products/index'),
+    () => miniProgram.reLaunch(route),
     'open product list',
     timeout,
   );
-  const buyAction = await findByTestIdAndDataId(
-    page,
-    'product-normal-buy',
-    productId,
-    timeout,
-  );
+  const buyAction = await findProductBuyAction(page, productId, timeout);
   return { page, buyAction };
 }
 
@@ -285,7 +283,7 @@ async function createOrdinaryOrder(context, fulfillment) {
   });
   const productEntry = await openProductAndFindBuyAction(
     miniProgram,
-    context.fixtures.product.product_id,
+    context.fixtures.product,
   );
   let page = productEntry.page;
   progress(`ordinary-${suffix}-product-ready`, {
