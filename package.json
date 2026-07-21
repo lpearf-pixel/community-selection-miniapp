@@ -26,7 +26,9 @@
     "test:miniapp:home-model": "node --test apps/miniapp/pages/index/home-model.test.cjs",
     "setup:miniapp:e2e": "pnpm --dir scripts/miniapp-e2e --ignore-workspace install --frozen-lockfile",
     "test:miniapp:e2e-lib": "node --test scripts/miniapp-e2e/home-smoke.test.cjs",
-    "e2e:miniapp:home": "node scripts/miniapp-e2e/home-smoke.cjs"
+    "e2e:miniapp:home": "node scripts/miniapp-e2e/container-runner.cjs",
+    "e2e:miniapp:home:click-only": "node scripts/miniapp-e2e/home-smoke.cjs",
+    "e2e:miniapp:down": "node scripts/miniapp-e2e/container-cleanup.cjs"
   },
   "devDependencies": {
     "prisma": "6.19.3",

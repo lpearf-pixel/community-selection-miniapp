@@ -32,6 +32,8 @@ const requiredFiles = [
   'apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg',
   'scripts/miniapp-e2e/home-smoke.cjs',
   'scripts/miniapp-e2e/lib.cjs',
+  'scripts/miniapp-e2e/container-runner.cjs',
+  'scripts/miniapp-e2e/container-cleanup.cjs',
   'scripts/miniapp-e2e/package.json',
   'scripts/miniapp-e2e/pnpm-lock.yaml',
 ];
@@ -49,6 +51,9 @@ const pageJson = read('apps/miniapp/pages/index/index.json');
 const appJson = read('apps/miniapp/app.json');
 const packageJson = read('package.json');
 const e2ePackageJson = read('scripts/miniapp-e2e/package.json');
+const containerRunner = read('scripts/miniapp-e2e/container-runner.cjs');
+const containerCleanup = read('scripts/miniapp-e2e/container-cleanup.cjs');
+const compose = read('docker-compose.yml');
 
 if (!/homeTemplateKey\s*:\s*['"]chunhuaqiushi['"]/.test(config)) fail('config must select the chunhuaqiushi home template');
 if (!/DEFAULT_HOME_TEMPLATE_KEY\s*=\s*['"]chunhuaqiushi['"]/.test(templateRegistry)) fail('template registry must define the default key');
@@ -92,7 +97,19 @@ if (!appJson.includes('"navigationBarTitleText": "春华秋实"')) fail('app nav
 if (!pageJson.includes('"navigationBarTitleText": "春华秋实"')) fail('home navigation title must use the brand name');
 if (!packageJson.includes('"e2e:miniapp:home"')) fail('package scripts must expose the Mac home smoke test');
 if (!packageJson.includes('"setup:miniapp:e2e"')) fail('package scripts must expose isolated E2E dependency setup');
+if (!packageJson.includes('"e2e:miniapp:home": "node scripts/miniapp-e2e/container-runner.cjs"')) fail('main home E2E command must orchestrate container services');
+if (!packageJson.includes('"e2e:miniapp:home:click-only": "node scripts/miniapp-e2e/home-smoke.cjs"')) fail('package scripts must expose click-only reruns');
+if (!packageJson.includes('"e2e:miniapp:down": "node scripts/miniapp-e2e/container-cleanup.cjs"')) fail('package scripts must expose non-destructive container cleanup');
 if (!/"miniprogram-automator"\s*:\s*"0\.12\.1"/.test(e2ePackageJson)) fail('E2E package must pin miniprogram-automator 0.12.1');
+for (const service of ['postgres', 'api']) {
+  if (!containerRunner.includes(`'${service}'`) && !containerRunner.includes('config.services')) fail(`container runner must start ${service}`);
+  if (!compose.includes(`  ${service}:`)) fail(`docker-compose.yml must define ${service}`);
+}
+if (!containerRunner.includes('composeUpArgs(config)')) fail('container runner must use the verified Compose up contract');
+if (!containerRunner.includes('waitForHealth(config)')) fail('container runner must verify the host API health endpoint');
+if (!containerRunner.includes('writeComposeDiagnostics')) fail('container runner must collect Compose diagnostics on failure');
+if (!containerCleanup.includes('composeDownArgs(config)')) fail('container cleanup must use the verified non-destructive down contract');
+if (/\bdown\b[^\n]*(?:-v|--volumes)/.test(containerCleanup)) fail('container cleanup must preserve named volumes');
 
 if (failures.length) {
   throw new Error(`L49 brand home static verification failed:\n- ${[...new Set(failures)].join('\n- ')}`);

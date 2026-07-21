@@ -2,6 +2,10 @@ const path = require('node:path');
 
 const DEFAULT_CLI_PATH = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli';
 const DEFAULT_PORT = 9420;
+const DEFAULT_HEALTH_URL = 'http://127.0.0.1:13080/api/health';
+const DEFAULT_HEALTH_TIMEOUT_MS = 30000;
+const DEFAULT_COMPOSE_WAIT_SECONDS = 300;
+const DEFAULT_COMPOSE_SERVICES = Object.freeze(['postgres', 'api']);
 
 function assertSupportedPlatform(platform = process.platform) {
   if (platform !== 'darwin') {
@@ -17,6 +21,14 @@ function parsePort(value) {
   return port;
 }
 
+function parsePositiveInteger(value, fallback, name) {
+  const number = Number(value || fallback);
+  if (!Number.isInteger(number) || number < 1) {
+    throw new Error(`Invalid ${name}: ${value}`);
+  }
+  return number;
+}
+
 function resolveE2eConfig(options = {}) {
   const env = options.env || process.env;
   const platform = options.platform || process.platform;
@@ -27,6 +39,66 @@ function resolveE2eConfig(options = {}) {
     projectPath: path.resolve(env.MINIAPP_PROJECT_PATH || path.join(repoRoot, 'apps/miniapp')),
     port: parsePort(env.MINIAPP_AUTOMATION_PORT),
   };
+}
+
+function resolveContainerConfig(options = {}) {
+  const env = options.env || process.env;
+  const repoRoot = options.repoRoot || path.resolve(__dirname, '../..');
+  return {
+    repoRoot,
+    composeFile: path.resolve(env.MINIAPP_E2E_COMPOSE_FILE || path.join(repoRoot, 'docker-compose.yml')),
+    healthUrl: env.MINIAPP_E2E_HEALTH_URL || DEFAULT_HEALTH_URL,
+    healthTimeoutMs: parsePositiveInteger(
+      env.MINIAPP_E2E_HEALTH_TIMEOUT_MS,
+      DEFAULT_HEALTH_TIMEOUT_MS,
+      'MINIAPP_E2E_HEALTH_TIMEOUT_MS',
+    ),
+    waitTimeoutSeconds: parsePositiveInteger(
+      env.MINIAPP_E2E_COMPOSE_WAIT_SECONDS,
+      DEFAULT_COMPOSE_WAIT_SECONDS,
+      'MINIAPP_E2E_COMPOSE_WAIT_SECONDS',
+    ),
+    services: [...DEFAULT_COMPOSE_SERVICES],
+  };
+}
+
+function composePrefix(config) {
+  return [
+    'compose',
+    '--file', config.composeFile,
+    '--project-directory', config.repoRoot,
+  ];
+}
+
+function composeUpArgs(config) {
+  return [
+    ...composePrefix(config),
+    'up',
+    '-d',
+    '--wait',
+    '--wait-timeout',
+    String(config.waitTimeoutSeconds),
+    ...config.services,
+  ];
+}
+
+function composePsArgs(config) {
+  return [...composePrefix(config), 'ps', ...config.services];
+}
+
+function composeLogsArgs(config) {
+  return [
+    ...composePrefix(config),
+    'logs',
+    '--no-color',
+    '--tail',
+    '200',
+    ...config.services,
+  ];
+}
+
+function composeDownArgs(config) {
+  return [...composePrefix(config), 'down', '--remove-orphans'];
 }
 
 function normalizePagePath(value) {
@@ -47,6 +119,7 @@ function artifactPaths(baseDir = '/tmp', now = new Date()) {
   return {
     log: `${prefix}.log`,
     screenshot: `${prefix}.png`,
+    composeLog: `${prefix}-compose.log`,
   };
 }
 
@@ -54,6 +127,11 @@ module.exports = {
   artifactPaths,
   assertPagePath,
   assertSupportedPlatform,
+  composeDownArgs,
+  composeLogsArgs,
+  composePsArgs,
+  composeUpArgs,
   normalizePagePath,
+  resolveContainerConfig,
   resolveE2eConfig,
 };
