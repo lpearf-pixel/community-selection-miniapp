@@ -5,7 +5,7 @@
 ## 首次准备
 
 1. 在 Mac 安装并启动 Docker Desktop，确认 `docker compose version` 可执行。
-2. 安装并登录微信开发者工具，在安全设置中开启 CLI/服务端口能力，并为本地开发关闭合法域名校验。
+2. 安装并登录微信开发者工具；不要使用截图中显示的“游客模式”。在“设置 → 安全设置”中开启服务端口，并为本地开发关闭合法域名校验。
 3. 从仓库根目录执行 `pnpm setup:miniapp:e2e`。该命令只安装点击框架自己的依赖，不修改根 `pnpm-lock.yaml`。
 4. 确认宿主机端口 `13080` 和 `15432` 未被其他程序占用。
 
@@ -55,6 +55,7 @@ pnpm e2e:miniapp:stop
 - `MINIAPP_E2E_HEALTH_URL`：宿主机 API 健康地址，默认 `http://127.0.0.1:13080/api/health`。
 - `MINIAPP_E2E_HEALTH_TIMEOUT_MS`：额外健康探针等待毫秒数，默认 `30000`。
 - `MINIAPP_E2E_API_BASE_URL`：开发者工具内临时使用的 API 基址；主命令默认从健康地址解析 origin，单独点击命令默认 `http://127.0.0.1:13080`。
+- `MINIAPP_AUTOMATION_TIMEOUT_MS`：等待微信开发者工具自动化端口的最长毫秒数，默认 `60000`；脚本按端口状态轮询，不依赖固定睡眠。
 
 ## 失败证据
 
@@ -64,9 +65,10 @@ pnpm e2e:miniapp:stop
 /tmp/chunhuaqiushi-miniapp-e2e-<timestamp>.log
 /tmp/chunhuaqiushi-miniapp-e2e-<timestamp>.png
 /tmp/chunhuaqiushi-miniapp-e2e-<timestamp>-compose.log
+/tmp/chunhuaqiushi-miniapp-e2e-<timestamp>-devtools.log
 ```
 
-小程序日志包含当前页面路径、页面数据的字段/数组长度摘要、控制台事件、未捕获异常和调用栈，不记录完整订单或用户字段。容器失败或点击失败时，Compose 诊断文件包含 `docker compose ps` 以及 PostgreSQL/API 最后 200 行日志。可通过 `MINIAPP_E2E_OUTPUT_DIR` 改变输出目录。
+小程序日志包含当前页面路径、页面数据的字段/数组长度摘要、控制台事件、未捕获异常和调用栈，不记录完整订单或用户字段。容器失败或点击失败时，Compose 诊断文件包含 `docker compose ps` 以及 PostgreSQL/API 最后 200 行日志；DevTools 诊断文件保留微信 CLI 的标准输出和错误。可通过 `MINIAPP_E2E_OUTPUT_DIR` 改变输出目录。
 
 常见失败：
 
@@ -76,7 +78,9 @@ pnpm e2e:miniapp:stop
 - `API health check timed out`：Compose 已返回但宿主机仍无法访问 `13080`，检查端口映射与代理绕过设置。
 - `Home API request failed`：宿主机健康检查已通过，但开发者工具内的商品或团购请求失败；检查“不校验合法域名”、代理绕过和小程序控制台。
 - `CLI not found`：检查 `WECHAT_CLI_PATH`，部分安装目录名称可能不同。
-- `automation enabled`：开发者工具未打开自动化/服务端口权限。
+- `服务端口`：登录微信开发者工具，在“设置 → 安全设置”中开启服务端口；开启后关闭当前普通项目窗口，再重新运行命令。
+- `游客模式`：先登录微信开发者工具并重新打开项目。游客模式下工具内部账号/安全接口可能失败，不能作为本项目的 E2E 准入环境。
+- `automation endpoint`：查看对应的 `-devtools.log`；若端口仍未建立，确认没有普通窗口占用同一项目，并关闭该窗口后重试。
 - `Port 9420 is in use`：换一个 `MINIAPP_AUTOMATION_PORT`。
 - `Missing Mini Program element`：页面未编译成功，或稳定 `data-testid` 被误删。
 
