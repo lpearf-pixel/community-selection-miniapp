@@ -52,6 +52,7 @@ const appJson = read('apps/miniapp/app.json');
 const packageJson = read('package.json');
 const e2ePackageJson = read('scripts/miniapp-e2e/package.json');
 const e2eLib = read('scripts/miniapp-e2e/lib.cjs');
+const devToolsLauncher = read('scripts/miniapp-e2e/devtools-launcher.cjs');
 const homeSmoke = read('scripts/miniapp-e2e/home-smoke.cjs');
 const containerRunner = read('scripts/miniapp-e2e/container-runner.cjs');
 const containerCleanup = read('scripts/miniapp-e2e/container-cleanup.cjs');
@@ -116,6 +117,14 @@ if (!containerRunner.includes('MINIAPP_E2E_API_BASE_URL')) fail('container runne
 for (const helper of ['overrideMiniappApiBaseUrl', 'restoreMiniappApiBaseUrl', 'waitForHomeApi']) {
   if (!homeSmoke.includes(helper)) fail(`home click smoke must use ${helper}`);
 }
+if (!homeSmoke.includes("require('./devtools-launcher.cjs')") || !homeSmoke.includes('launchDevTools(config)')) {
+  fail('home click smoke must use the diagnostic DevTools launcher');
+}
+if (homeSmoke.includes('automator.launch')) fail('home click smoke must not use the log-suppressing default launcher');
+for (const needle of ['buildDevToolsAutoArgs', 'diagnoseDevToolsLaunch', 'isPortOpen']) {
+  if (!devToolsLauncher.includes(needle)) fail(`DevTools launcher must use ${needle}`);
+}
+if (!homeSmoke.includes('artifacts.devToolsLog')) fail('home click smoke must persist DevTools CLI diagnostics');
 if (!containerCleanup.includes('composeStopArgs(config)')) fail('container cleanup must use the verified service-scoped stop contract');
 if (/\bdown\b|(?:-v|--volumes)/.test(containerCleanup)) fail('container cleanup must not tear down the Compose project or named volumes');
 
