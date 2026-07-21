@@ -2,6 +2,7 @@ const path = require('node:path');
 
 const DEFAULT_CLI_PATH = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli';
 const DEFAULT_PORT = 9420;
+const DEFAULT_AUTOMATION_TIMEOUT_MS = 60000;
 const DEFAULT_HEALTH_URL = 'http://127.0.0.1:13080/api/health';
 const DEFAULT_HEALTH_TIMEOUT_MS = 30000;
 const DEFAULT_COMPOSE_WAIT_SECONDS = 300;
@@ -38,7 +39,35 @@ function resolveE2eConfig(options = {}) {
     cliPath: env.WECHAT_CLI_PATH || DEFAULT_CLI_PATH,
     projectPath: path.resolve(env.MINIAPP_PROJECT_PATH || path.join(repoRoot, 'apps/miniapp')),
     port: parsePort(env.MINIAPP_AUTOMATION_PORT),
+    launchTimeoutMs: parsePositiveInteger(
+      env.MINIAPP_AUTOMATION_TIMEOUT_MS,
+      DEFAULT_AUTOMATION_TIMEOUT_MS,
+      'MINIAPP_AUTOMATION_TIMEOUT_MS',
+    ),
   };
+}
+
+function buildDevToolsAutoArgs(config) {
+  return [
+    'auto',
+    '--project', config.projectPath,
+    '--auto-port', String(config.port),
+    '--trust-project',
+  ];
+}
+
+function diagnoseDevToolsLaunch(output = '') {
+  const text = String(output);
+  if (/服务端口|service\s*port/i.test(text)) {
+    return '微信开发者工具“服务端口”未开启；请在 设置 → 安全设置 中开启后重试。';
+  }
+  if (/游客模式|未登录|请.*登录|log\s*in|sign\s*in/i.test(text)) {
+    return '微信开发者工具当前未登录或处于游客模式；请先登录微信开发者工具，再重新运行自动化。';
+  }
+  if (/project\.config|项目配置|appid/i.test(text)) {
+    return '小程序项目配置无法被微信 CLI 识别；请检查 project.config.json 与 AppID。';
+  }
+  return '127.0.0.1 上的微信开发者工具自动化端口未就绪；请检查服务端口、登录状态和是否已有普通项目窗口占用该项目。';
 }
 
 function resolveContainerConfig(options = {}) {
@@ -162,6 +191,7 @@ function artifactPaths(baseDir = '/tmp', now = new Date()) {
     log: `${prefix}.log`,
     screenshot: `${prefix}.png`,
     composeLog: `${prefix}-compose.log`,
+    devToolsLog: `${prefix}-devtools.log`,
   };
 }
 
@@ -170,10 +200,12 @@ module.exports = {
   assertHomeApiReady,
   assertPagePath,
   assertSupportedPlatform,
+  buildDevToolsAutoArgs,
   composeLogsArgs,
   composePsArgs,
   composeStopArgs,
   composeUpArgs,
+  diagnoseDevToolsLaunch,
   normalizePagePath,
   overrideMiniappApiBaseUrl,
   resolveContainerConfig,
