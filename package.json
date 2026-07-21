@@ -21,7 +21,9 @@
     "db:backup": "bash scripts/pg-backup.sh",
     "db:restore": "bash scripts/pg-restore.sh",
     "report:stage": "tsx scripts/generate-stage-report-entry.ts",
-    "report:publish": "tsx scripts/publish-stage-report.ts"
+    "report:publish": "tsx scripts/publish-stage-report.ts",
+    "verify:l49:static": "tsx scripts/verify-l49-brand-home-local.ts",
+    "test:miniapp:home-model": "node --test apps/miniapp/pages/index/home-model.test.cjs"
   },
   "devDependencies": {
     "prisma": "6.19.3",
