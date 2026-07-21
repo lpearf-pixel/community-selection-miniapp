@@ -28,6 +28,7 @@ const {
 } = require('./business-flow-lib.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const DEFAULT_AUTOMATOR_OPERATION_TIMEOUT = 10000;
 
 function safeJson(value) {
   try {
@@ -37,11 +38,42 @@ function safeJson(value) {
   }
 }
 
+function createProgressReporter(write = (line) => process.stdout.write(line)) {
+  return (event, details = {}) => {
+    write(`[business-e2e] ${event} ${safeJson(details)}\n`);
+  };
+}
+
+async function withOperationTimeout(
+  operation,
+  description,
+  timeout = DEFAULT_AUTOMATOR_OPERATION_TIMEOUT,
+) {
+  let timer;
+  const timeoutPromise = new Promise((resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Timed out after ${timeout} ms during ${description}`)),
+      timeout,
+    );
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      timeoutPromise,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function waitForPagePath(miniProgram, expected, timeout = 20000) {
   const deadline = Date.now() + timeout;
   let current;
   while (Date.now() < deadline) {
-    current = await miniProgram.currentPage();
+    current = await withOperationTimeout(
+      () => miniProgram.currentPage(),
+      `read current page while waiting for ${expected}`,
+    );
     if (current && String(current.path || '').replace(/^\/+/, '') === String(expected).replace(/^\/+/, '')) return current;
     await delay(250);
   }
@@ -50,7 +82,10 @@ async function waitForPagePath(miniProgram, expected, timeout = 20000) {
 
 async function waitForPageData(page, predicate, description, timeout = 20000) {
   return waitUntil(
-    () => page.data(),
+    () => withOperationTimeout(
+      () => page.data(),
+      `read page data for ${description}`,
+    ),
     predicate,
     description,
     { timeout, interval: 250 },
@@ -61,7 +96,10 @@ async function findByTestId(page, testId, timeout = 15000) {
   const selector = `[data-testid="${testId}"]`;
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const element = await page.$(selector);
+    const element = await withOperationTimeout(
+      () => page.$(selector),
+      `find Mini Program element ${selector}`,
+    );
     if (element) return element;
     await delay(250);
   }
@@ -72,11 +110,76 @@ async function findByTestIdAndDataId(page, testId, dataId, timeout = 15000) {
   const selector = `[data-testid="${testId}"][data-id="${dataId}"]`;
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const element = await page.$(selector);
+    const element = await withOperationTimeout(
+      () => page.$(selector),
+      `find Mini Program element ${selector}`,
+    );
     if (element) return element;
     await delay(250);
   }
   throw new Error(`Missing Mini Program element ${selector} on ${page.path}`);
+}
+
+async function openProductAndFindBuyAction(miniProgram, productId, timeout = 20000) {
+  const page = await withOperationTimeout(
+    () => miniProgram.reLaunch('/pages/products/index'),
+    'open product list',
+    timeout,
+  );
+  const buyAction = await findByTestIdAndDataId(
+    page,
+    'product-normal-buy',
+    productId,
+    timeout,
+  );
+  return { page, buyAction };
+}
+
+async function captureFailureEvidence(
+  miniProgram,
+  record,
+  artifacts,
+  timeout = DEFAULT_AUTOMATOR_OPERATION_TIMEOUT,
+) {
+  try {
+    const current = await withOperationTimeout(
+      () => miniProgram.currentPage(),
+      'read failure current page',
+      timeout,
+    );
+    const data = current
+      ? await withOperationTimeout(
+        () => current.data(),
+        'read failure page data',
+        timeout,
+      )
+      : null;
+    record('failure-page', { path: current && current.path, data });
+    await withOperationTimeout(
+      () => miniProgram.screenshot({ path: artifacts.screenshot }),
+      'capture failure screenshot',
+      timeout,
+    );
+    record('failure-screenshot', { path: artifacts.screenshot });
+  } catch (error) {
+    record('failure-evidence-error', { message: error.message });
+  }
+}
+
+async function closeMiniProgramSafely(
+  miniProgram,
+  timeout = DEFAULT_AUTOMATOR_OPERATION_TIMEOUT,
+) {
+  try {
+    await withOperationTimeout(
+      () => miniProgram.close(),
+      'close Mini Program automation',
+      timeout,
+    );
+  } catch (error) {
+    if (typeof miniProgram.disconnect === 'function') miniProgram.disconnect();
+    throw error;
+  }
 }
 
 const BUSINESS_STORAGE_KEYS = Object.freeze([
@@ -88,7 +191,10 @@ const BUSINESS_STORAGE_KEYS = Object.freeze([
 async function captureBusinessStorage(miniProgram) {
   const snapshot = {};
   for (const key of BUSINESS_STORAGE_KEYS) {
-    snapshot[key] = await miniProgram.callWxMethod('getStorageSync', key);
+    snapshot[key] = await withOperationTimeout(
+      () => miniProgram.callWxMethod('getStorageSync', key),
+      `read Mini Program storage ${key}`,
+    );
   }
   return snapshot;
 }
@@ -97,9 +203,15 @@ async function restoreBusinessStorage(miniProgram, snapshot) {
   for (const key of BUSINESS_STORAGE_KEYS) {
     const value = snapshot && snapshot[key];
     if (value === undefined || value === null || value === '') {
-      await miniProgram.callWxMethod('removeStorageSync', key);
+      await withOperationTimeout(
+        () => miniProgram.callWxMethod('removeStorageSync', key),
+        `remove Mini Program storage ${key}`,
+      );
     } else {
-      await miniProgram.callWxMethod('setStorageSync', key, value);
+      await withOperationTimeout(
+        () => miniProgram.callWxMethod('setStorageSync', key, value),
+        `restore Mini Program storage ${key}`,
+      );
     }
   }
 }
@@ -112,13 +224,22 @@ async function setBusinessUser(miniProgram, openid, nickname, phone) {
     receiver_name: nickname,
     receiver_phone: phone,
   };
-  await miniProgram.callWxMethod('setStorageSync', 'community_selection_user', user);
+  await withOperationTimeout(
+    () => miniProgram.callWxMethod('setStorageSync', 'community_selection_user', user),
+    `set Mini Program user ${openid}`,
+  );
   return user;
 }
 
 async function setBusinessLocation(miniProgram, fixtures) {
-  await miniProgram.callWxMethod('setStorageSync', 'selected_community', fixtures.community);
-  await miniProgram.callWxMethod('setStorageSync', 'selected_pickup_store', fixtures.pickupStore);
+  await withOperationTimeout(
+    () => miniProgram.callWxMethod('setStorageSync', 'selected_community', fixtures.community),
+    'set selected community',
+  );
+  await withOperationTimeout(
+    () => miniProgram.callWxMethod('setStorageSync', 'selected_pickup_store', fixtures.pickupStore),
+    'set selected pickup store',
+  );
 }
 
 async function loadFixtures(apiBaseUrl) {
@@ -152,20 +273,29 @@ async function waitForOrderDetail(miniProgram) {
 }
 
 async function createOrdinaryOrder(context, fulfillment) {
-  const { miniProgram, runId, record } = context;
+  const { miniProgram, progress, runId, record } = context;
   const suffix = fulfillment === 'delivery' ? 'delivery' : 'store';
   const openid = `miniapp-business-normal-${suffix}-${runId}`;
   context.testOpenids.add(openid);
   await setBusinessUser(miniProgram, openid, `普通购买${suffix}`, suffix === 'delivery' ? '13800001002' : '13800001001');
   await setBusinessLocation(miniProgram, context.fixtures);
 
-  let page = await miniProgram.reLaunch('/pages/products/index');
-  await waitForPageData(page, (data) => !data.loading && Array.isArray(data.products) && data.products.length > 0, `${suffix} product list`);
-  await (await findByTestIdAndDataId(
-    page,
-    'product-normal-buy',
+  progress(`ordinary-${suffix}-product-list-start`, {
+    productId: context.fixtures.product.product_id,
+  });
+  const productEntry = await openProductAndFindBuyAction(
+    miniProgram,
     context.fixtures.product.product_id,
-  )).tap();
+  );
+  let page = productEntry.page;
+  progress(`ordinary-${suffix}-product-ready`, {
+    productId: context.fixtures.product.product_id,
+  });
+  await withOperationTimeout(
+    () => productEntry.buyAction.tap(),
+    `tap ${suffix} product buy action`,
+  );
+  progress(`ordinary-${suffix}-buy-tapped`);
   page = await waitForPagePath(miniProgram, 'pages/orders/confirm/index');
   await waitForPageData(
     page,
@@ -363,14 +493,17 @@ async function main() {
   let businessStorageCaptured = false;
   let context;
   const record = (event, details = {}) => logs.push(`${new Date().toISOString()} ${event} ${safeJson(details)}`);
+  const progress = createProgressReporter();
 
   fs.mkdirSync(path.dirname(artifacts.log), { recursive: true });
   try {
     if (!fs.existsSync(config.cliPath)) throw new Error(`WeChat DevTools CLI not found: ${config.cliPath}`);
     if (!fs.existsSync(config.projectPath)) throw new Error(`Mini Program project not found: ${config.projectPath}`);
     assertMiniappProjectConfigured(config.projectPath);
+    progress('automation-connect-start', { port: config.port });
     const launched = await launchDevTools(config);
     miniProgram = launched.miniProgram;
+    progress('automation-connected', { port: config.port, reused: launched.reused });
     miniProgram.on('console', (event) => record('console', event));
     miniProgram.on('exception', (event) => {
       exceptions.push(event);
@@ -378,31 +511,47 @@ async function main() {
     });
     previousBusinessStorage = await captureBusinessStorage(miniProgram);
     businessStorageCaptured = true;
-    previousApiBaseUrl = await overrideMiniappApiBaseUrl(miniProgram, apiBaseUrl);
+    previousApiBaseUrl = await withOperationTimeout(
+      () => overrideMiniappApiBaseUrl(miniProgram, apiBaseUrl),
+      'override Mini Program API base URL',
+    );
     apiBaseOverrideApplied = true;
+    progress('fixtures-load-start', { apiBaseUrl });
     const fixtures = await loadFixtures(apiBaseUrl);
     record('fixtures-ready', { productId: fixtures.product.product_id, communityId: fixtures.community.community_id, pickupStoreId: fixtures.pickupStore.pickup_store_id });
-    context = { apiBaseUrl, createdOrders: [], fixtures, miniProgram, record, runId, testOpenids: new Set() };
+    progress('fixtures-ready', {
+      productId: fixtures.product.product_id,
+      communityId: fixtures.community.community_id,
+      pickupStoreId: fixtures.pickupStore.pickup_store_id,
+    });
+    context = {
+      apiBaseUrl,
+      createdOrders: [],
+      fixtures,
+      miniProgram,
+      progress,
+      record,
+      runId,
+      testOpenids: new Set(),
+    };
+    progress('ordinary-purchase-flow-start');
     await runOrdinaryPurchaseFlow(context);
+    progress('ordinary-purchase-flow-passed');
     process.stdout.write('ordinary_purchase_flow=passed\n');
+    progress('group-buy-flow-start');
     await runGroupBuyFlow(context);
+    progress('group-buy-flow-passed');
     process.stdout.write('group_buy_flow=passed\n');
     if (exceptions.length) throw new Error(`Mini Program emitted ${exceptions.length} uncaught exception(s)`);
     record('passed', { runId });
     process.stdout.write(`Mini Program business flow log: ${artifacts.log}\n`);
   } catch (error) {
     record('failed', { message: error.message, stack: error.stack });
-    if (miniProgram) {
-      try {
-        const current = await miniProgram.currentPage();
-        record('failure-page', { path: current && current.path, data: current ? await current.data() : null });
-        await miniProgram.screenshot({ path: artifacts.screenshot });
-        record('failure-screenshot', { path: artifacts.screenshot });
-      } catch (evidenceError) {
-        record('failure-evidence-error', { message: evidenceError.message });
-      }
-    }
+    progress('failed', { message: error.message });
     process.stderr.write(`${error.stack || error.message}\n`);
+    if (miniProgram) {
+      await captureFailureEvidence(miniProgram, record, artifacts);
+    }
     process.exitCode = 1;
   } finally {
     if (miniProgram) {
@@ -425,14 +574,17 @@ async function main() {
       }
       if (apiBaseOverrideApplied) {
         try {
-          await restoreMiniappApiBaseUrl(miniProgram, previousApiBaseUrl);
+          await withOperationTimeout(
+            () => restoreMiniappApiBaseUrl(miniProgram, previousApiBaseUrl),
+            'restore Mini Program API base URL',
+          );
         } catch (error) {
           record('api-base-restore-error', { message: error.message });
           process.exitCode = 1;
         }
       }
       try {
-        await miniProgram.close();
+        await closeMiniProgramSafely(miniProgram);
       } catch (error) {
         record('close-error', { message: error.message });
         process.exitCode = 1;
@@ -449,4 +601,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { runGroupBuyFlow, runOrdinaryPurchaseFlow };
+module.exports = {
+  captureFailureEvidence,
+  closeMiniProgramSafely,
+  createProgressReporter,
+  openProductAndFindBuyAction,
+  runGroupBuyFlow,
+  runOrdinaryPurchaseFlow,
+  withOperationTimeout,
+};

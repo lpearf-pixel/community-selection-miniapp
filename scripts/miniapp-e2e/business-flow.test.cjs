@@ -98,6 +98,99 @@ test('business flow helper unwraps API envelopes and preserves failure messages'
   );
 });
 
+test('business product entry waits for the known buy action without reading full page data', async () => {
+  const { openProductAndFindBuyAction } = require('./business-flow.cjs');
+  const selectors = [];
+  const buyAction = { tap() {} };
+  const page = {
+    path: 'pages/products/index',
+    data() {
+      throw new Error('full Page.getData must not be used for product readiness');
+    },
+    async $(selector) {
+      selectors.push(selector);
+      return selector === '[data-testid="product-normal-buy"][data-id="product-1"]'
+        ? buyAction
+        : null;
+    },
+  };
+  const miniProgram = {
+    async reLaunch(route) {
+      assert.equal(route, '/pages/products/index');
+      return page;
+    },
+  };
+
+  const result = await openProductAndFindBuyAction(miniProgram, 'product-1');
+
+  assert.equal(result.page, page);
+  assert.equal(result.buyAction, buyAction);
+  assert.deepEqual(selectors, ['[data-testid="product-normal-buy"][data-id="product-1"]']);
+});
+
+test('business automator operation timeout rejects a stalled protocol request', async () => {
+  const { withOperationTimeout } = require('./business-flow.cjs');
+  await assert.rejects(
+    () => withOperationTimeout(() => new Promise(() => {}), 'read product page data', 10),
+    /Timed out after 10 ms during read product page data/,
+  );
+});
+
+test('business progress reporter flushes visible step events immediately', () => {
+  const { createProgressReporter } = require('./business-flow.cjs');
+  const output = [];
+  const progress = createProgressReporter((line) => output.push(line));
+
+  progress('ordinary-store-start', { productId: 'product-1' });
+
+  assert.deepEqual(output, [
+    '[business-e2e] ordinary-store-start {"productId":"product-1"}\n',
+  ]);
+});
+
+test('business failure evidence cannot hang on a stalled Page.getData request', async () => {
+  const { captureFailureEvidence } = require('./business-flow.cjs');
+  const events = [];
+  const miniProgram = {
+    async currentPage() {
+      return {
+        path: 'pages/products/index',
+        data: () => new Promise(() => {}),
+      };
+    },
+    async screenshot() {
+      throw new Error('screenshot must not run after data capture timed out');
+    },
+  };
+
+  await captureFailureEvidence(
+    miniProgram,
+    (event, details) => events.push({ event, details }),
+    { screenshot: '/tmp/business-failure.png' },
+    10,
+  );
+
+  assert.equal(events[0].event, 'failure-evidence-error');
+  assert.match(events[0].details.message, /Timed out after 10 ms during read failure page data/);
+});
+
+test('business close fallback disconnects a stalled automator socket', async () => {
+  const { closeMiniProgramSafely } = require('./business-flow.cjs');
+  let disconnected = false;
+  const miniProgram = {
+    close: () => new Promise(() => {}),
+    disconnect() {
+      disconnected = true;
+    },
+  };
+
+  await assert.rejects(
+    () => closeMiniProgramSafely(miniProgram, 10),
+    /Timed out after 10 ms during close Mini Program automation/,
+  );
+  assert.equal(disconnected, true);
+});
+
 test('business flow helper normalizes fixtures for Mini Program storage', () => {
   const { normalizeCommunity, normalizePickupStore, selectBusinessFixtures } = require('./business-flow-lib.cjs');
   assert.deepEqual(normalizeCommunity({ id: 'community-1', name: '幸福里' }), {
