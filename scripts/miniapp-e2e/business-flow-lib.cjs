@@ -27,7 +27,10 @@ async function apiRequest(apiBaseUrl, pathname, options = {}, fetchImpl = global
     throw new Error(`API ${pathname} returned invalid JSON (${response.status})`);
   }
   if (!response.ok || payload.success !== true) {
-    throw new Error(payload.message || `API ${pathname} failed (${response.status})`);
+    throw Object.assign(
+      new Error(payload.message || `API ${pathname} failed (${response.status})`),
+      { status: response.status, pathname },
+    );
   }
   return payload.data;
 }
@@ -110,9 +113,15 @@ async function discoverUserOrders(
   };
   createdOrders.forEach(add);
   for (const openid of userOpenids) {
-    const orders = await apiRequest(apiBaseUrl, '/api/me/orders?page_size=100', {
-      headers: { 'x-openid': openid },
-    }, fetchImpl);
+    let orders;
+    try {
+      orders = await apiRequest(apiBaseUrl, '/api/me/orders?page_size=100', {
+        headers: { 'x-openid': openid },
+      }, fetchImpl);
+    } catch (error) {
+      if (error && error.status === 404) continue;
+      throw error;
+    }
     for (const order of asList(orders)) add({ id: order.id, openid });
   }
   return [...references.values()];
