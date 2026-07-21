@@ -25,6 +25,12 @@ test('the active theme descriptor and generated entry select chunhuaqiushi', () 
   assert.match(activeWxss, /themes\/chunhuaqiushi\.wxss/);
 });
 
+test('the app stores the active data theme without calling a generated runtime getter', () => {
+  const appSource = read('apps/miniapp/app.js');
+  assert.match(appSource, /theme:\s*activeTheme[,\n]/);
+  assert.doesNotMatch(appSource, /getActiveTheme\s*\(/);
+});
+
 test('all registered page roots opt into the global cq-page contract', () => {
   const missing = app.pages.filter((route) => !/class=["'][^"']*\bcq-page\b/.test(read('apps/miniapp/' + route + '.wxml')));
   assert.deepEqual(missing, app.pages.filter((route) => pendingRoutes.includes(route)));

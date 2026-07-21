@@ -29,12 +29,7 @@ function renderThemeArtifacts(themeId) {
     generatedJs: [
       "'use strict';",
       '',
-      "const theme = require('./" + themeId + "/theme');",
-      '',
-      'module.exports = Object.freeze({',
-      '  ...theme,',
-      '  getActiveTheme: () => theme,',
-      '});',
+      "module.exports = require('./" + themeId + "/theme');",
       '',
     ].join('\n'),
     generatedWxss: '@import "themes/' + themeId + '.wxss";\n',

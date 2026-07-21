@@ -46,6 +46,20 @@ test('activates a registered theme and writes deterministic JS, WXSS, and naviga
   }
 });
 
+test('generates a data-only CommonJS theme entry for the Mini Program runtime', () => {
+  const root = createFixture();
+  try {
+    const result = activateTheme('chunhuaqiushi', root);
+    assert.equal(
+      result.generatedJs,
+      "'use strict';\n\nmodule.exports = require('./chunhuaqiushi/theme');\n",
+    );
+    assert.doesNotMatch(result.generatedJs, /Object\.freeze|getActiveTheme|\.\.\./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('rejects an unregistered theme without changing the active files', () => {
   const root = createFixture();
   try {

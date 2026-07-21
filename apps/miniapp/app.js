@@ -4,7 +4,7 @@ const activeTheme = require('./themes/active.generated');
 App({
   globalData: {
     user: null,
-    theme: activeTheme.getActiveTheme(),
+    theme: activeTheme,
   },
   onLaunch() {
     this.globalData.user = getCurrentUser();
