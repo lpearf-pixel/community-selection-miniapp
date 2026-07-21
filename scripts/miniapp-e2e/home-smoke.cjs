@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const automator = require('miniprogram-automator');
+const { launchDevTools } = require('./devtools-launcher.cjs');
 const {
   artifactPaths,
   assertHomeApiReady,
@@ -99,12 +99,13 @@ async function main() {
     if (!fs.existsSync(config.projectPath)) throw new Error(`Mini Program project not found: ${config.projectPath}`);
 
     record('launch', config);
-    miniProgram = await automator.launch({
-      cliPath: config.cliPath,
-      projectPath: config.projectPath,
-      port: config.port,
-      trustProject: true,
-    });
+    const launched = await launchDevTools(config);
+    miniProgram = launched.miniProgram;
+    if (launched.cliOutput) {
+      fs.writeFileSync(artifacts.devToolsLog, launched.cliOutput, 'utf8');
+      record('devtools-log', { path: artifacts.devToolsLog });
+    }
+    record('automation-connected', { port: config.port, reused: launched.reused });
     miniProgram.on('console', (event) => record('console', event));
     miniProgram.on('exception', (event) => {
       exceptions.push(event);
@@ -147,6 +148,10 @@ async function main() {
     record('passed');
   } catch (error) {
     record('failed', { message: error.message, stack: error.stack });
+    if (Object.prototype.hasOwnProperty.call(error, 'devToolsOutput')) {
+      fs.writeFileSync(artifacts.devToolsLog, `${error.devToolsOutput || ''}\n`, 'utf8');
+      record('devtools-log', { path: artifacts.devToolsLog });
+    }
     if (miniProgram) {
       try {
         const page = await miniProgram.currentPage();
