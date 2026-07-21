@@ -22,7 +22,14 @@
       bindtap="openGroupBuy"
     >
       <image wx:if="{{item.coverImage}}" class="group-cover" src="{{item.coverImage}}" mode="aspectFill" />
-      <view wx:else class="group-cover group-placeholder">邻里拼</view>
+      <view wx:else class="group-cover catalog-sprite-window">
+        <image
+          class="group-sprite-image"
+          src="{{item.fallbackImage}}"
+          style="left: {{item.fallbackOffset}};"
+          mode="scaleToFill"
+        />
+      </view>
       <view class="group-body">
         <view class="group-name">{{item.name}}</view>
         <view class="group-community">{{item.communityName}}</view>

@@ -23,6 +23,31 @@ test('normalizes product cents and stock without leaking API shape', () => {
       priceYuan: '33.30',
       stockLabel: '库存：8斤',
       outOfStock: false,
+      fallbackImage: '',
+      fallbackOffset: '0%',
+    },
+  );
+});
+
+test('uses deterministic local photography when a product image is missing', () => {
+  assert.deepEqual(
+    normalizeHomeProduct({
+      product_id: 'p-2',
+      name: '本地菠菜',
+      cover_image: '/images/products/placeholder.png',
+      price_cents: 690,
+      stock: 18,
+      unit: '份',
+    }, 1),
+    {
+      id: 'p-2',
+      name: '本地菠菜',
+      coverImage: '',
+      fallbackImage: '/assets/catalog/chunhuaqiushi-catalog-sprite.jpg',
+      fallbackOffset: '-100%',
+      priceYuan: '6.90',
+      stockLabel: '库存：18份',
+      outOfStock: false,
     },
   );
 });
@@ -42,10 +67,27 @@ test('normalizes group progress and fallback labels', () => {
       name: '邻里蔬菜包',
       communityName: '春华社区',
       coverImage: '',
+      fallbackImage: '/assets/catalog/chunhuaqiushi-catalog-sprite.jpg',
+      fallbackOffset: '0%',
       priceYuan: '19.90',
       progressText: '1/3 人',
     },
   );
+});
+
+test('preserves an uploaded group-buy image instead of replacing it', () => {
+  const item = normalizeHomeGroupBuy({
+    id: 'g-2',
+    price_cents: 2990,
+    product: {
+      name: '有机蔬菜箱',
+      cover_image: 'https://cdn.example.com/vegetables.jpg',
+    },
+  }, 4);
+
+  assert.equal(item.coverImage, 'https://cdn.example.com/vegetables.jpg');
+  assert.equal(item.fallbackImage, '');
+  assert.equal(item.fallbackOffset, '0%');
 });
 
 test('falls back to the approved default template', () => {

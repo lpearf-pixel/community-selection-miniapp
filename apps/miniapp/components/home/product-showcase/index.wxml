@@ -23,7 +23,14 @@
         bindtap="openProduct"
       >
         <image wx:if="{{item.coverImage}}" class="product-cover" src="{{item.coverImage}}" mode="aspectFill" />
-        <view wx:else class="product-cover product-placeholder">新鲜</view>
+        <view wx:else class="product-cover catalog-sprite-window">
+          <image
+            class="product-sprite-image"
+            src="{{item.fallbackImage}}"
+            style="left: {{item.fallbackOffset}};"
+            mode="scaleToFill"
+          />
+        </view>
         <view class="product-body">
           <view class="product-name">{{item.name}}</view>
           <view class="product-price">¥{{item.priceYuan}}</view>

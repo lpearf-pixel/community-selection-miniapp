@@ -6,7 +6,14 @@
       <view class="brand-subtitle">{{brand.subtitle}}</view>
     </view>
   </view>
-  <view class="brand-slogan">{{brand.slogan}}</view>
+  <view class="brand-visual">
+    <image class="brand-hero-image" src="{{brand.heroImagePath}}" mode="aspectFill" />
+    <view class="brand-visual-shade"></view>
+    <view class="brand-visual-copy">
+      <view class="brand-slogan">{{brand.slogan}}</view>
+      <view class="brand-season">时令鲜蔬 · 自然好味</view>
+    </view>
+  </view>
   <view class="service-row">
     <view wx:for="{{services}}" wx:key="key" class="cq-pill service-pill">{{item.label}}</view>
   </view>

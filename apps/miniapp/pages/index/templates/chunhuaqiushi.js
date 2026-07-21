@@ -1,11 +1,15 @@
+const catalogSpritePath = '/assets/catalog/chunhuaqiushi-catalog-sprite.jpg';
+
 module.exports = Object.freeze({
   key: 'chunhuaqiushi',
   pageClass: 'theme-chunhuaqiushi',
+  catalogSpritePath,
   brand: {
     name: '春华秋实',
     subtitle: '社区甄选',
     slogan: '健康源于自然，温暖来自邻里',
     logoPath: '/assets/brand/chunhuaqiushi-logo.jpg',
+    heroImagePath: '/assets/brand/chunhuaqiushi-hero.jpg',
   },
   services: [
     { key: 'organic', label: '有机甄选' },
@@ -13,11 +17,11 @@ module.exports = Object.freeze({
     { key: 'neighbor', label: '邻里服务' },
   ],
   categories: [
-    { key: 'vegetables', label: '蔬菜', keyword: '蔬菜', icon: '🥬' },
-    { key: 'fruits', label: '水果', keyword: '水果', icon: '🍎' },
-    { key: 'eggs', label: '禽蛋', keyword: '鸡蛋', icon: '🥚' },
-    { key: 'grains', label: '粮油', keyword: '粮油', icon: '🌾' },
-    { key: 'pantry', label: '副食', keyword: '副食', icon: '🫙' },
+    { key: 'vegetables', label: '蔬菜', keyword: '蔬菜', imagePath: catalogSpritePath, spriteOffset: '0%' },
+    { key: 'fruits', label: '水果', keyword: '水果', imagePath: catalogSpritePath, spriteOffset: '-100%' },
+    { key: 'eggs', label: '禽蛋', keyword: '鸡蛋', imagePath: catalogSpritePath, spriteOffset: '-200%' },
+    { key: 'grains', label: '粮油', keyword: '粮油', imagePath: catalogSpritePath, spriteOffset: '-300%' },
+    { key: 'pantry', label: '副食', keyword: '副食', imagePath: catalogSpritePath, spriteOffset: '-400%' },
   ],
   sections: [
     { type: 'brandHero', variant: 'light-premium' },

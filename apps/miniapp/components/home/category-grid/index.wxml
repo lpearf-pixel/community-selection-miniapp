@@ -7,7 +7,14 @@
     data-testid="home-category-{{item.key}}"
     bindtap="chooseCategory"
   >
-    <view class="category-icon">{{item.icon}}</view>
+    <view class="category-photo">
+      <image
+        class="category-sprite-image"
+        src="{{item.imagePath}}"
+        style="left: {{item.spriteOffset}};"
+        mode="scaleToFill"
+      />
+    </view>
     <view class="category-label">{{item.label}}</view>
   </view>
 </view>

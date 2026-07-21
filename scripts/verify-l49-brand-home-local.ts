@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 
 const failures: string[] = [];
 
@@ -30,6 +30,8 @@ const requiredFiles = [
   'apps/miniapp/styles/tokens.wxss',
   'apps/miniapp/styles/themes/chunhuaqiushi.wxss',
   'apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg',
+  'apps/miniapp/assets/brand/chunhuaqiushi-hero.jpg',
+  'apps/miniapp/assets/catalog/chunhuaqiushi-catalog-sprite.jpg',
   'scripts/miniapp-e2e/home-smoke.cjs',
   'scripts/miniapp-e2e/lib.cjs',
   'scripts/miniapp-e2e/setup-miniapp-project.cjs',
@@ -76,7 +78,7 @@ for (const type of ['brandHero', 'categoryGrid', 'productShowcase', 'groupBuySho
 if (/(?:https?:\/\/|\/api\/|\bwx\.|=>|\bfunction\b)/.test(template)) fail('template configuration must not contain URLs, wx APIs, or executable callbacks');
 
 for (const endpoint of ['/api/products', '/api/group-buys']) {
-  if (!pageJs.includes(`url: '${endpoint}'`) && !pageJs.includes(`url: "${endpoint}"`)) fail(`home page must request ${endpoint}`);
+  if (!pageJs.includes(`url: '${endpoint}'`) && !pageJs.includes(`url: \"${endpoint}\"`)) fail(`home page must request ${endpoint}`);
 }
 if (!/require\(['"]\.\.\/\.\.\/utils\/api['"]\)/.test(pageJs) || !pageJs.includes('request')) fail('home page must use the shared request helper');
 if (!/require\(['"]\.\/templates\/index['"]\)/.test(pageJs)) fail('home page must explicitly require the template registry file for WeChat module resolution');
@@ -87,18 +89,36 @@ for (const needle of ['wx.login', 'wx.requestPayment', 'wx.getLocation', 'cost_p
 
 const componentAliases = ['brand-hero', 'category-grid', 'product-showcase', 'group-buy-showcase', 'quick-actions'];
 for (const alias of componentAliases) {
-  if (count(pageJson, `"${alias}"`) !== 1) fail(`index.json must register ${alias} exactly once`);
+  if (count(pageJson, `\"${alias}\"`) !== 1) fail(`index.json must register ${alias} exactly once`);
 }
 
 const componentWxml = [
   pageWxml,
   ...componentAliases.map((alias) => read(`apps/miniapp/components/home/${alias}/index.wxml`)),
 ].join('\n');
+
+for (const key of ['heroImagePath', 'catalogSpritePath', 'spriteOffset']) {
+  if (!template.includes(key)) fail(`home template must define ${key}`);
+}
+for (const selector of ['brand-hero-image', 'category-sprite-image', 'product-sprite-image', 'group-sprite-image']) {
+  if (!componentWxml.includes(selector)) fail(`home visual components must render ${selector}`);
+}
+for (const asset of [
+  'apps/miniapp/assets/brand/chunhuaqiushi-hero.jpg',
+  'apps/miniapp/assets/catalog/chunhuaqiushi-catalog-sprite.jpg',
+]) {
+  if (existsSync(asset) && readFileSync(asset).subarray(0, 3).toString('hex') !== 'ffd8ff') fail(`${asset} must be a JPEG`);
+}
+const visualAssetBytes = [
+  'apps/miniapp/assets/brand/chunhuaqiushi-hero.jpg',
+  'apps/miniapp/assets/catalog/chunhuaqiushi-catalog-sprite.jpg',
+].reduce((total, asset) => total + (existsSync(asset) ? statSync(asset).size : 0), 0);
+if (visualAssetBytes > 512000) fail('home hero and catalog sprite must stay below 500 KiB combined');
 for (const testId of ['home-brand', 'home-products-entry', 'home-group-buys-entry', 'home-orders-entry', 'home-products-retry', 'home-group-buys-retry']) {
-  if (count(componentWxml, `data-testid="${testId}"`) !== 1) fail(`${testId} must exist exactly once`);
+  if (count(componentWxml, `data-testid=\"${testId}\"`) !== 1) fail(`${testId} must exist exactly once`);
 }
 for (const dynamicId of ['home-category-{{item.key}}', 'home-product-{{item.id}}', 'home-group-buy-{{item.id}}']) {
-  if (count(componentWxml, `data-testid="${dynamicId}"`) !== 1) fail(`${dynamicId} must exist exactly once`);
+  if (count(componentWxml, `data-testid=\"${dynamicId}\"`) !== 1) fail(`${dynamicId} must exist exactly once`);
 }
 
 if (!appJson.includes('"navigationBarTitleText": "春华秋实"')) fail('app navigation title must use the brand name');

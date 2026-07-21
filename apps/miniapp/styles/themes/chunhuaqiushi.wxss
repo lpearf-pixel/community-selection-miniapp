@@ -1,5 +1,5 @@
 .theme-chunhuaqiushi { color: #2D3A31; }
-.theme-chunhuaqiushi .brand-hero { background: linear-gradient(145deg, #FFFDF8 0%, #F1F6EB 100%); }
+.theme-chunhuaqiushi .brand-hero { background: #FFFDF8; }
 .theme-chunhuaqiushi .brand-name { color: #315B45; }
 .theme-chunhuaqiushi .brand-subtitle,
 .theme-chunhuaqiushi .section-hint,
@@ -7,6 +7,7 @@
 .theme-chunhuaqiushi .group-community,
 .theme-chunhuaqiushi .quick-desc { color: #748078; }
 .theme-chunhuaqiushi .brand-slogan { color: #315B45; }
+.theme-chunhuaqiushi .brand-season { color: #5E725F; }
 .theme-chunhuaqiushi .category-tile { color: #315B45; background: rgba(255, 253, 248, 0.88); border: 1rpx solid rgba(49, 91, 69, 0.08); }
 .theme-chunhuaqiushi .category-tile:active { background: rgba(143, 175, 152, 0.20); }
 .theme-chunhuaqiushi .section-mark { color: #D5A84B; }
