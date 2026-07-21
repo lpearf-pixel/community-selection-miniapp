@@ -101,7 +101,11 @@ async function main() {
       ...process.env,
       MINIAPP_E2E_API_BASE_URL: process.env.MINIAPP_E2E_API_BASE_URL || new URL(config.healthUrl).origin,
     };
-    const clickResult = spawnSync(process.execPath, [path.join(__dirname, 'home-smoke.cjs')], {
+    const suiteIndex = process.argv.indexOf('--suite');
+    const suite = suiteIndex >= 0 ? process.argv[suiteIndex + 1] : 'home';
+    if (!['home', 'theme'].includes(suite)) throw new Error('Unknown Mini Program E2E suite: ' + suite);
+    const smokeScript = suite === 'theme' ? 'theme-smoke.cjs' : 'home-smoke.cjs';
+    const clickResult = spawnSync(process.execPath, [path.join(__dirname, smokeScript)], {
       cwd: config.repoRoot,
       env: clickEnv,
       stdio: 'inherit',
@@ -111,7 +115,7 @@ async function main() {
       throw new Error(`Mini Program click smoke exited with status ${clickResult.status}`);
     }
 
-    process.stdout.write('Containerized Mini Program home smoke passed.\n');
+    process.stdout.write('Containerized Mini Program ' + suite + ' smoke passed.\n');
     process.stdout.write('Containers remain running; use pnpm e2e:miniapp:stop when finished.\n');
   } catch (error) {
     try {

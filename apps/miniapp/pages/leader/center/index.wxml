@@ -1,68 +1,44 @@
-<view class="page">
-  <view class="page-title">团长中心</view>
-
-  <view wx:if="{{loading && !summary}}" class="state-card">正在加载团长中心…</view>
-
-  <view wx:elif="{{forbidden}}" class="state-card forbidden-state">
-    <view class="state-title">暂不可访问</view>
-    <view class="muted">{{error}}</view>
-    <button size="mini" bindtap="goMine">返回个人中心</button>
+<view class="cq-page page">
+  <view class="cq-title page-title">团长中心</view>
+  <state-panel wx:if="{{loading && !summary}}" state="loading" message="正在加载团长中心…" />
+  <view wx:elif="{{forbidden}}" class="cq-card access-card">
+    <state-panel state="error" message="{{error}}" />
+    <button class="cq-button cq-button--secondary" size="mini" bindtap="goMine">返回个人中心</button>
   </view>
-
-  <view wx:elif="{{error && !summary}}" class="state-card error-state">
-    <view>{{error}}</view>
-    <button size="mini" bindtap="retrySummary">重新加载</button>
-  </view>
+  <state-panel wx:elif="{{error && !summary}}" state="error" message="{{error}}" retryable bind:retry="retrySummary" />
 
   <block wx:if="{{summary}}">
-    <view class="notice">
-      奖励只来自本人真实有效团购订单；提现申请由后台人工审核并由工作人员线下处理，不代表自动到账。
+    <view class="cq-card cq-tone-warning notice-card">奖励只来自本人真实有效团购订单；提现申请由后台人工审核并由工作人员线下处理，不代表自动到账。</view>
+    <view wx:if="{{error}}" class="cq-card cq-tone-warning refresh-warning"><text>{{error}}</text><text class="retry-link" bindtap="retrySummary">重试</text></view>
+
+    <view class="cq-section-title section-title">开团概览</view>
+    <view class="cq-card metric-grid">
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.group_buys.active_count}}</view><view class="cq-muted metric-label">进行中</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.group_buys.success_count}}</view><view class="cq-muted metric-label">已成功</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.group_buys.failed_count}}</view><view class="cq-muted metric-label">未成团</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.group_buys.total_count}}</view><view class="cq-muted metric-label">全部</view></view>
     </view>
 
-    <view wx:if="{{error}}" class="refresh-warning">
-      <text>{{error}}</text>
-      <text class="retry-link" bindtap="retrySummary">重试</text>
+    <view class="cq-section-title section-title">开团服务奖励</view>
+    <view class="cq-card reward-grid">
+      <view class="reward-item"><view class="reward-value">{{summary.rewards.pending_text}}</view><view class="cq-muted metric-label">待生效</view></view>
+      <view class="reward-item"><view class="cq-price reward-value">{{summary.rewards.available_text}}</view><view class="cq-muted metric-label">可提现</view></view>
+      <view class="reward-item"><view class="reward-value">{{summary.rewards.withdrawing_text}}</view><view class="cq-muted metric-label">处理中</view></view>
+      <view class="reward-item"><view class="reward-value">{{summary.rewards.withdrawn_text}}</view><view class="cq-muted metric-label">已处理</view></view>
     </view>
+    <button class="cq-button cq-button--primary withdraw-button" disabled="{{!summary.navigation.withdrawal_entry_available}}" bindtap="goWithdrawals">申请人工提现</button>
 
-    <view class="section-title">开团概览</view>
-    <view class="card metric-grid">
-      <view class="metric-item"><view class="metric-value">{{summary.group_buys.active_count}}</view><view class="muted">进行中</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.group_buys.success_count}}</view><view class="muted">已成功</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.group_buys.failed_count}}</view><view class="muted">未成团</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.group_buys.total_count}}</view><view class="muted">全部</view></view>
-    </view>
-
-    <view class="section-title">开团服务奖励</view>
-    <view class="card reward-grid">
-      <view class="reward-item"><view class="reward-value">{{summary.rewards.pending_text}}</view><view class="muted">待生效</view></view>
-      <view class="reward-item"><view class="reward-value primary">{{summary.rewards.available_text}}</view><view class="muted">可提现</view></view>
-      <view class="reward-item"><view class="reward-value">{{summary.rewards.withdrawing_text}}</view><view class="muted">处理中</view></view>
-      <view class="reward-item"><view class="reward-value">{{summary.rewards.withdrawn_text}}</view><view class="muted">已处理</view></view>
-    </view>
-
-    <button
-      class="withdraw-button"
-      type="primary"
-      disabled="{{!summary.navigation.withdrawal_entry_available}}"
-      bindtap="goWithdrawals"
-    >申请人工提现</button>
-
-    <view class="section-title">最近提现申请</view>
-    <view class="card">
-      <view wx:if="{{!summary.withdrawals.latest.length}}" class="empty-text">暂无提现申请</view>
-      <block wx:else><block wx:for="{{summary.withdrawals.latest}}" wx:key="withdrawal_id">
-        <view class="withdrawal-row">
-          <view>
-            <view class="withdrawal-amount">{{item.amount_text}}</view>
-            <view class="muted">{{item.created_at}}</view>
-          </view>
-          <view class="status-text">{{item.status_text}}</view>
+    <view class="cq-section-title section-title">最近提现申请</view>
+    <view class="cq-card withdrawal-card">
+      <state-panel wx:if="{{!summary.withdrawals.latest.length}}" state="empty" message="暂无提现申请" />
+      <view wx:else>
+        <view wx:for="{{summary.withdrawals.latest}}" wx:key="withdrawal_id" class="cq-divider withdrawal-row">
+          <view><view class="cq-price withdrawal-amount">{{item.amount_text}}</view><view class="cq-muted withdrawal-time">{{item.created_at}}</view></view>
+          <status-pill text="{{item.status_text}}" tone="{{item.theme_status_tone}}" />
         </view>
-      </block>
-      </block>
+      </view>
     </view>
-
-    <view class="card status-summary">
+    <view class="cq-card status-summary">
       <view>待审核：{{summary.withdrawals.pending_count}}</view>
       <view>已通过待处理：{{summary.withdrawals.approved_count}}</view>
       <view>已拒绝：{{summary.withdrawals.rejected_count}}</view>

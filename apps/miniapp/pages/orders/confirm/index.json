@@ -1,3 +1,7 @@
 {
-  "navigationBarTitleText": "社区甄选"
+  "navigationBarTitleText": "社区甄选",
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index",
+    "media-thumb": "/components/ui/media-thumb/index"
+  }
 }

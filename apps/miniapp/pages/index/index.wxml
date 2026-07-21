@@ -1,4 +1,4 @@
-<view class="home-page {{layout.pageClass}}">
+<view class="cq-page home-page {{layout.pageClass}}">
   <block wx:for="{{layout.sections}}" wx:key="type" wx:for-item="section">
     <brand-hero
       wx:if="{{section.type === 'brandHero'}}"

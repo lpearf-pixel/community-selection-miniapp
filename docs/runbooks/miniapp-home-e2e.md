@@ -94,3 +94,7 @@ pnpm e2e:miniapp:stop
 - `Missing Mini Program element`：页面未编译成功，或稳定 `data-testid` 被误删。
 
 普通 Linux CI 只运行 `pnpm verify:l49:static`、纯函数测试和已有业务门禁；带 Docker Desktop 与微信开发者工具的 Mac 或后续自托管 Mac Runner 执行完整主命令。
+
+## 全局主题与 19 页验收
+
+首页点击冒烟通过后，使用 `pnpm e2e:miniapp:theme` 验证全部 19 个小程序页面。完整换肤流程、证据目录和验收标准见 [小程序全局主题切换与 19 页验收](miniapp-theme-switch.md)。

@@ -15,6 +15,7 @@ Page({
     products: [],
     keyword: "",
     loading: false,
+    error: "",
     selectedCommunity: null,
     cartCount: 0,
   },
@@ -43,7 +44,7 @@ Page({
     this.loadProducts();
   },
   loadProducts() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, error: "" });
     return request({
       url: "/api/products",
       params: { keyword: this.data.keyword },
@@ -63,6 +64,7 @@ Page({
           })),
         }),
       )
+      .catch((error) => this.setData({ error: error.message || "商品加载失败" }))
       .finally(() => this.setData({ loading: false }));
   },
   chooseCommunity() {

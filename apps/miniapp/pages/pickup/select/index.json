@@ -1,1 +1,6 @@
-{"navigationBarTitleText":"选择自提点"}
+{
+  "navigationBarTitleText": "选择自提点",
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index"
+  }
+}

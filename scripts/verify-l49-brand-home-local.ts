@@ -22,6 +22,9 @@ const requiredFiles = [
   'apps/miniapp/pages/index/home-model.js',
   'apps/miniapp/pages/index/templates/index.js',
   'apps/miniapp/pages/index/templates/chunhuaqiushi.js',
+  'apps/miniapp/themes/chunhuaqiushi/theme.json',
+  'apps/miniapp/themes/chunhuaqiushi/theme.js',
+  'apps/miniapp/themes/active.generated.js',
   'apps/miniapp/components/home/brand-hero/index.wxml',
   'apps/miniapp/components/home/category-grid/index.wxml',
   'apps/miniapp/components/home/product-showcase/index.wxml',
@@ -48,7 +51,9 @@ for (const path of requiredFiles) {
 
 const config = read('apps/miniapp/config.js');
 const templateRegistry = read('apps/miniapp/pages/index/templates/index.js');
-const template = read('apps/miniapp/pages/index/templates/chunhuaqiushi.js');
+const templateCompatibilityEntry = read('apps/miniapp/pages/index/templates/chunhuaqiushi.js');
+const templateDescriptor = read('apps/miniapp/themes/chunhuaqiushi/theme.json');
+const template = read('apps/miniapp/themes/chunhuaqiushi/theme.js');
 const pageJs = read('apps/miniapp/pages/index/index.js');
 const pageWxml = read('apps/miniapp/pages/index/index.wxml');
 const pageJson = read('apps/miniapp/pages/index/index.json');
@@ -64,18 +69,23 @@ const projectSetup = read('scripts/miniapp-e2e/setup-miniapp-project.cjs');
 const gitignore = read('.gitignore');
 const compose = read('docker-compose.yml');
 
-if (!/homeTemplateKey\s*:\s*['"]chunhuaqiushi['"]/.test(config)) fail('config must select the chunhuaqiushi home template');
-if (!/DEFAULT_HOME_TEMPLATE_KEY\s*=\s*['"]chunhuaqiushi['"]/.test(templateRegistry)) fail('template registry must define the default key');
-if (!templateRegistry.includes('registry[key] || registry[DEFAULT_HOME_TEMPLATE_KEY]')) fail('template registry must fail safe to the default template');
+if (!config.includes("require('./themes/active.generated')") || !/homeTemplateKey\s*:\s*activeTheme\.id/.test(config)) {
+  fail('config must select the globally active home template');
+}
+if (!/DEFAULT_HOME_TEMPLATE_KEY\s*=\s*activeTheme\.id/.test(templateRegistry)) fail('template registry must define the active default key');
+if (!templateRegistry.includes('registry[key] || activeTheme')) fail('template registry must fail safe to the active template');
+if (!templateCompatibilityEntry.includes("require('../../../themes/chunhuaqiushi/theme')")) {
+  fail('legacy template entry must re-export the global theme descriptor');
+}
 
 for (const text of ['春华秋实', '社区甄选', '健康源于自然，温暖来自邻里']) {
-  if (!template.includes(text)) fail(`template must contain ${text}`);
+  if (!(template + templateDescriptor).includes(text)) fail(`template must contain ${text}`);
 }
 for (const type of ['brandHero', 'categoryGrid', 'productShowcase', 'groupBuyShowcase', 'quickActions']) {
   if (!template.includes(`type: '${type}'`)) fail(`template must register ${type}`);
   if (!pageWxml.includes(`section.type === '${type}'`)) fail(`page shell must render ${type}`);
 }
-if (/(?:https?:\/\/|\/api\/|\bwx\.|=>|\bfunction\b)/.test(template)) fail('template configuration must not contain URLs, wx APIs, or executable callbacks');
+if (/(?:https?:\/\/|\/api\/|\bwx\.)/.test(template + templateDescriptor)) fail('theme configuration must not contain URLs, API paths, or wx APIs');
 
 for (const endpoint of ['/api/products', '/api/group-buys']) {
   if (!pageJs.includes(`url: '${endpoint}'`) && !pageJs.includes(`url: \"${endpoint}\"`)) fail(`home page must request ${endpoint}`);

@@ -1,0 +1,4 @@
+.state-panel { width: 100%; }
+.state-panel__indicator,
+.state-panel__message { line-height: 1.6; }
+.state-panel__retry { width: 240rpx; margin: 24rpx auto 0; }

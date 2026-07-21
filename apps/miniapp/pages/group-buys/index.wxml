@@ -1,10 +1,19 @@
-<view class="page">
-  <view class="title">今日开团</view>
-  <block wx:for="{{groupBuys}}" wx:key="id">
-    <view class="card" bindtap="openDetail" data-id="{{item.id}}">
-      <view class="name">{{item.product.name}}</view>
-      <view class="meta">{{item.community.name}} · {{item.current_people}}/{{item.min_people}} 人</view>
-      <view class="price">¥{{item.price_cents / 100}}</view>
+<view class="cq-page page">
+  <view class="cq-title page-title">今日开团</view>
+  <state-panel wx:if="{{loading && !groupBuys.length}}" state="loading" message="正在加载团购…" />
+  <state-panel wx:elif="{{error}}" state="error" message="{{error}}" retryable bind:retry="loadGroupBuys" />
+  <state-panel wx:elif="{{!groupBuys.length}}" state="empty" message="暂无进行中的团购" />
+  <view wx:else class="group-list">
+    <view wx:for="{{groupBuys}}" wx:key="id" class="cq-card group-card" bindtap="openDetail" data-id="{{item.id}}">
+      <view class="group-cover"><media-thumb src="{{item.product.cover_image}}" category-index="{{index}}" /></view>
+      <view class="group-body">
+        <view class="group-head">
+          <view class="group-name">{{item.product.name}}</view>
+          <status-pill text="{{item.themeStatus.text}}" tone="{{item.themeStatus.tone}}" />
+        </view>
+        <view class="cq-muted group-meta">{{item.community.name}} · {{item.current_people}}/{{item.min_people}} 人</view>
+        <view class="cq-price group-price">¥{{item.price_cents / 100}}</view>
+      </view>
     </view>
-  </block>
+  </view>
 </view>

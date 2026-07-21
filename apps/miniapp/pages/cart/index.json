@@ -1,1 +1,7 @@
-{ "navigationBarTitleText": "购物车" }
+{
+  "navigationBarTitleText": "购物车",
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index",
+    "media-thumb": "/components/ui/media-thumb/index"
+  }
+}

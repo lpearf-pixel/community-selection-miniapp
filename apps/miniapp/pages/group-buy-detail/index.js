@@ -26,18 +26,23 @@ function formatGroupBuy(raw) {
     is_failed: isFailed,
     status_text: isSuccess ? '已成团' : (isFailed ? '团购已结束' : '待成团'),
     manual_process_tip: isFailed ? '如已支付，请等待平台人工处理' : '',
-    join_button_text: isFailed ? '团购已结束' : (isSuccess ? '已成团，可继续购买' : '参团下单')
+    join_button_text: isFailed ? '团购已结束' : (isSuccess ? '已成团，可继续购买' : '参团下单'),
+    status_tone: isSuccess ? 'success' : (isFailed ? 'danger' : 'warning')
   };
 }
 
 Page({
-  data: { groupBuy: null, loading: true },
+  data: { groupBuy: null, groupBuyId: '', loading: true, error: '' },
   onLoad(query) {
+    this.setData({ groupBuyId: query.id, loading: true, error: '' });
     wx.request({
       url: `${apiBaseUrl}/api/group-buys/${query.id}`,
       success: (res) => this.setData({ groupBuy: formatGroupBuy(res.data.data), loading: false }),
-      fail: () => this.setData({ loading: false })
+      fail: (error) => this.setData({ loading: false, error: error.errMsg || '团购加载失败' })
     });
+  },
+  retryGroupBuy() {
+    this.onLoad({ id: this.data.groupBuyId });
   },
   join() {
     const groupBuy = this.data.groupBuy;

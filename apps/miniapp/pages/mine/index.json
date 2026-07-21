@@ -1,4 +1,8 @@
 {
   "navigationBarTitleText": "个人中心",
-  "enablePullDownRefresh": true
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index",
+    "status-pill": "/components/ui/status-pill/index"
+  }
 }

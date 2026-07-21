@@ -1,0 +1,12 @@
+<view class="cq-state state-panel">
+  <view wx:if="{{state === 'loading'}}" class="state-panel__indicator">正在加载…</view>
+  <view wx:elif="{{state === 'empty'}}" class="state-panel__message">{{message || '暂时没有内容'}}</view>
+  <view wx:elif="{{state === 'error'}}" class="cq-state--error">
+    <view class="state-panel__message">{{message || '加载失败，请稍后重试'}}</view>
+    <button
+      wx:if="{{retryable}}"
+      class="cq-button cq-button--secondary state-panel__retry"
+      bindtap="onRetry"
+    >重新加载</button>
+  </view>
+</view>

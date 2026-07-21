@@ -1,6 +1,7 @@
+@import "styles/theme-active.generated.wxss";
 @import "styles/tokens.wxss";
 
 page {
-  background: #FAF7EE;
-  color: #2D3A31;
+  color: var(--cq-color-text);
+  background: var(--cq-color-page);
 }

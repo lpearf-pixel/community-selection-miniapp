@@ -3,6 +3,29 @@ const {
   toLeaderCenterViewModel,
 } = require('../../../utils/center');
 
+function withdrawalStatusTone(status) {
+  const value = String(status || '').toLowerCase();
+  if (value.includes('reject') || value.includes('fail')) return 'danger';
+  if (value.includes('process') || value.includes('complete') || value.includes('paid')) return 'success';
+  if (value.includes('approve')) return 'brand';
+  if (value.includes('pending')) return 'warning';
+  return 'neutral';
+}
+
+function decorateSummary(summary) {
+  const viewModel = toLeaderCenterViewModel(summary);
+  return {
+    ...viewModel,
+    withdrawals: {
+      ...viewModel.withdrawals,
+      latest: (viewModel.withdrawals.latest || []).map((item) => ({
+        ...item,
+        theme_status_tone: withdrawalStatusTone(item.status || item.status_text),
+      })),
+    },
+  };
+}
+
 Page({
   data: {
     summary: null,
@@ -33,7 +56,7 @@ Page({
       .then((summary) => {
         if (requestId !== this.summaryRequestId) return;
         this.setData({
-          summary: toLeaderCenterViewModel(summary),
+          summary: decorateSummary(summary),
           loading: false,
           error: '',
           forbidden: false,
@@ -75,3 +98,5 @@ Page({
     });
   },
 });
+
+module.exports = { decorateSummary, withdrawalStatusTone };

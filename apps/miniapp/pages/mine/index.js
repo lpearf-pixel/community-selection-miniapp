@@ -87,3 +87,4 @@ Page({
     wx.navigateTo({ url: '/pages/pickup/select/index' });
   }
 });
+

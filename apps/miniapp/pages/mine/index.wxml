@@ -1,57 +1,47 @@
-<view class="page">
-  <view class="page-title">个人中心</view>
-
-  <view wx:if="{{loading && !summary}}" class="state-card">正在加载个人中心…</view>
-  <view wx:elif="{{error && !summary}}" class="state-card error-state">
-    <view>{{error}}</view>
-    <button size="mini" bindtap="retrySummary">重新加载</button>
-  </view>
+<view class="cq-page page">
+  <view class="cq-title page-title">个人中心</view>
+  <state-panel wx:if="{{loading && !summary}}" state="loading" message="正在加载个人中心…" />
+  <state-panel wx:elif="{{error && !summary}}" state="error" message="{{error}}" retryable bind:retry="retrySummary" />
 
   <block wx:if="{{summary}}">
-    <view class="card profile-card">
+    <view class="cq-card profile-card">
       <image wx:if="{{summary.profile.avatar_url}}" class="avatar" mode="aspectFill" src="{{summary.profile.avatar_url}}" />
-      <view wx:else class="avatar avatar-placeholder">社</view>
+      <view wx:else class="avatar avatar-placeholder cq-tone-brand">社</view>
       <view class="profile-copy">
         <view class="profile-name">{{summary.profile.nickname || '社区用户'}}</view>
-        <view class="muted">{{profileRoleText}}</view>
+        <view class="cq-muted">{{profileRoleText}}</view>
       </view>
     </view>
 
-    <view wx:if="{{error}}" class="refresh-warning">
+    <view wx:if="{{error}}" class="cq-card cq-tone-warning refresh-warning">
       <text>{{error}}</text>
       <text class="retry-link" bindtap="retrySummary">重试</text>
     </view>
 
-    <view class="section-title">我的订单</view>
-    <view class="card metric-grid" bindtap="goOrders">
-      <view class="metric-item"><view class="metric-value">{{summary.orders.unpaid_count}}</view><view class="muted">待付款</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.orders.pending_fulfillment_count}}</view><view class="muted">待履约</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.orders.ready_for_pickup_count}}</view><view class="muted">待取货</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.orders.in_delivery_count}}</view><view class="muted">配送中</view></view>
-      <view class="metric-item"><view class="metric-value">{{summary.orders.completed_count}}</view><view class="muted">已完成</view></view>
+    <view class="cq-section-title section-title">我的订单</view>
+    <view class="cq-card metric-grid" bindtap="goOrders">
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.orders.unpaid_count}}</view><view class="cq-muted metric-label">待付款</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.orders.pending_fulfillment_count}}</view><view class="cq-muted metric-label">待履约</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.orders.ready_for_pickup_count}}</view><view class="cq-muted metric-label">待取货</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.orders.in_delivery_count}}</view><view class="cq-muted metric-label">配送中</view></view>
+      <view class="metric-item"><view class="cq-emphasis metric-value">{{summary.orders.completed_count}}</view><view class="cq-muted metric-label">已完成</view></view>
     </view>
 
-    <view class="card action-row" bindtap="goAfterSales">
-      <view>
-        <view class="action-title">售后服务</view>
-        <view class="muted">查看申请与处理进度</view>
-      </view>
-      <view class="badge">{{summary.after_sales.pending_count}}</view>
+    <view class="cq-card action-row" bindtap="goAfterSales">
+      <view><view class="action-title">售后服务</view><view class="cq-muted action-hint">查看申请与处理进度</view></view>
+      <status-pill text="待处理 {{summary.after_sales.pending_count}}" tone="warning" />
     </view>
 
-    <view wx:if="{{leaderCenterAvailable}}" class="card leader-entry" bindtap="goLeaderCenter">
-      <view>
-        <view class="action-title">团长中心</view>
-        <view class="muted">查看开团、奖励与人工提现</view>
-      </view>
-      <view class="arrow">›</view>
+    <view wx:if="{{leaderCenterAvailable}}" class="cq-card leader-entry" bindtap="goLeaderCenter">
+      <view><view class="action-title">团长中心</view><view class="cq-muted action-hint">查看开团、奖励与人工提现</view></view>
+      <view class="cq-emphasis arrow">›</view>
     </view>
 
-    <view class="section-title">常用服务</view>
-    <view class="card actions">
-      <button bindtap="goCart">我的购物车（{{cartCount}}）</button>
-      <button bindtap="goCommunities">当前社区：{{community.name || '未选择'}}</button>
-      <button bindtap="goPickupStores">当前自提点：{{pickupStore.name || '未选择'}}</button>
+    <view class="cq-section-title section-title">常用服务</view>
+    <view class="cq-card service-actions">
+      <button class="cq-button cq-button--secondary" bindtap="goCart">我的购物车（{{cartCount}}）</button>
+      <button class="cq-button cq-button--secondary" bindtap="goCommunities">当前社区：{{community.name || '未选择'}}</button>
+      <button class="cq-button cq-button--secondary" bindtap="goPickupStores">当前自提点：{{pickupStore.name || '未选择'}}</button>
     </view>
   </block>
 </view>

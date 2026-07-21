@@ -1,0 +1,1 @@
+<view class="cq-chip status-pill cq-tone-{{resolvedTone}}">{{text}}</view>

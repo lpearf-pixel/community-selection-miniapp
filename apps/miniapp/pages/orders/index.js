@@ -15,6 +15,15 @@ const typeTabs = [
   { key: 'group_buy', label: '开团订单' }
 ];
 
+function orderStatusTone(order) {
+  const status = String(order.order_status || order.status || '').toLowerCase();
+  if (status.includes('refund') || status.includes('cancel') || status.includes('fail')) return 'danger';
+  if (status.includes('complete') || status.includes('picked')) return 'success';
+  if (status.includes('ready') || status.includes('paid')) return 'brand';
+  if (status.includes('unpaid') || status.includes('pending')) return 'warning';
+  return 'neutral';
+}
+
 Page({
   data: { statusTabs, typeTabs, activeStatus: 'all', activeType: 'all', orders: [], page: 1, page_size: 20, total: 0, hasMore: true, loading: false, refreshing: false, error: '' },
   onLoad() { this.loadOrders(true); },
@@ -35,7 +44,10 @@ Page({
     const page = reset ? 1 : this.data.page + 1;
     this.setData({ loading: true, error: '' });
     return request({ url: '/api/me/orders', params: this.buildParams(page) }).then((res) => {
-      let items = (res.items || res || []).map(normalizeOrder);
+      let items = (res.items || res || []).map(normalizeOrder).map((item) => ({
+        ...item,
+        theme_status_tone: orderStatusTone(item),
+      }));
       if (this.data.activeStatus === 'after_sale') items = items.filter((item) => item.has_after_sale);
       const orders = reset ? items : this.data.orders.concat(items);
       const total = Number(res.total || orders.length);
@@ -47,3 +59,5 @@ Page({
   applyAfterSale(event) { wx.navigateTo({ url: `/pages/after-sales/apply/index?order_id=${event.currentTarget.dataset.id}` }); },
   goAfterSale(event) { wx.navigateTo({ url: `/pages/after-sales/detail/index?order_id=${event.currentTarget.dataset.id}` }); }
 });
+
+module.exports = { orderStatusTone };

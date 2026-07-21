@@ -1,10 +1,27 @@
-.page { padding: 24rpx; background: #f7f8fa; min-height: 100vh; }
-.panel { background: #fff; border-radius: 16rpx; padding: 24rpx; }
-.title { font-size: 36rpx; font-weight: 600; margin-bottom: 20rpx; }
-.product, .section, .amounts { padding: 18rpx 0; border-bottom: 1rpx solid #f0f0f0; }
-.row { margin: 12rpx 0; }
-.muted, .hint { color: #888; font-size: 26rpx; }
-.error { color: #d93026; margin: 16rpx 0; }
-.quantity-box { display: flex; align-items: center; gap: 16rpx; margin: 12rpx 0; }
-.quantity-input { width: 160rpx; text-align: center; border: 1rpx solid #ddd; border-radius: 8rpx; padding: 8rpx; }
-.pay { font-weight: 600; color: #d93026; margin-top: 8rpx; }
+.page { padding: 28rpx 28rpx 160rpx; }
+.order-panel { padding: 26rpx; }
+.page-title { margin-bottom: 22rpx; }
+.product-summary { display: flex; gap: 18rpx; align-items: center; margin-bottom: 18rpx; }
+.product-cover { width: 140rpx; height: 140rpx; overflow: hidden; flex: none; border-radius: var(--cq-radius-control); }
+.product-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 9rpx; }
+.product-name { font-size: 31rpx; font-weight: 700; }
+.order-type { margin-top: 8rpx; }
+.source-tip { margin-top: 12rpx; }
+.section,
+.amount-summary { padding: 22rpx 0; }
+.section-label { margin-bottom: 12rpx; font-weight: 700; }
+.quantity-box,
+.option-row,
+.window-list { display: flex; flex-wrap: wrap; gap: 12rpx; align-items: center; }
+.quantity-button { width: 70rpx; }
+.quantity-input { width: 150rpx; height: 66rpx; padding: 0 12rpx; text-align: center; }
+.amount-summary { display: flex; flex-direction: column; gap: 12rpx; }
+.amount-summary > view { display: flex; justify-content: space-between; }
+.pay-row { font-size: 31rpx; font-weight: 700; }
+.inline-action { width: 180rpx; margin-top: 14rpx; }
+.pickup-meta,
+.delivery-hint { margin-top: 10rpx; line-height: 1.5; }
+.option-row { margin-top: 14rpx; }
+.delivery-input { width: 100%; height: 78rpx; margin-top: 14rpx; padding: 0 18rpx; }
+.submit-hint { margin-top: 18rpx; text-align: center; }
+.submit-button { width: 100%; }

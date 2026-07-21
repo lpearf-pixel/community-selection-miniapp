@@ -1,1 +1,10 @@
-.page{padding:24rpx;background:#f6f7fb;min-height:100vh}.title{font-size:38rpx;font-weight:700;margin-bottom:20rpx}.form{background:#fff;border-radius:20rpx;padding:24rpx}.label{font-weight:600;margin:18rpx 0 10rpx}.picker,input,textarea{background:#f6f7fb;border-radius:12rpx;padding:16rpx;box-sizing:border-box;width:100%}textarea{height:150rpx}.error{color:#e5484d;margin-bottom:16rpx}button{margin-top:24rpx}
+.page { padding: 28rpx 28rpx 150rpx; }
+.page-title { margin-bottom: 22rpx; }
+.after-sale-form { padding: 26rpx; }
+.field-label { margin: 22rpx 0 10rpx; font-weight: 700; }
+.field-label:first-child { margin-top: 0; }
+.picker-field { min-height: 80rpx; padding: 20rpx; }
+.text-field { width: 100%; height: 158rpx; padding: 18rpx; }
+.refund-amount { font-size: 42rpx; }
+.refund-hint { margin-top: 14rpx; font-size: 24rpx; line-height: 1.6; }
+.submit-button { width: 100%; }

@@ -1,1 +1,18 @@
-.page{padding:24rpx;background:#f7f8fa;min-height:100vh;padding-bottom:150rpx}.empty{text-align:center;color:#999;padding:120rpx 0}.empty button{margin-top:24rpx}.cart-card{display:flex;align-items:center;gap:16rpx;background:#fff;border-radius:18rpx;padding:20rpx;margin-bottom:18rpx}.cover{width:140rpx;height:140rpx;border-radius:14rpx;background:#eee}.info{flex:1}.name{font-weight:600;color:#222}.meta{color:#666;font-size:24rpx;margin-top:8rpx}.price{color:#f5222d;margin-top:8rpx}.subtotal{color:#333;font-size:24rpx}.ops{display:flex;flex-direction:column;gap:12rpx;align-items:flex-end}.qty{display:flex;align-items:center;gap:8rpx}.qty input{width:72rpx;text-align:center;border:1rpx solid #ddd;border-radius:8rpx;padding:6rpx}.bottom{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:18rpx 24rpx;display:flex;align-items:center;gap:16rpx;box-shadow:0 -4rpx 20rpx rgba(0,0,0,.06)}.summary{flex:1;font-weight:600}
+.page { padding: 28rpx 28rpx 160rpx; }
+.browse-button { width: 260rpx; margin: 0 auto; }
+.cart-list { display: flex; flex-direction: column; gap: 18rpx; }
+.cart-card { display: flex; align-items: center; gap: 16rpx; padding: 20rpx; }
+.cart-cover { width: 132rpx; height: 132rpx; overflow: hidden; flex: none; border-radius: var(--cq-radius-control); }
+.cart-info { min-width: 0; flex: 1; }
+.cart-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.cart-meta { margin-top: 7rpx; font-size: 23rpx; }
+.cart-price { margin-top: 8rpx; }
+.cart-subtotal { margin-top: 5rpx; font-size: 23rpx; }
+.cart-ops { display: flex; flex-direction: column; gap: 12rpx; align-items: flex-end; }
+.quantity-control { display: flex; align-items: center; gap: 6rpx; }
+.quantity-button { width: 54rpx; height: 54rpx; padding: 0; }
+.quantity-input { width: 68rpx; height: 54rpx; padding: 0 6rpx; text-align: center; }
+.remove-button { width: 120rpx; height: 52rpx; font-size: 22rpx; }
+.clear-button { width: 112rpx; }
+.cart-summary { min-width: 0; flex: 1; text-align: right; font-size: 24rpx; }
+.checkout-button { width: 184rpx; }
