@@ -106,6 +106,7 @@ for (const service of ['postgres', 'api']) {
   if (!compose.includes(`  ${service}:`)) fail(`docker-compose.yml must define ${service}`);
 }
 if (!containerRunner.includes('composeUpArgs(config)')) fail('container runner must use the verified Compose up contract');
+if (!containerRunner.includes('assertSupportedPlatform();')) fail('container runner must reject non-Mac hosts before starting Docker services');
 if (!containerRunner.includes('waitForHealth(config)')) fail('container runner must verify the host API health endpoint');
 if (!containerRunner.includes('writeComposeDiagnostics')) fail('container runner must collect Compose diagnostics on failure');
 if (!containerCleanup.includes('composeStopArgs(config)')) fail('container cleanup must use the verified service-scoped stop contract');

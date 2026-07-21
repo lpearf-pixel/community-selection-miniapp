@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const {
   artifactPaths,
+  assertSupportedPlatform,
   composeLogsArgs,
   composePsArgs,
   composeUpArgs,
@@ -78,6 +79,7 @@ function writeComposeDiagnostics(config, outputPath) {
 }
 
 async function main() {
+  assertSupportedPlatform();
   const config = resolveContainerConfig();
   const artifacts = artifactPaths(process.env.MINIAPP_E2E_OUTPUT_DIR || '/tmp');
 
