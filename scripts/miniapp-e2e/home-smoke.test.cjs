@@ -5,9 +5,9 @@ const {
   artifactPaths,
   assertPagePath,
   assertSupportedPlatform,
-  composeDownArgs,
   composeLogsArgs,
   composePsArgs,
+  composeStopArgs,
   composeUpArgs,
   normalizePagePath,
   resolveContainerConfig,
@@ -81,7 +81,7 @@ test('builds deterministic compose lifecycle commands', () => {
     ...prefix,
     'logs', '--no-color', '--tail', '200', 'postgres', 'api',
   ]);
-  assert.deepEqual(composeDownArgs(config), [...prefix, 'down', '--remove-orphans']);
+  assert.deepEqual(composeStopArgs(config), [...prefix, 'stop', 'postgres', 'api']);
 });
 
 test('rejects invalid container wait settings before invoking Docker', () => {

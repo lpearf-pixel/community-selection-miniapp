@@ -42,10 +42,10 @@ pnpm e2e:miniapp:home:click-only
 开发结束后停止测试容器：
 
 ```bash
-pnpm e2e:miniapp:down
+pnpm e2e:miniapp:stop
 ```
 
-清理命令不会删除 PostgreSQL 等命名卷；如需删除数据卷，必须另行人工确认后操作。
+停止命令只执行 `docker compose stop postgres api`，不会停止或移除同一项目中的 `admin`，也不会删除容器、网络或 PostgreSQL 等命名卷；如需移除数据卷，必须另行人工确认后操作。
 
 可选环境变量：
 

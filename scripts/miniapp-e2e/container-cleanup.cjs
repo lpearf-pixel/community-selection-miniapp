@@ -1,11 +1,11 @@
 const { spawnSync } = require('node:child_process');
 const {
-  composeDownArgs,
+  composeStopArgs,
   resolveContainerConfig,
 } = require('./lib.cjs');
 
 const config = resolveContainerConfig();
-const result = spawnSync('docker', composeDownArgs(config), {
+const result = spawnSync('docker', composeStopArgs(config), {
   cwd: config.repoRoot,
   encoding: 'utf8',
   stdio: 'inherit',

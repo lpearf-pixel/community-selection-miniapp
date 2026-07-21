@@ -99,7 +99,7 @@ if (!packageJson.includes('"e2e:miniapp:home"')) fail('package scripts must expo
 if (!packageJson.includes('"setup:miniapp:e2e"')) fail('package scripts must expose isolated E2E dependency setup');
 if (!packageJson.includes('"e2e:miniapp:home": "node scripts/miniapp-e2e/container-runner.cjs"')) fail('main home E2E command must orchestrate container services');
 if (!packageJson.includes('"e2e:miniapp:home:click-only": "node scripts/miniapp-e2e/home-smoke.cjs"')) fail('package scripts must expose click-only reruns');
-if (!packageJson.includes('"e2e:miniapp:down": "node scripts/miniapp-e2e/container-cleanup.cjs"')) fail('package scripts must expose non-destructive container cleanup');
+if (!packageJson.includes('"e2e:miniapp:stop": "node scripts/miniapp-e2e/container-cleanup.cjs"')) fail('package scripts must expose service-scoped container cleanup');
 if (!/"miniprogram-automator"\s*:\s*"0\.12\.1"/.test(e2ePackageJson)) fail('E2E package must pin miniprogram-automator 0.12.1');
 for (const service of ['postgres', 'api']) {
   if (!containerRunner.includes(`'${service}'`) && !containerRunner.includes('config.services')) fail(`container runner must start ${service}`);
@@ -108,8 +108,8 @@ for (const service of ['postgres', 'api']) {
 if (!containerRunner.includes('composeUpArgs(config)')) fail('container runner must use the verified Compose up contract');
 if (!containerRunner.includes('waitForHealth(config)')) fail('container runner must verify the host API health endpoint');
 if (!containerRunner.includes('writeComposeDiagnostics')) fail('container runner must collect Compose diagnostics on failure');
-if (!containerCleanup.includes('composeDownArgs(config)')) fail('container cleanup must use the verified non-destructive down contract');
-if (/\bdown\b[^\n]*(?:-v|--volumes)/.test(containerCleanup)) fail('container cleanup must preserve named volumes');
+if (!containerCleanup.includes('composeStopArgs(config)')) fail('container cleanup must use the verified service-scoped stop contract');
+if (/\bdown\b|(?:-v|--volumes)/.test(containerCleanup)) fail('container cleanup must not tear down the Compose project or named volumes');
 
 if (failures.length) {
   throw new Error(`L49 brand home static verification failed:\n- ${[...new Set(failures)].join('\n- ')}`);

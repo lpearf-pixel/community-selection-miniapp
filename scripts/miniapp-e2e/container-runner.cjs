@@ -102,7 +102,7 @@ async function main() {
     }
 
     process.stdout.write('Containerized Mini Program home smoke passed.\n');
-    process.stdout.write('Containers remain running; use pnpm e2e:miniapp:down when finished.\n');
+    process.stdout.write('Containers remain running; use pnpm e2e:miniapp:stop when finished.\n');
   } catch (error) {
     try {
       writeComposeDiagnostics(config, artifacts.composeLog);

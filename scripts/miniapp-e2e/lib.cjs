@@ -97,8 +97,8 @@ function composeLogsArgs(config) {
   ];
 }
 
-function composeDownArgs(config) {
-  return [...composePrefix(config), 'down', '--remove-orphans'];
+function composeStopArgs(config) {
+  return [...composePrefix(config), 'stop', ...config.services];
 }
 
 function normalizePagePath(value) {
@@ -127,9 +127,9 @@ module.exports = {
   artifactPaths,
   assertPagePath,
   assertSupportedPlatform,
-  composeDownArgs,
   composeLogsArgs,
   composePsArgs,
+  composeStopArgs,
   composeUpArgs,
   normalizePagePath,
   resolveContainerConfig,
