@@ -32,6 +32,8 @@ const requiredFiles = [
   'apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg',
   'scripts/miniapp-e2e/home-smoke.cjs',
   'scripts/miniapp-e2e/lib.cjs',
+  'scripts/miniapp-e2e/package.json',
+  'scripts/miniapp-e2e/pnpm-lock.yaml',
 ];
 
 for (const path of requiredFiles) {
@@ -46,6 +48,7 @@ const pageWxml = read('apps/miniapp/pages/index/index.wxml');
 const pageJson = read('apps/miniapp/pages/index/index.json');
 const appJson = read('apps/miniapp/app.json');
 const packageJson = read('package.json');
+const e2ePackageJson = read('scripts/miniapp-e2e/package.json');
 
 if (!/homeTemplateKey\s*:\s*['"]chunhuaqiushi['"]/.test(config)) fail('config must select the chunhuaqiushi home template');
 if (!/DEFAULT_HOME_TEMPLATE_KEY\s*=\s*['"]chunhuaqiushi['"]/.test(templateRegistry)) fail('template registry must define the default key');
@@ -88,6 +91,8 @@ for (const dynamicId of ['home-category-{{item.key}}', 'home-product-{{item.id}}
 if (!appJson.includes('"navigationBarTitleText": "春华秋实"')) fail('app navigation title must use the brand name');
 if (!pageJson.includes('"navigationBarTitleText": "春华秋实"')) fail('home navigation title must use the brand name');
 if (!packageJson.includes('"e2e:miniapp:home"')) fail('package scripts must expose the Mac home smoke test');
+if (!packageJson.includes('"setup:miniapp:e2e"')) fail('package scripts must expose isolated E2E dependency setup');
+if (!/"miniprogram-automator"\s*:\s*"0\.12\.1"/.test(e2ePackageJson)) fail('E2E package must pin miniprogram-automator 0.12.1');
 
 if (failures.length) {
   throw new Error(`L49 brand home static verification failed:\n- ${[...new Set(failures)].join('\n- ')}`);
