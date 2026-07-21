@@ -3,8 +3,12 @@ const path = require('node:path');
 const automator = require('miniprogram-automator');
 const {
   artifactPaths,
+  assertHomeApiReady,
   assertPagePath,
+  overrideMiniappApiBaseUrl,
+  resolveMiniappApiBaseUrl,
   resolveE2eConfig,
+  restoreMiniappApiBaseUrl,
 } = require('./lib.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -65,12 +69,25 @@ async function findByTestId(page, testId, timeout = 10000) {
   throw new Error(`Missing Mini Program element ${selector}`);
 }
 
+async function waitForHomeApi(page, timeout = 10000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const data = await page.data();
+    if (assertHomeApiReady(data)) return data;
+    await delay(250);
+  }
+  throw new Error('Home API requests did not finish before timeout');
+}
+
 async function main() {
   const config = resolveE2eConfig();
+  const apiBaseUrl = resolveMiniappApiBaseUrl();
   const artifacts = artifactPaths(process.env.MINIAPP_E2E_OUTPUT_DIR || '/tmp');
   const logs = [];
   const exceptions = [];
   let miniProgram;
+  let previousApiBaseUrl;
+  let apiBaseOverrideApplied = false;
 
   fs.mkdirSync(path.dirname(artifacts.log), { recursive: true });
   const record = (event, details = {}) => {
@@ -94,10 +111,19 @@ async function main() {
       record('exception', event);
     });
 
+    previousApiBaseUrl = await overrideMiniappApiBaseUrl(miniProgram, apiBaseUrl);
+    apiBaseOverrideApplied = true;
+    record('api-base-override', { apiBaseUrl, hadPreviousValue: Boolean(previousApiBaseUrl) });
+
     let page = await miniProgram.reLaunch('/pages/index/index');
     assertPagePath(page && page.path, 'pages/index/index');
     await findByTestId(page, 'home-brand');
-    record('home-ready', { path: page.path });
+    const homeData = await waitForHomeApi(page);
+    record('home-ready', {
+      path: page.path,
+      products: Array.isArray(homeData.products) ? homeData.products.length : 0,
+      groupBuys: Array.isArray(homeData.groupBuys) ? homeData.groupBuys.length : 0,
+    });
 
     const routes = [
       ['home-products-entry', 'pages/products/index'],
@@ -137,6 +163,15 @@ async function main() {
     process.exitCode = 1;
   } finally {
     if (miniProgram) {
+      if (apiBaseOverrideApplied) {
+        try {
+          await restoreMiniappApiBaseUrl(miniProgram, previousApiBaseUrl);
+          record('api-base-restored');
+        } catch (restoreError) {
+          record('api-base-restore-error', { message: restoreError.message });
+          process.exitCode = 1;
+        }
+      }
       try {
         await miniProgram.close();
       } catch (closeError) {

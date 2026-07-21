@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const {
   artifactPaths,
+  assertHomeApiReady,
   assertPagePath,
   assertSupportedPlatform,
   composeLogsArgs,
@@ -10,8 +11,11 @@ const {
   composeStopArgs,
   composeUpArgs,
   normalizePagePath,
+  overrideMiniappApiBaseUrl,
+  resolveMiniappApiBaseUrl,
   resolveContainerConfig,
   resolveE2eConfig,
+  restoreMiniappApiBaseUrl,
 } = require('./lib.cjs');
 
 test('rejects platforms that cannot launch WeChat DevTools', () => {
@@ -76,7 +80,7 @@ test('builds deterministic compose lifecycle commands', () => {
     ...prefix,
     'up', '-d', '--wait', '--wait-timeout', '420', 'postgres', 'api',
   ]);
-  assert.deepEqual(composePsArgs(config), [...prefix, 'ps', 'postgres', 'api']);
+  assert.deepEqual(composePsArgs(config), [...prefix, 'ps', '--all', 'postgres', 'api']);
   assert.deepEqual(composeLogsArgs(config), [
     ...prefix,
     'logs', '--no-color', '--tail', '200', 'postgres', 'api',
@@ -99,4 +103,70 @@ test('rejects invalid container wait settings before invoking Docker', () => {
     }),
     /Invalid MINIAPP_E2E_HEALTH_TIMEOUT_MS/,
   );
+});
+
+test('normalizes the API origin used inside WeChat DevTools', () => {
+  assert.equal(resolveMiniappApiBaseUrl({}), 'http://127.0.0.1:13080');
+  assert.equal(
+    resolveMiniappApiBaseUrl({ MINIAPP_E2E_API_BASE_URL: 'http://localhost:13080/' }),
+    'http://localhost:13080',
+  );
+  assert.throws(
+    () => resolveMiniappApiBaseUrl({ MINIAPP_E2E_API_BASE_URL: 'ftp://localhost:13080' }),
+    /Invalid MINIAPP_E2E_API_BASE_URL/,
+  );
+});
+
+test('requires both home API requests to finish without page-level errors', () => {
+  assert.equal(assertHomeApiReady({ productsLoading: true, groupBuysLoading: false }), false);
+  assert.equal(assertHomeApiReady({
+    productsLoading: false,
+    groupBuysLoading: false,
+    productsError: '',
+    groupBuysError: '',
+  }), true);
+  assert.throws(
+    () => assertHomeApiReady({
+      productsLoading: false,
+      groupBuysLoading: false,
+      productsError: 'network unavailable',
+      groupBuysError: '',
+    }),
+    /Home API request failed: products: network unavailable/,
+  );
+});
+
+test('temporarily overrides and then restores the Mini Program API base URL', async () => {
+  const calls = [];
+  const miniProgram = {
+    async callWxMethod(...args) {
+      calls.push(args);
+      if (args[0] === 'getStorageSync') return 'https://previous.example';
+      return undefined;
+    },
+  };
+
+  const previous = await overrideMiniappApiBaseUrl(miniProgram, 'http://127.0.0.1:13080');
+  await restoreMiniappApiBaseUrl(miniProgram, previous);
+
+  assert.deepEqual(calls, [
+    ['getStorageSync', 'API_BASE_URL'],
+    ['setStorageSync', 'API_BASE_URL', 'http://127.0.0.1:13080'],
+    ['setStorageSync', 'API_BASE_URL', 'https://previous.example'],
+  ]);
+});
+
+test('removes the temporary API override when no previous value existed', async () => {
+  const calls = [];
+  const miniProgram = {
+    async callWxMethod(...args) {
+      calls.push(args);
+      return '';
+    },
+  };
+
+  const previous = await overrideMiniappApiBaseUrl(miniProgram, 'http://127.0.0.1:13080');
+  await restoreMiniappApiBaseUrl(miniProgram, previous);
+
+  assert.deepEqual(calls.at(-1), ['removeStorageSync', 'API_BASE_URL']);
 });

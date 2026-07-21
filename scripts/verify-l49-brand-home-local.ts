@@ -51,6 +51,8 @@ const pageJson = read('apps/miniapp/pages/index/index.json');
 const appJson = read('apps/miniapp/app.json');
 const packageJson = read('package.json');
 const e2ePackageJson = read('scripts/miniapp-e2e/package.json');
+const e2eLib = read('scripts/miniapp-e2e/lib.cjs');
+const homeSmoke = read('scripts/miniapp-e2e/home-smoke.cjs');
 const containerRunner = read('scripts/miniapp-e2e/container-runner.cjs');
 const containerCleanup = read('scripts/miniapp-e2e/container-cleanup.cjs');
 const compose = read('docker-compose.yml');
@@ -107,8 +109,13 @@ for (const service of ['postgres', 'api']) {
 }
 if (!containerRunner.includes('composeUpArgs(config)')) fail('container runner must use the verified Compose up contract');
 if (!containerRunner.includes('assertSupportedPlatform();')) fail('container runner must reject non-Mac hosts before starting Docker services');
+if (!e2eLib.includes("'ps', '--all'")) fail('Compose diagnostics must include stopped and exited service containers');
 if (!containerRunner.includes('waitForHealth(config)')) fail('container runner must verify the host API health endpoint');
 if (!containerRunner.includes('writeComposeDiagnostics')) fail('container runner must collect Compose diagnostics on failure');
+if (!containerRunner.includes('MINIAPP_E2E_API_BASE_URL')) fail('container runner must pass the container API origin to the click smoke');
+for (const helper of ['overrideMiniappApiBaseUrl', 'restoreMiniappApiBaseUrl', 'waitForHomeApi']) {
+  if (!homeSmoke.includes(helper)) fail(`home click smoke must use ${helper}`);
+}
 if (!containerCleanup.includes('composeStopArgs(config)')) fail('container cleanup must use the verified service-scoped stop contract');
 if (/\bdown\b|(?:-v|--volumes)/.test(containerCleanup)) fail('container cleanup must not tear down the Compose project or named volumes');
 

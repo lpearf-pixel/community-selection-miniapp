@@ -62,6 +62,22 @@ function resolveContainerConfig(options = {}) {
   };
 }
 
+function resolveMiniappApiBaseUrl(env = process.env) {
+  const value = String(env.MINIAPP_E2E_API_BASE_URL || DEFAULT_HEALTH_URL.replace('/api/health', ''))
+    .trim()
+    .replace(/\/+$/, '');
+  let url;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error(`Invalid MINIAPP_E2E_API_BASE_URL: ${value}`);
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error(`Invalid MINIAPP_E2E_API_BASE_URL: ${value}`);
+  }
+  return value;
+}
+
 function composePrefix(config) {
   return [
     'compose',
@@ -83,7 +99,7 @@ function composeUpArgs(config) {
 }
 
 function composePsArgs(config) {
-  return [...composePrefix(config), 'ps', ...config.services];
+  return [...composePrefix(config), 'ps', '--all', ...config.services];
 }
 
 function composeLogsArgs(config) {
@@ -99,6 +115,32 @@ function composeLogsArgs(config) {
 
 function composeStopArgs(config) {
   return [...composePrefix(config), 'stop', ...config.services];
+}
+
+function assertHomeApiReady(data = {}) {
+  if (data.productsLoading || data.groupBuysLoading) return false;
+  const errors = [
+    ['products', data.productsError],
+    ['group buys', data.groupBuysError],
+  ].filter(([, message]) => message);
+  if (errors.length) {
+    throw new Error(`Home API request failed: ${errors.map(([name, message]) => `${name}: ${message}`).join('; ')}`);
+  }
+  return true;
+}
+
+async function overrideMiniappApiBaseUrl(miniProgram, apiBaseUrl) {
+  const previousValue = await miniProgram.callWxMethod('getStorageSync', 'API_BASE_URL');
+  await miniProgram.callWxMethod('setStorageSync', 'API_BASE_URL', apiBaseUrl);
+  return previousValue;
+}
+
+async function restoreMiniappApiBaseUrl(miniProgram, previousValue) {
+  if (previousValue === undefined || previousValue === null || previousValue === '') {
+    await miniProgram.callWxMethod('removeStorageSync', 'API_BASE_URL');
+    return;
+  }
+  await miniProgram.callWxMethod('setStorageSync', 'API_BASE_URL', previousValue);
 }
 
 function normalizePagePath(value) {
@@ -125,6 +167,7 @@ function artifactPaths(baseDir = '/tmp', now = new Date()) {
 
 module.exports = {
   artifactPaths,
+  assertHomeApiReady,
   assertPagePath,
   assertSupportedPlatform,
   composeLogsArgs,
@@ -132,6 +175,9 @@ module.exports = {
   composeStopArgs,
   composeUpArgs,
   normalizePagePath,
+  overrideMiniappApiBaseUrl,
   resolveContainerConfig,
   resolveE2eConfig,
+  resolveMiniappApiBaseUrl,
+  restoreMiniappApiBaseUrl,
 };

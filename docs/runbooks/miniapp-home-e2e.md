@@ -30,10 +30,11 @@ miniapp_home_e2e_exit=0
 
 1. `docker compose up -d --wait postgres api`，不会启动后台管理端。
 2. 再从 Mac 宿主机检查 `http://127.0.0.1:13080/api/health`。
-3. 启动微信开发者工具并执行首页点击冒烟。
-4. 测试结束后保留 PostgreSQL/API 容器，便于继续开发和复测。
+3. 临时把开发者工具内的 `API_BASE_URL` 指向容器映射地址，确认首页商品与团购请求均完成且无页面级错误。
+4. 执行首页点击冒烟，并在结束时恢复原有 `API_BASE_URL` 存储值。
+5. 测试结束后保留 PostgreSQL/API 容器，便于继续开发和复测。
 
-容器已经健康时，可只跑页面点击：
+容器已经健康时，可只跑页面点击；该命令默认仍指向 `http://127.0.0.1:13080`，并在测试后恢复此前设置：
 
 ```bash
 pnpm e2e:miniapp:home:click-only
@@ -53,6 +54,7 @@ pnpm e2e:miniapp:stop
 - `MINIAPP_E2E_COMPOSE_WAIT_SECONDS`：Compose 健康等待秒数，默认 `300`。
 - `MINIAPP_E2E_HEALTH_URL`：宿主机 API 健康地址，默认 `http://127.0.0.1:13080/api/health`。
 - `MINIAPP_E2E_HEALTH_TIMEOUT_MS`：额外健康探针等待毫秒数，默认 `30000`。
+- `MINIAPP_E2E_API_BASE_URL`：开发者工具内临时使用的 API 基址；主命令默认从健康地址解析 origin，单独点击命令默认 `http://127.0.0.1:13080`。
 
 ## 失败证据
 
@@ -72,6 +74,7 @@ pnpm e2e:miniapp:stop
 - `Unable to run Docker`：Docker Desktop 尚未启动，或 `docker` 不在 PATH 中。
 - `Docker exited with status`：查看输出的 `-compose.log`，重点检查端口占用、依赖安装与数据库迁移。
 - `API health check timed out`：Compose 已返回但宿主机仍无法访问 `13080`，检查端口映射与代理绕过设置。
+- `Home API request failed`：宿主机健康检查已通过，但开发者工具内的商品或团购请求失败；检查“不校验合法域名”、代理绕过和小程序控制台。
 - `CLI not found`：检查 `WECHAT_CLI_PATH`，部分安装目录名称可能不同。
 - `automation enabled`：开发者工具未打开自动化/服务端口权限。
 - `Port 9420 is in use`：换一个 `MINIAPP_AUTOMATION_PORT`。

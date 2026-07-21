@@ -93,9 +93,13 @@ async function main() {
     await waitForHealth(config);
     process.stdout.write(`API health check passed: ${config.healthUrl}\n`);
 
+    const clickEnv = {
+      ...process.env,
+      MINIAPP_E2E_API_BASE_URL: process.env.MINIAPP_E2E_API_BASE_URL || new URL(config.healthUrl).origin,
+    };
     const clickResult = spawnSync(process.execPath, [path.join(__dirname, 'home-smoke.cjs')], {
       cwd: config.repoRoot,
-      env: process.env,
+      env: clickEnv,
       stdio: 'inherit',
     });
     if (clickResult.error) throw new Error(`Unable to start click smoke: ${clickResult.error.message}`);
