@@ -1,7 +1,7 @@
 const config = require('../../config');
 const { request } = require('../../utils/api');
 const { normalizeHomeProduct, normalizeHomeGroupBuy } = require('./home-model');
-const { resolveHomeTemplate } = require('./templates');
+const { resolveHomeTemplate } = require('./templates/index');
 
 const routes = Object.freeze({
   products: '/pages/products/index',

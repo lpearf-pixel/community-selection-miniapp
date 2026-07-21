@@ -76,9 +76,10 @@ for (const type of ['brandHero', 'categoryGrid', 'productShowcase', 'groupBuySho
 if (/(?:https?:\/\/|\/api\/|\bwx\.|=>|\bfunction\b)/.test(template)) fail('template configuration must not contain URLs, wx APIs, or executable callbacks');
 
 for (const endpoint of ['/api/products', '/api/group-buys']) {
-  if (!pageJs.includes(`url: '${endpoint}'`) && !pageJs.includes(`url: \"${endpoint}\"`)) fail(`home page must request ${endpoint}`);
+  if (!pageJs.includes(`url: '${endpoint}'`) && !pageJs.includes(`url: "${endpoint}"`)) fail(`home page must request ${endpoint}`);
 }
 if (!/require\(['"]\.\.\/\.\.\/utils\/api['"]\)/.test(pageJs) || !pageJs.includes('request')) fail('home page must use the shared request helper');
+if (!/require\(['"]\.\/templates\/index['"]\)/.test(pageJs)) fail('home page must explicitly require the template registry file for WeChat module resolution');
 if (/\/\s*100/.test(pageWxml)) fail('home WXML must not calculate cents');
 for (const needle of ['wx.login', 'wx.requestPayment', 'wx.getLocation', 'cost_price_cents', 'commission_value', 'stock_deduct_quantity']) {
   if ((pageJs + pageWxml + template).includes(needle)) fail(`home source must not include ${needle}`);
@@ -86,7 +87,7 @@ for (const needle of ['wx.login', 'wx.requestPayment', 'wx.getLocation', 'cost_p
 
 const componentAliases = ['brand-hero', 'category-grid', 'product-showcase', 'group-buy-showcase', 'quick-actions'];
 for (const alias of componentAliases) {
-  if (count(pageJson, `\"${alias}\"`) !== 1) fail(`index.json must register ${alias} exactly once`);
+  if (count(pageJson, `"${alias}"`) !== 1) fail(`index.json must register ${alias} exactly once`);
 }
 
 const componentWxml = [
@@ -94,10 +95,10 @@ const componentWxml = [
   ...componentAliases.map((alias) => read(`apps/miniapp/components/home/${alias}/index.wxml`)),
 ].join('\n');
 for (const testId of ['home-brand', 'home-products-entry', 'home-group-buys-entry', 'home-orders-entry', 'home-products-retry', 'home-group-buys-retry']) {
-  if (count(componentWxml, `data-testid=\"${testId}\"`) !== 1) fail(`${testId} must exist exactly once`);
+  if (count(componentWxml, `data-testid="${testId}"`) !== 1) fail(`${testId} must exist exactly once`);
 }
 for (const dynamicId of ['home-category-{{item.key}}', 'home-product-{{item.id}}', 'home-group-buy-{{item.id}}']) {
-  if (count(componentWxml, `data-testid=\"${dynamicId}\"`) !== 1) fail(`${dynamicId} must exist exactly once`);
+  if (count(componentWxml, `data-testid="${dynamicId}"`) !== 1) fail(`${dynamicId} must exist exactly once`);
 }
 
 if (!appJson.includes('"navigationBarTitleText": "春华秋实"')) fail('app navigation title must use the brand name');
