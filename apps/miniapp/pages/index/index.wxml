@@ -1,7 +1,43 @@
-<view class="page">
-  <view class="title">社区甄选</view>
-  <view class="desc">实体店背书，微信群种草，小程序下单。</view>
-  <button class="primary" bindtap="goProducts">浏览商品</button>
-  <button class="secondary" bindtap="goGroupBuys">今日开团</button>
-  <button class="secondary" bindtap="goOrders">我的订单</button>
+<view class="home-page {{layout.pageClass}}">
+  <block wx:for="{{layout.sections}}" wx:key="type" wx:for-item="section">
+    <brand-hero
+      wx:if="{{section.type === 'brandHero'}}"
+      brand="{{layout.brand}}"
+      services="{{layout.services}}"
+      variant="{{section.variant}}"
+    />
+    <category-grid
+      wx:elif="{{section.type === 'categoryGrid'}}"
+      categories="{{layout.categories}}"
+      variant="{{section.variant}}"
+      bind:navigate="onNavigate"
+    />
+    <product-showcase
+      wx:elif="{{section.type === 'productShowcase'}}"
+      title="{{layout.sectionTitles.products}}"
+      hint="{{layout.sectionTitles.productsHint}}"
+      items="{{products}}"
+      loading="{{productsLoading}}"
+      error="{{productsError}}"
+      variant="{{section.variant}}"
+      bind:navigate="onNavigate"
+      bind:retry="onRetry"
+    />
+    <group-buy-showcase
+      wx:elif="{{section.type === 'groupBuyShowcase'}}"
+      title="{{layout.sectionTitles.groupBuys}}"
+      hint="{{layout.sectionTitles.groupBuysHint}}"
+      items="{{groupBuys}}"
+      loading="{{groupBuysLoading}}"
+      error="{{groupBuysError}}"
+      variant="{{section.variant}}"
+      bind:navigate="onNavigate"
+      bind:retry="onRetry"
+    />
+    <quick-actions
+      wx:elif="{{section.type === 'quickActions'}}"
+      variant="{{section.variant}}"
+      bind:navigate="onNavigate"
+    />
+  </block>
 </view>

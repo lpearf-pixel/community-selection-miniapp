@@ -21,8 +21,8 @@
     "pages/leader/withdrawals/index"
   ],
   "window": {
-    "navigationBarTitleText": "社区甄选",
-    "navigationBarBackgroundColor": "#1677ff",
-    "navigationBarTextStyle": "white"
+    "navigationBarTitleText": "春华秋实",
+    "navigationBarBackgroundColor": "#FAF7EE",
+    "navigationBarTextStyle": "black"
   }
 }

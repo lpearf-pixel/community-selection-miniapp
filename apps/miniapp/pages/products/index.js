@@ -2,6 +2,14 @@ const { request, formatYuan } = require("../../utils/api");
 const { getSelectedCommunity } = require("../../utils/selection");
 const { addToCart, getCartCount } = require("../../utils/cart");
 
+function decodeKeyword(value) {
+  try {
+    return decodeURIComponent(value || "");
+  } catch (error) {
+    return String(value || "");
+  }
+}
+
 Page({
   data: {
     products: [],
@@ -10,7 +18,8 @@ Page({
     selectedCommunity: null,
     cartCount: 0,
   },
-  onLoad() {
+  onLoad(options = {}) {
+    this.setData({ keyword: decodeKeyword(options.keyword) });
     this.refreshSelection();
     this.loadProducts();
   },
