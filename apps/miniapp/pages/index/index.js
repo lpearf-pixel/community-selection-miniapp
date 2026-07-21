@@ -30,7 +30,7 @@ Page({
     return this.refreshHome();
   },
   refreshHome() {
-    return Promise.allSettled([this.loadProducts(), this.loadGroupBuys()]);
+    return Promise.all([this.loadProducts(), this.loadGroupBuys()]);
   },
   loadProducts() {
     this.setData({ productsLoading: true, productsError: '' });

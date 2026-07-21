@@ -4,6 +4,7 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 100vh;
+  padding: 28rpx 28rpx 36rpx;
   padding: 28rpx 28rpx calc(36rpx + env(safe-area-inset-bottom));
   overflow-x: hidden;
 }

@@ -323,7 +323,7 @@ git commit -m "feat: add Chunhua Qiushi home modules and theme"
 
 - [ ] **Step 1: 实现页面状态与独立请求**
 
-首页 data 至少包含 `layout/products/groupBuys/productsLoading/groupBuysLoading/productsError/groupBuysError`。只在 `onShow` 调用 `refreshHome()`，内部使用 `Promise.allSettled([loadProducts(), loadGroupBuys()])`，避免首次双请求。
+首页 data 至少包含 `layout/products/groupBuys/productsLoading/groupBuysLoading/productsError/groupBuysError`。只在 `onShow` 调用 `refreshHome()`，内部使用 `Promise.all([loadProducts(), loadGroupBuys()])`；两个加载器各自捕获失败，因此一方失败不会拒绝整体刷新，同时兼容较旧的小程序运行时。
 
 `loadProducts` 请求 `/api/products`，取 `data.items || data || []` 的前四项；`loadGroupBuys` 请求 `/api/group-buys`，取前两项。各自 catch 后写页面错误文本并保留另一资源状态；finally 只关闭自己的 loading。
 

@@ -44,10 +44,22 @@ async function waitForPagePath(miniProgram, expected, timeout = 10000) {
 
 async function findByTestId(page, testId, timeout = 10000) {
   const selector = `[data-testid="${testId}"]`;
+  const componentSelectors = [
+    'brand-hero',
+    'category-grid',
+    'product-showcase',
+    'group-buy-showcase',
+    'quick-actions',
+  ];
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const element = await page.$(selector);
-    if (element) return element;
+    const pageElement = await page.$(selector);
+    if (pageElement) return pageElement;
+    for (const componentSelector of componentSelectors) {
+      const component = await page.$(componentSelector);
+      const componentElement = component && await component.$(selector);
+      if (componentElement) return componentElement;
+    }
     await delay(250);
   }
   throw new Error(`Missing Mini Program element ${selector}`);
