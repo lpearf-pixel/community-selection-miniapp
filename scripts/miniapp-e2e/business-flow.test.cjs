@@ -51,6 +51,11 @@ test('business flow controls expose stable click selectors', () => {
       assert.match(source, new RegExp(`data-testid=["']${testId}["']`), `${relativePath} must expose ${testId}`);
     }
   }
+  assert.match(
+    read('apps/miniapp/pages/products/index.wxml'),
+    /id=["']product-normal-buy-\{\{item\.product_id\}\}["']/,
+    'product buy action must expose a deterministic id selector',
+  );
 });
 
 test('group participant identity comes from the active Mini Program user', () => {
@@ -98,9 +103,9 @@ test('business flow helper unwraps API envelopes and preserves failure messages'
   );
 });
 
-test('business product entry waits for the known buy action without reading full page data', async () => {
+test('business product entry filters the list and uses one deterministic id selector', async () => {
   const { openProductAndFindBuyAction } = require('./business-flow.cjs');
-  const selectors = [];
+  const calls = [];
   const buyAction = { tap() {} };
   const page = {
     path: 'pages/products/index',
@@ -108,24 +113,28 @@ test('business product entry waits for the known buy action without reading full
       throw new Error('full Page.getData must not be used for product readiness');
     },
     async $(selector) {
-      selectors.push(selector);
-      return selector === '[data-testid="product-normal-buy"][data-id="product-1"]'
-        ? buyAction
-        : null;
+      calls.push(['selector', selector]);
+      return selector === '#product-normal-buy-product-1' ? buyAction : null;
     },
   };
   const miniProgram = {
     async reLaunch(route) {
-      assert.equal(route, '/pages/products/index');
+      calls.push(['route', route]);
       return page;
     },
   };
 
-  const result = await openProductAndFindBuyAction(miniProgram, 'product-1');
+  const result = await openProductAndFindBuyAction(
+    miniProgram,
+    { product_id: 'product-1', name: '有机 青菜' },
+  );
 
   assert.equal(result.page, page);
   assert.equal(result.buyAction, buyAction);
-  assert.deepEqual(selectors, ['[data-testid="product-normal-buy"][data-id="product-1"]']);
+  assert.deepEqual(calls, [
+    ['route', '/pages/products/index?keyword=%E6%9C%89%E6%9C%BA%20%E9%9D%92%E8%8F%9C'],
+    ['selector', '#product-normal-buy-product-1'],
+  ]);
 });
 
 test('business automator operation timeout rejects a stalled protocol request', async () => {
@@ -263,6 +272,47 @@ test('store pickup fulfillment uses the real pickup verification endpoint', asyn
   assert.equal(calls[1].headers['x-openid'], 'buyer-openid');
 });
 
+test('cleanup ignores unknown test users created after the last successful API step', async () => {
+  const { discoverUserOrders } = require('./business-flow-lib.cjs');
+  const missingUserFetch = async () => ({
+    ok: false,
+    status: 404,
+    json: async () => ({
+      success: false,
+      data: null,
+      message: '用户不存在',
+    }),
+  });
+  assert.deepEqual(
+    await discoverUserOrders(
+      'http://127.0.0.1:13080',
+      [],
+      ['never-created'],
+      missingUserFetch,
+    ),
+    [],
+  );
+
+  const serverFailureFetch = async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      success: false,
+      data: null,
+      message: '数据库失败',
+    }),
+  });
+  await assert.rejects(
+    () => discoverUserOrders(
+      'http://127.0.0.1:13080',
+      [],
+      ['broken-user'],
+      serverFailureFetch,
+    ),
+    /数据库失败/,
+  );
+});
+
 test('cleanup discovers paid orders even when post-payment page navigation failed', async () => {
   const { discoverUserOrders } = require('./business-flow-lib.cjs');
   const calls = [];
@@ -311,7 +361,7 @@ test('business click runner covers ordinary pickup, delivery, after-sale refund 
   for (const marker of [
     'runOrdinaryPurchaseFlow',
     'runGroupBuyFlow',
-    'findByTestIdAndDataId',
+    'findProductBuyAction',
     "callMethod('onProductChange'",
     "callMethod('onCommunityChange'",
     'fulfillment-store',
