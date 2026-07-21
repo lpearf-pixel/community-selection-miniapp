@@ -41,6 +41,12 @@ test('activates a registered theme and writes deterministic JS, WXSS, and naviga
       readFileSync(path.join(root, 'apps/miniapp/styles/theme-active.generated.wxss'), 'utf8'),
       result.generatedWxss,
     );
+    assert.deepEqual(
+      JSON.parse(readFileSync(path.join(root, 'apps/miniapp/themes/chunhuaqiushi/descriptor.generated.js'), 'utf8')
+        .replace(/^'use strict';\n\nmodule\.exports = /, '')
+        .replace(/;\n$/, '')),
+      JSON.parse(readFileSync(path.join(root, 'apps/miniapp/themes/chunhuaqiushi/theme.json'), 'utf8')),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -55,6 +61,21 @@ test('generates a data-only CommonJS theme entry for the Mini Program runtime', 
       "'use strict';\n\nmodule.exports = require('./chunhuaqiushi/theme');\n",
     );
     assert.doesNotMatch(result.generatedJs, /Object\.freeze|getActiveTheme|\.\.\./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generates a JavaScript descriptor so the Mini Program runtime never requires JSON', () => {
+  const root = createFixture();
+  try {
+    const result = activateTheme('chunhuaqiushi', root);
+    assert.match(result.generatedDescriptorJs, /^'use strict';\n\nmodule\.exports = \{/);
+    assert.doesNotMatch(result.generatedDescriptorJs, /require\s*\([^)]*\.json/);
+    assert.doesNotMatch(
+      readFileSync(path.join(root, 'apps/miniapp/themes/chunhuaqiushi/theme.js'), 'utf8'),
+      /require\s*\([^)]*\.json/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -78,6 +99,18 @@ test('check mode detects committed generated theme drift without rewriting files
     writeFileSync(generatedPath, 'module.exports = {};\n');
     assert.throws(() => checkTheme('chunhuaqiushi', root), /Theme activation drift.*active\.generated\.js/);
     assert.equal(readFileSync(generatedPath, 'utf8'), 'module.exports = {};\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('check mode detects generated JavaScript descriptor drift', () => {
+  const root = createFixture();
+  try {
+    activateTheme('chunhuaqiushi', root);
+    const generatedPath = path.join(root, 'apps/miniapp/themes/chunhuaqiushi/descriptor.generated.js');
+    writeFileSync(generatedPath, 'module.exports = {};\n');
+    assert.throws(() => checkTheme('chunhuaqiushi', root), /Theme activation drift.*descriptor\.generated\.js/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -24,12 +24,18 @@ function loadRegisteredTheme(themeId, rootDir, fileSystem = fs) {
   return { descriptor, miniappRoot };
 }
 
-function renderThemeArtifacts(themeId) {
+function renderThemeArtifacts(themeId, descriptor) {
   return {
     generatedJs: [
       "'use strict';",
       '',
       "module.exports = require('./" + themeId + "/theme');",
+      '',
+    ].join('\n'),
+    generatedDescriptorJs: [
+      "'use strict';",
+      '',
+      'module.exports = ' + JSON.stringify(descriptor, null, 2) + ';',
       '',
     ].join('\n'),
     generatedWxss: '@import "themes/' + themeId + '.wxss";\n',
@@ -41,7 +47,7 @@ function activateTheme(themeId, rootDir = path.resolve(__dirname, '../..'), opti
   const { descriptor, miniappRoot } = loadRegisteredTheme(themeId, rootDir, fileSystem);
   const appJsonPath = path.join(miniappRoot, 'app.json');
   const app = JSON.parse(fileSystem.readFileSync(appJsonPath, 'utf8'));
-  const artifacts = renderThemeArtifacts(themeId);
+  const artifacts = renderThemeArtifacts(themeId, descriptor);
   const window = {
     ...(app.window || {}),
     navigationBarTitleText: descriptor.navigation.title,
@@ -51,6 +57,11 @@ function activateTheme(themeId, rootDir = path.resolve(__dirname, '../..'), opti
   const nextApp = { ...app, window };
 
   writeAtomic(path.join(miniappRoot, 'themes/active.generated.js'), artifacts.generatedJs, fileSystem);
+  writeAtomic(
+    path.join(miniappRoot, 'themes', themeId, 'descriptor.generated.js'),
+    artifacts.generatedDescriptorJs,
+    fileSystem,
+  );
   writeAtomic(path.join(miniappRoot, 'styles/theme-active.generated.wxss'), artifacts.generatedWxss, fileSystem);
   writeAtomic(appJsonPath, JSON.stringify(nextApp, null, 2) + '\n', fileSystem);
 
@@ -60,7 +71,7 @@ function activateTheme(themeId, rootDir = path.resolve(__dirname, '../..'), opti
 function checkTheme(themeId, rootDir = path.resolve(__dirname, '../..'), options = {}) {
   const fileSystem = options.fileSystem || fs;
   const { descriptor, miniappRoot } = loadRegisteredTheme(themeId, rootDir, fileSystem);
-  const artifacts = renderThemeArtifacts(themeId);
+  const artifacts = renderThemeArtifacts(themeId, descriptor);
   const appJsonPath = path.join(miniappRoot, 'app.json');
   const app = JSON.parse(fileSystem.readFileSync(appJsonPath, 'utf8'));
   const expectedWindow = {
@@ -71,6 +82,7 @@ function checkTheme(themeId, rootDir = path.resolve(__dirname, '../..'), options
   const drift = [];
   const generatedFiles = [
     ['themes/active.generated.js', artifacts.generatedJs],
+    ['themes/' + themeId + '/descriptor.generated.js', artifacts.generatedDescriptorJs],
     ['styles/theme-active.generated.wxss', artifacts.generatedWxss],
   ];
   for (const [relativePath, expected] of generatedFiles) {
@@ -82,7 +94,7 @@ function checkTheme(themeId, rootDir = path.resolve(__dirname, '../..'), options
     if (!app.window || app.window[key] !== expected) drift.push('app.json.window.' + key);
   }
   if (drift.length) throw new Error('Theme activation drift: ' + drift.join(', '));
-  return { themeId, files: 3 };
+  return { themeId, files: 4 };
 }
 
 if (require.main === module) {
@@ -92,7 +104,7 @@ if (require.main === module) {
     process.stdout.write('miniapp_theme=' + result.themeId + '\nminiapp_theme_check=clean\n');
   } else {
     const result = activateTheme(args[0]);
-    process.stdout.write('miniapp_theme=' + result.themeId + '\nminiapp_theme_files=3\n');
+    process.stdout.write('miniapp_theme=' + result.themeId + '\nminiapp_theme_files=4\n');
   }
 }
 

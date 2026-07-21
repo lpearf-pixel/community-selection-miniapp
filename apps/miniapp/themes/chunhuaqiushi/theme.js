@@ -1,4 +1,4 @@
-const descriptor = require('./theme.json');
+const descriptor = require('./descriptor.generated');
 
 const catalogSpritePath = descriptor.assets.catalogSprite;
 

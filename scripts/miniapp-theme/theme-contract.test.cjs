@@ -16,13 +16,29 @@ test('the mini program theme contract covers exactly the registered 19 pages', (
 
 test('the active theme descriptor and generated entry select chunhuaqiushi', () => {
   const descriptorPath = path.join(root, 'apps/miniapp/themes/chunhuaqiushi/theme.json');
+  const runtimeDescriptorPath = path.join(root, 'apps/miniapp/themes/chunhuaqiushi/descriptor.generated.js');
   const activeWxssPath = path.join(root, 'apps/miniapp/styles/theme-active.generated.wxss');
   assert.equal(existsSync(descriptorPath), true, 'theme descriptor must exist');
+  assert.equal(existsSync(runtimeDescriptorPath), true, 'runtime JS descriptor must exist');
   assert.equal(existsSync(activeWxssPath), true, 'active WXSS entry must exist');
   const activeTheme = JSON.parse(readFileSync(descriptorPath, 'utf8'));
   const activeWxss = readFileSync(activeWxssPath, 'utf8');
   assert.equal(activeTheme.id, 'chunhuaqiushi');
   assert.match(activeWxss, /themes\/chunhuaqiushi\.wxss/);
+});
+
+test('the active Mini Program theme dependency chain never requires JSON modules', () => {
+  const runtimeFiles = [
+    'apps/miniapp/themes/active.generated.js',
+    'apps/miniapp/themes/chunhuaqiushi/theme.js',
+  ];
+  for (const runtimeFile of runtimeFiles) {
+    assert.doesNotMatch(
+      read(runtimeFile),
+      /require\s*\(\s*['"][^'"]+\.json['"]\s*\)/,
+      runtimeFile + ' must load JavaScript modules only',
+    );
+  }
 });
 
 test('the app stores the active data theme without calling a generated runtime getter', () => {
