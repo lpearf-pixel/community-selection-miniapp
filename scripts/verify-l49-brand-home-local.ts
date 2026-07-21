@@ -29,8 +29,7 @@ const requiredFiles = [
   'apps/miniapp/components/home/quick-actions/index.wxml',
   'apps/miniapp/styles/tokens.wxss',
   'apps/miniapp/styles/themes/chunhuaqiushi.wxss',
-  'apps/miniapp/assets/brand/chunhuaqiushi-logo.png',
-  'apps/miniapp/assets/brand/chunhuaqiushi-mark.png',
+  'apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg',
   'scripts/miniapp-e2e/home-smoke.cjs',
   'scripts/miniapp-e2e/lib.cjs',
 ];

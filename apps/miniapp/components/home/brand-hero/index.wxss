@@ -1,0 +1,9 @@
+.brand-hero { padding: 32rpx; overflow: hidden; }
+.brand-main { display: flex; align-items: center; }
+.brand-logo { width: 152rpx; height: 152rpx; flex: none; border-radius: 50%; }
+.brand-copy { margin-left: 24rpx; min-width: 0; }
+.brand-name { font-size: 48rpx; font-weight: 700; letter-spacing: 4rpx; }
+.brand-subtitle { margin-top: 8rpx; font-size: 24rpx; letter-spacing: 6rpx; }
+.brand-slogan { margin-top: 26rpx; font-size: 28rpx; line-height: 1.6; font-weight: 600; }
+.service-row { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 24rpx; }
+.service-pill { font-size: 22rpx; }

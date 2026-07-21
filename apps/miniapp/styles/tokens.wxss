@@ -1,0 +1,17 @@
+.cq-card {
+  background: #FFFDF8;
+  border: 1rpx solid rgba(49, 91, 69, 0.08);
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 30rpx rgba(57, 76, 62, 0.08);
+}
+.cq-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx 16rpx;
+  color: #315B45;
+  background: rgba(143, 175, 152, 0.18);
+  border: 1rpx solid rgba(49, 91, 69, 0.10);
+  border-radius: 999rpx;
+}
+.cq-section-title { color: #2D3A31; font-size: 34rpx; font-weight: 700; letter-spacing: 1rpx; }

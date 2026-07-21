@@ -5,7 +5,7 @@ module.exports = Object.freeze({
     name: '春华秋实',
     subtitle: '社区甄选',
     slogan: '健康源于自然，温暖来自邻里',
-    logoPath: '/assets/brand/chunhuaqiushi-logo.png',
+    logoPath: '/assets/brand/chunhuaqiushi-logo.jpg',
   },
   services: [
     { key: 'organic', label: '有机甄选' },

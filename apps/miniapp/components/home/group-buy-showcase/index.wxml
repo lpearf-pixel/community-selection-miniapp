@@ -1,0 +1,36 @@
+<view class="group-showcase {{variant}}">
+  <view class="section-heading">
+    <view>
+      <view class="cq-section-title">{{title}}</view>
+      <view class="section-hint">{{hint}}</view>
+    </view>
+    <view class="section-mark">邻里</view>
+  </view>
+  <view wx:if="{{loading && !items.length}}" class="cq-card state-card">正在看看邻里都在拼什么…</view>
+  <view wx:elif="{{error && !items.length}}" class="cq-card state-card">
+    <view>{{error}}</view>
+    <button class="retry-button" data-testid="home-group-buys-retry" bindtap="retry">重新加载</button>
+  </view>
+  <view wx:elif="{{!items.length}}" class="cq-card state-card">暂时没有进行中的团购</view>
+  <view wx:else class="group-list">
+    <view
+      wx:for="{{items}}"
+      wx:key="id"
+      class="cq-card group-card"
+      data-id="{{item.id}}"
+      data-testid="home-group-buy-{{item.id}}"
+      bindtap="openGroupBuy"
+    >
+      <image wx:if="{{item.coverImage}}" class="group-cover" src="{{item.coverImage}}" mode="aspectFill" />
+      <view wx:else class="group-cover group-placeholder">邻里拼</view>
+      <view class="group-body">
+        <view class="group-name">{{item.name}}</view>
+        <view class="group-community">{{item.communityName}}</view>
+        <view class="group-bottom">
+          <view class="group-price">¥{{item.priceYuan}}</view>
+          <view class="cq-pill group-progress">{{item.progressText}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,4 +1,6 @@
+@import "styles/tokens.wxss";
+
 page {
-  background: #f5f7fb;
-  color: #1f2937;
+  background: #FAF7EE;
+  color: #2D3A31;
 }

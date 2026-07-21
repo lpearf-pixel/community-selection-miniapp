@@ -1,0 +1,13 @@
+<view class="brand-hero cq-card {{variant}}" data-testid="home-brand">
+  <view class="brand-main">
+    <image class="brand-logo" src="{{brand.logoPath}}" mode="aspectFit" />
+    <view class="brand-copy">
+      <view class="brand-name">{{brand.name}}</view>
+      <view class="brand-subtitle">{{brand.subtitle}}</view>
+    </view>
+  </view>
+  <view class="brand-slogan">{{brand.slogan}}</view>
+  <view class="service-row">
+    <view wx:for="{{services}}" wx:key="key" class="cq-pill service-pill">{{item.label}}</view>
+  </view>
+</view>

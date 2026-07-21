@@ -1,0 +1,13 @@
+<view class="category-grid {{variant}}">
+  <view
+    wx:for="{{categories}}"
+    wx:key="key"
+    class="category-tile"
+    data-keyword="{{item.keyword}}"
+    data-testid="home-category-{{item.key}}"
+    bindtap="chooseCategory"
+  >
+    <view class="category-icon">{{item.icon}}</view>
+    <view class="category-label">{{item.label}}</view>
+  </view>
+</view>
