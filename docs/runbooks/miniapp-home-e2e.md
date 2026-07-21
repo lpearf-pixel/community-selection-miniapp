@@ -6,8 +6,15 @@
 
 1. 在 Mac 安装并启动 Docker Desktop，确认 `docker compose version` 可执行。
 2. 安装并登录微信开发者工具；不要使用截图中显示的“游客模式”。在“设置 → 安全设置”中开启服务端口，并为本地开发关闭合法域名校验。
-3. 从仓库根目录执行 `pnpm setup:miniapp:e2e`。该命令只安装点击框架自己的依赖，不修改根 `pnpm-lock.yaml`。
-4. 确认宿主机端口 `13080` 和 `15432` 未被其他程序占用。
+3. 在微信公众平台取得该小程序的真实 AppID（`wx` 开头共 18 位），从仓库根目录生成仅供本机使用的项目配置：
+
+   ```bash
+   MINIAPP_APP_ID="wx你的16位标识" pnpm setup:miniapp:project
+   ```
+
+   生成的 `apps/miniapp/project.config.json` 已被 Git 忽略；仓库只保留不含真实 AppID 的 `project.config.example.json`。
+4. 从仓库根目录执行 `pnpm setup:miniapp:e2e`。该命令只安装点击框架自己的依赖，不修改根 `pnpm-lock.yaml`。
+5. 确认宿主机端口 `13080` 和 `15432` 未被其他程序占用。
 
 ## 运行
 
@@ -28,11 +35,12 @@ miniapp_home_e2e_exit=0
 
 主命令会依次执行：
 
-1. `docker compose up -d --wait postgres api`，不会启动后台管理端。
-2. 再从 Mac 宿主机检查 `http://127.0.0.1:13080/api/health`。
-3. 临时把开发者工具内的 `API_BASE_URL` 指向容器映射地址，确认首页商品与团购请求均完成且无页面级错误。
-4. 执行首页点击冒烟，并在结束时恢复原有 `API_BASE_URL` 存储值。
-5. 测试结束后保留 PostgreSQL/API 容器，便于继续开发和复测。
+1. 在启动 Docker 和微信开发者工具前校验 `project.config.json` 已配置真实 AppID；缺失、占位值和 `touristappid` 会立即失败。
+2. `docker compose up -d --wait postgres api`，不会启动后台管理端。
+3. 再从 Mac 宿主机检查 `http://127.0.0.1:13080/api/health`。
+4. 临时把开发者工具内的 `API_BASE_URL` 指向容器映射地址，确认首页商品与团购请求均完成且无页面级错误。
+5. 执行首页点击冒烟，并在结束时恢复原有 `API_BASE_URL` 存储值。
+6. 测试结束后保留 PostgreSQL/API 容器，便于继续开发和复测。
 
 容器已经健康时，可只跑页面点击；该命令默认仍指向 `http://127.0.0.1:13080`，并在测试后恢复此前设置：
 
@@ -79,7 +87,8 @@ pnpm e2e:miniapp:stop
 - `Home API request failed`：宿主机健康检查已通过，但开发者工具内的商品或团购请求失败；检查“不校验合法域名”、代理绕过和小程序控制台。
 - `CLI not found`：检查 `WECHAT_CLI_PATH`，部分安装目录名称可能不同。
 - `服务端口`：登录微信开发者工具，在“设置 → 安全设置”中开启服务端口；开启后关闭当前普通项目窗口，再重新运行命令。
-- `游客模式`：先登录微信开发者工具并重新打开项目。游客模式下工具内部账号/安全接口可能失败，不能作为本项目的 E2E 准入环境。
+- `project.config.json`：先用 `MINIAPP_APP_ID="wx..." pnpm setup:miniapp:project` 生成本机配置。
+- `游客模式` 或 `webapi_getwxaasyncsecinfo:fail`：项目没有绑定可用的真实 AppID，或开发者工具尚未登录。重新生成本机项目配置并登录后再运行；游客模式不能作为本项目的 E2E 准入环境。
 - `automation endpoint`：查看对应的 `-devtools.log`；若端口仍未建立，确认没有普通窗口占用同一项目，并关闭该窗口后重试。
 - `Port 9420 is in use`：换一个 `MINIAPP_AUTOMATION_PORT`。
 - `Missing Mini Program element`：页面未编译成功，或稳定 `data-testid` 被误删。

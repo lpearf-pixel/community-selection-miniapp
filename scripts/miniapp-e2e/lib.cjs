@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 
 const DEFAULT_CLI_PATH = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli';
@@ -45,6 +46,36 @@ function resolveE2eConfig(options = {}) {
       'MINIAPP_AUTOMATION_TIMEOUT_MS',
     ),
   };
+}
+
+function assertRealWeChatAppId(appid) {
+  const value = String(appid || '').trim();
+  if (!/^wx[a-zA-Z0-9]{16}$/.test(value)) {
+    throw new Error(
+      `Mini Program project config must contain a real WeChat AppID; received ${value || '<empty>'}. `
+        + '游客模式/touristappid cannot run this E2E. Run MINIAPP_APP_ID=wx... pnpm setup:miniapp:project.',
+    );
+  }
+  return value;
+}
+
+function assertMiniappProjectConfigured(projectPath, fileSystem = fs) {
+  const configPath = path.join(projectPath, 'project.config.json');
+  if (!fileSystem.existsSync(configPath)) {
+    throw new Error(
+      `Mini Program project config not found: ${configPath}. `
+        + 'Run MINIAPP_APP_ID=wx... pnpm setup:miniapp:project before E2E.',
+    );
+  }
+
+  let config;
+  try {
+    config = JSON.parse(fileSystem.readFileSync(configPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Invalid Mini Program project config: ${configPath}: ${error.message}`);
+  }
+
+  return { appid: assertRealWeChatAppId(config.appid) };
 }
 
 function buildDevToolsAutoArgs(config) {
@@ -198,6 +229,8 @@ function artifactPaths(baseDir = '/tmp', now = new Date()) {
 module.exports = {
   artifactPaths,
   assertHomeApiReady,
+  assertMiniappProjectConfigured,
+  assertRealWeChatAppId,
   assertPagePath,
   assertSupportedPlatform,
   buildDevToolsAutoArgs,

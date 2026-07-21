@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   artifactPaths,
+  assertMiniappProjectConfigured,
   assertHomeApiReady,
   assertPagePath,
   assertSupportedPlatform,
@@ -21,6 +22,17 @@ const {
   restoreMiniappApiBaseUrl,
 } = require('./lib.cjs');
 
+function projectConfigFiles(content) {
+  return {
+    existsSync(filePath) {
+      return filePath.endsWith('project.config.json') && content !== undefined;
+    },
+    readFileSync() {
+      return content;
+    },
+  };
+}
+
 function loadDevToolsLauncher() {
   let launcher;
   assert.doesNotThrow(() => {
@@ -28,6 +40,15 @@ function loadDevToolsLauncher() {
   }, 'the DevTools launcher module must exist');
   assert.equal(typeof launcher.launchDevTools, 'function');
   return launcher;
+}
+
+function loadProjectSetup() {
+  let setup;
+  assert.doesNotThrow(() => {
+    setup = require('./setup-miniapp-project.cjs');
+  }, 'the Mini Program project setup module must exist');
+  assert.equal(typeof setup.createProjectConfig, 'function');
+  return setup;
 }
 
 function fakeCliProcess(stdout = '', stderr = '') {
@@ -58,6 +79,74 @@ test('resolves stable Mac defaults from the repository root', () => {
     port: 9420,
     launchTimeoutMs: 60000,
   });
+});
+
+test('rejects a Mini Program project without project.config.json before launch', () => {
+  assert.throws(
+    () => assertMiniappProjectConfigured('/repo/apps/miniapp', projectConfigFiles()),
+    /project\.config\.json.*MINIAPP_APP_ID/s,
+  );
+});
+
+test('rejects tourist and placeholder AppIDs before launch', () => {
+  for (const appid of ['touristappid', 'REPLACE_WITH_WECHAT_APP_ID', '']) {
+    assert.throws(
+      () => assertMiniappProjectConfigured(
+        '/repo/apps/miniapp',
+        projectConfigFiles(JSON.stringify({ appid })),
+      ),
+      /真实.*AppID|real.*AppID/i,
+    );
+  }
+});
+
+test('accepts a locally configured real WeChat AppID', () => {
+  assert.deepEqual(
+    assertMiniappProjectConfigured(
+      '/repo/apps/miniapp',
+      projectConfigFiles(JSON.stringify({ appid: 'wx1234567890abcdef' })),
+    ),
+    { appid: 'wx1234567890abcdef' },
+  );
+});
+
+test('builds a local WeChat project config from a real AppID', () => {
+  const { createProjectConfig } = loadProjectSetup();
+  const config = createProjectConfig('wx1234567890abcdef');
+  assert.equal(config.appid, 'wx1234567890abcdef');
+  assert.equal(config.compileType, 'miniprogram');
+  assert.equal(config.setting.urlCheck, false);
+  assert.throws(() => createProjectConfig('touristappid'), /真实.*AppID|real.*AppID/i);
+});
+
+test('container and click runners enforce project identity before starting external tools', () => {
+  const containerSource = fs.readFileSync(path.join(__dirname, 'container-runner.cjs'), 'utf8');
+  const clickSource = fs.readFileSync(path.join(__dirname, 'home-smoke.cjs'), 'utf8');
+  for (const source of [containerSource, clickSource]) {
+    assert.match(source, /assertMiniappProjectConfigured/);
+  }
+  assert.ok(
+    containerSource.indexOf('assertMiniappProjectConfigured') < containerSource.indexOf('runDocker('),
+    'container preflight must be declared before Docker orchestration',
+  );
+  assert.ok(
+    clickSource.indexOf('assertMiniappProjectConfigured') < clickSource.indexOf('launchDevTools(config)'),
+    'click preflight must run before WeChat DevTools launch',
+  );
+});
+
+test('repository exposes a safe local project identity setup contract', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const gitignore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
+  const examplePath = path.join(repoRoot, 'apps/miniapp/project.config.example.json');
+
+  assert.equal(
+    packageJson.scripts['setup:miniapp:project'],
+    'node scripts/miniapp-e2e/setup-miniapp-project.cjs',
+  );
+  assert.match(gitignore, /^apps\/miniapp\/project\.config\.json$/m);
+  assert.equal(JSON.parse(fs.readFileSync(examplePath, 'utf8')).appid, 'REPLACE_WITH_WECHAT_APP_ID');
 });
 
 test('builds the explicit WeChat DevTools automation command', () => {

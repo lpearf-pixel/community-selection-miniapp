@@ -4,6 +4,7 @@ const { launchDevTools } = require('./devtools-launcher.cjs');
 const {
   artifactPaths,
   assertHomeApiReady,
+  assertMiniappProjectConfigured,
   assertPagePath,
   overrideMiniappApiBaseUrl,
   resolveMiniappApiBaseUrl,
@@ -97,6 +98,8 @@ async function main() {
   try {
     if (!fs.existsSync(config.cliPath)) throw new Error(`WeChat DevTools CLI not found: ${config.cliPath}`);
     if (!fs.existsSync(config.projectPath)) throw new Error(`Mini Program project not found: ${config.projectPath}`);
+    const project = assertMiniappProjectConfigured(config.projectPath);
+    record('project-identity', { appid: project.appid });
 
     record('launch', config);
     const launched = await launchDevTools(config);

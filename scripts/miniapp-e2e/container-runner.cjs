@@ -5,11 +5,13 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const {
   artifactPaths,
+  assertMiniappProjectConfigured,
   assertSupportedPlatform,
   composeLogsArgs,
   composePsArgs,
   composeUpArgs,
   resolveContainerConfig,
+  resolveE2eConfig,
 } = require('./lib.cjs');
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -80,6 +82,8 @@ function writeComposeDiagnostics(config, outputPath) {
 
 async function main() {
   assertSupportedPlatform();
+  const e2eConfig = resolveE2eConfig();
+  assertMiniappProjectConfigured(e2eConfig.projectPath);
   const config = resolveContainerConfig();
   const artifacts = artifactPaths(process.env.MINIAPP_E2E_OUTPUT_DIR || '/tmp');
 

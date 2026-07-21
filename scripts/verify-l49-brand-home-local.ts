@@ -32,10 +32,12 @@ const requiredFiles = [
   'apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg',
   'scripts/miniapp-e2e/home-smoke.cjs',
   'scripts/miniapp-e2e/lib.cjs',
+  'scripts/miniapp-e2e/setup-miniapp-project.cjs',
   'scripts/miniapp-e2e/container-runner.cjs',
   'scripts/miniapp-e2e/container-cleanup.cjs',
   'scripts/miniapp-e2e/package.json',
   'scripts/miniapp-e2e/pnpm-lock.yaml',
+  'apps/miniapp/project.config.example.json',
 ];
 
 for (const path of requiredFiles) {
@@ -56,6 +58,8 @@ const devToolsLauncher = read('scripts/miniapp-e2e/devtools-launcher.cjs');
 const homeSmoke = read('scripts/miniapp-e2e/home-smoke.cjs');
 const containerRunner = read('scripts/miniapp-e2e/container-runner.cjs');
 const containerCleanup = read('scripts/miniapp-e2e/container-cleanup.cjs');
+const projectSetup = read('scripts/miniapp-e2e/setup-miniapp-project.cjs');
+const gitignore = read('.gitignore');
 const compose = read('docker-compose.yml');
 
 if (!/homeTemplateKey\s*:\s*['"]chunhuaqiushi['"]/.test(config)) fail('config must select the chunhuaqiushi home template');
@@ -100,6 +104,7 @@ if (!appJson.includes('"navigationBarTitleText": "春华秋实"')) fail('app nav
 if (!pageJson.includes('"navigationBarTitleText": "春华秋实"')) fail('home navigation title must use the brand name');
 if (!packageJson.includes('"e2e:miniapp:home"')) fail('package scripts must expose the Mac home smoke test');
 if (!packageJson.includes('"setup:miniapp:e2e"')) fail('package scripts must expose isolated E2E dependency setup');
+if (!packageJson.includes('"setup:miniapp:project": "node scripts/miniapp-e2e/setup-miniapp-project.cjs"')) fail('package scripts must expose local Mini Program identity setup');
 if (!packageJson.includes('"e2e:miniapp:home": "node scripts/miniapp-e2e/container-runner.cjs"')) fail('main home E2E command must orchestrate container services');
 if (!packageJson.includes('"e2e:miniapp:home:click-only": "node scripts/miniapp-e2e/home-smoke.cjs"')) fail('package scripts must expose click-only reruns');
 if (!packageJson.includes('"e2e:miniapp:stop": "node scripts/miniapp-e2e/container-cleanup.cjs"')) fail('package scripts must expose service-scoped container cleanup');
@@ -125,6 +130,11 @@ for (const needle of ['buildDevToolsAutoArgs', 'diagnoseDevToolsLaunch', 'isPort
   if (!devToolsLauncher.includes(needle)) fail(`DevTools launcher must use ${needle}`);
 }
 if (!homeSmoke.includes('artifacts.devToolsLog')) fail('home click smoke must persist DevTools CLI diagnostics');
+for (const source of [homeSmoke, containerRunner]) {
+  if (!source.includes('assertMiniappProjectConfigured')) fail('Mini Program runners must reject tourist projects before external startup');
+}
+if (!projectSetup.includes('MINIAPP_APP_ID')) fail('Mini Program project setup must read MINIAPP_APP_ID');
+if (!/^apps\/miniapp\/project\.config\.json$/m.test(gitignore)) fail('local project.config.json must be ignored');
 if (!containerCleanup.includes('composeStopArgs(config)')) fail('container cleanup must use the verified service-scoped stop contract');
 if (/\bdown\b|(?:-v|--volumes)/.test(containerCleanup)) fail('container cleanup must not tear down the Compose project or named volumes');
 
