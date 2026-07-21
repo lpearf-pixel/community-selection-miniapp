@@ -63,6 +63,7 @@ pnpm e2e:miniapp:stop
 - `MINIAPP_E2E_HEALTH_URL`：宿主机 API 健康地址，默认 `http://127.0.0.1:13080/api/health`。
 - `MINIAPP_E2E_HEALTH_TIMEOUT_MS`：额外健康探针等待毫秒数，默认 `30000`。
 - `MINIAPP_E2E_API_BASE_URL`：开发者工具内临时使用的 API 基址；主命令默认从健康地址解析 origin，单独点击命令默认 `http://127.0.0.1:13080`。
+- `MINIAPP_E2E_KEEP_DATA=true`：业务闭环验收后保留已完成订单，不执行库存恢复用的 MOCK 退款；仅用于人工检查现场。
 - `MINIAPP_AUTOMATION_TIMEOUT_MS`：等待微信开发者工具自动化端口的最长毫秒数，默认 `60000`；脚本按端口状态轮询，不依赖固定睡眠。
 
 ## 失败证据
@@ -94,6 +95,45 @@ pnpm e2e:miniapp:stop
 - `Missing Mini Program element`：页面未编译成功，或稳定 `data-testid` 被误删。
 
 普通 Linux CI 只运行 `pnpm verify:l49:static`、纯函数测试和已有业务门禁；带 Docker Desktop 与微信开发者工具的 Mac 或后续自托管 Mac Runner 执行完整主命令。
+
+## 交易业务闭环点击测试
+
+完成首页冒烟后运行：
+
+```bash
+set -o pipefail
+pnpm e2e:miniapp:business 2>&1 | tee /tmp/miniapp-business-e2e.log
+echo "miniapp_business_e2e_exit=$?"
+```
+
+该命令使用现有 Docker 测试 API 和 `MOCK_WECHAT_PAY=true`，依次执行：
+
+1. 普通购买到店自提：商品列表点击直接下单、确认订单、MOCK 支付、备货、待自提、已自提、完成。
+2. 普通购买门店配送：点击选择配送、配送时段与地址，MOCK 支付、备货、待配送、已配送、完成。
+3. 从已完成自提订单点击申请售后，提交售后原因，执行全额 MOCK 退款并断言订单已退款。
+4. 开团人点击创建 2 人团，两名不同 OpenID 用户分别点击参团、提交订单并 MOCK 支付，断言成团后完成两笔订单履约。
+
+每条订单的最终状态都通过对应测试用户的 `/api/me/orders/:id` 重新读取，避免用无身份的管理视角掩盖用户侧不可见问题。所有断言通过或中途失败后，脚本会恢复运行前的测试用户、社区、自提点与 `API_BASE_URL`；默认再对本次创建且仍有可退余额的订单执行全额 MOCK 退款，以恢复商品库存并保证可重复运行。订单、团购、时间线和审计记录会保留，便于追溯。
+
+若需要在开发者工具中人工检查“已完成/已成团”的最终数据，可保留本次订单，不执行自动退款清理：
+
+```bash
+MINIAPP_E2E_KEEP_DATA=true pnpm e2e:miniapp:business
+```
+
+保留数据会消耗测试库存，不建议连续多次使用该选项。
+
+成功输出必须同时包含：
+
+```text
+ordinary_purchase_flow=passed
+group_buy_flow=passed
+miniapp_business_e2e_exit=0
+```
+
+边界说明：用户侧浏览、选择、下单和售后申请使用微信页面真实点击；微信支付、门店履约状态和退款处理属于跨角色动作，由测试环境的 MOCK/受控接口推进。该命令不证明真实商户支付、微信支付回调或真实退款已经接通，上线前仍需真机 0.01 元验证。
+
+若刚拉取过主题生成文件或小程序运行模块变更，请完全退出并重新启动微信开发者工具后再运行，避免旧模块缓存造成假失败。
 
 ## 全局主题与 19 页验收
 

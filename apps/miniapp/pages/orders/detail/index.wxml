@@ -37,7 +37,7 @@
     <view class="cq-card detail-card" wx:if="{{order.timeline.length}}"><view class="cq-section-title card-title">订单时间线</view><view wx:for="{{order.timeline}}" wx:key="created_at" class="cq-muted timeline-row">{{item.title || item.event_type}} · {{item.created_at}}</view></view>
     <view class="cq-card detail-card detail-actions">
       <button wx:if="{{order.can_show_pickup_code}}" class="cq-button cq-button--secondary" bindtap="goPickupCode">查看自提凭证</button>
-      <button wx:if="{{order.can_apply_after_sale}}" class="cq-button cq-button--primary" bindtap="applyAfterSale">申请售后</button>
+      <button wx:if="{{order.can_apply_after_sale}}" class="cq-button cq-button--primary" data-testid="after-sale-apply" bindtap="applyAfterSale">申请售后</button>
       <button wx:if="{{order.has_after_sale}}" class="cq-button cq-button--secondary" bindtap="goAfterSale">查看售后进度</button>
       <button class="cq-button cq-button--secondary" bindtap="backList">返回订单列表</button>
     </view>

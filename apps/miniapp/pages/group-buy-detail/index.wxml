@@ -17,7 +17,7 @@
       <view wx:if="{{groupBuy.manual_process_tip}}" class="cq-chip process-tip">{{groupBuy.manual_process_tip}}</view>
     </view>
     <view class="cq-action-bar group-actions">
-      <button class="cq-button cq-button--primary" bindtap="join" disabled="{{!groupBuy.can_join}}">{{groupBuy.join_button_text}}</button>
+      <button class="cq-button cq-button--primary" data-testid="group-join" bindtap="join" disabled="{{!groupBuy.can_join}}">{{groupBuy.join_button_text}}</button>
       <button class="cq-button cq-button--secondary" open-type="share">分享团购</button>
     </view>
   </block>

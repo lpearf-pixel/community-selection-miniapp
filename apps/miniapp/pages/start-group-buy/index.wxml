@@ -16,6 +16,6 @@
     <input class="cq-input number-field" type="number" value="{{min_quantity}}" bindinput="onMinQuantityInput" />
   </view>
   <view class="cq-action-bar">
-    <button class="cq-button cq-button--primary primary-action" loading="{{loading}}" bindtap="submit">提交开团</button>
+    <button class="cq-button cq-button--primary primary-action" data-testid="group-create-submit" loading="{{loading}}" bindtap="submit">提交开团</button>
   </view>
 </view>

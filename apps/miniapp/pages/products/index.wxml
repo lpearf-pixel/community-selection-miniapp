@@ -24,7 +24,7 @@
       </view>
       <view class="product-actions">
         <button class="cq-button cq-button--secondary" size="mini" catchtap="addCart" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">加入购物车</button>
-        <button class="cq-button cq-button--primary" size="mini" catchtap="goNormalBuy" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">{{item.out_of_stock ? '库存不足' : '直接下单'}}</button>
+        <button class="cq-button cq-button--primary" data-testid="product-normal-buy" size="mini" catchtap="goNormalBuy" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">{{item.out_of_stock ? '库存不足' : '直接下单'}}</button>
       </view>
     </view>
   </view>

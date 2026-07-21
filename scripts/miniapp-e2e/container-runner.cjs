@@ -103,8 +103,13 @@ async function main() {
     };
     const suiteIndex = process.argv.indexOf('--suite');
     const suite = suiteIndex >= 0 ? process.argv[suiteIndex + 1] : 'home';
-    if (!['home', 'theme'].includes(suite)) throw new Error('Unknown Mini Program E2E suite: ' + suite);
-    const smokeScript = suite === 'theme' ? 'theme-smoke.cjs' : 'home-smoke.cjs';
+    const suiteScripts = {
+      home: 'home-smoke.cjs',
+      theme: 'theme-smoke.cjs',
+      business: 'business-flow.cjs',
+    };
+    if (!suiteScripts[suite]) throw new Error('Unknown Mini Program E2E suite: ' + suite);
+    const smokeScript = suiteScripts[suite];
     const clickResult = spawnSync(process.execPath, [path.join(__dirname, smokeScript)], {
       cwd: config.repoRoot,
       env: clickEnv,

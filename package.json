@@ -33,6 +33,7 @@
     "miniapp:theme:check": "node scripts/miniapp-theme/activate-theme.cjs --check chunhuaqiushi",
     "e2e:miniapp:home": "node scripts/miniapp-e2e/container-runner.cjs",
     "e2e:miniapp:theme": "node scripts/miniapp-e2e/container-runner.cjs --suite theme",
+    "e2e:miniapp:business": "node scripts/miniapp-e2e/container-runner.cjs --suite business",
     "e2e:miniapp:home:click-only": "node scripts/miniapp-e2e/home-smoke.cjs",
     "e2e:miniapp:stop": "node scripts/miniapp-e2e/container-cleanup.cjs"
   },

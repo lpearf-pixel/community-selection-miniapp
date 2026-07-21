@@ -1,4 +1,5 @@
-const { apiBaseUrl } = require('../../config');
+const { getApiBaseUrl } = require('../../utils/api');
+const { getCurrentUser } = require('../../utils/user');
 
 function toFutureIso(hours) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
@@ -20,6 +21,7 @@ Page({
     this.loadOptions();
   },
   loadOptions() {
+    const apiBaseUrl = getApiBaseUrl();
     wx.request({
       url: `${apiBaseUrl}/api/products?page_size=100`,
       success: (res) => {
@@ -47,18 +49,20 @@ Page({
   submit() {
     const product = this.data.products[this.data.productIndex];
     const community = this.data.communities[this.data.communityIndex];
+    const user = getCurrentUser();
     if (!product || !community) {
       wx.showToast({ title: '请先选择商品和社区', icon: 'none' });
       return;
     }
     this.setData({ loading: true });
+    const apiBaseUrl = getApiBaseUrl();
     wx.request({
       url: `${apiBaseUrl}/api/group-buys`,
       method: 'POST',
       data: {
         product_id: product.id,
         community_id: community.id,
-        leader_openid: 'leader-openid',
+        leader_openid: user.openid,
         min_people: this.data.min_people,
         min_quantity: this.data.min_quantity,
         end_time: this.data.end_time,
@@ -75,4 +79,3 @@ Page({
     });
   }
 });
-

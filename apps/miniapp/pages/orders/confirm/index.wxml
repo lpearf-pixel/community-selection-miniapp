@@ -32,8 +32,8 @@
     <view class="cq-divider section">
       <view class="section-label">履约方式</view>
       <view class="option-row">
-        <button class="cq-button {{pickup_type === 'store' ? 'cq-button--selected' : 'cq-button--secondary'}}" size="mini" data-type="store" bindtap="selectPickupType">到店自提</button>
-        <button class="cq-button {{pickup_type === 'delivery' ? 'cq-button--selected' : 'cq-button--secondary'}}" size="mini" data-type="delivery" bindtap="selectPickupType">门店配送</button>
+        <button class="cq-button {{pickup_type === 'store' ? 'cq-button--selected' : 'cq-button--secondary'}}" data-testid="fulfillment-store" size="mini" data-type="store" bindtap="selectPickupType">到店自提</button>
+        <button class="cq-button {{pickup_type === 'delivery' ? 'cq-button--selected' : 'cq-button--secondary'}}" data-testid="fulfillment-delivery" size="mini" data-type="delivery" bindtap="selectPickupType">门店配送</button>
       </view>
     </view>
 
@@ -61,17 +61,17 @@
       <view wx:if="{{deliveryRule.free_threshold_cents !== null}}" class="cq-muted delivery-hint">免配送费门槛：¥{{deliveryRule.free_threshold_yuan}}</view>
       <view class="section-label">配送时段</view>
       <view class="window-list">
-        <button wx:for="{{delivery_time_windows}}" wx:key="code" class="cq-button {{delivery_time_window_code === item.code ? 'cq-button--selected' : 'cq-button--secondary'}}" size="mini" data-code="{{item.code}}" bindtap="selectDeliveryTimeWindow">{{item.label}} {{item.start_time}}-{{item.end_time}}</button>
+        <button wx:for="{{delivery_time_windows}}" wx:key="code" class="cq-button {{delivery_time_window_code === item.code ? 'cq-button--selected' : 'cq-button--secondary'}}" data-testid="delivery-window" size="mini" data-code="{{item.code}}" bindtap="selectDeliveryTimeWindow">{{item.label}} {{item.start_time}}-{{item.end_time}}</button>
       </view>
-      <input class="cq-input delivery-input" data-field="receiver_name" value="{{receiver_name}}" bindinput="onInput" placeholder="收货人姓名" />
-      <input class="cq-input delivery-input" data-field="receiver_phone" value="{{receiver_phone}}" bindinput="onInput" placeholder="手机号" />
-      <input class="cq-input delivery-input" data-field="receiver_address" value="{{receiver_address}}" bindinput="onInput" placeholder="收货地址" />
+      <input class="cq-input delivery-input" data-testid="receiver-name" data-field="receiver_name" value="{{receiver_name}}" bindinput="onInput" placeholder="收货人姓名" />
+      <input class="cq-input delivery-input" data-testid="receiver-phone" data-field="receiver_phone" value="{{receiver_phone}}" bindinput="onInput" placeholder="手机号" />
+      <input class="cq-input delivery-input" data-testid="receiver-address" data-field="receiver_address" value="{{receiver_address}}" bindinput="onInput" placeholder="收货地址" />
     </view>
     <view wx:else class="cq-muted section">到店自提：提交校验需要先选择自提点。</view>
     <view wx:if="{{submit_hint}}" class="cq-muted submit-hint">{{submit_hint}}</view>
     <state-panel wx:if="{{error}}" state="error" message="{{error}}" />
   </view>
   <view class="cq-action-bar">
-    <button class="cq-button cq-button--primary submit-button" loading="{{submitting}}" disabled="{{submitting || (product && product.stock <= 0)}}" bindtap="submit">{{submitting ? '提交中...' : '提交并 MOCK 支付'}}</button>
+    <button class="cq-button cq-button--primary submit-button" data-testid="checkout-submit" loading="{{submitting}}" disabled="{{submitting || (product && product.stock <= 0)}}" bindtap="submit">{{submitting ? '提交中...' : '提交并 MOCK 支付'}}</button>
   </view>
 </view>

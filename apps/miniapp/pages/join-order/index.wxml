@@ -2,13 +2,13 @@
   <view class="cq-title page-title">参团下单</view>
   <view class="cq-card order-form">
     <view class="field-label">收货人</view>
-    <input class="cq-input form-input" placeholder="收货人" value="{{receiver_name}}" bindinput="onNameInput" />
+    <input class="cq-input form-input" data-testid="group-order-name" placeholder="收货人" value="{{receiver_name}}" bindinput="onNameInput" />
     <view class="field-label">手机号</view>
-    <input class="cq-input form-input" placeholder="手机号" value="{{receiver_phone}}" bindinput="onPhoneInput" />
+    <input class="cq-input form-input" data-testid="group-order-phone" placeholder="手机号" value="{{receiver_phone}}" bindinput="onPhoneInput" />
     <view class="field-label">购买数量</view>
     <input class="cq-input form-input" type="number" placeholder="数量" value="{{quantity}}" bindinput="onQuantityInput" />
   </view>
   <view class="cq-action-bar">
-    <button class="cq-button cq-button--primary primary-action" bindtap="submit">提交订单</button>
+    <button class="cq-button cq-button--primary primary-action" data-testid="group-order-submit" bindtap="submit">提交订单</button>
   </view>
 </view>

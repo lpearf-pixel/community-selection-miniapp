@@ -1,4 +1,4 @@
-const { apiBaseUrl } = require('../../config');
+const { getApiBaseUrl } = require('../../utils/api');
 
 function formatGroupBuy(raw) {
   if (!raw) return null;
@@ -35,6 +35,7 @@ Page({
   data: { groupBuy: null, groupBuyId: '', loading: true, error: '' },
   onLoad(query) {
     this.setData({ groupBuyId: query.id, loading: true, error: '' });
+    const apiBaseUrl = getApiBaseUrl();
     wx.request({
       url: `${apiBaseUrl}/api/group-buys/${query.id}`,
       success: (res) => this.setData({ groupBuy: formatGroupBuy(res.data.data), loading: false }),
