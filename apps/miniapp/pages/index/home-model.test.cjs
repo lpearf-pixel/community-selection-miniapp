@@ -4,6 +4,7 @@ const {
   normalizeHomeProduct,
   normalizeHomeGroupBuy,
 } = require('./home-model');
+const { resolveHomeTemplate } = require('./templates');
 
 test('normalizes product cents and stock without leaking API shape', () => {
   assert.deepEqual(
@@ -44,5 +45,14 @@ test('normalizes group progress and fallback labels', () => {
       priceYuan: '19.90',
       progressText: '1/3 人',
     },
+  );
+});
+
+test('falls back to the approved default template', () => {
+  const template = resolveHomeTemplate('missing');
+  assert.equal(template.key, 'chunhuaqiushi');
+  assert.deepEqual(
+    template.sections.map((section) => section.type),
+    ['brandHero', 'categoryGrid', 'productShowcase', 'groupBuyShowcase', 'quickActions'],
   );
 });
