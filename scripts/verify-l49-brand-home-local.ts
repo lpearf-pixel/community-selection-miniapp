@@ -1,0 +1,97 @@
+import { existsSync, readFileSync } from 'node:fs';
+
+const failures: string[] = [];
+
+function fail(message: string) {
+  failures.push(message);
+}
+
+function read(path: string) {
+  if (!existsSync(path)) {
+    fail(`${path} is required`);
+    return '';
+  }
+  return readFileSync(path, 'utf8');
+}
+
+function count(source: string, needle: string) {
+  return source.split(needle).length - 1;
+}
+
+const requiredFiles = [
+  'apps/miniapp/pages/index/home-model.js',
+  'apps/miniapp/pages/index/templates/index.js',
+  'apps/miniapp/pages/index/templates/chunhuaqiushi.js',
+  'apps/miniapp/components/home/brand-hero/index.wxml',
+  'apps/miniapp/components/home/category-grid/index.wxml',
+  'apps/miniapp/components/home/product-showcase/index.wxml',
+  'apps/miniapp/components/home/group-buy-showcase/index.wxml',
+  'apps/miniapp/components/home/quick-actions/index.wxml',
+  'apps/miniapp/styles/tokens.wxss',
+  'apps/miniapp/styles/themes/chunhuaqiushi.wxss',
+  'apps/miniapp/assets/brand/chunhuaqiushi-logo.png',
+  'apps/miniapp/assets/brand/chunhuaqiushi-mark.png',
+  'scripts/miniapp-e2e/home-smoke.cjs',
+  'scripts/miniapp-e2e/lib.cjs',
+];
+
+for (const path of requiredFiles) {
+  if (!existsSync(path)) fail(`${path} is required`);
+}
+
+const config = read('apps/miniapp/config.js');
+const templateRegistry = read('apps/miniapp/pages/index/templates/index.js');
+const template = read('apps/miniapp/pages/index/templates/chunhuaqiushi.js');
+const pageJs = read('apps/miniapp/pages/index/index.js');
+const pageWxml = read('apps/miniapp/pages/index/index.wxml');
+const pageJson = read('apps/miniapp/pages/index/index.json');
+const appJson = read('apps/miniapp/app.json');
+const packageJson = read('package.json');
+
+if (!/homeTemplateKey\s*:\s*['"]chunhuaqiushi['"]/.test(config)) fail('config must select the chunhuaqiushi home template');
+if (!/DEFAULT_HOME_TEMPLATE_KEY\s*=\s*['"]chunhuaqiushi['"]/.test(templateRegistry)) fail('template registry must define the default key');
+if (!templateRegistry.includes('registry[key] || registry[DEFAULT_HOME_TEMPLATE_KEY]')) fail('template registry must fail safe to the default template');
+
+for (const text of ['春华秋实', '社区甄选', '健康源于自然，温暖来自邻里']) {
+  if (!template.includes(text)) fail(`template must contain ${text}`);
+}
+for (const type of ['brandHero', 'categoryGrid', 'productShowcase', 'groupBuyShowcase', 'quickActions']) {
+  if (!template.includes(`type: '${type}'`)) fail(`template must register ${type}`);
+  if (!pageWxml.includes(`section.type === '${type}'`)) fail(`page shell must render ${type}`);
+}
+if (/(?:https?:\/\/|\/api\/|\bwx\.|=>|\bfunction\b)/.test(template)) fail('template configuration must not contain URLs, wx APIs, or executable callbacks');
+
+for (const endpoint of ['/api/products', '/api/group-buys']) {
+  if (!pageJs.includes(`url: '${endpoint}'`) && !pageJs.includes(`url: \"${endpoint}\"`)) fail(`home page must request ${endpoint}`);
+}
+if (!/require\(['"]\.\.\/\.\.\/utils\/api['"]\)/.test(pageJs) || !pageJs.includes('request')) fail('home page must use the shared request helper');
+if (/\/\s*100/.test(pageWxml)) fail('home WXML must not calculate cents');
+for (const needle of ['wx.login', 'wx.requestPayment', 'wx.getLocation', 'cost_price_cents', 'commission_value', 'stock_deduct_quantity']) {
+  if ((pageJs + pageWxml + template).includes(needle)) fail(`home source must not include ${needle}`);
+}
+
+const componentAliases = ['brand-hero', 'category-grid', 'product-showcase', 'group-buy-showcase', 'quick-actions'];
+for (const alias of componentAliases) {
+  if (count(pageJson, `\"${alias}\"`) !== 1) fail(`index.json must register ${alias} exactly once`);
+}
+
+const componentWxml = [
+  pageWxml,
+  ...componentAliases.map((alias) => read(`apps/miniapp/components/home/${alias}/index.wxml`)),
+].join('\n');
+for (const testId of ['home-brand', 'home-products-entry', 'home-group-buys-entry', 'home-orders-entry', 'home-products-retry', 'home-group-buys-retry']) {
+  if (count(componentWxml, `data-testid=\"${testId}\"`) !== 1) fail(`${testId} must exist exactly once`);
+}
+for (const dynamicId of ['home-category-{{item.key}}', 'home-product-{{item.id}}', 'home-group-buy-{{item.id}}']) {
+  if (count(componentWxml, `data-testid=\"${dynamicId}\"`) !== 1) fail(`${dynamicId} must exist exactly once`);
+}
+
+if (!appJson.includes('"navigationBarTitleText": "春华秋实"')) fail('app navigation title must use the brand name');
+if (!pageJson.includes('"navigationBarTitleText": "春华秋实"')) fail('home navigation title must use the brand name');
+if (!packageJson.includes('"e2e:miniapp:home"')) fail('package scripts must expose the Mac home smoke test');
+
+if (failures.length) {
+  throw new Error(`L49 brand home static verification failed:\n- ${[...new Set(failures)].join('\n- ')}`);
+}
+
+console.log('L49 brand home static verification passed.');
