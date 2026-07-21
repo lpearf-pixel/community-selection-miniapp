@@ -61,5 +61,6 @@ pnpm exec tsx scripts/verify-l19-product-purchase-entry-local.ts
 pnpm exec tsx scripts/verify-l20-miniapp-e2e-release-local.ts
 pnpm exec tsx scripts/verify-l21-miniapp-location-selection-local.ts
 pnpm exec tsx scripts/verify-l22-miniapp-order-center-local.ts
+pnpm exec tsx scripts/verify-l49-brand-home-local.ts
 pnpm exec tsx scripts/verify-l23-mvp-release-readiness-local.ts
 pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L47

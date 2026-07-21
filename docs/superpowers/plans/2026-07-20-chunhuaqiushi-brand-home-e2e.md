@@ -38,8 +38,7 @@
 - `apps/miniapp/components/home/quick-actions/*`：三个固定业务入口。
 - `apps/miniapp/styles/tokens.wxss`：共享色板、圆角、阴影和间距基础类。
 - `apps/miniapp/styles/themes/chunhuaqiushi.wxss`：默认模板主题。
-- `apps/miniapp/assets/brand/chunhuaqiushi-logo.png`：用户 Logo 的透明底首页资产。
-- `apps/miniapp/assets/brand/chunhuaqiushi-mark.png`：小尺寸简化标。
+- `apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg`：用户原始 Logo 的本地首页资产；不得生成式重绘。
 - `scripts/verify-l49-brand-home-local.ts`：Linux/Docker 可运行的静态契约。
 - `scripts/miniapp-e2e/home-smoke.cjs`：Mac 开发者工具首页点击冒烟。
 - `scripts/miniapp-e2e/home-smoke.test.cjs`：路径断言、配置探针和日志命名的纯函数测试。
@@ -57,7 +56,8 @@
 - `apps/miniapp/app.json`：更新品牌导航标题、背景色和文字色。
 - `apps/miniapp/app.wxss`：导入共享 tokens，统一暖米白背景和正文色。
 - `package.json`：加入 L49、模型测试和 Mac E2E 命令及固定依赖。
-- `pnpm-lock.yaml`：锁定 `miniprogram-automator@0.12.1`。
+- `scripts/miniapp-e2e/package.json`：隔离点击框架依赖。
+- `scripts/miniapp-e2e/pnpm-lock.yaml`：锁定 `miniprogram-automator@0.12.1`，不修改根 lock。
 - `scripts/verify-all-local.sh`：在 L22 后登记 L49 静态门禁。
 
 ---
@@ -259,8 +259,7 @@ git commit -m "feat: add home view model and template registry"
 - Create: `apps/miniapp/components/home/{brand-hero,category-grid,product-showcase,group-buy-showcase,quick-actions}/index.{js,json,wxml,wxss}`
 - Create: `apps/miniapp/styles/tokens.wxss`
 - Create: `apps/miniapp/styles/themes/chunhuaqiushi.wxss`
-- Create: `apps/miniapp/assets/brand/chunhuaqiushi-logo.png`
-- Create: `apps/miniapp/assets/brand/chunhuaqiushi-mark.png`
+- Create: `apps/miniapp/assets/brand/chunhuaqiushi-logo.jpg`
 - Modify: `apps/miniapp/app.wxss`
 - Test: `scripts/verify-l49-brand-home-local.ts`
 
@@ -290,12 +289,7 @@ git commit -m "feat: add home view model and template registry"
 
 - [ ] **Step 4: 生成并校验品牌资产**
 
-以用户提供的 Logo 为源，输出透明 PNG，不重绘苹果、三片叶子或中文字形：
-
-- `chunhuaqiushi-logo.png`：最长边 640px，首页完整标。
-- `chunhuaqiushi-mark.png`：256×256，只保留苹果与叶片。
-
-检查 alpha 通道、四周透明边距、无白底残留、无明显锯齿；禁止把视觉融合稿整屏裁成 Logo。
+直接归档用户提供的原始 JPG 为 `chunhuaqiushi-logo.jpg`，并核对复制前后 SHA-256 一致。自动透明化结果只要改变苹果、三片叶子、圆环或中文字形就必须拒绝；本阶段不生成简化标，待取得原始 PNG/SVG 后再无损补充。
 
 - [ ] **Step 5: 验证并提交**
 
@@ -388,7 +382,8 @@ git commit -m "feat: render branded modular home with live summaries"
 - Create: `scripts/miniapp-e2e/home-smoke.cjs`
 - Create: `docs/runbooks/miniapp-home-e2e.md`
 - Modify: `package.json`
-- Modify: `pnpm-lock.yaml`
+- Create: `scripts/miniapp-e2e/package.json`
+- Create: `scripts/miniapp-e2e/pnpm-lock.yaml`
 
 **Interfaces:**
 - Consumes: `WECHAT_CLI_PATH`、`MINIAPP_PROJECT_PATH`、`MINIAPP_AUTOMATION_PORT`、首页固定 `data-testid`。
@@ -436,21 +431,19 @@ const miniProgram = await automator.launch({
 
 - [ ] **Step 4: 锁定依赖与命令**
 
-`package.json` 增加：
+`scripts/miniapp-e2e/package.json` 精确锁定 `miniprogram-automator: 0.12.1`；根 `package.json` 增加：
 
 ```json
 {
   "scripts": {
+    "setup:miniapp:e2e": "pnpm --dir scripts/miniapp-e2e --ignore-workspace install --frozen-lockfile",
     "test:miniapp:e2e-lib": "node --test scripts/miniapp-e2e/home-smoke.test.cjs",
     "e2e:miniapp:home": "node scripts/miniapp-e2e/home-smoke.cjs"
-  },
-  "devDependencies": {
-    "miniprogram-automator": "0.12.1"
   }
 }
 ```
 
-运行 `pnpm install --lockfile-only` 更新 lock，然后 `pnpm install --frozen-lockfile` 验证可复现。
+在 `scripts/miniapp-e2e/` 使用 pnpm 9.15.4 生成并验证独立 lock；不得修改根 `pnpm-lock.yaml`。
 
 - [ ] **Step 5: 写 Mac 运行手册并提交**
 
@@ -466,8 +459,9 @@ pnpm e2e:miniapp:home
 并说明开发者工具需登录、开启 CLI/服务端口权限，失败证据位于 `/tmp`，真实支付/分享/登录仍保留真机验收。
 
 ```bash
+pnpm setup:miniapp:e2e
 pnpm test:miniapp:e2e-lib
-git add scripts/miniapp-e2e docs/runbooks/miniapp-home-e2e.md package.json pnpm-lock.yaml
+git add scripts/miniapp-e2e docs/runbooks/miniapp-home-e2e.md package.json
 git commit -m "test: add miniapp home click smoke harness"
 ```
 
