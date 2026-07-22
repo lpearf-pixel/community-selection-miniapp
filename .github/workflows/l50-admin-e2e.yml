@@ -28,6 +28,6 @@ jobs:
       - name: Install Admin E2E dependencies
         run: pnpm setup:admin:e2e
       - name: Install Chromium
-        run: pnpm --dir scripts/admin-e2e exec playwright install --with-deps chromium
+        run: pnpm --dir scripts/admin-e2e exec playwright install chromium
       - name: Run Admin browser smoke
         run: pnpm e2e:admin
