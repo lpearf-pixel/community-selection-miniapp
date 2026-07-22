@@ -5,6 +5,22 @@ function toFutureIso(hours) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
+function asItems(value) {
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.items)) return value.items;
+  return [];
+}
+
+function normalizeProduct(item) {
+  const id = item.product_id || item.id;
+  return { ...item, id, product_id: id };
+}
+
+function normalizeCommunity(item) {
+  const id = item.community_id || item.id;
+  return { ...item, id, community_id: id };
+}
+
 Page({
   data: {
     products: [],
@@ -25,13 +41,19 @@ Page({
     wx.request({
       url: `${apiBaseUrl}/api/products?page_size=100`,
       success: (res) => {
-        const items = ((res.data && res.data.data && res.data.data.items) || []).filter((item) => item.is_group_enabled);
+        const data = res.data && res.data.data;
+        const items = asItems(data)
+          .filter((item) => item.is_group_enabled)
+          .map(normalizeProduct);
         this.setData({ products: items });
       }
     });
     wx.request({
       url: `${apiBaseUrl}/api/communities`,
-      success: (res) => this.setData({ communities: (res.data && res.data.data) || [] })
+      success: (res) => {
+        const data = res.data && res.data.data;
+        this.setData({ communities: asItems(data).map(normalizeCommunity) });
+      }
     });
   },
   onProductChange(event) {
@@ -60,8 +82,8 @@ Page({
       url: `${apiBaseUrl}/api/group-buys`,
       method: 'POST',
       data: {
-        product_id: product.id,
-        community_id: community.id,
+        product_id: product.product_id || product.id,
+        community_id: community.community_id || community.id,
         leader_openid: user.openid,
         min_people: this.data.min_people,
         min_quantity: this.data.min_quantity,

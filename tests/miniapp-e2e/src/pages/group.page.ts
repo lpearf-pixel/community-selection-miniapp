@@ -3,7 +3,7 @@ import type { CommunityFixture, ProductFixture } from '../fixture-api.js';
 
 const target = (testId: string, description: string) => ({
   description,
-  renderSelector: `[data-testid="${testId}"]`,
+  renderSelector: `.e2e-${testId}`,
 });
 
 export class StartGroupBuyPage extends MiniappPageObject {

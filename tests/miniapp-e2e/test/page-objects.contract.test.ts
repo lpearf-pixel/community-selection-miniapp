@@ -103,4 +103,55 @@ describe('Community Selection page objects', () => {
       for (const marker of markers) expect(source, `${relativePath} missing ${marker}`).toContain(marker);
     }
   });
+
+  it('uses Mini Program selector-query compatible classes for rendered actions', () => {
+    const pageObjects = [
+      'tests/miniapp-e2e/src/pages/products.page.ts',
+      'tests/miniapp-e2e/src/pages/checkout.page.ts',
+      'tests/miniapp-e2e/src/pages/order-detail.page.ts',
+      'tests/miniapp-e2e/src/pages/after-sales.page.ts',
+      'tests/miniapp-e2e/src/pages/group.page.ts',
+    ];
+    for (const relativePath of pageObjects) {
+      const source = read(relativePath);
+      expect(source, `${relativePath} still uses an attribute render selector`)
+        .not.toMatch(/renderSelector:\s*[`'"]\[data-testid=/);
+    }
+
+    const hooks: Record<string, string[]> = {
+      'apps/miniapp/pages/products/index.wxml': ['e2e-product-normal-buy'],
+      'apps/miniapp/pages/orders/confirm/index.wxml': [
+        'e2e-fulfillment-store',
+        'e2e-fulfillment-delivery',
+        'e2e-delivery-window',
+        'e2e-receiver-name',
+        'e2e-receiver-phone',
+        'e2e-receiver-address',
+        'e2e-checkout-submit',
+      ],
+      'apps/miniapp/pages/orders/detail/index.wxml': ['e2e-after-sale-apply'],
+      'apps/miniapp/pages/after-sales/apply/index.wxml': [
+        'e2e-after-sale-reason',
+        'e2e-after-sale-submit',
+      ],
+      'apps/miniapp/pages/start-group-buy/index.wxml': [
+        'e2e-group-product-picker',
+        'e2e-group-community-picker',
+        'e2e-group-min-people',
+        'e2e-group-min-quantity',
+        'e2e-group-create-submit',
+      ],
+      'apps/miniapp/pages/group-buy-detail/index.wxml': ['e2e-group-join'],
+      'apps/miniapp/pages/join-order/index.wxml': [
+        'e2e-group-order-name',
+        'e2e-group-order-phone',
+        'e2e-group-order-quantity',
+        'e2e-group-order-submit',
+      ],
+    };
+    for (const [relativePath, markers] of Object.entries(hooks)) {
+      const source = read(relativePath);
+      for (const marker of markers) expect(source, `${relativePath} missing ${marker}`).toContain(marker);
+    }
+  });
 });

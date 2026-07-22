@@ -11,7 +11,7 @@ export class ProductsPage extends MiniappPageObject {
     const page = await this.current();
     await this.tap(page, {
       description: `direct buy for ${product.product_id}`,
-      renderSelector: '[data-testid="product-normal-buy"]',
+      renderSelector: '.e2e-product-normal-buy',
       querySelector: `#product-normal-buy-${product.product_id}`,
       dataset: { id: product.product_id },
     });

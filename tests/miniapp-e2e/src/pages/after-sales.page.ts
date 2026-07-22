@@ -2,7 +2,7 @@ import { MiniappPageObject, type MiniProgramPage } from '@community-selection/mi
 
 const target = (testId: string, description: string) => ({
   description,
-  renderSelector: `[data-testid="${testId}"]`,
+  renderSelector: `.e2e-${testId}`,
 });
 
 export class AfterSalesPage extends MiniappPageObject {

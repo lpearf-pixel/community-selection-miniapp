@@ -27,7 +27,7 @@ export class OrderDetailPage extends MiniappPageObject {
   async applyAfterSale(page: MiniProgramPage): Promise<MiniProgramPage> {
     await this.tap(page, {
       description: 'after-sale apply',
-      renderSelector: '[data-testid="after-sale-apply"]',
+      renderSelector: '.e2e-after-sale-apply',
     });
     return this.driver.waitForRoute('pages/after-sales/apply/index');
   }
