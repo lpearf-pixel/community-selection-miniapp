@@ -21,4 +21,10 @@ test('L50 Admin browser smoke infrastructure is complete', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['setup:admin:e2e'], 'pnpm --dir scripts/admin-e2e --ignore-workspace install --frozen-lockfile');
   assert.equal(pkg.scripts['e2e:admin'], 'node scripts/admin-e2e/run.cjs');
+
+  const workspace = fs.readFileSync(
+    path.join(root, 'apps/admin/src/app/AdminFeatureWorkspace.tsx'),
+    'utf8',
+  );
+  assert.match(workspace, /__ADMIN_E2E_FORCE_RENDER_ERROR__/);
 });
