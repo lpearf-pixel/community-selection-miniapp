@@ -1,0 +1,18 @@
+name: L50 Admin E2E
+
+on:
+  push:
+    branches:
+      - codex/l50-a1-admin-foundation
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+      - name: Admin E2E contract
+        run: node --test scripts/admin-e2e/contract.test.cjs
