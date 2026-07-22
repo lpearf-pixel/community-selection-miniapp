@@ -19,18 +19,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
           cache: pnpm
 
-      - name: Enable pnpm
+      - name: Report toolchain
         shell: bash
         run: |
           set -euo pipefail
-          corepack enable
-          corepack prepare pnpm@9.15.4 --activate
+          node --version
           pnpm --version
 
       - name: Install dependencies
