@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   connectivity:
-    runs-on: [self-hosted, Linux, X64, lan, docker, home, chan-shuo]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     steps:
       - name: Report runner context
