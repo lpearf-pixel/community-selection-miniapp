@@ -4,18 +4,30 @@ on:
   pull_request:
     branches:
       - stable/l49-business-base
-  push:
-    branches:
-      - codex/l50-a1-admin-foundation
   workflow_dispatch:
 
 jobs:
-  contract:
+  admin-e2e:
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-      - name: Admin E2E contract
+          cache: pnpm
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+      - name: Verify Admin E2E contract
         run: node --test scripts/admin-e2e/contract.test.cjs
+      - name: Install Admin E2E dependencies
+        run: pnpm setup:admin:e2e
+      - name: Install Chromium
+        run: pnpm --dir scripts/admin-e2e exec playwright install --with-deps chromium
+      - name: Run Admin browser smoke
+        run: pnpm e2e:admin
