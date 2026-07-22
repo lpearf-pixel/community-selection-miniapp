@@ -1,0 +1,24 @@
+{
+  "name": "community-selection-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "社区甄选微信小程序系统第一阶段项目骨架",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @community-selection/api --filter @community-selection/admin dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:generate": "prisma generate --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "prisma": "^5.22.0",
+    "typescript": "^5.8.3",
+    "vitest": "^1.6.1"
+  },
+  "packageManager": "pnpm@10.28.1"
+}

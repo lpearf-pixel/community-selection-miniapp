@@ -1,0 +1,10 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 阶段 2 将在此定义用户、商品、团购、订单、退款和开团服务奖励数据模型。

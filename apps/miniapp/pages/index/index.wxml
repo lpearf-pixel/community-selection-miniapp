@@ -1,0 +1,7 @@
+<view class="page">
+  <view class="hero">
+    <text class="title">社区甄选</text>
+    <text class="subtitle">实体店背书，微信群种草，小程序下单。</text>
+  </view>
+  <view class="card">阶段 1：微信原生小程序基础页面已就绪。</view>
+</view>
