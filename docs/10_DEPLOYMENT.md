@@ -35,7 +35,7 @@ nginx     反向代理，后续添加
 
 ```env
 NODE_ENV=production
-PORT=3000
+PORT=13080
 DATABASE_URL=
 ADMIN_TOKEN=
 MOCK_WECHAT_PAY=false

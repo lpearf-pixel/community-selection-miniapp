@@ -1,0 +1,4 @@
+.page { padding: 32rpx; }
+.name { font-size: 40rpx; font-weight: 700; }
+.price { color: #f5222d; font-size: 42rpx; margin: 20rpx 0; }
+.meta { color: #555; margin-bottom: 16rpx; }

@@ -1,0 +1,8 @@
+<view class="page" wx:if="{{groupBuy}}">
+  <view class="name">{{groupBuy.product.name}}</view>
+  <view class="price">¥{{groupBuy.price_cents / 100}}</view>
+  <view class="meta">社区：{{groupBuy.community.name}}</view>
+  <view class="meta">进度：{{groupBuy.current_people}}/{{groupBuy.min_people}} 人，{{groupBuy.current_quantity}}/{{groupBuy.min_quantity}} 份</view>
+  <view class="meta">状态：{{groupBuy.status}}</view>
+  <button type="primary" bindtap="join">参团下单</button>
+</view>

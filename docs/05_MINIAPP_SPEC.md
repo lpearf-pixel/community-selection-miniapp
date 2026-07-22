@@ -147,7 +147,7 @@ pages/withdraw/index         提现申请
 `apps/miniapp/config.js`：
 
 ```js
-export const API_BASE_URL = 'http://localhost:3000'
+export const API_BASE_URL = 'http://localhost:13080'
 ```
 
 ## 小程序端要求

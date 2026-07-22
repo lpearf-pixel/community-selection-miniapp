@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@community-selection/shared": [
+        "packages/shared/dist/index.d.ts"
+      ],
+      "@community-selection/config": [
+        "packages/config/dist/index.d.ts"
+      ]
+    }
+  }
+}
