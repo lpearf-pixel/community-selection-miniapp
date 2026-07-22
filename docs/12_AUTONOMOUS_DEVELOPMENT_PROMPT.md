@@ -67,7 +67,7 @@ scripts/check.sh
 ```bash
 scripts/e2e-smoke.sh
 scripts/e2e-refund.sh
-scripts/e2e-group-expired.sh
+scripts/e2e-group-failed.sh
 ```
 
 如果脚本不可运行，先修复脚本和项目配置。
