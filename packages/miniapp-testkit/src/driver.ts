@@ -74,10 +74,6 @@ export class MiniappDriver {
 
   async waitForElement(page: MiniProgramPage, target: ElementTarget): Promise<MiniProgramElement> {
     const timeoutMs = target.timeoutMs ?? 15_000;
-    const renderTarget = {
-      selector: target.renderSelector,
-      ...(target.dataset ? { dataset: target.dataset } : {}),
-    };
     this.reporter.step('element-wait-start', {
       description: target.description,
       renderSelector: target.renderSelector,
@@ -85,12 +81,7 @@ export class MiniappDriver {
       dataset: target.dataset,
     });
 
-    if (page.waitForRendered) {
-      await withTimeout(
-        () => page.waitForRendered!(renderTarget, { timeoutMs }),
-        { label: `wait for rendered ${target.description}`, timeoutMs },
-      );
-    }
+    await this.waitForRenderedTarget(page, target, timeoutMs);
     if (!page.query) {
       throw new InfrastructureError(`Page ${page.path} does not support element queries`, {
         code: 'QUERY_UNSUPPORTED',
@@ -113,6 +104,52 @@ export class MiniappDriver {
     throw new InfrastructureError(`Timed out waiting for ${target.description} (${selector})`, {
       code: 'ELEMENT_TIMEOUT',
     });
+  }
+
+  private async waitForRenderedTarget(
+    page: MiniProgramPage,
+    target: ElementTarget,
+    timeoutMs: number,
+  ): Promise<void> {
+    if (!page.waitForRendered) return;
+    const renderTarget = {
+      selector: target.renderSelector,
+      ...(target.dataset ? { dataset: target.dataset } : {}),
+    };
+    await withTimeout(
+      () => page.waitForRendered!(renderTarget, { timeoutMs }),
+      { label: `wait for rendered ${target.description}`, timeoutMs },
+    );
+  }
+
+  async invoke(
+    page: MiniProgramPage,
+    target: ElementTarget,
+    method: string,
+    ...args: unknown[]
+  ): Promise<void> {
+    const renderTimeoutMs = target.timeoutMs ?? 15_000;
+    this.reporter.step('page-action-wait-start', {
+      description: target.description,
+      renderSelector: target.renderSelector,
+      dataset: target.dataset,
+      method,
+    });
+    await this.waitForRenderedTarget(page, target, renderTimeoutMs);
+    if (!page.callMethod) {
+      throw new InfrastructureError(`Page ${page.path} cannot invoke ${method}`, {
+        code: 'PAGE_METHOD_UNSUPPORTED',
+      });
+    }
+    this.reporter.step('page-action-start', { description: target.description, method });
+    await withTimeout(
+      () => page.callMethod!(method, ...args),
+      {
+        label: `invoke ${method} for ${target.description}`,
+        timeoutMs: target.timeoutMs ?? this.operationTimeoutMs,
+      },
+    );
+    this.reporter.step('page-action-complete', { description: target.description, method });
   }
 
   async waitForData<T>(

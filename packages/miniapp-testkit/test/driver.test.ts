@@ -136,4 +136,36 @@ describe('MiniappDriver', () => {
     expect(trigger).toHaveBeenCalledTimes(1);
     expect(trigger).toHaveBeenCalledWith('change', { value: '2' });
   });
+
+  it('invokes a rendered page action without querying a fallback element', async () => {
+    const callMethod = vi.fn(async () => undefined);
+    const query = vi.fn(async () => null);
+    const waitForRendered = vi.fn(async () => undefined);
+    const page: MiniProgramPage = {
+      path: 'pages/form/index',
+      waitForRendered,
+      query,
+      callMethod,
+    };
+    const driver = new MiniappDriver({
+      session: sessionWithPage(page),
+      reporter: new JsonLineReporter({ write: () => undefined, runId: 'page-action' }),
+      pollIntervalMs: 0,
+    });
+
+    await driver.invoke(page, {
+      description: 'fixture picker',
+      renderSelector: '.e2e-fixture-picker',
+      dataset: { id: 'fixture-1' },
+      timeoutMs: 50,
+    }, 'onFixtureChange', { detail: { value: '2' } });
+
+    expect(waitForRendered).toHaveBeenCalledWith({
+      selector: '.e2e-fixture-picker',
+      dataset: { id: 'fixture-1' },
+    }, { timeoutMs: 50 });
+    expect(callMethod).toHaveBeenCalledTimes(1);
+    expect(callMethod).toHaveBeenCalledWith('onFixtureChange', { detail: { value: '2' } });
+    expect(query).not.toHaveBeenCalled();
+  });
 });

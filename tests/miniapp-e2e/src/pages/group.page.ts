@@ -34,11 +34,31 @@ export class StartGroupBuyPage extends MiniappPageObject {
     ));
     if (productIndex < 0) throw new Error(`Group product ${product.product_id} is not selectable`);
     if (communityIndex < 0) throw new Error(`Group community ${community.community_id} is not selectable`);
-    await this.driver.trigger(page, this.productPicker, 'change', { value: String(productIndex) });
-    await this.driver.trigger(page, this.communityPicker, 'change', { value: String(communityIndex) });
-    await this.input(page, target('group-min-people', 'group minimum people'), '2');
-    await this.input(page, target('group-min-quantity', 'group minimum quantity'), '2');
-    await this.tap(page, target('group-create-submit', 'group create submit'));
+    await this.driver.invoke(
+      page,
+      this.productPicker,
+      'onProductChange',
+      { detail: { value: String(productIndex) } },
+    );
+    await this.driver.invoke(
+      page,
+      this.communityPicker,
+      'onCommunityChange',
+      { detail: { value: String(communityIndex) } },
+    );
+    await this.driver.invoke(
+      page,
+      target('group-min-people', 'group minimum people'),
+      'onMinPeopleInput',
+      { detail: { value: '2' } },
+    );
+    await this.driver.invoke(
+      page,
+      target('group-min-quantity', 'group minimum quantity'),
+      'onMinQuantityInput',
+      { detail: { value: '2' } },
+    );
+    await this.driver.invoke(page, target('group-create-submit', 'group create submit'), 'submit');
     return this.driver.waitForRoute('pages/group-buy-detail/index');
   }
 }
@@ -62,7 +82,7 @@ export class GroupBuyDetailPage extends MiniappPageObject {
 
   async join(page?: MiniProgramPage): Promise<MiniProgramPage> {
     const currentPage = page ?? await this.current();
-    await this.tap(currentPage, target('group-join', 'group join'));
+    await this.driver.invoke(currentPage, target('group-join', 'group join'), 'join');
     return this.driver.waitForRoute('pages/join-order/index');
   }
 }
@@ -72,10 +92,25 @@ export class GroupOrderPage extends MiniappPageObject {
 
   async submit(name: string, phone: string): Promise<MiniProgramPage> {
     const page = await this.current();
-    await this.input(page, target('group-order-name', 'group order name'), name);
-    await this.input(page, target('group-order-phone', 'group order phone'), phone);
-    await this.input(page, target('group-order-quantity', 'group order quantity'), '1');
-    await this.tap(page, target('group-order-submit', 'group order submit'));
+    await this.driver.invoke(
+      page,
+      target('group-order-name', 'group order name'),
+      'onNameInput',
+      { detail: { value: name } },
+    );
+    await this.driver.invoke(
+      page,
+      target('group-order-phone', 'group order phone'),
+      'onPhoneInput',
+      { detail: { value: phone } },
+    );
+    await this.driver.invoke(
+      page,
+      target('group-order-quantity', 'group order quantity'),
+      'onQuantityInput',
+      { detail: { value: '1' } },
+    );
+    await this.driver.invoke(page, target('group-order-submit', 'group order submit'), 'submit');
     return this.driver.waitForRoute('pages/orders/index');
   }
 }

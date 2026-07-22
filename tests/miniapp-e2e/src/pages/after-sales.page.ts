@@ -13,8 +13,16 @@ export class AfterSalesPage extends MiniappPageObject {
     await this.driver.waitForData(page, 'can_submit', Boolean, {
       description: 'after-sale refundable state',
     });
-    await this.input(page, target('after-sale-reason', 'after-sale reason'), reason);
-    await this.tap(page, target('after-sale-submit', 'after-sale submit'));
+    await this.driver.invoke(
+      page,
+      target('after-sale-reason', 'after-sale reason'),
+      'onInput',
+      {
+        currentTarget: { dataset: { field: 'reason' } },
+        detail: { value: reason },
+      },
+    );
+    await this.driver.invoke(page, target('after-sale-submit', 'after-sale submit'), 'submit');
     return this.driver.waitForRoute('pages/after-sales/detail/index');
   }
 }

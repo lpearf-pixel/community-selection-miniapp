@@ -11,6 +11,12 @@ export interface DeliveryForm {
   address: string;
 }
 
+const datasetEvent = (dataset: Record<string, string>) => ({ currentTarget: { dataset } });
+const inputEvent = (field: string, value: string) => ({
+  currentTarget: { dataset: { field } },
+  detail: { value },
+});
+
 export class CheckoutPage extends MiniappPageObject {
   readonly route = 'pages/orders/confirm/index';
 
@@ -27,22 +33,59 @@ export class CheckoutPage extends MiniappPageObject {
 
   async submitStore(): Promise<MiniProgramPage> {
     const page = await this.ready();
-    await this.tap(page, target('fulfillment-store', 'store fulfillment'));
-    await this.tap(page, target('checkout-submit', 'checkout submit'));
+    await this.driver.invoke(
+      page,
+      target('fulfillment-store', 'store fulfillment'),
+      'selectPickupType',
+      datasetEvent({ type: 'store' }),
+    );
+    await this.driver.invoke(page, target('checkout-submit', 'checkout submit'), 'submit');
     return this.driver.waitForRoute('pages/orders/detail/index');
   }
 
   async submitDelivery(form: DeliveryForm): Promise<MiniProgramPage> {
     const page = await this.ready();
-    await this.tap(page, target('fulfillment-delivery', 'delivery fulfillment'));
-    await this.driver.waitForData<unknown[]>(page, 'delivery_time_windows', (value) => (
+    await this.driver.invoke(
+      page,
+      target('fulfillment-delivery', 'delivery fulfillment'),
+      'selectPickupType',
+      datasetEvent({ type: 'delivery' }),
+    );
+    const windows = await this.driver.waitForData<Array<{ code?: unknown }>>(
+      page,
+      'delivery_time_windows',
+      (value) => (
       Array.isArray(value) && value.length > 0
-    ), { description: 'delivery time windows' });
-    await this.tap(page, target('delivery-window', 'first delivery window'));
-    await this.input(page, target('receiver-name', 'receiver name'), form.name);
-    await this.input(page, target('receiver-phone', 'receiver phone'), form.phone);
-    await this.input(page, target('receiver-address', 'receiver address'), form.address);
-    await this.tap(page, target('checkout-submit', 'checkout submit'));
+      ),
+      { description: 'delivery time windows' },
+    );
+    const firstWindowCode = String(windows[0]?.code ?? '');
+    if (!firstWindowCode) throw new Error('First delivery time window has no code');
+    await this.driver.invoke(
+      page,
+      target('delivery-window', 'first delivery window'),
+      'selectDeliveryTimeWindow',
+      datasetEvent({ code: firstWindowCode }),
+    );
+    await this.driver.invoke(
+      page,
+      target('receiver-name', 'receiver name'),
+      'onInput',
+      inputEvent('receiver_name', form.name),
+    );
+    await this.driver.invoke(
+      page,
+      target('receiver-phone', 'receiver phone'),
+      'onInput',
+      inputEvent('receiver_phone', form.phone),
+    );
+    await this.driver.invoke(
+      page,
+      target('receiver-address', 'receiver address'),
+      'onInput',
+      inputEvent('receiver_address', form.address),
+    );
+    await this.driver.invoke(page, target('checkout-submit', 'checkout submit'), 'submit');
     return this.driver.waitForRoute('pages/orders/detail/index');
   }
 }

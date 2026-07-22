@@ -9,11 +9,12 @@ export class ProductsPage extends MiniappPageObject {
       `/${this.route}?keyword=${encodeURIComponent(product.name)}`,
     );
     const page = await this.current();
-    await this.tap(page, {
+    await this.driver.invoke(page, {
       description: `direct buy for ${product.product_id}`,
       renderSelector: '.e2e-product-normal-buy',
-      querySelector: `#product-normal-buy-${product.product_id}`,
       dataset: { id: product.product_id },
+    }, 'goNormalBuy', {
+      currentTarget: { dataset: { id: product.product_id } },
     });
     return this.driver.waitForRoute('pages/orders/confirm/index');
   }
