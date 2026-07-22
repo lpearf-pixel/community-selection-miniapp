@@ -219,7 +219,7 @@ describe('L4 group-buy and order routes', () => {
     expect(inventoryServiceSource.includes('stock_deduct_quantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_quantity') || orderServiceSource.includes('stock_quantity: stockLock.stock_quantity')).toBe(true);
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
-    expect(serviceSource.includes('current_quantity: { increment: order.quantity }')).toBe(true);
+    expect(serviceSource.includes('_sum: { quantity: true }')).toBe(true);\n    expect(serviceSource.includes('current_quantity: paidQuantity')).toBe(true);
     expect(source.includes('refund.upsert')).toBe(true);
     expect(source.includes('pay_amount_cents / groupBuy.price_cents')).toBe(false);
   });
