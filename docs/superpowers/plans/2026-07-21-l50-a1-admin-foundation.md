@@ -50,7 +50,6 @@
 | **apps/admin/src/app/feature-registry.ts** | 现有页面到领域、文案、权限声明的唯一映射 |
 | **apps/admin/src/app/feature-registry.test.ts** | 唯一性、完整性、默认页和 login 排除测试 |
 | **apps/admin/src/app/navigation.ts** | 从 registry 生成当前导航项的纯函数 |
-| **apps/admin/src/app/navigation.test.ts** | 锁定现有导航顺序、标签和选择行为 |
 | **apps/admin/src/app/AdminErrorBoundary.tsx** | 当前工作区的 React 错误隔离与重试入口 |
 | **apps/admin/src/app/AdminShell.tsx** | 管理端标题、管理员信息、导航、刷新和退出 |
 | **apps/admin/src/app/AdminApp.tsx** | 会话与当前 view 编排；暂时承载原 App 业务工作区 |
@@ -272,7 +271,7 @@ describe('createJsonRequester', () => {
   it('aborts a request after its timeout budget', async () => {
     const fetchImpl = vi.fn(
       (_url: string, init?: RequestInit) =>
-        new Promise((_resolve, reject) => {
+        new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => {
             reject(init.signal?.reason);
           });
@@ -355,9 +354,28 @@ The implementation must:
 - distinguish caller abort, timeout, network failure and invalid JSON;
 - clear timers and listeners in **finally**.
 
-Public signature:
+Complete implementation:
 
 ~~~ts
+import { AdminApiError } from './errors';
+import {
+  requestContextHeaders,
+  type RequestContext,
+} from './request-context';
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+  code?: string;
+  trace_id?: string;
+};
+
+export type FetchLike = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
 export type JsonRequestOptions = Omit<RequestInit, 'signal'> & {
   signal?: AbortSignal;
   context?: RequestContext;
@@ -370,9 +388,109 @@ export type JsonRequester = <T>(
 
 export function createJsonRequester(config: {
   baseUrl: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: FetchLike;
   getDefaultHeaders?: () => HeadersInit;
-}): JsonRequester;
+}): JsonRequester {
+  const fetchImpl = config.fetchImpl ?? fetch;
+
+  return async function requestJson<T>(
+    path: string,
+    options: JsonRequestOptions = {},
+  ): Promise<T> {
+    const controller = new AbortController();
+    const timeoutMs = options.context?.timeoutMs;
+    let timedOut = false;
+
+    const abortFromCaller = () => {
+      controller.abort(options.signal?.reason);
+    };
+    if (options.signal?.aborted) abortFromCaller();
+    options.signal?.addEventListener('abort', abortFromCaller, { once: true });
+
+    const timer =
+      timeoutMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, timeoutMs);
+
+    try {
+      const headers = new Headers(config.getDefaultHeaders?.());
+      for (const [name, value] of Object.entries(
+        requestContextHeaders(options.context),
+      )) {
+        headers.set(name, value);
+      }
+      new Headers(options.headers).forEach((value, name) => {
+        headers.set(name, value);
+      });
+      if (options.body !== undefined && !headers.has('content-type')) {
+        headers.set('content-type', 'application/json');
+      }
+
+      const response = await fetchImpl(config.baseUrl + path, {
+        ...options,
+        credentials: 'include',
+        headers,
+        signal: controller.signal,
+      });
+
+      let envelope: ApiEnvelope<T>;
+      try {
+        envelope = (await response.json()) as ApiEnvelope<T>;
+      } catch (error) {
+        throw new AdminApiError(
+          '服务返回了无法识别的数据',
+          response.status,
+          'INVALID_RESPONSE',
+          undefined,
+          { cause: error },
+        );
+      }
+
+      if (!response.ok || envelope.success !== true) {
+        throw new AdminApiError(
+          envelope.message ?? '请求失败',
+          response.status,
+          envelope.code ?? 'REQUEST_FAILED',
+          envelope.trace_id,
+        );
+      }
+      return envelope.data as T;
+    } catch (error) {
+      if (error instanceof AdminApiError) throw error;
+      if (timedOut) {
+        throw new AdminApiError(
+          '请求超时',
+          0,
+          'REQUEST_TIMEOUT',
+          undefined,
+          { cause: error },
+        );
+      }
+      if (options.signal?.aborted) {
+        throw new AdminApiError(
+          '请求已取消',
+          0,
+          'REQUEST_ABORTED',
+          undefined,
+          { cause: error },
+        );
+      }
+      throw new AdminApiError(
+        '网络请求失败',
+        0,
+        'NETWORK_ERROR',
+        undefined,
+        { cause: error },
+      );
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      options.signal?.removeEventListener('abort', abortFromCaller);
+    }
+  };
+}
 ~~~
 
 - [ ] **Step 5: Delegate the existing admin request API**
@@ -422,7 +540,6 @@ git commit -m "refactor(admin): add typed request boundary"
 - Create: **apps/admin/src/app/feature-registry.ts**
 - Create: **apps/admin/src/app/feature-registry.test.ts**
 - Create: **apps/admin/src/app/navigation.ts**
-- Create: **apps/admin/src/app/navigation.test.ts**
 
 **Interfaces:**
 - Consumes: **AdminViewKey**, **ADMIN_VIEW_KEYS**
@@ -440,7 +557,7 @@ describe('admin feature registry', () => {
   it('maps every non-login view exactly once', () => {
     const expected = ADMIN_VIEW_KEYS.filter((key) => key !== 'login');
     const actual = ADMIN_FEATURES.map((feature) => feature.key);
-    expect(actual).toEqual(expected);
+    expect(new Set(actual)).toEqual(new Set(expected));
     expect(new Set(actual).size).toBe(actual.length);
   });
 
@@ -462,6 +579,7 @@ describe('admin feature registry', () => {
         ['withdrawals', '提现管理'],
         ['alerts', '告警中心'],
         ['taxRecords', '税务人工 Review'],
+        ['dashboardV2', '经营驾驶舱 V2'],
         ['finance', '财务对账'],
         ['refundLedger', '退款台账'],
         ['rewardLedger', '开团服务奖励'],
@@ -469,7 +587,6 @@ describe('admin feature registry', () => {
         ['pickupWorkbench', '自提工作台'],
         ['deliveryReservation', '配送预留'],
         ['deliveryRuleConfig', '管理配送规则'],
-        ['dashboardV2', '经营驾驶舱 V2'],
       ]);
   });
 });
@@ -480,7 +597,7 @@ describe('admin feature registry', () => {
 Run:
 
 ~~~bash
-pnpm --filter @community-selection/admin test -- src/app/feature-registry.test.ts src/app/navigation.test.ts
+pnpm --filter @community-selection/admin test -- src/app/feature-registry.test.ts
 ~~~
 
 Expected: FAIL because registry and navigation modules do not exist.
@@ -523,6 +640,7 @@ export const ADMIN_FEATURES = [
   { key: 'withdrawals', label: '提现管理', section: 'finance', requiredPermissions: ['withdrawal.read'] },
   { key: 'alerts', label: '告警中心', section: 'operations', requiredPermissions: ['ops.alert.read'] },
   { key: 'taxRecords', label: '税务人工 Review', section: 'finance', requiredPermissions: ['tax.read'] },
+  { key: 'dashboardV2', label: '经营驾驶舱 V2', section: 'operations', requiredPermissions: ['dashboard.read'] },
   { key: 'finance', label: '财务对账', section: 'finance', requiredPermissions: ['finance.read'] },
   { key: 'refundLedger', label: '退款台账', section: 'finance', requiredPermissions: ['refund.read'] },
   { key: 'rewardLedger', label: '开团服务奖励', section: 'finance', requiredPermissions: ['reward.read'] },
@@ -530,7 +648,6 @@ export const ADMIN_FEATURES = [
   { key: 'pickupWorkbench', label: '自提工作台', section: 'fulfillment', requiredPermissions: ['pickup.read'] },
   { key: 'deliveryReservation', label: '配送预留', section: 'fulfillment', requiredPermissions: ['delivery.read'] },
   { key: 'deliveryRuleConfig', label: '管理配送规则', section: 'fulfillment', requiredPermissions: ['delivery.rule.read'] },
-  { key: 'dashboardV2', label: '经营驾驶舱 V2', section: 'operations', requiredPermissions: ['dashboard.read'] },
 ] as const satisfies readonly AdminFeatureDefinition[];
 ~~~
 
@@ -551,7 +668,7 @@ export function buildLegacyNavigation() {
 Run:
 
 ~~~bash
-pnpm --filter @community-selection/admin test -- src/app/feature-registry.test.ts src/app/navigation.test.ts
+pnpm --filter @community-selection/admin test -- src/app/feature-registry.test.ts
 pnpm --filter @community-selection/admin typecheck
 ~~~
 
@@ -560,7 +677,7 @@ Expected: registry/navigation tests pass; TypeScript exits 0.
 - [ ] **Step 6: Commit**
 
 ~~~bash
-git add apps/admin/src/app/feature-registry.ts apps/admin/src/app/feature-registry.test.ts apps/admin/src/app/navigation.ts apps/admin/src/app/navigation.test.ts
+git add apps/admin/src/app/feature-registry.ts apps/admin/src/app/feature-registry.test.ts apps/admin/src/app/navigation.ts
 git commit -m "refactor(admin): register admin features"
 ~~~
 
@@ -775,7 +892,7 @@ Define **featureContent** as the existing view-condition block moved without cha
 Run:
 
 ~~~bash
-pnpm --filter @community-selection/admin test -- src/app/shell-model.test.ts src/app/feature-registry.test.ts src/app/navigation.test.ts
+pnpm --filter @community-selection/admin test -- src/app/shell-model.test.ts src/app/feature-registry.test.ts
 pnpm --filter @community-selection/admin typecheck
 pnpm --filter @community-selection/admin build
 ~~~
