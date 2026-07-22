@@ -221,7 +221,9 @@ describe('L4 group-buy and order routes', () => {
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
     expect(serviceSource.includes('_sum: { quantity: true }')).toBe(true);
     expect(serviceSource.includes('current_quantity: paidQuantity')).toBe(true);
-    expect(source.includes('refund.upsert')).toBe(true);
+    const refundServiceSource = readFileSync(new URL('../src/services/refund-service.ts', import.meta.url), 'utf8');
+    expect(refundServiceSource.includes('where: { client_refund_id: input.client_refund_id }')).toBe(true);
+    expect(refundServiceSource.includes('tx.refund.create')).toBe(true);
     expect(source.includes('pay_amount_cents / groupBuy.price_cents')).toBe(false);
   });
 
