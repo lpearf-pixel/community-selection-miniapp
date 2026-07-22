@@ -29,5 +29,10 @@ jobs:
         run: pnpm setup:admin:e2e
       - name: Install Chromium
         run: pnpm --dir scripts/admin-e2e exec playwright install chromium
+      - name: Diagnose Docker socket access
+        run: |
+          id
+          stat -c 'socket_uid=%u socket_gid=%g socket_mode=%a' /var/run/docker.sock
+          docker version
       - name: Run Admin browser smoke
         run: pnpm e2e:admin
