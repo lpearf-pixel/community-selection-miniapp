@@ -216,9 +216,15 @@ export class FixtureApi {
 
   async getUserOrder(orderId: string, openid: string): Promise<OrderRecord> {
     if (!openid) throw new Error(`Order ${orderId} requires a user OpenID`);
-    return this.request(`/api/me/orders/${encodeURIComponent(orderId)}`, {
-      headers: { 'x-openid': openid },
-    });
+    const order = await this.request<Record<string, unknown>>(
+      `/api/me/orders/${encodeURIComponent(orderId)}`,
+      {
+        headers: { 'x-openid': openid },
+      },
+    );
+    const id = String(order.order_id ?? order.id ?? '').trim();
+    if (!id) throw new Error(`Order ${orderId} response is missing an identifier`);
+    return { ...order, id } as OrderRecord;
   }
 
   async advanceOrder(

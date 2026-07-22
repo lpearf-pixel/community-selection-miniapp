@@ -99,6 +99,40 @@ describe('FixtureApi', () => {
     ]);
   });
 
+  it('normalizes a public order-detail identifier before requesting a refund', async () => {
+    let refundBody = '';
+    const api = new FixtureApi('http://127.0.0.1:13080', async (input, init = {}) => {
+      if (String(input).endsWith('/api/me/orders/order-public-1')) {
+        return response(200, {
+          success: true,
+          data: {
+            order_id: 'order-public-1',
+            pay_amount_cents: 3300,
+            refund_amount_cents: 800,
+          },
+        });
+      }
+      if (String(input).endsWith('/api/refunds/mock')) {
+        refundBody = String(init.body);
+        return response(200, { success: true, data: { id: 'refund-1' } });
+      }
+      throw new Error(`unexpected URL ${String(input)}`);
+    });
+
+    const order = await api.getUserOrder('order-public-1', 'buyer-openid');
+
+    expect(order).toMatchObject({
+      id: 'order-public-1',
+      order_id: 'order-public-1',
+    });
+    await api.createFullMockRefund(order, 'run-1');
+    expect(JSON.parse(refundBody)).toMatchObject({
+      order_id: 'order-public-1',
+      refund_amount_cents: 2500,
+      client_refund_id: 'miniapp-business-run-1-order-public-1',
+    });
+  });
+
   it('locks store and delivery fulfillment sequences', () => {
     expect(STORE_SEQUENCE).toEqual(['preparing', 'ready', 'picked', 'completed']);
     expect(DELIVERY_SEQUENCE).toEqual(['preparing', 'ready', 'delivered', 'completed']);
