@@ -1,1 +1,6 @@
-{"navigationBarTitleText":"选择社区"}
+{
+  "navigationBarTitleText": "选择社区",
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index"
+  }
+}

@@ -1,5 +1,8 @@
-.page { padding: 48rpx 32rpx; }
-.title { font-size: 44rpx; font-weight: 700; margin-bottom: 16rpx; }
-.desc { color: #666; margin-bottom: 32rpx; }
-.primary { background: #1677ff; color: #fff; margin-bottom: 20rpx; }
-.secondary { margin-bottom: 20rpx; }
+.home-page {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+  padding: 28rpx 28rpx 36rpx;
+  padding: 28rpx 28rpx calc(36rpx + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+}

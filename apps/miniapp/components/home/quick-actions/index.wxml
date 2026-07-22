@@ -1,0 +1,14 @@
+<view class="quick-actions {{variant}}">
+  <view class="quick-action quick-action-primary" data-target="products" data-testid="home-products-entry" bindtap="navigate">
+    <view class="quick-icon">鲜</view>
+    <view><view class="quick-title">全部商品</view><view class="quick-desc">看看今日新鲜</view></view>
+  </view>
+  <view class="quick-action" data-target="group-buys" data-testid="home-group-buys-entry" bindtap="navigate">
+    <view class="quick-icon">拼</view>
+    <view><view class="quick-title">今日开团</view><view class="quick-desc">邻里一起更划算</view></view>
+  </view>
+  <view class="quick-action" data-target="orders" data-testid="home-orders-entry" bindtap="navigate">
+    <view class="quick-icon">单</view>
+    <view><view class="quick-title">我的订单</view><view class="quick-desc">查看自提与售后</view></view>
+  </view>
+</view>

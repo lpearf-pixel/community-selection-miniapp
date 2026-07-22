@@ -1,0 +1,64 @@
+page,
+.theme-chunhuaqiushi {
+  --cq-color-page: #FAF7EE;
+  --cq-color-surface: #FFFDF8;
+  --cq-color-surface-soft: #F1F6EB;
+  --cq-color-brand: #315B45;
+  --cq-color-brand-soft: #EAF1E7;
+  --cq-color-accent: #D5A84B;
+  --cq-color-price: #DF6B4F;
+  --cq-color-text: #2D3A31;
+  --cq-color-muted: #748078;
+  --cq-color-danger: #C94F45;
+  --cq-color-warning: #9A6A19;
+  --cq-color-success: #3F7957;
+  --cq-color-info: #557A83;
+  --cq-color-on-brand: #FFFDF8;
+  --cq-color-border: rgba(49, 91, 69, 0.10);
+  --cq-color-brand-tint: rgba(143, 175, 152, 0.18);
+  --cq-color-brand-tint-active: rgba(143, 175, 152, 0.24);
+  --cq-color-accent-tint: rgba(213, 168, 75, 0.18);
+  --cq-color-on-brand-muted: rgba(255, 253, 248, 0.74);
+  --cq-radius-card: 28rpx;
+  --cq-radius-control: 18rpx;
+  --cq-radius-pill: 999rpx;
+  --cq-shadow-card: 0 12rpx 30rpx rgba(57, 76, 62, 0.08);
+  --cq-shadow-action: 0 -6rpx 24rpx rgba(57, 76, 62, 0.10);
+}
+
+.theme-chunhuaqiushi .brand-hero { background: var(--cq-color-surface); }
+.theme-chunhuaqiushi .brand-name,
+.theme-chunhuaqiushi .brand-slogan { color: var(--cq-color-brand); }
+.theme-chunhuaqiushi .brand-subtitle,
+.theme-chunhuaqiushi .brand-season,
+.theme-chunhuaqiushi .section-hint,
+.theme-chunhuaqiushi .product-stock,
+.theme-chunhuaqiushi .group-community,
+.theme-chunhuaqiushi .quick-desc { color: var(--cq-color-muted); }
+.theme-chunhuaqiushi .category-tile {
+  color: var(--cq-color-brand);
+  background: var(--cq-color-surface);
+  border: 1rpx solid var(--cq-color-border);
+}
+.theme-chunhuaqiushi .category-tile:active { background: var(--cq-color-brand-tint-active); }
+.theme-chunhuaqiushi .section-mark { color: var(--cq-color-accent); }
+.theme-chunhuaqiushi .product-placeholder,
+.theme-chunhuaqiushi .group-placeholder { color: var(--cq-color-brand); background: var(--cq-color-brand-soft); }
+.theme-chunhuaqiushi .product-price,
+.theme-chunhuaqiushi .group-price,
+.theme-chunhuaqiushi .product-stock.is-empty { color: var(--cq-color-price); }
+.theme-chunhuaqiushi .retry-button {
+  color: var(--cq-color-on-brand);
+  background: var(--cq-color-brand);
+  border-radius: var(--cq-radius-pill);
+}
+.theme-chunhuaqiushi .quick-action {
+  color: var(--cq-color-brand);
+  background: var(--cq-color-surface);
+  border: 1rpx solid var(--cq-color-border);
+  box-shadow: var(--cq-shadow-card);
+}
+.theme-chunhuaqiushi .quick-action-primary { background: var(--cq-color-brand); color: var(--cq-color-on-brand); }
+.theme-chunhuaqiushi .quick-action-primary .quick-desc { color: var(--cq-color-on-brand-muted); }
+.theme-chunhuaqiushi .quick-icon { color: var(--cq-color-brand); background: var(--cq-color-accent-tint); }
+.theme-chunhuaqiushi .quick-action-primary .quick-icon { color: var(--cq-color-brand); background: var(--cq-color-accent); }

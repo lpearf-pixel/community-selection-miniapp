@@ -1,0 +1,28 @@
+import { MiniappPageObject, type MiniProgramPage } from '@community-selection/miniapp-testkit';
+
+const target = (testId: string, description: string) => ({
+  description,
+  renderSelector: `.e2e-${testId}`,
+});
+
+export class AfterSalesPage extends MiniappPageObject {
+  readonly route = 'pages/after-sales/apply/index';
+
+  async submit(reason: string): Promise<MiniProgramPage> {
+    const page = await this.current();
+    await this.driver.waitForData(page, 'can_submit', Boolean, {
+      description: 'after-sale refundable state',
+    });
+    await this.driver.invoke(
+      page,
+      target('after-sale-reason', 'after-sale reason'),
+      'onInput',
+      {
+        currentTarget: { dataset: { field: 'reason' } },
+        detail: { value: reason },
+      },
+    );
+    await this.driver.invoke(page, target('after-sale-submit', 'after-sale submit'), 'submit');
+    return this.driver.waitForRoute('pages/after-sales/detail/index');
+  }
+}

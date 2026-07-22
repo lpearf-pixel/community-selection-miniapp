@@ -1,1 +1,20 @@
-.page{padding:24rpx;background:#f6f7fb;min-height:100vh}.title{font-size:38rpx;font-weight:700;margin-bottom:20rpx}.tabs,.type-tabs{display:flex;gap:12rpx;overflow:auto;margin-bottom:16rpx}.tab,.type-tab{padding:12rpx 20rpx;border-radius:999rpx;background:#fff;color:#666;white-space:nowrap}.active{background:#1677ff;color:#fff}.card{background:#fff;border-radius:20rpx;padding:24rpx;margin-bottom:20rpx}.card-head{display:flex;justify-content:space-between;color:#666;margin-bottom:18rpx}.status{color:#1677ff}.product{display:flex;gap:18rpx}.cover{width:140rpx;height:140rpx;border-radius:16rpx;background:#edf0f5;text-align:center;line-height:140rpx;color:#999}.product-info{flex:1}.name{font-weight:600;font-size:32rpx}.meta,.pickup,.after-sale,.state{color:#666;margin-top:12rpx}.amount{color:#e5484d;font-weight:700;margin-top:12rpx}.actions{display:flex;gap:12rpx;flex-wrap:wrap;margin-top:20rpx}.error{color:#e5484d}.muted{color:#999;text-align:center}
+.page { padding: 28rpx; }
+.page-title { margin-bottom: 20rpx; }
+.filter-scroll { width: 100%; margin-bottom: 14rpx; white-space: nowrap; }
+.type-filter { margin-bottom: 22rpx; }
+.filter-row { display: inline-flex; gap: 12rpx; }
+.filter-chip { flex: none; }
+.order-list { display: flex; flex-direction: column; gap: 18rpx; }
+.order-card { padding: 22rpx; }
+.order-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; }
+.order-product { display: flex; gap: 18rpx; }
+.order-cover { width: 142rpx; height: 142rpx; overflow: hidden; flex: none; border-radius: var(--cq-radius-control); }
+.product-info { min-width: 0; flex: 1; }
+.product-name { font-size: 31rpx; font-weight: 700; }
+.product-meta,
+.order-meta { margin-top: 10rpx; font-size: 24rpx; }
+.order-amount { margin-top: 12rpx; font-size: 31rpx; }
+.after-sale-chip { margin-top: 14rpx; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 18rpx; }
+.order-actions button { padding: 0 16rpx; font-size: 23rpx; }
+.compact-state { padding: 28rpx; }

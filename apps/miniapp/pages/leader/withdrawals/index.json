@@ -1,1 +1,7 @@
-{ "navigationBarTitleText": "开团服务奖励提现" }
+{
+  "navigationBarTitleText": "开团服务奖励提现",
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index",
+    "status-pill": "/components/ui/status-pill/index"
+  }
+}

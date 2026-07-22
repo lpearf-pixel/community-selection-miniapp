@@ -1,19 +1,42 @@
-<view class="page">
-  <view class="title">我的订单</view>
-  <view class="tabs"><block wx:for="{{statusTabs}}" wx:key="key"><view class="tab {{activeStatus === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="switchStatus">{{item.label}}</view></block></view>
-  <view class="type-tabs"><block wx:for="{{typeTabs}}" wx:key="key"><view class="type-tab {{activeType === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="switchType">{{item.label}}</view></block></view>
-  <view wx:if="{{loading && orders.length === 0}}" class="state">加载中...</view>
-  <view wx:elif="{{error}}" class="state error">{{error}}</view>
-  <view wx:elif="{{orders.length === 0}}" class="state">暂无订单</view>
-  <block wx:for="{{orders}}" wx:key="id">
-    <view class="card">
-      <view class="card-head"><text>{{item.order_type_text}}</text><text class="status">{{item.user_status_text}}</text></view>
-      <view class="product" data-id="{{item.id}}" bindtap="goDetail"><image wx:if="{{item.product.cover_image}}" class="cover" src="{{item.product.cover_image}}" mode="aspectFill"/><view class="cover placeholder" wx:else>图</view><view class="product-info"><view class="name">{{item.product.name}}</view><view class="meta">数量 x{{item.quantity}}</view><view class="amount">¥{{item.amount_yuan}}</view></view></view>
-      <view wx:if="{{item.pickup.pickup_store_name}}" class="pickup">自提点：{{item.pickup.pickup_store_name}}</view>
-      <view wx:if="{{item.has_after_sale}}" class="after-sale">售后状态：{{item.after_sale_summary.latest_status || '处理中'}}</view>
-      <view class="actions"><button size="mini" data-id="{{item.id}}" bindtap="goDetail">查看详情</button><button wx:if="{{item.can_show_pickup_code}}" size="mini" data-id="{{item.id}}" bindtap="goPickupCode">查看自提凭证</button><button wx:if="{{item.can_apply_after_sale}}" size="mini" data-id="{{item.id}}" bindtap="applyAfterSale">申请售后</button><button wx:if="{{item.has_after_sale}}" size="mini" data-id="{{item.id}}" bindtap="goAfterSale">查看售后进度</button></view>
+<view class="cq-page page">
+  <view class="cq-title page-title">我的订单</view>
+  <scroll-view class="filter-scroll" scroll-x>
+    <view class="filter-row">
+      <view wx:for="{{statusTabs}}" wx:key="key" class="cq-chip filter-chip {{activeStatus === item.key ? 'cq-tone-brand' : 'cq-tone-neutral'}}" data-key="{{item.key}}" bindtap="switchStatus">{{item.label}}</view>
     </view>
-  </block>
-  <view wx:if="{{loading && orders.length > 0}}" class="state">加载更多...</view>
-  <view wx:if="{{!hasMore && orders.length > 0}}" class="state muted">没有更多了</view>
+  </scroll-view>
+  <scroll-view class="filter-scroll type-filter" scroll-x>
+    <view class="filter-row">
+      <view wx:for="{{typeTabs}}" wx:key="key" class="cq-chip filter-chip {{activeType === item.key ? 'cq-tone-brand' : 'cq-tone-neutral'}}" data-key="{{item.key}}" bindtap="switchType">{{item.label}}</view>
+    </view>
+  </scroll-view>
+  <state-panel wx:if="{{loading && orders.length === 0}}" state="loading" message="正在加载订单…" />
+  <state-panel wx:elif="{{error}}" state="error" message="{{error}}" retryable bind:retry="loadOrders" />
+  <state-panel wx:elif="{{orders.length === 0}}" state="empty" message="暂无订单" />
+  <view wx:else class="order-list">
+    <view wx:for="{{orders}}" wx:key="id" class="cq-card order-card">
+      <view class="order-head">
+        <text class="cq-muted">{{item.order_type_text}}</text>
+        <status-pill text="{{item.user_status_text}}" tone="{{item.theme_status_tone}}" />
+      </view>
+      <view class="order-product" data-id="{{item.id}}" bindtap="goDetail">
+        <view class="order-cover"><media-thumb src="{{item.product.cover_image}}" category-index="{{index}}" /></view>
+        <view class="product-info">
+          <view class="product-name">{{item.product.name}}</view>
+          <view class="cq-muted product-meta">数量 x{{item.quantity}}</view>
+          <view class="cq-price order-amount">¥{{item.amount_yuan}}</view>
+        </view>
+      </view>
+      <view wx:if="{{item.pickup.pickup_store_name}}" class="cq-muted order-meta">自提点：{{item.pickup.pickup_store_name}}</view>
+      <view wx:if="{{item.has_after_sale}}" class="cq-chip after-sale-chip">售后：{{item.after_sale_summary.latest_status || '处理中'}}</view>
+      <view class="order-actions">
+        <button class="cq-button cq-button--secondary" size="mini" data-id="{{item.id}}" bindtap="goDetail">查看详情</button>
+        <button wx:if="{{item.can_show_pickup_code}}" class="cq-button cq-button--secondary" size="mini" data-id="{{item.id}}" bindtap="goPickupCode">自提凭证</button>
+        <button wx:if="{{item.can_apply_after_sale}}" class="cq-button cq-button--secondary" size="mini" data-id="{{item.id}}" bindtap="applyAfterSale">申请售后</button>
+        <button wx:if="{{item.has_after_sale}}" class="cq-button cq-button--secondary" size="mini" data-id="{{item.id}}" bindtap="goAfterSale">售后进度</button>
+      </view>
+    </view>
+  </view>
+  <view wx:if="{{loading && orders.length > 0}}" class="cq-state compact-state">加载更多…</view>
+  <view wx:if="{{!hasMore && orders.length > 0}}" class="cq-state compact-state">没有更多了</view>
 </view>

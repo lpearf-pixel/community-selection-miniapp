@@ -1,0 +1,17 @@
+{
+  "description": "春华秋实社区甄选小程序本地开发配置",
+  "packOptions": {
+    "ignore": []
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.17.0",
+  "appid": "REPLACE_WITH_WECHAT_APP_ID",
+  "projectname": "community-selection-miniapp",
+  "condition": {}
+}

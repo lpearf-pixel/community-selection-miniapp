@@ -1,7 +1,24 @@
-const { apiBaseUrl } = require('../../config');
+const { getApiBaseUrl } = require('../../utils/api');
+const { getCurrentUser } = require('../../utils/user');
 
 function toFutureIso(hours) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function asItems(value) {
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.items)) return value.items;
+  return [];
+}
+
+function normalizeProduct(item) {
+  const id = item.product_id || item.id;
+  return { ...item, id, product_id: id };
+}
+
+function normalizeCommunity(item) {
+  const id = item.community_id || item.id;
+  return { ...item, id, community_id: id };
 }
 
 Page({
@@ -20,16 +37,23 @@ Page({
     this.loadOptions();
   },
   loadOptions() {
+    const apiBaseUrl = getApiBaseUrl();
     wx.request({
       url: `${apiBaseUrl}/api/products?page_size=100`,
       success: (res) => {
-        const items = ((res.data && res.data.data && res.data.data.items) || []).filter((item) => item.is_group_enabled);
+        const data = res.data && res.data.data;
+        const items = asItems(data)
+          .filter((item) => item.is_group_enabled)
+          .map(normalizeProduct);
         this.setData({ products: items });
       }
     });
     wx.request({
       url: `${apiBaseUrl}/api/communities`,
-      success: (res) => this.setData({ communities: (res.data && res.data.data) || [] })
+      success: (res) => {
+        const data = res.data && res.data.data;
+        this.setData({ communities: asItems(data).map(normalizeCommunity) });
+      }
     });
   },
   onProductChange(event) {
@@ -47,31 +71,38 @@ Page({
   submit() {
     const product = this.data.products[this.data.productIndex];
     const community = this.data.communities[this.data.communityIndex];
+    const user = getCurrentUser();
     if (!product || !community) {
       wx.showToast({ title: '请先选择商品和社区', icon: 'none' });
       return;
     }
     this.setData({ loading: true });
-    wx.request({
-      url: `${apiBaseUrl}/api/group-buys`,
-      method: 'POST',
-      data: {
-        product_id: product.id,
-        community_id: community.id,
-        leader_openid: 'leader-openid',
-        min_people: this.data.min_people,
-        min_quantity: this.data.min_quantity,
-        end_time: this.data.end_time,
-        pickup_time: this.data.pickup_time
-      },
-      success: (res) => {
-        if (res.data && res.data.success) {
-          wx.navigateTo({ url: `/pages/group-buy-detail/index?id=${res.data.data.id}` });
-        } else {
-          wx.showToast({ title: (res.data && res.data.message) || '发起失败', icon: 'none' });
+    const apiBaseUrl = getApiBaseUrl();
+    return new Promise((resolve) => {
+      wx.request({
+        url: `${apiBaseUrl}/api/group-buys`,
+        method: 'POST',
+        data: {
+          product_id: product.product_id || product.id,
+          community_id: community.community_id || community.id,
+          leader_openid: user.openid,
+          min_people: this.data.min_people,
+          min_quantity: this.data.min_quantity,
+          end_time: this.data.end_time,
+          pickup_time: this.data.pickup_time
+        },
+        success: (res) => {
+          if (res.data && res.data.success) {
+            wx.navigateTo({ url: `/pages/group-buy-detail/index?id=${res.data.data.id}` });
+          } else {
+            wx.showToast({ title: (res.data && res.data.message) || '发起失败', icon: 'none' });
+          }
+        },
+        complete: () => {
+          this.setData({ loading: false });
+          resolve();
         }
-      },
-      complete: () => this.setData({ loading: false })
+      });
     });
   }
 });

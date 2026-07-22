@@ -1,17 +1,77 @@
-<view class="page">
-  <view class="panel">
-    <view class="title">确认订单</view>
-    <view wx:if="{{product}}" class="product"><view>{{product.name}}</view><view>单价：¥{{product.price_yuan}}</view><view class="muted">{{stock_label}}</view></view>
-    <view class="row">购买类型：{{type === 'group_buy' ? '开团购买' : '普通购买'}}</view>
-    <view wx:if="{{from_cart}}" class="row muted">来自购物车</view>
-    <view class="row">数量</view><view class="quantity-box"><button size="mini" bindtap="decreaseQuantity" disabled="{{quantity <= 1}}">-</button><input class="quantity-input" type="number" value="{{quantity}}" bindinput="onQuantityInput" placeholder="数量" /><button size="mini" bindtap="increaseQuantity" disabled="{{product && product.stock <= 0}}">+</button></view>
-    <view class="amounts"><view>购买数量：{{quantity}}</view><view>商品金额：¥{{product_amount_yuan}}</view><view>配送费：¥{{delivery_fee_yuan}}</view><view class="pay">应付金额：¥{{pay_amount_yuan}}</view></view>
-    <view class="section"><view class="row">履约方式</view><button size="mini" type="{{pickup_type === 'store' ? 'primary' : 'default'}}" data-type="store" bindtap="selectPickupType">到店自提</button><button size="mini" type="{{pickup_type === 'delivery' ? 'primary' : 'default'}}" data-type="delivery" bindtap="selectPickupType">门店配送</button></view>
-    <view class="section"><view class="row">当前社区：{{selectedCommunity ? selectedCommunity.name : (community_id || '请选择社区')}}</view><button size="mini" bindtap="chooseCommunity">选择社区</button></view>
-    <view class="section"><view class="row">自提点 / 发货点：{{selectedPickupStore ? selectedPickupStore.name : '请选择自提点'}}</view><view wx:if="{{selectedPickupStore}}" class="muted">自提点地址：{{selectedPickupStore.address}} {{selectedPickupStore.phone}}</view><button size="mini" bindtap="choosePickupStore">选择自提点</button><button wx:if="{{selectedPickupStore}}" size="mini" bindtap="copyPickupAddress">复制地址</button><button wx:if="{{selectedPickupStore}}" size="mini" bindtap="copyNavigationUrl">打开高德地图/复制导航链接</button></view>
-    <block wx:if="{{pickup_type === 'delivery'}}"><view class="hint">{{deliveryRule.notice || '当前为门店配送，暂不接第三方配送。'}}</view><view class="hint">配送范围：{{deliveryRule.service_radius_text || '配送范围以门店确认为准'}}</view><view class="hint">配送费：¥{{delivery_fee_yuan}}</view><view wx:if="{{deliveryRule.free_threshold_cents !== null}}" class="hint">免配送费门槛：¥{{deliveryRule.free_threshold_yuan}}</view><view class="row">配送时段</view><block wx:for="{{delivery_time_windows}}" wx:key="code"><button size="mini" type="{{delivery_time_window_code === item.code ? 'primary' : 'default'}}" data-code="{{item.code}}" bindtap="selectDeliveryTimeWindow">{{item.label}} {{item.start_time}}-{{item.end_time}}</button></block><input data-field="receiver_name" value="{{receiver_name}}" bindinput="onInput" placeholder="收货人姓名" /><input data-field="receiver_phone" value="{{receiver_phone}}" bindinput="onInput" placeholder="手机号" /><input data-field="receiver_address" value="{{receiver_address}}" bindinput="onInput" placeholder="收货地址" /></block>
-    <block wx:else><view class="hint">到店自提：提交校验需要先选择自提点。</view></block>
-    <view wx:if="{{submit_hint}}" class="hint">{{submit_hint}}</view><view wx:if="{{error}}" class="error">{{error}}</view>
-    <button type="primary" loading="{{submitting}}" disabled="{{submitting || (product && product.stock <= 0)}}" bindtap="submit">{{submitting ? '提交中...' : '提交并 MOCK 支付'}}</button>
+<view class="cq-page page">
+  <view class="cq-card order-panel">
+    <view class="cq-title page-title">确认订单</view>
+    <state-panel wx:if="{{loading}}" state="loading" message="正在读取商品…" />
+    <view wx:if="{{product}}" class="product-summary">
+      <view class="product-cover"><media-thumb src="{{product.cover_image}}" /></view>
+      <view class="product-copy">
+        <view class="product-name">{{product.name}}</view>
+        <view class="cq-price">单价：¥{{product.price_yuan}}</view>
+        <view class="cq-muted">{{stock_label}}</view>
+      </view>
+    </view>
+    <view class="cq-chip order-type">{{type === 'group_buy' ? '开团购买' : '普通购买'}}</view>
+    <view wx:if="{{from_cart}}" class="cq-muted source-tip">来自购物车</view>
+
+    <view class="cq-divider section">
+      <view class="section-label">购买数量</view>
+      <view class="quantity-box">
+        <button class="cq-button cq-button--secondary quantity-button" size="mini" bindtap="decreaseQuantity" disabled="{{quantity <= 1}}">-</button>
+        <input class="cq-input quantity-input" type="number" value="{{quantity}}" bindinput="onQuantityInput" placeholder="数量" />
+        <button class="cq-button cq-button--secondary quantity-button" size="mini" bindtap="increaseQuantity" disabled="{{product && product.stock <= 0}}">+</button>
+      </view>
+    </view>
+
+    <view class="cq-divider amount-summary">
+      <view><text class="cq-muted">购买数量</text><text>{{quantity}}</text></view>
+      <view><text class="cq-muted">商品金额</text><text>¥{{product_amount_yuan}}</text></view>
+      <view><text class="cq-muted">配送费</text><text>¥{{delivery_fee_yuan}}</text></view>
+      <view class="pay-row"><text>应付金额</text><text class="cq-price">¥{{pay_amount_yuan}}</text></view>
+    </view>
+
+    <view class="cq-divider section">
+      <view class="section-label">履约方式</view>
+      <view class="option-row">
+        <button class="cq-button e2e-fulfillment-store {{pickup_type === 'store' ? 'cq-button--selected' : 'cq-button--secondary'}}" data-testid="fulfillment-store" size="mini" data-type="store" bindtap="selectPickupType">到店自提</button>
+        <button class="cq-button e2e-fulfillment-delivery {{pickup_type === 'delivery' ? 'cq-button--selected' : 'cq-button--secondary'}}" data-testid="fulfillment-delivery" size="mini" data-type="delivery" bindtap="selectPickupType">门店配送</button>
+      </view>
+    </view>
+
+    <view class="cq-divider section">
+      <view class="section-label">当前社区</view>
+      <view class="cq-muted">{{selectedCommunity ? selectedCommunity.name : (community_id || '请选择社区')}}</view>
+      <button class="cq-button cq-button--secondary inline-action" size="mini" bindtap="chooseCommunity">选择社区</button>
+    </view>
+
+    <view class="cq-divider section">
+      <view class="section-label">自提点 / 发货点</view>
+      <view>{{selectedPickupStore ? selectedPickupStore.name : '请选择自提点'}}</view>
+      <view wx:if="{{selectedPickupStore}}" class="cq-muted pickup-meta">{{selectedPickupStore.address}} {{selectedPickupStore.phone}}</view>
+      <view class="option-row">
+        <button class="cq-button cq-button--secondary" size="mini" bindtap="choosePickupStore">选择自提点</button>
+        <button wx:if="{{selectedPickupStore}}" class="cq-button cq-button--secondary" size="mini" bindtap="copyPickupAddress">复制地址</button>
+        <button wx:if="{{selectedPickupStore}}" class="cq-button cq-button--secondary" size="mini" bindtap="copyNavigationUrl">导航链接</button>
+      </view>
+    </view>
+
+    <view wx:if="{{pickup_type === 'delivery'}}" class="section delivery-section">
+      <view class="cq-muted delivery-hint">{{deliveryRule.notice || '当前为门店配送，暂不接第三方配送。'}}</view>
+      <view class="cq-muted delivery-hint">配送范围：{{deliveryRule.service_radius_text || '配送范围以门店确认为准'}}</view>
+      <view class="cq-muted delivery-hint">配送费：¥{{delivery_fee_yuan}}</view>
+      <view wx:if="{{deliveryRule.free_threshold_cents !== null}}" class="cq-muted delivery-hint">免配送费门槛：¥{{deliveryRule.free_threshold_yuan}}</view>
+      <view class="section-label">配送时段</view>
+      <view class="window-list">
+        <button wx:for="{{delivery_time_windows}}" wx:key="code" class="cq-button e2e-delivery-window {{delivery_time_window_code === item.code ? 'cq-button--selected' : 'cq-button--secondary'}}" data-testid="delivery-window" size="mini" data-code="{{item.code}}" bindtap="selectDeliveryTimeWindow">{{item.label}} {{item.start_time}}-{{item.end_time}}</button>
+      </view>
+      <input class="cq-input delivery-input e2e-receiver-name" data-testid="receiver-name" data-field="receiver_name" value="{{receiver_name}}" bindinput="onInput" placeholder="收货人姓名" />
+      <input class="cq-input delivery-input e2e-receiver-phone" data-testid="receiver-phone" data-field="receiver_phone" value="{{receiver_phone}}" bindinput="onInput" placeholder="手机号" />
+      <input class="cq-input delivery-input e2e-receiver-address" data-testid="receiver-address" data-field="receiver_address" value="{{receiver_address}}" bindinput="onInput" placeholder="收货地址" />
+    </view>
+    <view wx:else class="cq-muted section">到店自提：提交校验需要先选择自提点。</view>
+    <view wx:if="{{submit_hint}}" class="cq-muted submit-hint">{{submit_hint}}</view>
+    <state-panel wx:if="{{error}}" state="error" message="{{error}}" />
+  </view>
+  <view class="cq-action-bar">
+    <button class="cq-button cq-button--primary submit-button e2e-checkout-submit" data-testid="checkout-submit" loading="{{submitting}}" disabled="{{submitting || (product && product.stock <= 0)}}" bindtap="submit">{{submitting ? '提交中...' : '提交并 MOCK 支付'}}</button>
   </view>
 </view>

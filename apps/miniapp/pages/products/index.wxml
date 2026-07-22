@@ -1,1 +1,31 @@
-<view class="page"><view class="top"><view class="location" bindtap="chooseCommunity">{{selectedCommunity ? selectedCommunity.name : '请选择社区'}}</view><button size="mini" bindtap="goCart">购物车 {{cartCount}}</button></view><view class="search"><input placeholder="搜索社区好物" value="{{keyword}}" bindinput="onKeywordInput"/><button bindtap="onSearch">搜索</button></view><view wx:if="{{!products.length && !loading}}" class="empty">暂无可购商品</view><view wx:for="{{products}}" wx:key="product_id" class="card" bindtap="goDetail" data-id="{{item.product_id}}"><image wx:if="{{item.cover_image}}" src="{{item.cover_image}}" mode="aspectFill" class="cover" /><view class="info"><view class="name">{{item.name}}</view><view class="price">¥{{item.price_yuan}}</view><view class="meta">{{item.stock_label}}</view><view wx:if="{{item.has_active_group_buy}}" class="tag">可参与社区团购</view></view><view class="actions"><button size="mini" catchtap="addCart" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">加入购物车</button><button size="mini" catchtap="goNormalBuy" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">{{item.out_of_stock ? '库存不足' : '直接下单'}}</button></view></view></view>
+<view class="cq-page page">
+  <view class="cq-card top">
+    <view class="location" bindtap="chooseCommunity">
+      <view class="cq-muted location-label">当前社区</view>
+      <view class="location-name">{{selectedCommunity ? selectedCommunity.name : '请选择社区'}}</view>
+    </view>
+    <button class="cq-button cq-button--secondary cart-button" size="mini" bindtap="goCart">购物车 {{cartCount}}</button>
+  </view>
+  <view class="search">
+    <input class="cq-input search-input" placeholder="搜索社区好物" value="{{keyword}}" bindinput="onKeywordInput"/>
+    <button class="cq-button cq-button--primary search-button" bindtap="onSearch">搜索</button>
+  </view>
+  <state-panel wx:if="{{loading && !products.length}}" state="loading" message="正在加载商品…" />
+  <state-panel wx:elif="{{error}}" state="error" message="{{error}}" retryable bind:retry="loadProducts" />
+  <state-panel wx:elif="{{!products.length}}" state="empty" message="暂无可购商品" />
+  <view wx:else class="product-list">
+    <view wx:for="{{products}}" wx:key="product_id" class="cq-card product-card" bindtap="goDetail" data-id="{{item.product_id}}">
+      <view class="product-cover"><media-thumb src="{{item.cover_image}}" category-index="{{index}}" /></view>
+      <view class="product-info">
+        <view class="product-name">{{item.name}}</view>
+        <view class="cq-price product-price">¥{{item.price_yuan}}</view>
+        <view class="cq-muted product-meta">{{item.stock_label}}</view>
+        <view wx:if="{{item.has_active_group_buy}}" class="cq-chip product-tag">可参与社区团购</view>
+      </view>
+      <view class="product-actions">
+        <button class="cq-button cq-button--secondary" size="mini" catchtap="addCart" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">加入购物车</button>
+        <button id="product-normal-buy-{{item.product_id}}" class="cq-button cq-button--primary e2e-product-normal-buy" data-testid="product-normal-buy" size="mini" catchtap="goNormalBuy" data-id="{{item.product_id}}" disabled="{{item.out_of_stock}}">{{item.out_of_stock ? '库存不足' : '直接下单'}}</button>
+      </view>
+    </view>
+  </view>
+</view>

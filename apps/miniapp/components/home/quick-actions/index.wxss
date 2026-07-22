@@ -1,0 +1,5 @@
+.quick-actions { display: grid; grid-template-columns: 1fr; gap: 16rpx; margin-top: 38rpx; padding-bottom: 24rpx; }
+.quick-action { display: flex; align-items: center; min-width: 0; padding: 22rpx 24rpx; border-radius: 24rpx; }
+.quick-icon { width: 66rpx; height: 66rpx; margin-right: 20rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 25rpx; font-weight: 700; flex: none; }
+.quick-title { font-size: 27rpx; font-weight: 600; }
+.quick-desc { margin-top: 5rpx; font-size: 21rpx; }

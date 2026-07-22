@@ -1,0 +1,17 @@
+<view class="media-thumb">
+  <image
+    wx:if="{{currentSrc}}"
+    class="media-thumb__image"
+    src="{{currentSrc}}"
+    mode="{{mode}}"
+    binderror="onImageError"
+  />
+  <view wx:else class="media-thumb__fallback">
+    <image
+      class="media-thumb__sprite"
+      src="{{fallbackSource}}"
+      style="left: {{fallbackOffset}};"
+      mode="scaleToFill"
+    />
+  </view>
+</view>

@@ -18,18 +18,23 @@ function decorateProduct(product) {
   };
 }
 Page({
-  data: { product: null, selectedCommunity: null },
+  data: { product: null, productId: "", selectedCommunity: null, loading: true, error: "" },
   onLoad(options) {
-    this.setData({ selectedCommunity: getSelectedCommunity() });
+    this.setData({ selectedCommunity: getSelectedCommunity(), productId: options.id });
     this.loadProduct(options.id);
   },
   onShow() {
     this.setData({ selectedCommunity: getSelectedCommunity() });
   },
   loadProduct(id) {
-    return request({ url: `/api/products/${id}` }).then((product) =>
-      this.setData({ product: decorateProduct(product) }),
-    );
+    this.setData({ loading: true, error: "" });
+    return request({ url: `/api/products/${id}` })
+      .then((product) => this.setData({ product: decorateProduct(product) }))
+      .catch((error) => this.setData({ error: error.message || "商品加载失败" }))
+      .finally(() => this.setData({ loading: false }));
+  },
+  retryProduct() {
+    return this.loadProduct(this.data.productId);
   },
   addCart() {
     const p = this.data.product;

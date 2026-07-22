@@ -5,17 +5,32 @@ function randomId() {
   return `wd-${Date.now().toString(36)}-${bytes}`;
 }
 function selectionKey(ids) { return ids.slice().sort().join('|'); }
+function withdrawalStatusTone(status) {
+  const value = String(status || '').toLowerCase();
+  if (value.includes('reject') || value.includes('fail')) return 'danger';
+  if (value.includes('process') || value.includes('complete') || value.includes('paid')) return 'success';
+  if (value.includes('approve')) return 'brand';
+  if (value.includes('pending')) return 'warning';
+  return 'neutral';
+}
 Page({
-  data: { balance: 0, items: [], selected: {}, selectedTotal: 0, withdrawals: [], submitting: false, pendingRequestId: '', notice: '提交后由后台人工审核；审核通过后由工作人员线下处理，本页面不代表自动到账。' },
+  data: { balance: 0, items: [], selected: {}, selectedTotal: 0, withdrawals: [], loading: false, error: '', submitting: false, pendingRequestId: '', notice: '提交后由后台人工审核；审核通过后由工作人员线下处理，本页面不代表自动到账。' },
   onLoad() { this.restorePendingRequest(); this.load(); },
   restorePendingRequest() {
     const pending = wx.getStorageSync(STORAGE_KEY);
     if (pending && pending.client_request_id) this.setData({ pendingRequestId: pending.client_request_id });
   },
   async load() {
-    const commissions = await request({ url: '/api/leaders/me/withdrawable-commissions' });
-    const withdrawals = await request({ url: '/api/leaders/me/withdrawals' });
-    this.setData({ balance: commissions.available_balance_cents || 0, items: commissions.items || [], withdrawals: withdrawals || [] });
+    this.setData({ loading: true, error: '' });
+    try {
+      const commissions = await request({ url: '/api/leaders/me/withdrawable-commissions' });
+      const withdrawals = await request({ url: '/api/leaders/me/withdrawals' });
+      this.setData({ balance: commissions.available_balance_cents || 0, items: commissions.items || [], withdrawals: (withdrawals || []).map((item) => ({ ...item, theme_status_tone: withdrawalStatusTone(item.status || item.status_text) })) });
+    } catch (error) {
+      this.setData({ error: error.message || '提现信息加载失败' });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
   ensureRequestId(ids) {
     const key = selectionKey(ids);
@@ -50,3 +65,5 @@ Page({
   },
   yuan(e) { return ((e || 0) / 100).toFixed(2); }
 });
+
+module.exports = { selectionKey, withdrawalStatusTone };

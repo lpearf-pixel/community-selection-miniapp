@@ -1,1 +1,8 @@
-{"navigationBarTitleText":"今日开团"}
+{
+  "navigationBarTitleText": "今日开团",
+  "usingComponents": {
+    "state-panel": "/components/ui/state-panel/index",
+    "media-thumb": "/components/ui/media-thumb/index",
+    "status-pill": "/components/ui/status-pill/index"
+  }
+}

@@ -1,14 +1,30 @@
-<view class="page">
-  <view class="notice">{{notice}}</view>
-  <view class="card">可提现开团服务奖励：¥{{balance / 100}}</view>
-  <view class="section-title">选择整笔奖励</view>
-  <block wx:for="{{items}}" wx:key="commission_id">
-    <view class="row" bindtap="toggle" data-id="{{item.commission_id}}">
+<view class="cq-page page">
+  <view class="cq-card cq-tone-warning notice-card">{{notice}}</view>
+  <view class="cq-card balance-card"><view class="cq-muted">可提现开团服务奖励</view><view class="cq-price balance-amount">¥{{balance / 100}}</view></view>
+  <state-panel wx:if="{{loading && !items.length}}" state="loading" message="正在加载可提现奖励…" />
+  <state-panel wx:if="{{error}}" state="error" message="{{error}}" retryable bind:retry="load" />
+
+  <view class="cq-section-title section-title">选择整笔奖励</view>
+  <state-panel wx:if="{{!loading && !items.length}}" state="empty" message="暂无可提现奖励" />
+  <view wx:else class="commission-list">
+    <view wx:for="{{items}}" wx:key="commission_id" class="cq-card commission-row" bindtap="toggle" data-id="{{item.commission_id}}">
       <checkbox checked="{{selected[item.commission_id]}}" />
-      <view class="info"><view>{{item.product_name}} / {{item.order_no}}</view><view class="muted">{{item.community_name}} ¥{{item.final_amount_cents / 100}}</view></view>
+      <view class="commission-info"><view class="commission-name">{{item.product_name}} / {{item.order_no}}</view><view class="cq-muted commission-meta">{{item.community_name}}</view></view>
+      <view class="cq-price">¥{{item.final_amount_cents / 100}}</view>
     </view>
-  </block>
-  <button loading="{{submitting}}" disabled="{{submitting || selectedTotal <= 0}}" bindtap="submit">提交人工审核（¥{{selectedTotal / 100}}）</button>
-  <view class="section-title">提现记录</view>
-  <block wx:for="{{withdrawals}}" wx:key="withdrawal_id"><view class="record">¥{{item.amount_cents / 100}} - {{item.status_text}}<view class="muted">{{item.created_at}}</view></view></block>
+  </view>
+
+  <view class="cq-section-title section-title">提现记录</view>
+  <view class="withdrawal-list">
+    <state-panel wx:if="{{!withdrawals.length}}" state="empty" message="暂无提现记录" />
+    <view wx:for="{{withdrawals}}" wx:key="withdrawal_id" class="cq-card withdrawal-record">
+      <view><view class="cq-price withdrawal-amount">¥{{item.amount_cents / 100}}</view><view class="cq-muted withdrawal-time">{{item.created_at}}</view></view>
+      <status-pill text="{{item.status_text}}" tone="{{item.theme_status_tone}}" />
+    </view>
+  </view>
+
+  <view class="cq-action-bar">
+    <view class="selected-total">已选 <text class="cq-price">¥{{selectedTotal / 100}}</text></view>
+    <button class="cq-button cq-button--primary submit-button" loading="{{submitting}}" disabled="{{submitting || selectedTotal <= 0}}" bindtap="submit">提交人工审核</button>
+  </view>
 </view>

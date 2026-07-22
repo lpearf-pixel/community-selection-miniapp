@@ -1,15 +1,27 @@
-<view class="page" wx:if="{{groupBuy}}">
-  <view class="name">{{groupBuy.product.name}}</view>
-  <view class="price">¥{{groupBuy.price_cents / 100}}</view>
-  <view class="meta">当前状态：{{groupBuy.status_text}}</view>
-  <view class="meta">成团目标：满 {{groupBuy.target_count}} 份成团</view>
-  <view class="meta">已支付有效份数：{{groupBuy.paid_quantity}}</view>
-  <view class="meta">还差 {{groupBuy.remaining_quantity}} 份成团</view>
-  <view class="meta">截止时间：{{groupBuy.end_time}}</view>
-  <view class="meta" wx:if="{{groupBuy.manual_process_tip}}">{{groupBuy.manual_process_tip}}</view>
-  <view class="meta" wx:if="{{groupBuy.community}}">社区：{{groupBuy.community.name}}</view>
-  <button type="primary" bindtap="join" disabled="{{!groupBuy.can_join}}">{{groupBuy.join_button_text}}</button>
-  <button open-type="share">分享团购</button>
+<view class="cq-page page">
+  <block wx:if="{{groupBuy}}">
+    <view class="group-hero"><media-thumb src="{{groupBuy.product.cover_image}}" /></view>
+    <view class="cq-card group-panel">
+      <view class="group-heading">
+        <view class="group-name">{{groupBuy.product.name}}</view>
+        <status-pill text="{{groupBuy.status_text}}" tone="{{groupBuy.status_tone}}" />
+      </view>
+      <view class="cq-price group-price">¥{{groupBuy.price_cents / 100}}</view>
+      <view class="group-progress">
+        <view class="cq-muted">成团目标</view><view>满 {{groupBuy.target_count}} 份成团</view>
+        <view class="cq-muted">已支付有效份数</view><view>{{groupBuy.paid_quantity}} 份</view>
+        <view class="cq-muted">距离成团</view><view>还差 {{groupBuy.remaining_quantity}} 份</view>
+        <view class="cq-muted">截止时间</view><view>{{groupBuy.end_time}}</view>
+        <view wx:if="{{groupBuy.community}}" class="cq-muted">社区</view><view wx:if="{{groupBuy.community}}">{{groupBuy.community.name}}</view>
+      </view>
+      <view wx:if="{{groupBuy.manual_process_tip}}" class="cq-chip process-tip">{{groupBuy.manual_process_tip}}</view>
+    </view>
+    <view class="cq-action-bar group-actions">
+      <button class="cq-button cq-button--primary e2e-group-join" data-testid="group-join" bindtap="join" disabled="{{!groupBuy.can_join}}">{{groupBuy.join_button_text}}</button>
+      <button class="cq-button cq-button--secondary" open-type="share">分享团购</button>
+    </view>
+  </block>
+  <state-panel wx:elif="{{loading}}" state="loading" message="正在加载团购…" />
+  <state-panel wx:elif="{{error}}" state="error" message="{{error}}" retryable bind:retry="retryGroupBuy" />
+  <state-panel wx:else state="empty" message="团购不存在或已结束" />
 </view>
-<view class="page" wx:elif="{{loading}}">加载中...</view>
-<view class="page" wx:else>团购不存在或已结束</view>

@@ -1,0 +1,17 @@
+.group-showcase { margin-top: 38rpx; }
+.section-heading { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18rpx; }
+.section-hint { margin-top: 6rpx; font-size: 23rpx; }
+.section-mark { padding-bottom: 4rpx; font-size: 22rpx; }
+.state-card { padding: 36rpx 24rpx; text-align: center; font-size: 25rpx; }
+.retry-button { width: 180rpx; margin-top: 20rpx; font-size: 24rpx; line-height: 2.2; }
+.group-list { display: flex; flex-direction: column; gap: 18rpx; }
+.group-card { display: flex; min-width: 0; overflow: hidden; }
+.group-cover { width: 190rpx; min-height: 190rpx; flex: none; }
+.catalog-sprite-window { position: relative; height: 190rpx; overflow: hidden; }
+.group-sprite-image { position: absolute; top: -75%; width: 500%; height: 250%; display: block; }
+.group-body { flex: 1; min-width: 0; padding: 22rpx; }
+.group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 29rpx; font-weight: 600; }
+.group-community { margin-top: 12rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 23rpx; }
+.group-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; margin-top: 22rpx; }
+.group-price { font-size: 30rpx; font-weight: 700; }
+.group-progress { flex: none; font-size: 21rpx; }

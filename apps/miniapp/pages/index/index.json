@@ -1,3 +1,11 @@
 {
-  "navigationBarTitleText": "社区甄选"
+  "navigationBarTitleText": "春华秋实",
+  "usingComponents": {
+    "brand-hero": "/components/home/brand-hero/index",
+    "category-grid": "/components/home/category-grid/index",
+    "product-showcase": "/components/home/product-showcase/index",
+    "group-buy-showcase": "/components/home/group-buy-showcase/index",
+    "quick-actions": "/components/home/quick-actions/index"
+  }
 }
+

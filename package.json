@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter @community-selection/api --filter @community-selection/admin dev",
     "build": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/api build && pnpm --filter @community-selection/admin build",
@@ -21,7 +24,22 @@
     "db:backup": "bash scripts/pg-backup.sh",
     "db:restore": "bash scripts/pg-restore.sh",
     "report:stage": "tsx scripts/generate-stage-report-entry.ts",
-    "report:publish": "tsx scripts/publish-stage-report.ts"
+    "report:publish": "tsx scripts/publish-stage-report.ts",
+    "verify:l49:static": "tsx scripts/verify-l49-brand-home-local.ts",
+    "test:miniapp:theme": "node --test scripts/miniapp-theme/*.test.cjs",
+    "verify:miniapp:theme": "tsx scripts/verify-miniapp-theme-local.ts",
+    "miniapp:theme:activate": "node scripts/miniapp-theme/activate-theme.cjs",
+    "test:miniapp:home-model": "node --test apps/miniapp/pages/index/home-model.test.cjs",
+    "setup:miniapp:project": "node scripts/miniapp-e2e/setup-miniapp-project.cjs",
+    "setup:miniapp:e2e": "pnpm --dir scripts/miniapp-e2e --ignore-workspace install --frozen-lockfile",
+    "test:miniapp:e2e-lib": "node --test scripts/miniapp-e2e/*.test.cjs",
+    "test:miniapp:e2e-framework": "vitest run packages/miniapp-testkit/test && vitest run --config tests/miniapp-e2e/vitest.config.ts && tsc --noEmit -p packages/miniapp-testkit/tsconfig.json && tsc --noEmit -p tests/miniapp-e2e/tsconfig.json",
+    "miniapp:theme:check": "node scripts/miniapp-theme/activate-theme.cjs --check chunhuaqiushi",
+    "e2e:miniapp:home": "node scripts/miniapp-e2e/container-runner.cjs",
+    "e2e:miniapp:theme": "node scripts/miniapp-e2e/container-runner.cjs --suite theme",
+    "e2e:miniapp:business": "node scripts/miniapp-e2e/container-runner.cjs --suite business",
+    "e2e:miniapp:home:click-only": "node scripts/miniapp-e2e/home-smoke.cjs",
+    "e2e:miniapp:stop": "node scripts/miniapp-e2e/container-cleanup.cjs"
   },
   "devDependencies": {
     "prisma": "6.19.3",

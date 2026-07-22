@@ -27,6 +27,7 @@ yarn-error.log*
 .vscode/
 
 # WeChat miniapp local/private files
+apps/miniapp/project.config.json
 apps/miniapp/project.private.config.json
 apps/miniapp/miniprogram_npm/
 

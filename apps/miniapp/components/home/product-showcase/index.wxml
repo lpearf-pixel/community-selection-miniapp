@@ -1,0 +1,42 @@
+<view class="showcase {{variant}}">
+  <view class="section-heading">
+    <view>
+      <view class="cq-section-title">{{title}}</view>
+      <view class="section-hint">{{hint}}</view>
+    </view>
+    <view class="section-mark">当季</view>
+  </view>
+  <view wx:if="{{loading && !items.length}}" class="cq-card state-card">正在挑选今日好物…</view>
+  <view wx:elif="{{error && !items.length}}" class="cq-card state-card">
+    <view>{{error}}</view>
+    <button class="retry-button" data-testid="home-products-retry" bindtap="retry">重新加载</button>
+  </view>
+  <view wx:elif="{{!items.length}}" class="cq-card state-card">今日商品正在准备中，稍后再来看看</view>
+  <scroll-view wx:else scroll-x enable-flex class="product-scroll">
+    <view class="product-row">
+      <view
+        wx:for="{{items}}"
+        wx:key="id"
+        class="cq-card product-card"
+        data-id="{{item.id}}"
+        data-testid="home-product-{{item.id}}"
+        bindtap="openProduct"
+      >
+        <image wx:if="{{item.coverImage}}" class="product-cover" src="{{item.coverImage}}" mode="aspectFill" />
+        <view wx:else class="product-cover catalog-sprite-window">
+          <image
+            class="product-sprite-image"
+            src="{{item.fallbackImage}}"
+            style="left: {{item.fallbackOffset}};"
+            mode="scaleToFill"
+          />
+        </view>
+        <view class="product-body">
+          <view class="product-name">{{item.name}}</view>
+          <view class="product-price">¥{{item.priceYuan}}</view>
+          <view class="product-stock {{item.outOfStock ? 'is-empty' : ''}}">{{item.stockLabel}}</view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

@@ -2,15 +2,25 @@ const { request, formatYuan } = require("../../utils/api");
 const { getSelectedCommunity } = require("../../utils/selection");
 const { addToCart, getCartCount } = require("../../utils/cart");
 
+function decodeKeyword(value) {
+  try {
+    return decodeURIComponent(value || "");
+  } catch (error) {
+    return String(value || "");
+  }
+}
+
 Page({
   data: {
     products: [],
     keyword: "",
     loading: false,
+    error: "",
     selectedCommunity: null,
     cartCount: 0,
   },
-  onLoad() {
+  onLoad(options = {}) {
+    this.setData({ keyword: decodeKeyword(options.keyword) });
     this.refreshSelection();
     this.loadProducts();
   },
@@ -34,7 +44,7 @@ Page({
     this.loadProducts();
   },
   loadProducts() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, error: "" });
     return request({
       url: "/api/products",
       params: { keyword: this.data.keyword },
@@ -54,6 +64,7 @@ Page({
           })),
         }),
       )
+      .catch((error) => this.setData({ error: error.message || "商品加载失败" }))
       .finally(() => this.setData({ loading: false }));
   },
   chooseCommunity() {

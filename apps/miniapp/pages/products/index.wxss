@@ -1,1 +1,19 @@
-.page{padding:24rpx;background:#f7f8fa;min-height:100vh}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16rpx}.search{display:flex;gap:16rpx;margin-bottom:20rpx}.search input{flex:1;background:#fff;border-radius:12rpx;padding:0 20rpx}.card{display:flex;gap:20rpx;background:#fff;border-radius:18rpx;padding:20rpx;margin-bottom:18rpx}.cover{width:160rpx;height:160rpx;border-radius:14rpx;background:#eee}.info{flex:1}.name{font-weight:600;color:#222}.price{color:#f5222d;font-size:36rpx;margin:12rpx 0}.meta{color:#666;font-size:24rpx}.tag{display:inline-block;margin-top:12rpx;color:#1677ff;background:#e6f4ff;border-radius:999rpx;padding:4rpx 14rpx;font-size:22rpx}.empty{text-align:center;color:#999;padding:80rpx 0}.actions{display:flex;flex-direction:column;gap:12rpx;align-self:center}button{align-self:center}
+.page { padding: 28rpx; }
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; padding: 20rpx 22rpx; }
+.location { min-width: 0; flex: 1; }
+.location-label { font-size: 22rpx; }
+.location-name { margin-top: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.cart-button { flex: none; margin-left: 16rpx; padding: 0 18rpx; }
+.search { display: flex; gap: 14rpx; margin-bottom: 24rpx; }
+.search-input { flex: 1; height: 76rpx; padding: 0 20rpx; }
+.search-button { width: 156rpx; height: 76rpx; font-size: 28rpx; }
+.product-list { display: flex; flex-direction: column; gap: 18rpx; }
+.product-card { display: flex; gap: 20rpx; align-items: center; padding: 20rpx; }
+.product-cover { width: 164rpx; height: 164rpx; overflow: hidden; flex: none; border-radius: var(--cq-radius-control); }
+.product-info { min-width: 0; flex: 1; }
+.product-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 31rpx; font-weight: 700; }
+.product-price { margin: 10rpx 0; font-size: 34rpx; }
+.product-meta { font-size: 24rpx; }
+.product-tag { margin-top: 12rpx; font-size: 21rpx; }
+.product-actions { display: flex; flex-direction: column; gap: 12rpx; flex: none; }
+.product-actions button { min-width: 150rpx; padding: 0 14rpx; font-size: 23rpx; }

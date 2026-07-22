@@ -1,1 +1,17 @@
-.page{padding:24rpx}.notice{padding:20rpx;background:#fff7e6;color:#ad6800;border-radius:12rpx}.card,.row,.record{margin-top:20rpx;padding:24rpx;background:#fff;border-radius:12rpx}.row{display:flex;gap:16rpx}.info{flex:1}.muted{color:#888;font-size:24rpx}.section-title{margin-top:28rpx;font-weight:600}button{margin-top:24rpx}
+.page { padding: 28rpx 28rpx 160rpx; }
+.notice-card { padding: 22rpx; line-height: 1.6; }
+.balance-card { margin-top: 18rpx; padding: 26rpx; }
+.balance-amount { margin-top: 10rpx; font-size: 44rpx; }
+.section-title { margin: 28rpx 0 14rpx; }
+.commission-list,
+.withdrawal-list { display: flex; flex-direction: column; gap: 16rpx; }
+.commission-row,
+.withdrawal-record { display: flex; align-items: center; gap: 16rpx; padding: 22rpx; }
+.commission-info { min-width: 0; flex: 1; }
+.commission-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.commission-meta { margin-top: 7rpx; font-size: 23rpx; }
+.withdrawal-record { justify-content: space-between; }
+.withdrawal-amount { font-size: 31rpx; }
+.withdrawal-time { margin-top: 7rpx; font-size: 23rpx; }
+.selected-total { min-width: 0; flex: 1; }
+.submit-button { width: 260rpx; flex: none; }

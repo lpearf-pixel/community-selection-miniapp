@@ -1,0 +1,16 @@
+.showcase { margin-top: 38rpx; }
+.section-heading { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18rpx; }
+.section-hint { margin-top: 6rpx; font-size: 23rpx; }
+.section-mark { padding-bottom: 4rpx; font-size: 22rpx; }
+.state-card { padding: 36rpx 24rpx; text-align: center; font-size: 25rpx; }
+.retry-button { width: 180rpx; margin-top: 20rpx; font-size: 24rpx; line-height: 2.2; }
+.product-scroll { width: 100%; white-space: nowrap; }
+.product-row { display: inline-flex; gap: 18rpx; padding: 2rpx 4rpx 14rpx; }
+.product-card { width: 276rpx; overflow: hidden; flex: none; }
+.product-cover { width: 276rpx; height: 210rpx; display: block; }
+.catalog-sprite-window { position: relative; overflow: hidden; }
+.product-sprite-image { position: absolute; top: -114%; width: 500%; height: 329%; display: block; }
+.product-body { padding: 20rpx; }
+.product-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 28rpx; font-weight: 600; }
+.product-price { margin-top: 12rpx; font-size: 30rpx; font-weight: 700; }
+.product-stock { margin-top: 10rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 21rpx; }
