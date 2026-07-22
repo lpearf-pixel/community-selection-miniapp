@@ -1,4 +1,4 @@
-name: Self-hosted runner connectivity
+name: PR quality gate
 
 on:
   pull_request:
@@ -8,21 +8,47 @@ permissions:
   contents: read
 
 concurrency:
-  group: runner-connectivity-${{ github.ref }}
+  group: pr-quality-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  connectivity:
+  quality:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 5
+    timeout-minutes: 45
     steps:
-      - name: Report runner context
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+
+      - name: Enable pnpm
         shell: bash
         run: |
           set -euo pipefail
-          echo "runner_name=${RUNNER_NAME}"
-          echo "runner_os=${RUNNER_OS}"
-          echo "runner_arch=${RUNNER_ARCH}"
-          echo "repository=${GITHUB_REPOSITORY}"
-          echo "event=${GITHUB_EVENT_NAME}"
-          test "${GITHUB_REPOSITORY}" = "lpearf-pixel/community-selection-miniapp"
+          corepack enable
+          corepack prepare pnpm@9.15.4 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        shell: bash
+        run: pnpm lint
+
+      - name: Typecheck
+        shell: bash
+        run: pnpm typecheck
+
+      - name: Test
+        shell: bash
+        run: pnpm test
+
+      - name: Build
+        shell: bash
+        run: pnpm build
