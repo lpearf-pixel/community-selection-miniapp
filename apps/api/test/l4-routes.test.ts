@@ -213,14 +213,17 @@ describe('L4 group-buy and order routes', () => {
     const orderServiceSource = readFileSync(new URL('../src/modules/order/order-service.ts', import.meta.url), 'utf8');
     expect(orderServiceSource.includes('const saleQuantity')).toBe(true);
     expect(orderServiceSource.includes('positiveInt(input.quantity')).toBe(true);
-    expect(orderServiceSource.includes('sale_quantity')).toBe(true);
+    expect(orderServiceSource.includes('quantity: saleQuantity')).toBe(true);
     expect(orderServiceSource.includes('saleQuantity')).toBe(true);
     expect(inventoryServiceSource.includes('stockDeductQuantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_deduct_quantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_quantity') || orderServiceSource.includes('stock_quantity: stockLock.stock_quantity')).toBe(true);
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
-    expect(serviceSource.includes('current_quantity: { increment: order.quantity }')).toBe(true);
-    expect(source.includes('refund.upsert')).toBe(true);
+    expect(serviceSource.includes('_sum: { quantity: true }')).toBe(true);
+    expect(serviceSource.includes('current_quantity: paidQuantity')).toBe(true);
+    const refundServiceSource = readFileSync(new URL('../src/services/refund-service.ts', import.meta.url), 'utf8');
+    expect(refundServiceSource.includes('where: { client_refund_id: input.client_refund_id }')).toBe(true);
+    expect(refundServiceSource.includes('tx.refund.create')).toBe(true);
     expect(source.includes('pay_amount_cents / groupBuy.price_cents')).toBe(false);
   });
 
