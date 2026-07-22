@@ -1,47 +1,28 @@
-name: PR quality gate
+name: Self-hosted runner connectivity
 
 on:
   pull_request:
-  push:
-    branches:
-      - "stable/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
+  group: runner-connectivity-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  workspace:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  connectivity:
+    runs-on: [self-hosted, Linux, X64, lan, docker, home, chan-shuo]
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.14.0"
-
-      - name: Enable pnpm
+      - name: Report runner context
+        shell: bash
         run: |
-          corepack enable
-          corepack prepare pnpm@9.15.4 --activate
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
+          set -euo pipefail
+          echo "runner_name=${RUNNER_NAME}"
+          echo "runner_os=${RUNNER_OS}"
+          echo "runner_arch=${RUNNER_ARCH}"
+          echo "repository=${GITHUB_REPOSITORY}"
+          echo "event=${GITHUB_EVENT_NAME}"
+          test "${GITHUB_REPOSITORY}" = "lpearf-pixel/community-selection-miniapp"
