@@ -22,7 +22,7 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
 
 export function resolveProjectE2eConfig(env: NodeJS.ProcessEnv = process.env): ProjectE2eConfig {
   const testRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const repoRoot = path.resolve(testRoot, '../../..');
+  const repoRoot = path.resolve(testRoot, '../..');
   const apiBaseUrl = String(env.MINIAPP_E2E_API_BASE_URL ?? 'http://127.0.0.1:13080')
     .replace(/\/+$/, '');
   const config: ProjectE2eConfig = {
