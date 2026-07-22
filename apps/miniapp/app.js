@@ -3,6 +3,7 @@ const activeTheme = require('./themes/active.generated');
 
 App({
   globalData: {
+    e2eContractVersion: 'miniapp-e2e-v2',
     user: null,
     theme: activeTheme,
   },

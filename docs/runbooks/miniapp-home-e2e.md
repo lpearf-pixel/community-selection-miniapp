@@ -13,7 +13,7 @@
    ```
 
    生成的 `apps/miniapp/project.config.json` 已被 Git 忽略；仓库只保留不含真实 AppID 的 `project.config.example.json`。
-4. 从仓库根目录执行 `pnpm setup:miniapp:e2e`。该命令只安装点击框架自己的依赖，不修改根 `pnpm-lock.yaml`。
+4. 从仓库根目录执行 `pnpm install --frozen-lockfile`。业务测试框架位于 workspace 的 `packages/miniapp-testkit`，项目业务套件位于 `tests/miniapp-e2e`。仅运行旧首页/主题脚本时，仍可使用 `pnpm setup:miniapp:e2e` 安装其兼容依赖。
 5. 确认宿主机端口 `13080` 和 `15432` 未被其他程序占用。
 
 ## 运行
@@ -98,6 +98,14 @@ pnpm e2e:miniapp:stop
 
 ## 交易业务闭环点击测试
 
+业务点击已迁移到独立测试框架：通用 Driver、超时、有限重试、Page Object 基类、生命周期和报告位于 `packages/miniapp-testkit`；本项目的 API 夹具、页面对象与场景位于 `tests/miniapp-e2e`。旧 `scripts/miniapp-e2e/business-flow.cjs` 不再是执行入口。
+
+在 Linux 或不启动微信开发者工具的环境中，先运行框架门禁：
+
+```bash
+pnpm test:miniapp:e2e-framework
+```
+
 完成首页冒烟后运行：
 
 ```bash
@@ -106,7 +114,7 @@ pnpm e2e:miniapp:business 2>&1 | tee /tmp/miniapp-business-e2e.log
 echo "miniapp_business_e2e_exit=$?"
 ```
 
-该命令使用现有 Docker 测试 API 和 `MOCK_WECHAT_PAY=true`，依次执行：
+该命令启动现有 Docker 测试 API，随后使用串行 Vitest、Node.js 22+ 和 `@weapp-vite/miniprogram-automator` 执行一次共享会话。启动时会核验源码契约 `miniapp-e2e-v2`，开发者工具若仍加载旧代码会立即报 `MINIAPP_SOURCE_CONTRACT_MISMATCH`，而不是继续点击。测试使用 `MOCK_WECHAT_PAY=true`，依次执行：
 
 1. 普通购买到店自提：商品列表点击直接下单、确认订单、MOCK 支付、备货、待自提、已自提、完成。
 2. 普通购买门店配送：点击选择配送、配送时段与地址，MOCK 支付、备货、待配送、已配送、完成。
@@ -127,9 +135,19 @@ MINIAPP_E2E_KEEP_DATA=true pnpm e2e:miniapp:business
 
 ```text
 ordinary_purchase_flow=passed
+ordinary_delivery_flow=passed
 group_buy_flow=passed
 miniapp_business_e2e_exit=0
 ```
+
+过程日志逐步输出 JSON Lines；失败时保留首个业务错误，并附加当前路由、WXML、截图和清理错误。默认报告文件为：
+
+```text
+/tmp/miniapp-e2e-<run-id>-failure.png
+/tmp/miniapp-e2e-<run-id>-report.json
+```
+
+基础设施读取允许有限重试；点击、输入提交、状态推进和业务断言不会自动重放，以免重复下单或掩盖真实失败。
 
 边界说明：用户侧浏览、选择、下单和售后申请使用微信页面真实点击；微信支付、门店履约状态和退款处理属于跨角色动作，由测试环境的 MOCK/受控接口推进。该命令不证明真实商户支付、微信支付回调或真实退款已经接通，上线前仍需真机 0.01 元验证。
 

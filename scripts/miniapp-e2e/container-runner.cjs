@@ -103,21 +103,42 @@ async function main() {
     };
     const suiteIndex = process.argv.indexOf('--suite');
     const suite = suiteIndex >= 0 ? process.argv[suiteIndex + 1] : 'home';
-    const suiteScripts = {
-      home: 'home-smoke.cjs',
-      theme: 'theme-smoke.cjs',
-      business: 'business-flow.cjs',
+    const suiteCommands = {
+      home: {
+        command: process.execPath,
+        args: [path.join(__dirname, 'home-smoke.cjs')],
+        env: {},
+      },
+      theme: {
+        command: process.execPath,
+        args: [path.join(__dirname, 'theme-smoke.cjs')],
+        env: {},
+      },
+      business: {
+        command: process.execPath,
+        args: [
+          require.resolve('vitest/vitest.mjs'),
+          'run',
+          '--config',
+          path.join(config.repoRoot, 'tests/miniapp-e2e/vitest.config.ts'),
+          '--reporter=verbose',
+        ],
+        env: {
+          MINIAPP_E2E_REAL: '1',
+          MOCK_WECHAT_PAY: process.env.MOCK_WECHAT_PAY || 'true',
+        },
+      },
     };
-    if (!suiteScripts[suite]) throw new Error('Unknown Mini Program E2E suite: ' + suite);
-    const smokeScript = suiteScripts[suite];
-    const clickResult = spawnSync(process.execPath, [path.join(__dirname, smokeScript)], {
+    if (!suiteCommands[suite]) throw new Error('Unknown Mini Program E2E suite: ' + suite);
+    const suiteCommand = suiteCommands[suite];
+    const clickResult = spawnSync(suiteCommand.command, suiteCommand.args, {
       cwd: config.repoRoot,
-      env: clickEnv,
+      env: { ...clickEnv, ...suiteCommand.env },
       stdio: 'inherit',
     });
-    if (clickResult.error) throw new Error(`Unable to start click smoke: ${clickResult.error.message}`);
+    if (clickResult.error) throw new Error(`Unable to start ${suite} suite: ${clickResult.error.message}`);
     if (clickResult.status !== 0) {
-      throw new Error(`Mini Program click smoke exited with status ${clickResult.status}`);
+      throw new Error(`Mini Program ${suite} suite exited with status ${clickResult.status}`);
     }
 
     process.stdout.write('Containerized Mini Program ' + suite + ' smoke passed.\n');

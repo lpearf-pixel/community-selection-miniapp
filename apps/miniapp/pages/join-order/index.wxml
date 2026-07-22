@@ -6,7 +6,7 @@
     <view class="field-label">手机号</view>
     <input class="cq-input form-input" data-testid="group-order-phone" placeholder="手机号" value="{{receiver_phone}}" bindinput="onPhoneInput" />
     <view class="field-label">购买数量</view>
-    <input class="cq-input form-input" type="number" placeholder="数量" value="{{quantity}}" bindinput="onQuantityInput" />
+    <input class="cq-input form-input" data-testid="group-order-quantity" type="number" placeholder="数量" value="{{quantity}}" bindinput="onQuantityInput" />
   </view>
   <view class="cq-action-bar">
     <button class="cq-button cq-button--primary primary-action" data-testid="group-order-submit" bindtap="submit">提交订单</button>

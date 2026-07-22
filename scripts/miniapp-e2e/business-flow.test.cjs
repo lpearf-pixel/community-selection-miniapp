@@ -392,5 +392,9 @@ test('package and container runner expose the business click suite', () => {
     'node scripts/miniapp-e2e/container-runner.cjs --suite business',
   );
   const runner = read('scripts/miniapp-e2e/container-runner.cjs');
-  assert.match(runner, /business:\s*['"]business-flow\.cjs['"]/);
+  assert.match(runner, /MINIAPP_E2E_REAL:\s*['"]1['"]/);
+  assert.match(runner, /require\.resolve\(['"]vitest\/vitest\.mjs['"]\)/);
+  assert.match(runner, /tests\/miniapp-e2e\/vitest\.config\.ts/);
+  assert.doesNotMatch(runner, /business:\s*['"]business-flow\.cjs['"]/);
 });
+

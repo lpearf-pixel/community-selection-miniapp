@@ -3,17 +3,17 @@
   <view class="cq-muted page-hint">选择支持开团的商品和社区，设置最低成团人数/数量后发起。</view>
   <view class="cq-card form-card">
     <view class="field-label">团购商品</view>
-    <picker mode="selector" range="{{products}}" range-key="name" value="{{productIndex}}" bindchange="onProductChange">
+    <picker data-testid="group-product-picker" mode="selector" range="{{products}}" range-key="name" value="{{productIndex}}" bindchange="onProductChange">
       <view class="cq-input picker-field">{{products[productIndex].name || '请选择支持开团的商品'}}</view>
     </picker>
     <view class="field-label">社区</view>
-    <picker mode="selector" range="{{communities}}" range-key="name" value="{{communityIndex}}" bindchange="onCommunityChange">
+    <picker data-testid="group-community-picker" mode="selector" range="{{communities}}" range-key="name" value="{{communityIndex}}" bindchange="onCommunityChange">
       <view class="cq-input picker-field">{{communities[communityIndex].name || '请选择社区'}}</view>
     </picker>
     <view class="field-label">最低成团人数</view>
-    <input class="cq-input number-field" type="number" value="{{min_people}}" bindinput="onMinPeopleInput" />
+    <input class="cq-input number-field" data-testid="group-min-people" type="number" value="{{min_people}}" bindinput="onMinPeopleInput" />
     <view class="field-label">最低成团数量</view>
-    <input class="cq-input number-field" type="number" value="{{min_quantity}}" bindinput="onMinQuantityInput" />
+    <input class="cq-input number-field" data-testid="group-min-quantity" type="number" value="{{min_quantity}}" bindinput="onMinQuantityInput" />
   </view>
   <view class="cq-action-bar">
     <button class="cq-button cq-button--primary primary-action" data-testid="group-create-submit" loading="{{loading}}" bindtap="submit">提交开团</button>
