@@ -94,8 +94,13 @@ export class ScenarioContext {
     await this.session.callWxMethod('setStorageSync', 'selected_pickup_store', this.fixture.pickupStore);
   }
 
-  async setUser(openid: string, name: string, phone: string): Promise<void> {
-    this.testOpenids.add(openid);
+  async setUser(
+    openid: string,
+    name: string,
+    phone: string,
+    options: { trackOrders?: boolean } = {},
+  ): Promise<void> {
+    if (options.trackOrders !== false) this.testOpenids.add(openid);
     await this.session.callWxMethod('setStorageSync', 'community_selection_user', {
       user_id: '',
       openid,

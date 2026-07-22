@@ -202,7 +202,10 @@ export class FixtureApi {
         const payload = await this.request('/api/me/orders?page_size=100', {
           headers: { 'x-openid': openid },
         });
-        for (const order of asItems(payload)) add({ id: String(order.id), openid });
+        for (const order of asItems(payload)) {
+          const id = String(order.order_id ?? order.id ?? '').trim();
+          if (id) add({ id, openid });
+        }
       } catch (error) {
         if (error instanceof FixtureApiError && error.status === 404) continue;
         throw error;

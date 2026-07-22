@@ -83,6 +83,22 @@ describe('FixtureApi', () => {
       .rejects.toBeInstanceOf(FixtureApiError);
   });
 
+  it('normalizes public order-list identifiers for cleanup discovery', async () => {
+    const api = new FixtureApi('http://127.0.0.1:13080', async () => response(200, {
+      success: true,
+      data: { items: [
+        { order_id: 'order-public-1' },
+        { id: 'order-legacy-2' },
+        { order_id: '' },
+      ] },
+    }));
+
+    await expect(api.discoverUserOrders([], ['buyer-openid'])).resolves.toEqual([
+      { id: 'order-public-1', openid: 'buyer-openid' },
+      { id: 'order-legacy-2', openid: 'buyer-openid' },
+    ]);
+  });
+
   it('locks store and delivery fulfillment sequences', () => {
     expect(STORE_SEQUENCE).toEqual(['preparing', 'ready', 'picked', 'completed']);
     expect(DELIVERY_SEQUENCE).toEqual(['preparing', 'ready', 'delivered', 'completed']);

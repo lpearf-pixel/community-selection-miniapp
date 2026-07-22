@@ -59,9 +59,10 @@ async function createParticipantOrder(
 
 export async function runGroupBuy(context: ScenarioContext) {
   await context.setUser(
-    `miniapp-business-group-leader-${context.runId}`,
+    'leader-openid',
     '测试开团人',
     '13800000001',
+    { trackOrders: false },
   );
   const detailPage = await context.pages.startGroup.create(
     context.fixture.product,

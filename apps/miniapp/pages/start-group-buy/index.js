@@ -78,26 +78,31 @@ Page({
     }
     this.setData({ loading: true });
     const apiBaseUrl = getApiBaseUrl();
-    wx.request({
-      url: `${apiBaseUrl}/api/group-buys`,
-      method: 'POST',
-      data: {
-        product_id: product.product_id || product.id,
-        community_id: community.community_id || community.id,
-        leader_openid: user.openid,
-        min_people: this.data.min_people,
-        min_quantity: this.data.min_quantity,
-        end_time: this.data.end_time,
-        pickup_time: this.data.pickup_time
-      },
-      success: (res) => {
-        if (res.data && res.data.success) {
-          wx.navigateTo({ url: `/pages/group-buy-detail/index?id=${res.data.data.id}` });
-        } else {
-          wx.showToast({ title: (res.data && res.data.message) || '发起失败', icon: 'none' });
+    return new Promise((resolve) => {
+      wx.request({
+        url: `${apiBaseUrl}/api/group-buys`,
+        method: 'POST',
+        data: {
+          product_id: product.product_id || product.id,
+          community_id: community.community_id || community.id,
+          leader_openid: user.openid,
+          min_people: this.data.min_people,
+          min_quantity: this.data.min_quantity,
+          end_time: this.data.end_time,
+          pickup_time: this.data.pickup_time
+        },
+        success: (res) => {
+          if (res.data && res.data.success) {
+            wx.navigateTo({ url: `/pages/group-buy-detail/index?id=${res.data.data.id}` });
+          } else {
+            wx.showToast({ title: (res.data && res.data.message) || '发起失败', icon: 'none' });
+          }
+        },
+        complete: () => {
+          this.setData({ loading: false });
+          resolve();
         }
-      },
-      complete: () => this.setData({ loading: false })
+      });
     });
   }
 });

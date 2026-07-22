@@ -11,13 +11,15 @@ interface RequestCall {
   method?: string;
   data?: Record<string, unknown>;
   success?: (response: unknown) => void;
+  fail?: (error: unknown) => void;
+  complete?: () => void;
 }
 
 interface PageHarness extends Record<string, unknown> {
   data: Record<string, unknown>;
   setData(patch: Record<string, unknown>): void;
   loadOptions(): void;
-  submit(): void;
+  submit(): Promise<void> | undefined;
 }
 
 function loadPage() {
@@ -27,6 +29,7 @@ function loadPage() {
     path.join(repoRoot, 'apps/miniapp/pages/start-group-buy/index.js'),
     'utf8',
   );
+  const navigateTo = vi.fn();
   vm.runInNewContext(source, {
     Date,
     require: (request: string) => {
@@ -40,7 +43,7 @@ function loadPage() {
     wx: {
       request: (options: RequestCall) => requests.push(options),
       showToast: vi.fn(),
-      navigateTo: vi.fn(),
+      navigateTo,
     },
   });
   if (!definition) throw new Error('Page definition was not registered');
@@ -51,12 +54,12 @@ function loadPage() {
       Object.assign(this.data, patch);
     },
   } as PageHarness;
-  return { page, requests };
+  return { navigateTo, page, requests };
 }
 
 describe('start group-buy Mini Program page', () => {
-  it('unwraps paginated options and submits canonical product and community IDs', () => {
-    const { page, requests } = loadPage();
+  it('unwraps paginated options and awaits canonical group creation', async () => {
+    const { navigateTo, page, requests } = loadPage();
 
     page.loadOptions();
     expect(requests).toHaveLength(2);
@@ -78,7 +81,8 @@ describe('start group-buy Mini Program page', () => {
       expect.objectContaining({ id: 'community-1', community_id: 'community-1' }),
     ]);
 
-    page.submit();
+    const submission = page.submit();
+    expect(typeof submission?.then).toBe('function');
     expect(requests[2]).toMatchObject({
       url: 'http://api.test/api/group-buys',
       method: 'POST',
@@ -88,5 +92,21 @@ describe('start group-buy Mini Program page', () => {
         leader_openid: 'leader-1',
       },
     });
+    requests[2].success?.({ data: { success: true, data: { id: 'group-1' } } });
+    requests[2].complete?.();
+    await submission;
+    expect(navigateTo).toHaveBeenCalledWith({
+      url: '/pages/group-buy-detail/index?id=group-1',
+    });
+  });
+
+  it('uses the seeded leader identity required by the API role check', () => {
+    const scenario = fs.readFileSync(
+      path.join(repoRoot, 'tests/miniapp-e2e/src/scenarios/group-buy.ts'),
+      'utf8',
+    );
+    expect(scenario).toContain("'leader-openid'");
+    expect(scenario).toContain('{ trackOrders: false }');
+    expect(scenario).not.toContain('miniapp-business-group-leader-');
   });
 });

@@ -80,4 +80,17 @@ describe('ScenarioContext storage isolation', () => {
       expect.objectContaining({ openid: 'participant-a', receiver_name: '参团A' }),
     );
   });
+
+  it('switches to a shared leader identity without widening cleanup discovery', async () => {
+    const { context } = createContext();
+
+    await context.setUser(
+      'leader-openid',
+      '测试开团人',
+      '13800000001',
+      { trackOrders: false },
+    );
+
+    expect(context.testOpenids).not.toContain('leader-openid');
+  });
 });

@@ -245,7 +245,7 @@ Page({
       group_buy_id: isGroupBuy ? this.data.group_buy_id : undefined,
     };
     this.setData({ submitting: true, error: "", can_submit: false });
-    request({
+    return request({
       url: isGroupBuy ? "/api/orders" : "/api/orders/normal",
       method: "POST",
       data: payload,
