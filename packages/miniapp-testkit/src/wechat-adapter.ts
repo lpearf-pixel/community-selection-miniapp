@@ -82,6 +82,10 @@ function adaptElement(element: RawElement): MiniProgramElement {
   };
 }
 
+function wrapExpression(expression: string): string {
+  return `function () { return (${expression}); }`;
+}
+
 function adaptPage(page: RawPage): MiniProgramPage {
   return {
     path: page.path,
@@ -125,8 +129,8 @@ function adaptSession(session: RawSession): MiniProgramSession {
     ...(session.evaluateWithOptions || session.evaluate ? {
       evaluate: (expression: string, options: { timeoutMs?: number } = {}) => (
         session.evaluateWithOptions
-          ? session.evaluateWithOptions(expression, { timeout: options.timeoutMs })
-          : session.evaluate!(expression)
+          ? session.evaluateWithOptions(wrapExpression(expression), { timeout: options.timeoutMs })
+          : session.evaluate!(wrapExpression(expression))
       ),
     } : {}),
     screenshot: (options = {}) => session.screenshot({

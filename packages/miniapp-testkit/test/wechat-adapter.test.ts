@@ -69,7 +69,7 @@ describe('WechatSessionFactory', () => {
       timeout: 1_000,
     });
     expect(rawSession.evaluateWithOptions).toHaveBeenCalledWith(
-      'getApp().globalData.contract',
+      'function () { return (getApp().globalData.contract); }',
       { timeout: 1_500 },
     );
   });
@@ -98,5 +98,27 @@ describe('WechatSessionFactory', () => {
       trustProject: true,
     });
     expect(rawSession.waitForAppReady).toHaveBeenCalledWith(60_000);
+  });
+
+  it('wraps expressions for the legacy evaluate fallback too', async () => {
+    const { rawSession } = createRawSession();
+    const rawEvaluate = vi.fn(async () => 'contract-v1');
+    const { evaluateWithOptions: _evaluateWithOptions, ...rawWithoutOptions } = rawSession;
+    const fallbackSession = { ...rawWithoutOptions, evaluate: rawEvaluate };
+    const launcher = {
+      connect: vi.fn(async () => fallbackSession),
+      launch: vi.fn(async () => fallbackSession),
+    };
+    const factory = new WechatSessionFactory({ createLauncher: () => launcher });
+    const session = await factory.connect({
+      wsEndpoint: 'ws://127.0.0.1:9420',
+      timeoutMs: 12_000,
+    });
+
+    await expect(session.evaluate?.('getApp().globalData.contract', { timeoutMs: 1_500 }))
+      .resolves.toBe('contract-v1');
+    expect(rawEvaluate).toHaveBeenCalledWith(
+      'function () { return (getApp().globalData.contract); }',
+    );
   });
 });
