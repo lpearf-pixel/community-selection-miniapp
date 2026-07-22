@@ -1,0 +1,11 @@
+services:
+  api:
+    environment:
+      ADMIN_AUTH_ENABLED: "true"
+      ADMIN_AUTH_MODE: session
+      ADMIN_TOKEN: l50-e2e-admin-token
+      ADMIN_TOTP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+
+  admin:
+    environment:
+      VITE_API_BASE_URL: http://localhost:13080
