@@ -1,6 +1,9 @@
 name: L50 Admin E2E
 
 on:
+  pull_request:
+    branches:
+      - stable/l49-business-base
   push:
     branches:
       - codex/l50-a1-admin-foundation
