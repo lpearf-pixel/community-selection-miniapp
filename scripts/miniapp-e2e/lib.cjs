@@ -1,6 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const SUPPORTED_NODE_RANGE = '^20.19.0 || >=22.12.0';
+
 const DEFAULT_CLI_PATH = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli';
 const DEFAULT_PORT = 9420;
 const DEFAULT_AUTOMATION_TIMEOUT_MS = 60000;
@@ -13,6 +15,24 @@ function assertSupportedPlatform(platform = process.platform) {
   if (platform !== 'darwin') {
     throw new Error('Mini Program click smoke requires macOS and WeChat DevTools');
   }
+}
+
+function assertSupportedNodeVersion(version = process.versions.node) {
+  const value = String(version || '').replace(/^v/, '');
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(value);
+  const major = Number(match?.[1]);
+  const minor = Number(match?.[2]);
+  const supported = (major === 20 && minor >= 19)
+    || (major === 22 && minor >= 12)
+    || major > 22;
+
+  if (!match || !supported) {
+    throw new Error(
+      `Mini Program E2E requires Node.js ${SUPPORTED_NODE_RANGE.replace(' || ', ' or ')}; received ${value || '<unknown>'}. `
+        + 'Run "nvm install 22 && nvm use 22", then "pnpm install --frozen-lockfile".',
+    );
+  }
+  return value;
 }
 
 function parsePort(value) {
@@ -232,6 +252,7 @@ module.exports = {
   assertMiniappProjectConfigured,
   assertRealWeChatAppId,
   assertPagePath,
+  assertSupportedNodeVersion,
   assertSupportedPlatform,
   buildDevToolsAutoArgs,
   composeLogsArgs,

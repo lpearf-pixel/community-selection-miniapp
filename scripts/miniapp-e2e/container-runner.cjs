@@ -6,6 +6,7 @@ const { spawnSync } = require('node:child_process');
 const {
   artifactPaths,
   assertMiniappProjectConfigured,
+  assertSupportedNodeVersion,
   assertSupportedPlatform,
   composeLogsArgs,
   composePsArgs,
@@ -81,6 +82,7 @@ function writeComposeDiagnostics(config, outputPath) {
 }
 
 async function main() {
+  assertSupportedNodeVersion();
   assertSupportedPlatform();
   const e2eConfig = resolveE2eConfig();
   assertMiniappProjectConfigured(e2eConfig.projectPath);
