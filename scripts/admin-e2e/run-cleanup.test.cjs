@@ -20,6 +20,13 @@ if (command === 'docker' && args.includes('up') && scenario === 'database-start'
   process.exit(17);
 }
 if (
+  command === 'docker'
+  && args[0] === 'rm'
+  && scenario === 'browser-remove'
+) {
+  process.exit(19);
+}
+if (
   command === 'pnpm'
   && args.some((arg) => arg.endsWith('/fixture.ts'))
   && args.includes('setup')
@@ -157,6 +164,31 @@ test('external cleanup removes only the exact cancelled run resources', () => {
       /docker compose -p community-selection-admin-e2e-29999909088 -f docker-compose\.yml down --volumes --remove-orphans/,
     );
     assert.doesNotMatch(log, /docker system prune/);
+  } finally {
+    fs.rmSync(context.binDir, { recursive: true, force: true });
+  }
+});
+
+test('external cleanup fails when the browser container still exists', () => {
+  const context = createScenarioEnvironment('browser-remove');
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/admin-e2e/cleanup-resources.cjs', 'forced-cancel'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: context.env,
+      },
+    );
+    const log = readLog(context.logPath);
+
+    assert.notEqual(result.status, 0, result.stderr);
+    assert.match(log, /docker rm -f community-selection-admin-e2e-browser-forced-cancel/);
+    assert.match(
+      log,
+      /docker compose -p community-selection-admin-e2e-forced-cancel -f docker-compose\.yml down --volumes --remove-orphans/,
+    );
   } finally {
     fs.rmSync(context.binDir, { recursive: true, force: true });
   }
