@@ -38,8 +38,9 @@ jobs:
       - run: node --import tsx --test scripts/admin-e2e/admin-auth-runtime.test.ts
       - run: node --test scripts/admin-e2e/contract.test.cjs scripts/admin-e2e/run-cleanup.test.cjs
       - run: pnpm setup:admin:e2e
-      - name: Inspect Admin E2E port owner
-        run: |
-          docker ps --filter publish=15432 --format 'published={{.Names}} image={{.Image}} ports={{.Ports}}'
-          docker ps -a --filter name=community-selection-admin-e2e --format 'e2e={{.Names}} status={{.Status}} labels={{.Labels}}'
+      - name: Recover confirmed cancelled E2E run
+        run: node scripts/admin-e2e/cleanup-resources.cjs 29999909088
       - run: pnpm e2e:admin
+      - name: Cleanup current E2E resources
+        if: always()
+        run: node scripts/admin-e2e/cleanup-resources.cjs "$GITHUB_RUN_ID"
