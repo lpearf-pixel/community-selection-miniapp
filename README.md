@@ -93,6 +93,8 @@
 
 详见 `docs/09_ACCEPTANCE_TESTS.md`。
 
+自建 GitHub Actions Runner 的环境契约、Admin E2E 拓扑、验证顺序与排障清单见 [`docs/self-hosted-runner.md`](docs/self-hosted-runner.md)。
+
 ## 小程序主题开发规范
 
 小程序端 19 个页面共用同一套主题令牌、共享组件和换肤门禁。新增页面或切换模板前，请先阅读 [`docs/architecture/miniapp-global-theme-system.md`](docs/architecture/miniapp-global-theme-system.md)。后台管理端主题化不在 L50 阶段范围内。
