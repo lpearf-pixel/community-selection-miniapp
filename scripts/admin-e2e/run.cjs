@@ -23,6 +23,7 @@ const browserContainer = `community-selection-admin-e2e-browser-${projectSuffix}
 let fixtureSetupAttempted = false;
 let databaseStartAttempted = false;
 let browserContainerCreateAttempted = false;
+let cleanupStarted = false;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: 'inherit', env, ...options });
@@ -53,6 +54,36 @@ function stopService({ label, child }) {
     if (error.code !== 'ESRCH') console.error(`Failed to stop ${label}`, error);
   }
 }
+
+function cleanup() {
+  if (cleanupStarted) return;
+  cleanupStarted = true;
+
+  if (browserContainerCreateAttempted) {
+    spawnSync('docker', ['rm', '-f', browserContainer], { stdio: 'inherit', env });
+  }
+  for (const service of services.reverse()) stopService(service);
+  if (fixtureSetupAttempted) {
+    spawnSync('pnpm', ['exec', 'tsx', 'scripts/admin-e2e/fixture.ts', 'cleanup'], {
+      stdio: 'inherit',
+      env,
+    });
+  }
+  if (databaseStartAttempted) {
+    spawnSync('docker', [...compose, 'down', '--volumes', '--remove-orphans'], {
+      stdio: 'inherit',
+      env,
+    });
+  }
+}
+
+function handleSignal(signal) {
+  cleanup();
+  process.exit(signal === 'SIGINT' ? 130 : 143);
+}
+
+process.once('SIGINT', () => handleSignal('SIGINT'));
+process.once('SIGTERM', () => handleSignal('SIGTERM'));
 
 async function waitForUrl(label, url, child) {
   let lastError;
@@ -139,22 +170,7 @@ async function main() {
     ]);
     runBrowserSmoke();
   } finally {
-    if (fixtureSetupAttempted) {
-      spawnSync('pnpm', ['exec', 'tsx', 'scripts/admin-e2e/fixture.ts', 'cleanup'], {
-        stdio: 'inherit',
-        env,
-      });
-    }
-    if (browserContainerCreateAttempted) {
-      spawnSync('docker', ['rm', '-f', browserContainer], { stdio: 'inherit', env });
-    }
-    for (const service of services.reverse()) stopService(service);
-    if (databaseStartAttempted) {
-      spawnSync('docker', [...compose, 'down', '--volumes', '--remove-orphans'], {
-        stdio: 'inherit',
-        env,
-      });
-    }
+    cleanup();
   }
 }
 
