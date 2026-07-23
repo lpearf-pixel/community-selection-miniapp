@@ -30,9 +30,12 @@ test('L50 Admin browser smoke infrastructure is complete', () => {
 
 test('Admin E2E starts API and Admin natively on the runner', () => {
   const runner = fs.readFileSync(path.join(root, 'scripts/admin-e2e/run.cjs'), 'utf8');
+  const viteConfig = fs.readFileSync(path.join(root, 'apps/admin/vite.config.ts'), 'utf8');
 
   assert.doesNotMatch(runner, /docker-compose\.e2e\.yml/);
   assert.doesNotMatch(runner, /['"]postgres['"],\s*['"]api['"],\s*['"]admin['"]/);
+  assert.doesNotMatch(runner, /VITE_API_BASE_URL:\s*['"]https?:\/\//);
+  assert.match(viteConfig, /['"]\/api['"]:\s*['"]http:\/\/localhost:13080['"]/);
   assert.match(runner, /@community-selection\/api/);
   assert.match(runner, /@community-selection\/admin/);
   assert.match(runner, /ADMIN_E2E_DATABASE_URL/);
