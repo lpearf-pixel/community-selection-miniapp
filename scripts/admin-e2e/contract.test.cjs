@@ -63,6 +63,13 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
     path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
     'utf8',
   );
+  const catalogPage = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/catalog/products/CatalogProductsPage.tsx',
+    ),
+    'utf8',
+  );
 
   assert.match(smoke, /catalogRequestCount/);
   assert.match(smoke, /categoryRequestCount/);
@@ -84,4 +91,5 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
   assert.match(smoke, /财务对账加载失败/);
   assert.match(smoke, /运营看板加载失败/);
   assert.match(smoke, /getByRole\('button', \{ name: \/重\\s\*试\//);
+  assert.match(catalogPage, /aria-label="商品名称"/);
 });

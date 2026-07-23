@@ -201,6 +201,7 @@ export function CatalogProductsPage(props: CatalogProductsPageProps) {
         <Form layout="vertical">
           <Form.Item label="商品名称">
             <Input
+              aria-label="商品名称"
               value={editingProduct.name}
               onChange={(event: { target: { value: string } }) =>
                 setEditingProduct({
