@@ -27,6 +27,23 @@ if (
   process.exit(19);
 }
 if (
+  command === 'docker'
+  && args[0] === 'rm'
+  && scenario === 'browser-missing'
+) {
+  process.stderr.write('Error: No such container\\n');
+  process.exit(1);
+}
+if (
+  command === 'docker'
+  && args[0] === 'container'
+  && args[1] === 'inspect'
+  && scenario === 'browser-missing'
+) {
+  process.stderr.write('Error: No such object\\n');
+  process.exit(1);
+}
+if (
   command === 'pnpm'
   && args.some((arg) => arg.endsWith('/fixture.ts'))
   && args.includes('setup')
@@ -188,6 +205,34 @@ test('external cleanup fails when the browser container still exists', () => {
     assert.match(
       log,
       /docker compose -p community-selection-admin-e2e-forced-cancel -f docker-compose\.yml down --volumes --remove-orphans/,
+    );
+  } finally {
+    fs.rmSync(context.binDir, { recursive: true, force: true });
+  }
+});
+
+test('external cleanup is idempotent when the browser container is absent', () => {
+  const context = createScenarioEnvironment('browser-missing');
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/admin-e2e/cleanup-resources.cjs', 'already-clean'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: context.env,
+      },
+    );
+    const log = readLog(context.logPath);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      log,
+      /docker container inspect community-selection-admin-e2e-browser-already-clean/,
+    );
+    assert.match(
+      log,
+      /docker compose -p community-selection-admin-e2e-already-clean -f docker-compose\.yml down --volumes --remove-orphans/,
     );
   } finally {
     fs.rmSync(context.binDir, { recursive: true, force: true });
