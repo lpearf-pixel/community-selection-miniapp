@@ -1,5 +1,6 @@
 const { existsSync } = require('node:fs');
 const { spawn, spawnSync } = require('node:child_process');
+const { dependencies: adminE2eDependencies } = require('./package.json');
 
 const projectSuffix = String(process.env.GITHUB_RUN_ID ?? process.pid).replace(/[^a-zA-Z0-9_-]/g, '-');
 const compose = ['compose', '-p', `community-selection-admin-e2e-${projectSuffix}`, '-f', 'docker-compose.yml'];
@@ -18,8 +19,10 @@ const env = {
 };
 
 const services = [];
+const browserContainer = `community-selection-admin-e2e-browser-${projectSuffix}`;
 let fixtureCreated = false;
 let databaseStarted = false;
+let browserContainerCreated = false;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: 'inherit', env, ...options });
@@ -69,6 +72,46 @@ async function waitForUrl(label, url, child) {
   throw new Error(`${label} health check timed out: ${lastError?.message ?? 'unknown error'}`);
 }
 
+function runBrowserSmoke() {
+  if (!existsSync('/.dockerenv')) {
+    run('pnpm', ['--dir', 'scripts/admin-e2e', 'test']);
+    return;
+  }
+
+  const runnerContainerId = process.env.HOSTNAME;
+  if (!runnerContainerId) throw new Error('Container runner hostname is unavailable');
+  const playwrightVersion = String(adminE2eDependencies.playwright ?? '').replace(/^v/, '');
+  if (!/^\d+\.\d+\.\d+$/.test(playwrightVersion)) {
+    throw new Error(`Unsupported Playwright version: ${playwrightVersion || 'missing'}`);
+  }
+  const browserImage = process.env.ADMIN_E2E_PLAYWRIGHT_IMAGE
+    ?? `mcr.microsoft.com/playwright:v${playwrightVersion}-noble`;
+
+  run('docker', [
+    'create',
+    '--init',
+    '--name', browserContainer,
+    '--network', `container:${runnerContainerId}`,
+    '--ipc', 'host',
+    '--workdir', '/work',
+    browserImage,
+    'sleep', 'infinity',
+  ]);
+  browserContainerCreated = true;
+  run('docker', ['start', browserContainer]);
+  run('docker', ['exec', browserContainer, 'mkdir', '-p', '/work/node_modules']);
+  run('docker', ['cp', 'scripts/admin-e2e/node_modules/.', `${browserContainer}:/work/node_modules`]);
+  run('docker', ['cp', 'scripts/admin-e2e/admin-smoke.mjs', `${browserContainer}:/work/admin-smoke.mjs`]);
+  run('docker', ['cp', 'scripts/admin-e2e/.fixture.json', `${browserContainer}:/work/.fixture.json`]);
+  run('docker', [
+    'exec',
+    '-e', 'ADMIN_E2E_BASE_URL=http://127.0.0.1:13081',
+    '-e', 'PLAYWRIGHT_BROWSERS_PATH=/ms-playwright',
+    browserContainer,
+    'node', '/work/admin-smoke.mjs',
+  ]);
+}
+
 async function main() {
   try {
     run('docker', [...compose, 'up', '-d', '--wait', 'postgres']);
@@ -94,13 +137,16 @@ async function main() {
       waitForUrl('API', 'http://127.0.0.1:13080/api/health', api),
       waitForUrl('Admin', 'http://127.0.0.1:13081', admin),
     ]);
-    run('pnpm', ['--dir', 'scripts/admin-e2e', 'test']);
+    runBrowserSmoke();
   } finally {
     if (fixtureCreated) {
       spawnSync('pnpm', ['exec', 'tsx', 'scripts/admin-e2e/fixture.ts', 'cleanup'], {
         stdio: 'inherit',
         env,
       });
+    }
+    if (browserContainerCreated) {
+      spawnSync('docker', ['rm', '-f', browserContainer], { stdio: 'inherit', env });
     }
     for (const service of services.reverse()) stopService(service);
     if (databaseStarted) {
