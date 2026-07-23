@@ -26,7 +26,11 @@ jobs:
       - run: pnpm db:generate
       - name: Verify L50 A2 contracts
         run: |
-          pnpm --filter @community-selection/admin test --             src/shared/state/feature-resource.test.ts             src/features/finance/reconciliation/api.test.ts             src/features/operations/dashboard/api.test.ts             src/app/refresh-policy.test.ts
+          pnpm --filter @community-selection/admin test -- \
+            src/shared/state/feature-resource.test.ts \
+            src/features/finance/reconciliation/api.test.ts \
+            src/features/operations/dashboard/api.test.ts \
+            src/app/refresh-policy.test.ts
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -34,4 +38,8 @@ jobs:
       - run: node --import tsx --test scripts/admin-e2e/admin-auth-runtime.test.ts
       - run: node --test scripts/admin-e2e/contract.test.cjs scripts/admin-e2e/run-cleanup.test.cjs
       - run: pnpm setup:admin:e2e
+      - name: Inspect Admin E2E port owner
+        run: |
+          docker ps --filter publish=15432 --format 'published={{.Names}} image={{.Image}} ports={{.Ports}}'
+          docker ps -a --filter name=community-selection-admin-e2e --format 'e2e={{.Names}} status={{.Status}} labels={{.Labels}}'
       - run: pnpm e2e:admin
