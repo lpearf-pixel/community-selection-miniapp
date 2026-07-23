@@ -13,7 +13,7 @@ const command = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
 fs.appendFileSync(
   process.env.ADMIN_E2E_FAILURE_LOG,
-  command + ' ' + args.join(' ') + '\\n',
+  command + ' ' + args.join(' ') + '\n',
 );
 const scenario = process.env.ADMIN_E2E_FAILURE_SCENARIO;
 if (command === 'docker' && args.includes('up') && scenario === 'database-start') {
@@ -84,7 +84,7 @@ async function waitForLog(logPath, predicate, timeoutMs = 5_000) {
     if (predicate(log)) return log;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  throw new Error(`timed out waiting for command log:\\n${readLog(logPath)}`);
+  throw new Error(`timed out waiting for command log:\n${readLog(logPath)}`);
 }
 
 function waitForClose(child) {
