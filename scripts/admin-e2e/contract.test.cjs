@@ -37,3 +37,14 @@ test('Admin E2E starts API and Admin natively on the runner', () => {
   assert.match(runner, /@community-selection\/admin/);
   assert.match(runner, /ADMIN_E2E_DATABASE_URL/);
 });
+
+test('Admin E2E workflow can move from a container runner to a physical host', () => {
+  const workflow = fs.readFileSync(
+    path.join(root, '.github/workflows/l50-admin-e2e.yml'),
+    'utf8',
+  );
+
+  assert.match(workflow, /runs-on:\s*self-hosted/);
+  assert.doesNotMatch(workflow, /runs-on:\s*\[/);
+  assert.doesNotMatch(workflow, /\/var\/run\/docker\.sock|stat -c/);
+});
