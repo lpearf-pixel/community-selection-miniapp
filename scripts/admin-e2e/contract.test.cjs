@@ -12,7 +12,6 @@ test('L50 Admin browser smoke infrastructure is complete', () => {
     'scripts/admin-e2e/admin-smoke.mjs',
     'scripts/admin-e2e/fixture.ts',
     'scripts/admin-e2e/run.cjs',
-    'scripts/admin-e2e/docker-compose.e2e.yml',
   ];
   for (const file of required) {
     assert.equal(fs.existsSync(path.join(root, file)), true, `missing ${file}`);
@@ -27,4 +26,14 @@ test('L50 Admin browser smoke infrastructure is complete', () => {
     'utf8',
   );
   assert.match(workspace, /__ADMIN_E2E_FORCE_RENDER_ERROR__/);
+});
+
+test('Admin E2E starts API and Admin natively on the runner', () => {
+  const runner = fs.readFileSync(path.join(root, 'scripts/admin-e2e/run.cjs'), 'utf8');
+
+  assert.doesNotMatch(runner, /docker-compose\.e2e\.yml/);
+  assert.doesNotMatch(runner, /['"]postgres['"],\s*['"]api['"],\s*['"]admin['"]/);
+  assert.match(runner, /@community-selection\/api/);
+  assert.match(runner, /@community-selection\/admin/);
+  assert.match(runner, /ADMIN_E2E_DATABASE_URL/);
 });
