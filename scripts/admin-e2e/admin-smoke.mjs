@@ -25,9 +25,10 @@ try {
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
 
-  const buttons = page.getByRole('button');
+  const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
+  const buttons = shell.getByRole('button');
   for (const label of navigation) {
-    const button = page.getByRole('button', { name: label, exact: true });
+    const button = shell.getByRole('button', { name: label, exact: true });
     await button.click();
     await assert.doesNotReject(async () => {
       const className = await button.getAttribute('class');
@@ -39,18 +40,18 @@ try {
 
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
-  await page.getByRole('button', { name: '商品管理', exact: true }).waitFor();
+  await shell.getByRole('button', { name: '商品管理', exact: true }).waitFor();
 
   await page.evaluate(() => { window.__ADMIN_E2E_FORCE_RENDER_ERROR__ = true; });
-  await page.getByRole('button', { name: '订单管理', exact: true }).click();
+  await shell.getByRole('button', { name: '订单管理', exact: true }).click();
   await page.getByText('当前页面加载失败').waitFor();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.evaluate(() => { window.__ADMIN_E2E_FORCE_RENDER_ERROR__ = false; });
-  await page.getByRole('button', { name: '商品管理', exact: true }).click();
+  await shell.getByRole('button', { name: '商品管理', exact: true }).click();
   await page.getByText('当前页面加载失败').waitFor({ state: 'detached' });
 
-  await page.getByRole('button', { name: /刷\s*新/ }).click();
-  await page.getByRole('button', { name: '退出登录', exact: true }).click();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await shell.getByRole('button', { name: '退出登录', exact: true }).click();
   await page.getByText('后台登录', { exact: true }).waitFor();
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByText('后台登录', { exact: true }).waitFor();
