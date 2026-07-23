@@ -21,10 +21,13 @@ import { RewardLedgerPage } from "../pages/rewards/RewardLedgerPage";
 import { WithdrawalReviewPage } from "../pages/withdrawals/WithdrawalReviewPage";
 import { TaxReviewPage } from "../pages/tax-review/TaxReviewPage";
 import { AdminBusinessDashboardV2Page } from "../pages/dashboard-v2/AdminBusinessDashboardV2Page";
+import { FinanceReconciliationPage } from "../features/finance/reconciliation/FinanceReconciliationPage";
+import { OperationsDashboardPage } from "../features/operations/dashboard/OperationsDashboardPage";
 import { DEFAULT_ADMIN_VIEW, type AdminViewKey } from "./admin-view";
 import { AdminErrorBoundary } from "./AdminErrorBoundary";
 import { AdminFeatureWorkspace } from "./AdminFeatureWorkspace";
 import { AdminShell } from "./AdminShell";
+import { adminRefreshTarget } from "./refresh-policy";
 
 type CommissionType = "none" | "fixed" | "percent";
 type ProductStatus = "draft" | "active" | "inactive";
@@ -165,21 +168,8 @@ type TaxRecord = {
 };
 
 
-type FinanceOverview = {
-  paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_case_count: number; inventory_loss_estimated_amount: number; service_reward_estimated_amount: number; tax_review_pending_count: number; withdrawal_paid_amount: number;
-};
-type FinanceOrderRow = { order_id: string; order_status: string; paid_amount: number; refunded_amount: number; net_amount: number; after_sale_case_count: number; commission_reward_amount: number; };
-type FinanceRewardRow = { reward_id: string; leader_user_id: string; order_id: string; reward_amount: number; reward_status: string; available_at?: string | null; withdrawal_id?: string | null; recalculated_after_refund: boolean; };
-type FinanceAfterSaleRow = { after_sale_case_id: string; order_id: string; type: string; status: string; requested_amount: number; approved_amount: number; resolved_amount: number; linked_inventory_loss_id?: string | null; };
 
 
-
-type OperationsOverview = { order_count: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_rate: number; refund_rate: number; pickup_completed_count: number; inventory_loss_estimated_amount: number; service_reward_amount: number; };
-type OperationsTrendRow = { date: string; order_count: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_case_count: number; inventory_loss_count: number; pickup_completed_count: number; };
-type OperationsProductRow = { product_id: string; product_name: string; category_name: string; order_count: number; quantity_sold: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_rate: number; inventory_loss_count: number; };
-type OperationsCommunityRow = { community_id: string; community_name: string; order_count: number; paid_amount: number; refunded_amount: number; net_sales_amount: number; pickup_completed_count: number; after_sale_case_count: number; active_group_buy_count: number; };
-type OperationsPickupStoreRow = { pickup_store_id: string; pickup_store_name: string; order_count: number; pickup_completed_count: number; pickup_pending_count: number; pickup_completion_rate: number; paid_amount: number; after_sale_case_count: number; };
-type OperationsAlertRow = { type: string; severity: string; title: string; description: string; metric_value: number; };
 
 type InventoryItem = {
   product_id: string;
@@ -431,16 +421,6 @@ export function AdminApp() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
-  const [financeOverview, setFinanceOverview] = useState<FinanceOverview | null>(null);
-  const [financeOrders, setFinanceOrders] = useState<FinanceOrderRow[]>([]);
-  const [financeRewards, setFinanceRewards] = useState<FinanceRewardRow[]>([]);
-  const [financeAfterSales, setFinanceAfterSales] = useState<FinanceAfterSaleRow[]>([]);
-  const [operationsOverview, setOperationsOverview] = useState<OperationsOverview | null>(null);
-  const [operationsTrends, setOperationsTrends] = useState<OperationsTrendRow[]>([]);
-  const [operationsProducts, setOperationsProducts] = useState<OperationsProductRow[]>([]);
-  const [operationsCommunities, setOperationsCommunities] = useState<OperationsCommunityRow[]>([]);
-  const [operationsPickupStores, setOperationsPickupStores] = useState<OperationsPickupStoreRow[]>([]);
-  const [operationsAlerts, setOperationsAlerts] = useState<OperationsAlertRow[]>([]);
   const [selectedOrderContext, setSelectedOrderContext] =
     useState<AiContext | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product>(emptyProduct);
@@ -448,8 +428,10 @@ export function AdminApp() {
   const [selectedClosureGroupBuyId, setSelectedClosureGroupBuyId] = useState("");
   const [closureSummary, setClosureSummary] = useState<ClosureSummary | null>(null);
   const [manualRefundOrders, setManualRefundOrders] = useState<ManualRefundOrder[]>([]);
+  const [financeRefreshVersion, setFinanceRefreshVersion] = useState(0);
+  const [operationsRefreshVersion, setOperationsRefreshVersion] = useState(0);
 
-  function refresh() {
+  function refreshLegacyFeatures() {
     void Promise.all([
       fetchJson<Category[]>("/api/categories"),
       fetchJson<{ items: Product[] }>("/api/products"),
@@ -468,16 +450,6 @@ export function AdminApp() {
       fetchJson<Withdrawal[]>("/api/admin/withdrawals"),
       fetchJson<OpsAlert[]>("/api/admin/logs/alerts"),
       fetchJson<TaxRecord[]>("/api/admin/tax-records"),
-      fetchJson<FinanceOverview>("/api/admin/finance/reconciliation/overview"),
-      fetchJson<{ items: FinanceOrderRow[] }>("/api/admin/finance/reconciliation/orders"),
-      fetchJson<FinanceRewardRow[]>("/api/admin/finance/reconciliation/rewards"),
-      fetchJson<FinanceAfterSaleRow[]>("/api/admin/finance/reconciliation/after-sales"),
-      fetchJson<OperationsOverview>("/api/admin/operations/dashboard/overview"),
-      fetchJson<OperationsTrendRow[]>("/api/admin/operations/dashboard/trends?days=7"),
-      fetchJson<OperationsProductRow[]>("/api/admin/operations/dashboard/products"),
-      fetchJson<OperationsCommunityRow[]>("/api/admin/operations/dashboard/communities"),
-      fetchJson<OperationsPickupStoreRow[]>("/api/admin/operations/dashboard/pickup-stores"),
-      fetchJson<OperationsAlertRow[]>("/api/admin/operations/dashboard/alerts"),
     ])
       .then(
         ([
@@ -496,16 +468,6 @@ export function AdminApp() {
           withdrawalData,
           alertData,
           taxRecordData,
-          financeOverviewData,
-          financeOrderData,
-          financeRewardData,
-          financeAfterSaleData,
-          operationsOverviewData,
-          operationsTrendData,
-          operationsProductData,
-          operationsCommunityData,
-          operationsPickupStoreData,
-          operationsAlertData,
         ]) => {
           setCategories(categoryData);
           setProducts(productData.items);
@@ -522,19 +484,22 @@ export function AdminApp() {
           setWithdrawals(withdrawalData);
           setAlerts(alertData);
           setTaxRecords(taxRecordData);
-          setFinanceOverview(financeOverviewData);
-          setFinanceOrders(financeOrderData.items);
-          setFinanceRewards(financeRewardData);
-          setFinanceAfterSales(financeAfterSaleData);
-          setOperationsOverview(operationsOverviewData);
-          setOperationsTrends(operationsTrendData);
-          setOperationsProducts(operationsProductData);
-          setOperationsCommunities(operationsCommunityData);
-          setOperationsPickupStores(operationsPickupStoreData);
-          setOperationsAlerts(operationsAlertData);
         },
       )
       .catch((error: Error) => setMessage(error.message));
+  }
+
+  function refreshActiveFeature() {
+    const target = adminRefreshTarget(view);
+    if (target === "finance") {
+      setFinanceRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "operations") {
+      setOperationsRefreshVersion((version) => version + 1);
+      return;
+    }
+    refreshLegacyFeatures();
   }
 
   useEffect(() => {
@@ -542,7 +507,7 @@ export function AdminApp() {
       .then((admin) => {
         setAdminSession(admin);
         setView(DEFAULT_ADMIN_VIEW);
-        refresh();
+        refreshLegacyFeatures();
       })
       .catch(() => setView("login"));
   }, []);
@@ -570,7 +535,7 @@ export function AdminApp() {
     setAdminSession(result.admin_user);
     setView(DEFAULT_ADMIN_VIEW);
     setMessage("后台登录成功");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function logoutAdmin() {
@@ -622,7 +587,7 @@ export function AdminApp() {
       }),
     });
     setMessage("提现税务复核已保存");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function updateWithdrawal(
@@ -634,7 +599,7 @@ export function AdminApp() {
       body: JSON.stringify({ reason: "后台人工处理" }),
     });
     setMessage(`提现申请已执行 ${action}`);
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function updateAlert(alert: OpsAlert, action: "resolve" | "ignore") {
@@ -646,7 +611,7 @@ export function AdminApp() {
       }),
     });
     setMessage(`告警已${action === "resolve" ? "处理" : "忽略"}`);
-    refresh();
+    refreshLegacyFeatures();
   }
 
   function exportPicking(format: "summary" | "detail") {
@@ -659,7 +624,7 @@ export function AdminApp() {
       body: JSON.stringify({ admin_remark: "后台核销自提" }),
     });
     setMessage(`订单 ${order.order_no} 已核销自提`);
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function loadStockLedger(item: InventoryItem) {
@@ -683,7 +648,7 @@ export function AdminApp() {
       body: JSON.stringify({ adjust_quantity: Number(adjustText), reason }),
     });
     setMessage("库存调整已保存");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function createPurchasePlan(item?: InventoryItem) {
@@ -733,7 +698,7 @@ export function AdminApp() {
       }),
     });
     setMessage("采购计划已创建");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function confirmPurchasePlan(plan: PurchasePlan) {
@@ -741,7 +706,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("采购计划已确认");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function cancelPurchasePlan(plan: PurchasePlan) {
@@ -749,7 +714,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("采购计划已取消");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function receivePurchasePlan(plan: PurchasePlan) {
@@ -767,7 +732,7 @@ export function AdminApp() {
       }),
     });
     setMessage("采购入库已完成");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function createSupplier() {
@@ -786,7 +751,7 @@ export function AdminApp() {
       }),
     });
     setMessage("供应商已创建");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function disableSupplier(supplier: Supplier) {
@@ -794,7 +759,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("供应商已禁用");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function loadBatchLedger(batch: ProductBatch) {
@@ -828,7 +793,7 @@ export function AdminApp() {
       }),
     });
     setMessage("损耗已记录");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function createStockCheck() {
@@ -863,7 +828,7 @@ export function AdminApp() {
       }),
     });
     setMessage("盘点单已创建");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function confirmStockCheck(check: StockCheck) {
@@ -871,7 +836,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("盘点单已确认");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function reviewAfterSale(
@@ -909,7 +874,7 @@ export function AdminApp() {
       }),
     });
     setMessage("售后审核已保存");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function resolveAfterSale(item: AfterSaleCase) {
@@ -939,7 +904,7 @@ export function AdminApp() {
       }),
     });
     setMessage("售后处理已完成");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function addAfterSaleNote(item: AfterSaleCase) {
@@ -950,7 +915,7 @@ export function AdminApp() {
       body: JSON.stringify({ admin_note: note }),
     });
     setMessage("售后备注已追加");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function linkAfterSaleLoss(item: AfterSaleCase) {
@@ -974,7 +939,7 @@ export function AdminApp() {
       }),
     });
     setMessage("售后损耗已关联");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function loadClosureWorkbench(groupBuyId: string) {
@@ -1022,7 +987,7 @@ export function AdminApp() {
       body: JSON.stringify({ end_time: endTime, pickup_time: pickupTime }),
     });
     setMessage("已一键再开团");
-    refresh();
+    refreshLegacyFeatures();
   }
 
   async function markOrder(order: Order, nextStatus: string) {
@@ -1031,7 +996,7 @@ export function AdminApp() {
       body: JSON.stringify({ next_status: nextStatus }),
     });
     setMessage(`订单 ${order.order_no} 已更新为 ${nextStatus}`);
-    refresh();
+    refreshLegacyFeatures();
   }
 
   if (view === "login" || !adminSession) {
@@ -1073,33 +1038,7 @@ export function AdminApp() {
   const renderFeatureContent = () => (
     <>
         {view === "operations" ? (
-          <>
-            <Card title="运营看板">
-              <Space wrap>
-                <Card title="今日订单数">{operationsOverview?.order_count ?? 0}</Card>
-                <Card title="实收金额">¥{formatYuan(operationsOverview?.paid_amount ?? 0)}</Card>
-                <Card title="退款金额">¥{formatYuan(operationsOverview?.refunded_amount ?? 0)}</Card>
-                <Card title="净销售额">¥{formatYuan(operationsOverview?.net_sales_amount ?? 0)}</Card>
-                <Card title="售后率">{((operationsOverview?.after_sale_rate ?? 0) * 100).toFixed(2)}%</Card>
-                <Card title="退款率">{((operationsOverview?.refund_rate ?? 0) * 100).toFixed(2)}%</Card>
-                <Card title="自提完成数">{operationsOverview?.pickup_completed_count ?? 0}</Card>
-                <Card title="库存损耗估算">¥{formatYuan(operationsOverview?.inventory_loss_estimated_amount ?? 0)}</Card>
-                <Card title="开团服务奖励金额">¥{formatYuan(operationsOverview?.service_reward_amount ?? 0)}</Card>
-              </Space>
-              <Space style={{ marginTop: 16 }} wrap>
-                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=trends`}>导出趋势 CSV</Button>
-                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=products`}>导出商品排行 CSV</Button>
-                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=communities`}>导出社区排行 CSV</Button>
-                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=pickup_stores`}>导出自提点排行 CSV</Button>
-                <Button href={`${apiBaseUrl}/api/admin/operations/dashboard/export.csv?type=alerts`}>导出异常提醒 CSV</Button>
-              </Space>
-            </Card>
-            <Card title="近 7 日趋势表"><Table rowKey="date" dataSource={operationsTrends} columns={[{ title: "date", dataIndex: "date" }, { title: "order_count", dataIndex: "order_count" }, { title: "paid_amount", render: (_: unknown, row: OperationsTrendRow) => `¥${formatYuan(row.paid_amount)}` }, { title: "refunded_amount", render: (_: unknown, row: OperationsTrendRow) => `¥${formatYuan(row.refunded_amount)}` }, { title: "net_sales_amount", render: (_: unknown, row: OperationsTrendRow) => `¥${formatYuan(row.net_sales_amount)}` }, { title: "after_sale_case_count", dataIndex: "after_sale_case_count" }, { title: "inventory_loss_count", dataIndex: "inventory_loss_count" }]} /></Card>
-            <Card title="商品排行表"><Table rowKey="product_id" dataSource={operationsProducts} columns={[{ title: "商品", dataIndex: "product_name" }, { title: "分类", dataIndex: "category_name" }, { title: "订单数", dataIndex: "order_count" }, { title: "销售数量", dataIndex: "quantity_sold" }, { title: "实收金额", render: (_: unknown, row: OperationsProductRow) => `¥${formatYuan(row.paid_amount)}` }, { title: "退款金额", render: (_: unknown, row: OperationsProductRow) => `¥${formatYuan(row.refunded_amount)}` }, { title: "净销售额", render: (_: unknown, row: OperationsProductRow) => `¥${formatYuan(row.net_sales_amount)}` }, { title: "售后率", render: (_: unknown, row: OperationsProductRow) => `${(row.after_sale_rate * 100).toFixed(2)}%` }, { title: "损耗数", dataIndex: "inventory_loss_count" }]} /></Card>
-            <Card title="社区排行表"><Table rowKey="community_id" dataSource={operationsCommunities} columns={[{ title: "社区", dataIndex: "community_name" }, { title: "订单数", dataIndex: "order_count" }, { title: "实收金额", render: (_: unknown, row: OperationsCommunityRow) => `¥${formatYuan(row.paid_amount)}` }, { title: "退款金额", render: (_: unknown, row: OperationsCommunityRow) => `¥${formatYuan(row.refunded_amount)}` }, { title: "净销售额", render: (_: unknown, row: OperationsCommunityRow) => `¥${formatYuan(row.net_sales_amount)}` }, { title: "自提完成数", dataIndex: "pickup_completed_count" }, { title: "售后数", dataIndex: "after_sale_case_count" }]} /></Card>
-            <Card title="自提点履约表"><Table rowKey="pickup_store_id" dataSource={operationsPickupStores} columns={[{ title: "自提点", dataIndex: "pickup_store_name" }, { title: "订单数", dataIndex: "order_count" }, { title: "自提完成数", dataIndex: "pickup_completed_count" }, { title: "待自提数", dataIndex: "pickup_pending_count" }, { title: "自提完成率", render: (_: unknown, row: OperationsPickupStoreRow) => `${(row.pickup_completion_rate * 100).toFixed(2)}%` }, { title: "售后数", dataIndex: "after_sale_case_count" }]} /></Card>
-            <Card title="异常提醒列表"><Table rowKey="type" dataSource={operationsAlerts} columns={[{ title: "severity", dataIndex: "severity" }, { title: "title", dataIndex: "title" }, { title: "description", dataIndex: "description" }, { title: "metric_value", dataIndex: "metric_value" }]} /></Card>
-          </>
+          <OperationsDashboardPage refreshVersion={operationsRefreshVersion} />
         ) : null}
 
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
@@ -1112,50 +1051,7 @@ export function AdminApp() {
         {view === "deliveryRuleConfig" ? <DeliveryRuleConfigPage /> : null}
 
         {view === "finance" ? (
-          <>
-            <Card title="财务对账">
-              <Space wrap>
-                <Card title="实收金额">¥{formatYuan(financeOverview?.paid_amount ?? 0)}</Card>
-                <Card title="退款金额">¥{formatYuan(financeOverview?.refunded_amount ?? 0)}</Card>
-                <Card title="净销售额">¥{formatYuan(financeOverview?.net_sales_amount ?? 0)}</Card>
-                <Card title="售后单数">{financeOverview?.after_sale_case_count ?? 0}</Card>
-                <Card title="库存损耗估算">¥{formatYuan(financeOverview?.inventory_loss_estimated_amount ?? 0)}</Card>
-                <Card title="开团服务奖励估算">¥{formatYuan(financeOverview?.service_reward_estimated_amount ?? 0)}</Card>
-                <Card title="待税务审核数量">{financeOverview?.tax_review_pending_count ?? 0}</Card>
-                <Card title="已打款提现金额">¥{formatYuan(financeOverview?.withdrawal_paid_amount ?? 0)}</Card>
-              </Space>
-              <Space style={{ marginTop: 16 }}>
-                <Button href={`${apiBaseUrl}/api/admin/finance/reconciliation/export.csv?type=orders`}>导出订单对账 CSV</Button>
-                <Button href={`${apiBaseUrl}/api/admin/finance/reconciliation/export.csv?type=rewards`}>导出开团服务奖励 CSV</Button>
-                <Button href={`${apiBaseUrl}/api/admin/finance/reconciliation/export.csv?type=after_sales`}>导出售后退款 CSV</Button>
-              </Space>
-            </Card>
-            <Card title="订单对账表">
-              <Table rowKey="order_id" dataSource={financeOrders} columns={[
-                { title: "order id", dataIndex: "order_id" }, { title: "状态", dataIndex: "order_status" },
-                { title: "支付金额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.paid_amount)}` },
-                { title: "退款金额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.refunded_amount)}` },
-                { title: "净额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.net_amount)}` },
-                { title: "售后数量", dataIndex: "after_sale_case_count" },
-                { title: "开团服务奖励金额", render: (_: unknown, row: FinanceOrderRow) => `¥${formatYuan(row.commission_reward_amount)}` },
-              ]} />
-            </Card>
-            <Card title="开团服务奖励对账表">
-              <Table rowKey="reward_id" dataSource={financeRewards} columns={[
-                { title: "leader_user_id", dataIndex: "leader_user_id" }, { title: "order_id", dataIndex: "order_id" },
-                { title: "reward_amount", render: (_: unknown, row: FinanceRewardRow) => `¥${formatYuan(row.reward_amount)}` },
-                { title: "reward_status", dataIndex: "reward_status" }, { title: "available_at", dataIndex: "available_at" },
-                { title: "withdrawal_id", dataIndex: "withdrawal_id" }, { title: "recalculated_after_refund", render: (_: unknown, row: FinanceRewardRow) => row.recalculated_after_refund ? "是" : "否" },
-              ]} />
-            </Card>
-            <Card title="售后/退款对账表">
-              <Table rowKey="after_sale_case_id" dataSource={financeAfterSales} columns={[
-                { title: "after_sale_case_id", dataIndex: "after_sale_case_id" }, { title: "order_id", dataIndex: "order_id" }, { title: "type", dataIndex: "type" }, { title: "status", dataIndex: "status" },
-                { title: "requested_amount", render: (_: unknown, row: FinanceAfterSaleRow) => `¥${formatYuan(row.requested_amount)}` }, { title: "approved_amount", render: (_: unknown, row: FinanceAfterSaleRow) => `¥${formatYuan(row.approved_amount)}` },
-                { title: "resolved_amount", render: (_: unknown, row: FinanceAfterSaleRow) => `¥${formatYuan(row.resolved_amount)}` }, { title: "linked_inventory_loss_id", dataIndex: "linked_inventory_loss_id" },
-              ]} />
-            </Card>
-          </>
+          <FinanceReconciliationPage refreshVersion={financeRefreshVersion} />
         ) : null}
 
         {view === "products" ? (
@@ -2132,7 +2028,7 @@ export function AdminApp() {
       admin={adminSession}
       message={message}
       onNavigate={setView}
-      onRefresh={refresh}
+      onRefresh={refreshActiveFeature}
       onLogout={() => void logoutAdmin()}
     >
       <AdminErrorBoundary resetKey={view}>

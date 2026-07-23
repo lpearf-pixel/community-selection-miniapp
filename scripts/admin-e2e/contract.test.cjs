@@ -56,3 +56,20 @@ test('A container runner executes Chromium in the matching Playwright image', ()
   assert.match(runner, /PLAYWRIGHT_BROWSERS_PATH/);
   assert.match(runner, /docker[\s\S]*cp[\s\S]*admin-smoke\.mjs/);
 });
+
+
+test('Admin E2E verifies lazy feature requests, active refresh, and local retry', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+
+  assert.match(smoke, /financeRequestCount/);
+  assert.match(smoke, /operationsRequestCount/);
+  assert.match(smoke, /financeRequestsBeforeSelection/);
+  assert.match(smoke, /operationsRequestsBeforeSelection/);
+  assert.match(smoke, /operationsFailureInjected/);
+  assert.match(smoke, /财务对账加载失败/);
+  assert.match(smoke, /运营看板加载失败/);
+  assert.match(smoke, /getByRole\('button', \{ name: \/重\\s\*试\//);
+});
