@@ -1,15 +1,12 @@
 name: L50 A2 Gate
 
 on:
-  push:
-    branches:
-      - codex/l50-a2-readonly-feature-slices
   pull_request:
     branches:
       - stable/l50-business-base
 
 concurrency:
-  group: l50-a2-${{ github.event.pull_request.number || github.ref }}
+  group: l50-a2-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
