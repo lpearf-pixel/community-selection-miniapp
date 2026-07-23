@@ -71,5 +71,5 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
   assert.match(smoke, /operationsFailureInjected/);
   assert.match(smoke, /财务对账加载失败/);
   assert.match(smoke, /运营看板加载失败/);
-  assert.match(smoke, /getByRole\('button', \{ name: '重试'/);
+  assert.match(smoke, /getByRole\('button', \{ name: \/重\\s\*试\//);
 });
