@@ -6,6 +6,10 @@ on:
       - stable/l49-business-base
   workflow_dispatch:
 
+concurrency:
+  group: l50-admin-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   admin-e2e:
     runs-on: self-hosted
