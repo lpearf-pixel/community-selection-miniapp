@@ -41,15 +41,11 @@ test('Admin E2E starts API and Admin natively on the runner', () => {
   assert.match(runner, /ADMIN_E2E_DATABASE_URL/);
 });
 
-test('Admin E2E workflow can move from a container runner to a physical host', () => {
-  const workflow = fs.readFileSync(
-    path.join(root, '.github/workflows/l50-admin-e2e.yml'),
-    'utf8',
-  );
+test('Admin E2E keeps a native browser path for a physical runner', () => {
+  const runner = fs.readFileSync(path.join(root, 'scripts/admin-e2e/run.cjs'), 'utf8');
 
-  assert.match(workflow, /runs-on:\s*self-hosted/);
-  assert.doesNotMatch(workflow, /runs-on:\s*\[/);
-  assert.doesNotMatch(workflow, /\/var\/run\/docker\.sock|stat -c/);
+  assert.match(runner, /if \(!existsSync\('\/\.dockerenv'\)\)/);
+  assert.match(runner, /pnpm[\s\S]*--dir[\s\S]*scripts\/admin-e2e[\s\S]*test/);
 });
 
 test('A container runner executes Chromium in the matching Playwright image', () => {
