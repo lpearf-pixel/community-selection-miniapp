@@ -15,7 +15,7 @@ const env = {
   ADMIN_TOKEN: 'l50-e2e-admin-token',
   ADMIN_TOTP_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef',
   PORT: '13080',
-  VITE_API_BASE_URL: 'http://127.0.0.1:13080',
+  VITE_API_BASE_URL: '',
 };
 
 const services = [];
