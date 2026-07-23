@@ -24,12 +24,17 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
 
+let catalogRequestCount = 0;
 let financeRequestCount = 0;
 let operationsRequestCount = 0;
+let catalogFailureInjected = false;
 let operationsFailureInjected = false;
 
 page.on('request', (request) => {
   const pathname = new URL(request.url()).pathname;
+  if (pathname === '/api/categories' || pathname === '/api/products') {
+    catalogRequestCount += 1;
+  }
   if (pathname.startsWith('/api/admin/finance/reconciliation/')) {
     financeRequestCount += 1;
   }
@@ -54,6 +59,64 @@ try {
     assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
   };
 
+  await page.getByText('商品列表', { exact: true }).waitFor();
+  await waitForCount(page, () => catalogRequestCount, 2, 'catalog initial load');
+  const catalogRequestsAfterInitial = catalogRequestCount;
+  assert.equal(catalogRequestsAfterInitial, 2);
+  assert.equal(financeRequestCount, 0);
+  assert.equal(operationsRequestCount, 0);
+
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await waitForCount(
+    page,
+    () => catalogRequestCount,
+    catalogRequestsAfterInitial + 2,
+    'catalog active refresh',
+  );
+  assert.equal(financeRequestCount, 0);
+  assert.equal(operationsRequestCount, 0);
+
+  await page.route('**/api/categories', async (route) => {
+    if (!catalogFailureInjected) {
+      catalogFailureInjected = true;
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          code: 'E2E_CATALOG_FAILURE',
+          message: '模拟商品目录失败',
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  const catalogRequestsBeforeFailure = catalogRequestCount;
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await page.getByText('商品目录加载失败', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
+  assert.equal(catalogFailureInjected, true);
+  await waitForCount(
+    page,
+    () => catalogRequestCount,
+    catalogRequestsBeforeFailure + 2,
+    'catalog failed refresh',
+  );
+
+  const catalogRequestsAfterFailure = catalogRequestCount;
+  await page.getByRole('button', { name: /重\s*试/ }).click();
+  await page.getByText('商品目录加载失败').waitFor({ state: 'detached' });
+  await page.getByText('商品列表', { exact: true }).waitFor();
+  await waitForCount(
+    page,
+    () => catalogRequestCount,
+    catalogRequestsAfterFailure + 2,
+    'catalog retry',
+  );
+  const catalogRequestsAfterRetry = catalogRequestCount;
+
   const financeRequestsBeforeSelection = financeRequestCount;
   const operationsRequestsBeforeSelection = operationsRequestCount;
   assert.equal(financeRequestsBeforeSelection, 0);
@@ -67,10 +130,12 @@ try {
   await assertActive(financeButton, '财务对账');
   await page.getByText('订单对账表', { exact: true }).waitFor();
   await waitForCount(page, () => financeRequestCount, 4, 'finance initial load');
+  assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(operationsRequestCount, 0);
 
   await shell.getByRole('button', { name: /刷\s*新/ }).click();
   await waitForCount(page, () => financeRequestCount, 8, 'finance active refresh');
+  assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(operationsRequestCount, 0);
   assert.equal(await page.getByText('财务对账加载失败').count(), 0);
 
@@ -123,10 +188,14 @@ try {
     operationsRequestsAfterFailure + 6,
     'operations retry',
   );
+  assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(financeRequestCount, financeRequestsAfterRefresh);
 
   const remainingNavigation = navigation.filter(
-    (label) => label !== '财务对账' && label !== '运营看板',
+    (label) =>
+      label !== '商品管理' &&
+      label !== '财务对账' &&
+      label !== '运营看板',
   );
   for (const label of remainingNavigation) {
     const button = shell.getByRole('button', { name: label, exact: true });
@@ -155,7 +224,7 @@ try {
   await page.getByText('后台登录', { exact: true }).waitFor();
 
   console.log(
-    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}.`,
+    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; catalog requests=${catalogRequestCount}; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}.`,
   );
 } finally {
   await context.close();
