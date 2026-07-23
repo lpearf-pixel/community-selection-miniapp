@@ -1,0 +1,13 @@
+{
+  "name": "community-selection-admin-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "test": "node admin-smoke.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}

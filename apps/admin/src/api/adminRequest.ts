@@ -1,4 +1,8 @@
 import { getAdminScopeHeaders } from "../access/adminAccess";
+import {
+  createJsonRequester,
+  type JsonRequestOptions,
+} from "../shared/api/client";
 
 export const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -32,9 +36,11 @@ export async function adminFetch(path: string, init?: RequestInit & { json?: boo
   });
 }
 
-export async function requestAdminJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await adminFetch(path, init);
-  const body = await res.json();
-  if (!res.ok || !body.success) throw new Error(body.message ?? "请求失败");
-  return body.data as T;
+const requestJson = createJsonRequester({
+  baseUrl: apiBaseUrl,
+  getDefaultHeaders: () => getAdminRequestHeaders(false),
+});
+
+export function requestAdminJson<T>(path: string, init?: JsonRequestOptions): Promise<T> {
+  return requestJson<T>(path, init);
 }
