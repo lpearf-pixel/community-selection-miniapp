@@ -21,7 +21,7 @@ try {
   await page.getByText('后台登录', { exact: true }).waitFor();
   await page.getByLabel('用户名').fill(credentials.username);
   await page.getByLabel('密码').fill(credentials.password);
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.getByRole('button', { name: /登\s*录/ }).click();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
 
@@ -49,7 +49,7 @@ try {
   await page.getByRole('button', { name: '商品管理', exact: true }).click();
   await page.getByText('当前页面加载失败').waitFor({ state: 'detached' });
 
-  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await page.getByRole('button', { name: /刷\s*新/ }).click();
   await page.getByRole('button', { name: '退出登录', exact: true }).click();
   await page.getByText('后台登录', { exact: true }).waitFor();
   await page.reload({ waitUntil: 'networkidle' });
