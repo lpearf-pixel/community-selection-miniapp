@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   catalogCategoryOptions,
+  reduceCatalogProductsResource,
   toggleCatalogProductStatus,
 } from "./page-model";
-import { EMPTY_PRODUCT } from "./types";
+import type { FeatureResourceState } from "../../../shared/state/feature-resource";
+import { EMPTY_PRODUCT, type CatalogProductsData } from "./types";
 
 describe("catalog product page model", () => {
   it("maps categories to the existing select options", () => {
@@ -25,4 +27,32 @@ describe("catalog product page model", () => {
       { id: "p2", status: "draft" },
     ]);
   });
+
+  it.each([
+    ["refreshing", null],
+    ["error", "目录刷新失败"],
+  ] as const)(
+    "preserves %s request state when a product is toggled locally",
+    (status, error) => {
+      const state: FeatureResourceState<CatalogProductsData> = {
+        status,
+        error,
+        data: {
+          categories: [],
+          products: [
+            { ...EMPTY_PRODUCT, id: "p1", status: "active" },
+          ],
+        },
+      };
+
+      const result = reduceCatalogProductsResource(state, {
+        type: "product-status-toggled",
+        productId: "p1",
+      });
+
+      expect(result.status).toBe(status);
+      expect(result.error).toBe(error);
+      expect(result.data?.products[0]?.status).toBe("inactive");
+    },
+  );
 });

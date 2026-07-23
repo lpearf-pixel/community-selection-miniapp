@@ -72,6 +72,10 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
   assert.match(smoke, /catalogRequestsAfterInitial/);
   assert.match(smoke, /catalogRequestsBeforeRefresh/);
   assert.match(smoke, /catalogFailureInjected/);
+  assert.match(smoke, /catalogDraftName/);
+  assert.match(smoke, /groupBuysButton/);
+  assert.match(smoke, /categoryRetryResponse/);
+  assert.match(smoke, /productRetryResponse/);
   assert.match(smoke, /financeRequestsAfterInitial/);
   assert.match(smoke, /financeRequestsBeforeSelection/);
   assert.match(smoke, /operationsRequestsBeforeSelection/);

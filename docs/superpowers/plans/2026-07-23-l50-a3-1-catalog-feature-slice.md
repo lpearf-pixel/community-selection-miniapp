@@ -4,7 +4,7 @@
 
 **Goal:** Move the existing product/category Admin page out of `AdminApp` into an isolated catalog feature with typed loading, local refresh/retry, and unchanged UI behavior.
 
-**Architecture:** `AdminApp` remains the authenticated composition root and renders the catalog feature for the existing `products` view. `CatalogProductsPage` owns category/product DTOs, initial loading, errors, retry, local product editor state, and the current non-persistent status toggle. The Shell refresh increments only the active feature version; all other mutable legacy views remain on `refreshLegacyFeatures` until later A3 checkpoints.
+**Architecture:** `AdminApp` remains the authenticated composition root and keeps the catalog feature mounted for the authenticated session, hiding it outside the existing `products` view so temporary editor/status state preserves its prior navigation lifetime. `CatalogProductsPage` owns category/product DTOs, initial loading, errors, retry, local product editor state, and the current non-persistent status toggle. A catalog-specific reducer keeps local toggles separate from request success/error state. The Shell refresh increments only the active feature version; all other mutable legacy views remain on `refreshLegacyFeatures` until later A3 checkpoints.
 
 **Tech Stack:** React 18.3.1, Ant Design 5.23.0, TypeScript strict/noImplicitAny, Vite 6, Vitest 2, Node 20.19.0, pnpm 9.15.4, Playwright 1.61.1.
 
@@ -308,6 +308,7 @@ In `AdminApp`:
 - add `catalogRefreshVersion`;
 - increment it in `refreshActiveFeature` when the target is `catalog`;
 - render `<CatalogProductsPage refreshVersion={catalogRefreshVersion} />`;
+- keep the catalog page mounted behind `hidden={view !== "products"}` so navigation does not reset the existing temporary editor/status state;
 - remove catalog DTOs, `EMPTY_PRODUCT`, category/product state, catalog memo, catalog handlers, and inline products JSX;
 - remove `/api/categories` and `/api/products` from `refreshLegacyFeatures`;
 - leave every remaining endpoint, state, mutation handler, view, and post-mutation legacy refresh unchanged;
@@ -353,7 +354,8 @@ The contract must require the smoke to:
 - click Shell refresh on products and prove only catalog counts increase among extracted catalog/finance/operations groups;
 - fail the first category request on an isolated catalog refresh with a `500` envelope;
 - prove local catalog error and `重试` are visible while navigation remains usable;
-- retry against the real category endpoint and prove `商品列表` renders;
+- navigate to another real feature during the catalog error, return, and prove the catalog error plus editor draft are preserved;
+- retry against both real catalog endpoints, require successful response envelopes, and prove the refresh completes with `商品列表` plus the editor draft intact;
 - continue the existing finance/operations and 23-navigation assertions;
 - continue logout and exact cleanup.
 

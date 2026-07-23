@@ -17,12 +17,11 @@ import { formatYuan } from "@community-selection/shared";
 import {
   featureErrorMessage,
   initialFeatureResourceState,
-  reduceFeatureResource,
 } from "../../../shared/state/feature-resource";
 import { loadCatalogProducts } from "./api";
 import {
   catalogCategoryOptions,
-  toggleCatalogProductStatus,
+  reduceCatalogProductsResource,
 } from "./page-model";
 import {
   EMPTY_PRODUCT,
@@ -40,7 +39,7 @@ export function CatalogProductsPage(props: CatalogProductsPageProps) {
   const [editingProduct, setEditingProduct] = useState<Product>(EMPTY_PRODUCT);
   const [message, setMessage] = useState("");
   const [state, dispatch] = useReducer(
-    reduceFeatureResource<CatalogProductsData>,
+    reduceCatalogProductsResource,
     initialFeatureResourceState<CatalogProductsData>(),
   );
 
@@ -112,11 +111,8 @@ export function CatalogProductsPage(props: CatalogProductsPageProps) {
 
   const toggleStatus = (product: Product) => {
     dispatch({
-      type: "resolved",
-      data: {
-        ...data,
-        products: toggleCatalogProductStatus(data.products, product.id),
-      },
+      type: "product-status-toggled",
+      productId: product.id,
     });
     setMessage(
       "已在页面临时切换上下架状态，持久化接口将在后续阶段接入。",

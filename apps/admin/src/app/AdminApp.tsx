@@ -975,9 +975,9 @@ export function AdminApp() {
           <FinanceReconciliationPage refreshVersion={financeRefreshVersion} />
         ) : null}
 
-        {view === "products" ? (
+        <div hidden={view !== "products"}>
           <CatalogProductsPage refreshVersion={catalogRefreshVersion} />
-        ) : null}
+        </div>
 
         {view === "groupBuys" ? (
           <Card title="团购列表">

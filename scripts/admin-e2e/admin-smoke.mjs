@@ -65,6 +65,11 @@ try {
     const className = await button.getAttribute('class');
     assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
   };
+  const productButton = shell.getByRole('button', {
+    name: '商品管理',
+    exact: true,
+  });
+  await assertActive(productButton, '商品管理');
 
   await page.getByText('商品列表', { exact: true }).waitFor();
   await waitForCount(page, () => categoryRequestCount, 1, 'category initial load');
@@ -84,6 +89,8 @@ try {
   );
   assert.equal(financeRequestCount, 0);
   assert.equal(operationsRequestCount, 0);
+  const catalogDraftName = 'E2E 保留商品草稿';
+  await page.getByLabel('商品名称').fill(catalogDraftName);
 
   const catalogRequestsBeforeRefresh = {
     categories: categoryRequestCount,
@@ -151,14 +158,48 @@ try {
   assert.equal(productRequestCount, catalogRequestsBeforeFailure.products + 1);
   assert.equal(catalogRequestCount, catalogRequestsBeforeFailure.total + 2);
 
+  const groupBuysButton = shell.getByRole('button', {
+    name: '团购管理',
+    exact: true,
+  });
+  await groupBuysButton.click();
+  await assertActive(groupBuysButton, '团购管理');
+  await page.getByText('团购列表', { exact: true }).waitFor();
+  await productButton.click();
+  await assertActive(productButton, '商品管理');
+  await page.getByText('商品目录加载失败', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('商品名称').inputValue(), catalogDraftName);
+
   const catalogRequestsAfterFailure = {
     categories: categoryRequestCount,
     products: productRequestCount,
     total: catalogRequestCount,
   };
+  const categoryRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/categories' && response.ok(),
+  );
+  const productRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/products' && response.ok(),
+  );
   await page.getByRole('button', { name: /重\s*试/ }).click();
+  const [categoryResponse, productResponse] = await Promise.all([
+    categoryRetryResponse,
+    productRetryResponse,
+  ]);
+  const [categoryEnvelope, productEnvelope] = await Promise.all([
+    categoryResponse.json(),
+    productResponse.json(),
+  ]);
+  assert.equal(categoryEnvelope.success, true);
+  assert.equal(productEnvelope.success, true);
+  assert.equal(Array.isArray(categoryEnvelope.data), true);
+  assert.equal(Array.isArray(productEnvelope.data?.items), true);
+  await page
+    .getByText('正在刷新商品目录…')
+    .waitFor({ state: 'detached' });
   await page.getByText('商品目录加载失败').waitFor({ state: 'detached' });
   await page.getByText('商品列表', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('商品名称').inputValue(), catalogDraftName);
   await waitForCount(
     page,
     () => categoryRequestCount,

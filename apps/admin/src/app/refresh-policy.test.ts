@@ -21,6 +21,7 @@ describe('admin refresh policy', () => {
     expect(source).not.toContain('type Product =');
     expect(source).not.toContain('type Category =');
     expect(source).toContain('CatalogProductsPage');
+    expect(source).toContain('hidden={view !== "products"}');
     expect(source).toContain('FinanceReconciliationPage');
     expect(source).toContain('OperationsDashboardPage');
   });
