@@ -20,9 +20,9 @@ const env = {
 
 const services = [];
 const browserContainer = `community-selection-admin-e2e-browser-${projectSuffix}`;
-let fixtureCreated = false;
-let databaseStarted = false;
-let browserContainerCreated = false;
+let fixtureSetupAttempted = false;
+let databaseStartAttempted = false;
+let browserContainerCreateAttempted = false;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: 'inherit', env, ...options });
@@ -87,6 +87,7 @@ function runBrowserSmoke() {
   const browserImage = process.env.ADMIN_E2E_PLAYWRIGHT_IMAGE
     ?? `mcr.microsoft.com/playwright:v${playwrightVersion}-noble`;
 
+  browserContainerCreateAttempted = true;
   run('docker', [
     'create',
     '--init',
@@ -97,7 +98,6 @@ function runBrowserSmoke() {
     browserImage,
     'sleep', 'infinity',
   ]);
-  browserContainerCreated = true;
   run('docker', ['start', browserContainer]);
   run('docker', ['exec', browserContainer, 'mkdir', '-p', '/work/node_modules']);
   run('docker', ['cp', 'scripts/admin-e2e/node_modules/.', `${browserContainer}:/work/node_modules`]);
@@ -114,13 +114,13 @@ function runBrowserSmoke() {
 
 async function main() {
   try {
+    databaseStartAttempted = true;
     run('docker', [...compose, 'up', '-d', '--wait', 'postgres']);
-    databaseStarted = true;
     run('pnpm', ['exec', 'prisma', 'migrate', 'deploy', '--schema', 'prisma/schema.prisma']);
     run('pnpm', ['--filter', '@community-selection/shared', 'build']);
     run('pnpm', ['--filter', '@community-selection/config', 'build']);
+    fixtureSetupAttempted = true;
     run('pnpm', ['exec', 'tsx', 'scripts/admin-e2e/fixture.ts', 'setup']);
-    fixtureCreated = true;
 
     const api = startService(
       'API',
@@ -139,17 +139,17 @@ async function main() {
     ]);
     runBrowserSmoke();
   } finally {
-    if (fixtureCreated) {
+    if (fixtureSetupAttempted) {
       spawnSync('pnpm', ['exec', 'tsx', 'scripts/admin-e2e/fixture.ts', 'cleanup'], {
         stdio: 'inherit',
         env,
       });
     }
-    if (browserContainerCreated) {
+    if (browserContainerCreateAttempted) {
       spawnSync('docker', ['rm', '-f', browserContainer], { stdio: 'inherit', env });
     }
     for (const service of services.reverse()) stopService(service);
-    if (databaseStarted) {
+    if (databaseStartAttempted) {
       spawnSync('docker', [...compose, 'down', '--volumes', '--remove-orphans'], {
         stdio: 'inherit',
         env,
