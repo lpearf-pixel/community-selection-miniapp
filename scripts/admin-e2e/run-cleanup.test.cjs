@@ -13,7 +13,7 @@ const command = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
 fs.appendFileSync(
   process.env.ADMIN_E2E_FAILURE_LOG,
-  command + ' ' + args.join(' ') + '\n',
+  command + ' ' + args.join(' ') + '\\n',
 );
 const scenario = process.env.ADMIN_E2E_FAILURE_SCENARIO;
 if (command === 'docker' && args.includes('up') && scenario === 'database-start') {
@@ -84,7 +84,7 @@ async function waitForLog(logPath, predicate, timeoutMs = 5_000) {
     if (predicate(log)) return log;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  throw new Error(`timed out waiting for command log:\n${readLog(logPath)}`);
+  throw new Error(`timed out waiting for command log:\\n${readLog(logPath)}`);
 }
 
 function waitForClose(child) {
@@ -132,6 +132,32 @@ test('cleans fixture and Compose resources when the runner sends SIGTERM', async
     assert.match(log, /docker compose .* down --volumes --remove-orphans/);
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    fs.rmSync(context.binDir, { recursive: true, force: true });
+  }
+});
+
+test('external cleanup removes only the exact cancelled run resources', () => {
+  const context = createScenarioEnvironment('external-cancel');
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/admin-e2e/cleanup-resources.cjs', '29999909088'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: context.env,
+      },
+    );
+    const log = readLog(context.logPath);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(log, /docker rm -f community-selection-admin-e2e-browser-29999909088/);
+    assert.match(
+      log,
+      /docker compose -p community-selection-admin-e2e-29999909088 -f docker-compose\.yml down --volumes --remove-orphans/,
+    );
+    assert.doesNotMatch(log, /docker system prune/);
+  } finally {
     fs.rmSync(context.binDir, { recursive: true, force: true });
   }
 });
