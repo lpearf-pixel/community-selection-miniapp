@@ -38,23 +38,6 @@ page.on('request', (request) => {
   }
 });
 
-await page.route('**/api/admin/operations/dashboard/overview', async (route) => {
-  if (!operationsFailureInjected) {
-    operationsFailureInjected = true;
-    await route.fulfill({
-      status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: false,
-        code: 'E2E_OPERATIONS_FAILURE',
-        message: '模拟运营看板失败',
-      }),
-    });
-    return;
-  }
-  await route.continue();
-});
-
 try {
   await page.goto(baseURL, { waitUntil: 'networkidle' });
   await page.getByText('后台登录', { exact: true }).waitFor();
@@ -91,22 +74,56 @@ try {
   assert.equal(operationsRequestCount, 0);
   assert.equal(await page.getByText('财务对账加载失败').count(), 0);
 
+  const financeRequestsAfterRefresh = financeRequestCount;
   const operationsButton = shell.getByRole('button', {
     name: '运营看板',
     exact: true,
   });
   await operationsButton.click();
   await assertActive(operationsButton, '运营看板');
+  await page.getByText('近 7 日趋势表', { exact: true }).waitFor();
+  await waitForCount(page, () => operationsRequestCount, 6, 'operations initial load');
+
+  const operationsRequestsAfterInitial = operationsRequestCount;
+  await page.route('**/api/admin/operations/dashboard/overview', async (route) => {
+    if (!operationsFailureInjected) {
+      operationsFailureInjected = true;
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          code: 'E2E_OPERATIONS_FAILURE',
+          message: '模拟运营看板失败',
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
   await page.getByText('运营看板加载失败', { exact: true }).waitFor();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   assert.equal(operationsFailureInjected, true);
-  await waitForCount(page, () => operationsRequestCount, 6, 'operations failed load');
+  await waitForCount(
+    page,
+    () => operationsRequestCount,
+    operationsRequestsAfterInitial + 6,
+    'operations failed refresh',
+  );
 
+  const operationsRequestsAfterFailure = operationsRequestCount;
   await page.getByRole('button', { name: /重\s*试/ }).click();
-  await page.getByText('近 7 日趋势表', { exact: true }).waitFor();
   await page.getByText('运营看板加载失败').waitFor({ state: 'detached' });
-  await waitForCount(page, () => operationsRequestCount, 12, 'operations retry');
-  assert.equal(financeRequestCount, 8);
+  await page.getByText('近 7 日趋势表', { exact: true }).waitFor();
+  await waitForCount(
+    page,
+    () => operationsRequestCount,
+    operationsRequestsAfterFailure + 6,
+    'operations retry',
+  );
+  assert.equal(financeRequestCount, financeRequestsAfterRefresh);
 
   const remainingNavigation = navigation.filter(
     (label) => label !== '财务对账' && label !== '运营看板',
