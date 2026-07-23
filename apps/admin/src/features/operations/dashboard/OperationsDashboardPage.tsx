@@ -9,7 +9,6 @@ import {
 } from '../../../shared/state/feature-resource';
 import { loadOperationsDashboard } from './api';
 import type {
-  OperationsAlertRow,
   OperationsCommunityRow,
   OperationsDashboardData,
   OperationsPickupStoreRow,
@@ -253,7 +252,7 @@ export function OperationsDashboardPage(
             { title: 'title', dataIndex: 'title' },
             { title: 'description', dataIndex: 'description' },
             { title: 'metric_value', dataIndex: 'metric_value' },
-          ] satisfies Array<Record<string, unknown>>}
+          ]}
         />
       </Card>
     </Space>
