@@ -48,3 +48,12 @@ test('Admin E2E workflow can move from a container runner to a physical host', (
   assert.doesNotMatch(workflow, /runs-on:\s*\[/);
   assert.doesNotMatch(workflow, /\/var\/run\/docker\.sock|stat -c/);
 });
+
+test('A container runner executes Chromium in the matching Playwright image', () => {
+  const runner = fs.readFileSync(path.join(root, 'scripts/admin-e2e/run.cjs'), 'utf8');
+
+  assert.match(runner, /mcr\.microsoft\.com\/playwright:v\$\{playwrightVersion\}-noble/);
+  assert.match(runner, /--network[\s\S]*container:\$\{runnerContainerId\}/);
+  assert.match(runner, /PLAYWRIGHT_BROWSERS_PATH/);
+  assert.match(runner, /docker[\s\S]*cp[\s\S]*admin-smoke\.mjs/);
+});
