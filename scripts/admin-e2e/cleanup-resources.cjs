@@ -10,10 +10,40 @@ const project = `community-selection-admin-e2e-${rawSuffix}`;
 const browserContainer = `community-selection-admin-e2e-browser-${rawSuffix}`;
 const env = { ...process.env };
 
-spawnSync('docker', ['rm', '-f', browserContainer], {
-  stdio: 'inherit',
+const browserRemoval = spawnSync('docker', ['rm', '-f', browserContainer], {
+  encoding: 'utf8',
   env,
 });
+let browserCleanupFailed = false;
+
+if (browserRemoval.error) {
+  console.error(browserRemoval.error);
+  browserCleanupFailed = true;
+} else if (browserRemoval.status !== 0) {
+  const browserInspection = spawnSync(
+    'docker',
+    ['container', 'inspect', browserContainer],
+    {
+      encoding: 'utf8',
+      env,
+    },
+  );
+  const inspectionError = [
+    browserInspection.stderr,
+    browserInspection.stdout,
+  ].filter(Boolean).join('\n');
+
+  if (
+    browserInspection.error
+    || browserInspection.status === 0
+    || !/No such (?:container|object)/i.test(inspectionError)
+  ) {
+    if (browserRemoval.stderr) process.stderr.write(browserRemoval.stderr);
+    if (browserInspection.error) console.error(browserInspection.error);
+    else if (inspectionError) process.stderr.write(inspectionError);
+    browserCleanupFailed = true;
+  }
+}
 
 const composeDown = spawnSync(
   'docker',
@@ -39,4 +69,7 @@ if (composeDown.error) {
 }
 if (composeDown.status !== 0) {
   process.exit(composeDown.status ?? 1);
+}
+if (browserCleanupFailed) {
+  process.exit(1);
 }
