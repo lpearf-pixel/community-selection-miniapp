@@ -63,13 +63,33 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
     path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
     'utf8',
   );
+  const catalogPage = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/catalog/products/CatalogProductsPage.tsx',
+    ),
+    'utf8',
+  );
 
+  assert.match(smoke, /catalogRequestCount/);
+  assert.match(smoke, /categoryRequestCount/);
+  assert.match(smoke, /productRequestCount/);
   assert.match(smoke, /financeRequestCount/);
   assert.match(smoke, /operationsRequestCount/);
+  assert.match(smoke, /catalogRequestsAfterInitial/);
+  assert.match(smoke, /catalogRequestsBeforeRefresh/);
+  assert.match(smoke, /catalogFailureInjected/);
+  assert.match(smoke, /catalogDraftName/);
+  assert.match(smoke, /groupBuysButton/);
+  assert.match(smoke, /categoryRetryResponse/);
+  assert.match(smoke, /productRetryResponse/);
+  assert.match(smoke, /financeRequestsAfterInitial/);
   assert.match(smoke, /financeRequestsBeforeSelection/);
   assert.match(smoke, /operationsRequestsBeforeSelection/);
   assert.match(smoke, /operationsFailureInjected/);
+  assert.match(smoke, /商品目录加载失败/);
   assert.match(smoke, /财务对账加载失败/);
   assert.match(smoke, /运营看板加载失败/);
   assert.match(smoke, /getByRole\('button', \{ name: \/重\\s\*试\//);
+  assert.match(catalogPage, /aria-label="商品名称"/);
 });

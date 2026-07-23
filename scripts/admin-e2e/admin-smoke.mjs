@@ -24,12 +24,24 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
 
+let catalogRequestCount = 0;
+let categoryRequestCount = 0;
+let productRequestCount = 0;
 let financeRequestCount = 0;
 let operationsRequestCount = 0;
+let catalogFailureInjected = false;
 let operationsFailureInjected = false;
 
 page.on('request', (request) => {
   const pathname = new URL(request.url()).pathname;
+  if (pathname === '/api/categories') {
+    categoryRequestCount += 1;
+    catalogRequestCount += 1;
+  }
+  if (pathname === '/api/products') {
+    productRequestCount += 1;
+    catalogRequestCount += 1;
+  }
   if (pathname.startsWith('/api/admin/finance/reconciliation/')) {
     financeRequestCount += 1;
   }
@@ -53,6 +65,157 @@ try {
     const className = await button.getAttribute('class');
     assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
   };
+  const productButton = shell.getByRole('button', {
+    name: '商品管理',
+    exact: true,
+  });
+  await assertActive(productButton, '商品管理');
+
+  await page.getByText('商品列表', { exact: true }).waitFor();
+  await waitForCount(page, () => categoryRequestCount, 1, 'category initial load');
+  await waitForCount(page, () => productRequestCount, 1, 'product initial load');
+  const catalogRequestsAfterInitial = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
+  assert.equal(
+    catalogRequestsAfterInitial.categories,
+    catalogRequestsAfterInitial.products,
+  );
+  assert.equal(
+    catalogRequestsAfterInitial.total,
+    catalogRequestsAfterInitial.categories + catalogRequestsAfterInitial.products,
+  );
+  assert.equal(financeRequestCount, 0);
+  assert.equal(operationsRequestCount, 0);
+  const catalogDraftName = 'E2E 保留商品草稿';
+  await page.getByLabel('商品名称').fill(catalogDraftName);
+
+  const catalogRequestsBeforeRefresh = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await waitForCount(
+    page,
+    () => categoryRequestCount,
+    catalogRequestsBeforeRefresh.categories + 1,
+    'category active refresh',
+  );
+  await waitForCount(
+    page,
+    () => productRequestCount,
+    catalogRequestsBeforeRefresh.products + 1,
+    'product active refresh',
+  );
+  assert.equal(categoryRequestCount, catalogRequestsBeforeRefresh.categories + 1);
+  assert.equal(productRequestCount, catalogRequestsBeforeRefresh.products + 1);
+  assert.equal(catalogRequestCount, catalogRequestsBeforeRefresh.total + 2);
+  assert.equal(financeRequestCount, 0);
+  assert.equal(operationsRequestCount, 0);
+
+  await page.route('**/api/categories', async (route) => {
+    if (!catalogFailureInjected) {
+      catalogFailureInjected = true;
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          code: 'E2E_CATALOG_FAILURE',
+          message: '模拟商品目录失败',
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  const catalogRequestsBeforeFailure = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await page.getByText('商品目录加载失败', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
+  assert.equal(catalogFailureInjected, true);
+  await waitForCount(
+    page,
+    () => categoryRequestCount,
+    catalogRequestsBeforeFailure.categories + 1,
+    'category failed refresh',
+  );
+  await waitForCount(
+    page,
+    () => productRequestCount,
+    catalogRequestsBeforeFailure.products + 1,
+    'product failed refresh',
+  );
+  assert.equal(categoryRequestCount, catalogRequestsBeforeFailure.categories + 1);
+  assert.equal(productRequestCount, catalogRequestsBeforeFailure.products + 1);
+  assert.equal(catalogRequestCount, catalogRequestsBeforeFailure.total + 2);
+
+  const groupBuysButton = shell.getByRole('button', {
+    name: '团购管理',
+    exact: true,
+  });
+  await groupBuysButton.click();
+  await assertActive(groupBuysButton, '团购管理');
+  await page.getByText('团购列表', { exact: true }).waitFor();
+  await productButton.click();
+  await assertActive(productButton, '商品管理');
+  await page.getByText('商品目录加载失败', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('商品名称').inputValue(), catalogDraftName);
+
+  const catalogRequestsAfterFailure = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
+  const categoryRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/categories' && response.ok(),
+  );
+  const productRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/products' && response.ok(),
+  );
+  await page.getByRole('button', { name: /重\s*试/ }).click();
+  const [categoryResponse, productResponse] = await Promise.all([
+    categoryRetryResponse,
+    productRetryResponse,
+  ]);
+  const [categoryEnvelope, productEnvelope] = await Promise.all([
+    categoryResponse.json(),
+    productResponse.json(),
+  ]);
+  assert.equal(categoryEnvelope.success, true);
+  assert.equal(productEnvelope.success, true);
+  assert.equal(Array.isArray(categoryEnvelope.data), true);
+  assert.equal(Array.isArray(productEnvelope.data?.items), true);
+  await page
+    .getByText('正在刷新商品目录…')
+    .waitFor({ state: 'detached' });
+  await page.getByText('商品目录加载失败').waitFor({ state: 'detached' });
+  await page.getByText('商品列表', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('商品名称').inputValue(), catalogDraftName);
+  await waitForCount(
+    page,
+    () => categoryRequestCount,
+    catalogRequestsAfterFailure.categories + 1,
+    'category retry',
+  );
+  await waitForCount(
+    page,
+    () => productRequestCount,
+    catalogRequestsAfterFailure.products + 1,
+    'product retry',
+  );
+  assert.equal(categoryRequestCount, catalogRequestsAfterFailure.categories + 1);
+  assert.equal(productRequestCount, catalogRequestsAfterFailure.products + 1);
+  assert.equal(catalogRequestCount, catalogRequestsAfterFailure.total + 2);
+  const catalogRequestsAfterRetry = catalogRequestCount;
 
   const financeRequestsBeforeSelection = financeRequestCount;
   const operationsRequestsBeforeSelection = operationsRequestCount;
@@ -67,10 +230,20 @@ try {
   await assertActive(financeButton, '财务对账');
   await page.getByText('订单对账表', { exact: true }).waitFor();
   await waitForCount(page, () => financeRequestCount, 4, 'finance initial load');
+  const financeRequestsAfterInitial = financeRequestCount;
+  assert.equal(financeRequestsAfterInitial % 4, 0);
+  assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(operationsRequestCount, 0);
 
   await shell.getByRole('button', { name: /刷\s*新/ }).click();
-  await waitForCount(page, () => financeRequestCount, 8, 'finance active refresh');
+  await waitForCount(
+    page,
+    () => financeRequestCount,
+    financeRequestsAfterInitial + 4,
+    'finance active refresh',
+  );
+  assert.equal(financeRequestCount, financeRequestsAfterInitial + 4);
+  assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(operationsRequestCount, 0);
   assert.equal(await page.getByText('财务对账加载失败').count(), 0);
 
@@ -123,10 +296,14 @@ try {
     operationsRequestsAfterFailure + 6,
     'operations retry',
   );
+  assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(financeRequestCount, financeRequestsAfterRefresh);
 
   const remainingNavigation = navigation.filter(
-    (label) => label !== '财务对账' && label !== '运营看板',
+    (label) =>
+      label !== '商品管理' &&
+      label !== '财务对账' &&
+      label !== '运营看板',
   );
   for (const label of remainingNavigation) {
     const button = shell.getByRole('button', { name: label, exact: true });
@@ -155,7 +332,7 @@ try {
   await page.getByText('后台登录', { exact: true }).waitFor();
 
   console.log(
-    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}.`,
+    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; catalog requests=${catalogRequestCount}; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}.`,
   );
 } finally {
   await context.close();
