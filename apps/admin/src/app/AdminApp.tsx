@@ -5,7 +5,6 @@ import {
   Form,
   Input,
   Layout,
-  Select,
   Space,
   Table,
   Typography,
@@ -20,9 +19,12 @@ import { WithdrawalReviewPage } from "../pages/withdrawals/WithdrawalReviewPage"
 import { TaxReviewPage } from "../pages/tax-review/TaxReviewPage";
 import { AdminBusinessDashboardV2Page } from "../pages/dashboard-v2/AdminBusinessDashboardV2Page";
 import { CatalogProductsPage } from "../features/catalog/products/CatalogProductsPage";
-import type { Product } from "../features/catalog/products/types";
 import { FinanceReconciliationPage } from "../features/finance/reconciliation/FinanceReconciliationPage";
 import { OperationsDashboardPage } from "../features/operations/dashboard/OperationsDashboardPage";
+import { GroupBuyManagementPage } from "../features/sales/group-buys/GroupBuyManagementPage";
+import { OrdersPage } from "../features/sales/orders/OrdersPage";
+import { FulfillmentOverviewPage } from "../features/fulfillment/overview/FulfillmentOverviewPage";
+import { AfterSalesPage } from "../features/sales/after-sales/AfterSalesPage";
 import { DEFAULT_ADMIN_VIEW, type AdminViewKey } from "./admin-view";
 import { AdminErrorBoundary } from "./AdminErrorBoundary";
 import { AdminFeatureWorkspace } from "./AdminFeatureWorkspace";
@@ -30,84 +32,6 @@ import { AdminShell } from "./AdminShell";
 import { adminRefreshTarget } from "./refresh-policy";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
-
-type GroupBuy = {
-  id: string;
-  product?: Product;
-  community?: { name: string };
-  min_people: number;
-  min_quantity: number;
-  current_people: number;
-  current_quantity: number;
-  price_cents: number;
-  status: string;
-  end_time: string;
-  pickup_time: string;
-};
-
-type ClosureSummary = {
-  group_buy_id: string;
-  status: string;
-  expired: boolean;
-  target_count: number;
-  paid_quantity: number;
-  unpaid_order_count: number;
-  paid_pending_refund_count: number;
-  refund_success_count: number;
-  exception_order_count: number;
-  pending_refund_amount_cents: number;
-  total_refunded_amount_cents: number;
-  inventory_deducted_quantity: number;
-  inventory_restored_quantity: number;
-  inventory_remaining_restorable_quantity: number;
-  closable: boolean;
-  blockers: Array<{ type: string; count: number; order_ids?: string[] }>;
-};
-
-type ManualRefundOrder = {
-  order_id: string;
-  order_no: string;
-  user_id: string;
-  product_id: string;
-  quantity: number;
-  pay_amount_cents: number;
-  product_amount_cents: number;
-  delivery_fee_cents: number;
-  refund_amount_cents: number;
-  refund_status: string;
-  latest_refund_id: string | null;
-  closure_status: string;
-  created_at: string;
-  paid_at: string | null;
-};
-
-type ManualRefundOrderResponse = {
-  group_buy_id: string;
-  group_buy_status: string;
-  summary: {
-    total_paid_orders: number;
-    pending_refund_orders: number;
-    refund_success_orders: number;
-    exception_orders: number;
-    pending_refund_amount_cents: number;
-  };
-  items: ManualRefundOrder[];
-};
-
-type Order = {
-  id: string;
-  order_no: string;
-  group_buy?: GroupBuy;
-  product?: Product;
-  user?: { nickname: string };
-  pay_amount_cents: number;
-  pay_status: string;
-  order_status: string;
-  receiver_name: string;
-  receiver_phone: string;
-  credit_amount_cents?: number;
-  credit_source_type?: string | null;
-};
 
 type Withdrawal = {
   id: string;
@@ -240,27 +164,6 @@ type BatchStockLedger = {
   remark?: string | null;
 };
 
-type AfterSaleCase = {
-  id: string;
-  order_id: string;
-  user_id?: string | null;
-  group_buy_id?: string | null;
-  product_id?: string | null;
-  product?: { name: string } | null;
-  order?: { order_no: string; user?: { nickname: string } | null } | null;
-  type: string;
-  status: string;
-  resolution_type?: string | null;
-  reason: string;
-  description?: string | null;
-  requested_refund_cents?: number | null;
-  approved_refund_cents?: number | null;
-  evidence_image_urls?: string[] | null;
-  responsibility?: string | null;
-  admin_note?: string | null;
-  created_at: string;
-};
-
 type ExpiryAlert = {
   batch_id: string;
   batch_no: string;
@@ -295,51 +198,6 @@ type StockCheck = {
   items: StockCheckItem[];
 };
 
-type FulfillmentOverview = {
-  today_group_buys: number;
-  pending_prepare_orders: number;
-  ready_pickup_orders: number;
-  picked_orders: number;
-  completed_orders: number;
-  abnormal_orders: number;
-  by_community: Array<{
-    community_id: string;
-    community_name: string;
-    order_count: number;
-    quantity: number;
-    amount_cents: number;
-  }>;
-  by_product: Array<{
-    product_id: string;
-    product_name: string;
-    quantity: number;
-    order_count: number;
-  }>;
-};
-
-type AiContext = {
-  order: Order;
-  timeline: Array<{
-    id: string;
-    event_type: string;
-    title: string;
-    created_at: string;
-  }>;
-  business_events: Array<{
-    id: string;
-    event_type: string;
-    event_level: string;
-    message?: string | null;
-  }>;
-  alerts: OpsAlert[];
-  credit_usage?: {
-    used_credit: boolean;
-    amount_cents: number;
-    from_reward_conversion: boolean;
-    tax_status?: string | null;
-  };
-};
-
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${url}`, {
     credentials: "include",
@@ -357,10 +215,6 @@ export function AdminApp() {
     username: string;
     role: string;
   } | null>(null);
-  const [groupBuys, setGroupBuys] = useState<GroupBuy[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [fulfillmentOverview, setFulfillmentOverview] =
-    useState<FulfillmentOverview | null>(null);
   const [inventoryOverview, setInventoryOverview] =
     useState<InventoryOverview | null>(null);
   const [stockLedgers, setStockLedgers] = useState<StockLedger[]>([]);
@@ -370,25 +224,20 @@ export function AdminApp() {
   const [batchLedgers, setBatchLedgers] = useState<BatchStockLedger[]>([]);
   const [expiryAlerts, setExpiryAlerts] = useState<ExpiryAlert[]>([]);
   const [stockChecks, setStockChecks] = useState<StockCheck[]>([]);
-  const [afterSales, setAfterSales] = useState<AfterSaleCase[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
-  const [selectedOrderContext, setSelectedOrderContext] =
-    useState<AiContext | null>(null);
   const [message, setMessage] = useState("");
-  const [selectedClosureGroupBuyId, setSelectedClosureGroupBuyId] = useState("");
-  const [closureSummary, setClosureSummary] = useState<ClosureSummary | null>(null);
-  const [manualRefundOrders, setManualRefundOrders] = useState<ManualRefundOrder[]>([]);
+  const [groupBuysRefreshVersion, setGroupBuysRefreshVersion] = useState(0);
+  const [ordersRefreshVersion, setOrdersRefreshVersion] = useState(0);
+  const [fulfillmentRefreshVersion, setFulfillmentRefreshVersion] = useState(0);
+  const [afterSalesRefreshVersion, setAfterSalesRefreshVersion] = useState(0);
   const [catalogRefreshVersion, setCatalogRefreshVersion] = useState(0);
   const [financeRefreshVersion, setFinanceRefreshVersion] = useState(0);
   const [operationsRefreshVersion, setOperationsRefreshVersion] = useState(0);
 
   function refreshLegacyFeatures() {
     void Promise.all([
-      fetchJson<GroupBuy[]>("/api/group-buys"),
-      fetchJson<Order[]>("/api/orders"),
-      fetchJson<FulfillmentOverview>("/api/admin/fulfillment/overview"),
       fetchJson<InventoryOverview>("/api/admin/inventory/overview"),
       fetchJson<PurchasePlan[]>("/api/admin/purchase-plans"),
       fetchJson<Supplier[]>("/api/admin/suppliers"),
@@ -397,37 +246,28 @@ export function AdminApp() {
         "/api/admin/inventory/expiry-alerts?days=7",
       ),
       fetchJson<StockCheck[]>("/api/admin/stock-checks"),
-      fetchJson<AfterSaleCase[]>("/api/admin/after-sales"),
       fetchJson<Withdrawal[]>("/api/admin/withdrawals"),
       fetchJson<OpsAlert[]>("/api/admin/logs/alerts"),
       fetchJson<TaxRecord[]>("/api/admin/tax-records"),
     ])
       .then(
         ([
-          groupBuyData,
-          orderData,
-          fulfillmentData,
           inventoryData,
           purchasePlanData,
           supplierData,
           batchData,
           expiryData,
           stockCheckData,
-          afterSaleData,
           withdrawalData,
           alertData,
           taxRecordData,
         ]) => {
-          setGroupBuys(groupBuyData);
-          setOrders(orderData);
-          setFulfillmentOverview(fulfillmentData);
           setInventoryOverview(inventoryData);
           setPurchasePlans(purchasePlanData);
           setSuppliers(supplierData);
           setBatches(batchData);
           setExpiryAlerts(expiryData.items);
           setStockChecks(stockCheckData);
-          setAfterSales(afterSaleData);
           setWithdrawals(withdrawalData);
           setAlerts(alertData);
           setTaxRecords(taxRecordData);
@@ -436,8 +276,32 @@ export function AdminApp() {
       .catch((error: Error) => setMessage(error.message));
   }
 
+  function refreshSalesAndLegacyFeatures() {
+    setGroupBuysRefreshVersion((version) => version + 1);
+    setOrdersRefreshVersion((version) => version + 1);
+    setFulfillmentRefreshVersion((version) => version + 1);
+    setAfterSalesRefreshVersion((version) => version + 1);
+    refreshLegacyFeatures();
+  }
+
   function refreshActiveFeature() {
     const target = adminRefreshTarget(view);
+    if (target === "group-buys") {
+      setGroupBuysRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "orders") {
+      setOrdersRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "fulfillment") {
+      setFulfillmentRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "after-sales") {
+      setAfterSalesRefreshVersion((version) => version + 1);
+      return;
+    }
     if (target === "catalog") {
       setCatalogRefreshVersion((version) => version + 1);
       return;
@@ -487,14 +351,6 @@ export function AdminApp() {
     setMessage("已退出后台登录");
   }
 
-  async function loadOrderContext(order: Order) {
-    const context = await fetchJson<AiContext>(
-      `/api/admin/logs/orders/${order.id}/ai-context`,
-    );
-    setSelectedOrderContext(context);
-    setMessage(`已加载订单 ${order.order_no} 全链路详情`);
-  }
-
   async function reviewWithdrawalTax(withdrawal: Withdrawal) {
     await fetchJson(`/api/admin/withdrawals/${withdrawal.id}/tax-review`, {
       method: "POST",
@@ -508,7 +364,7 @@ export function AdminApp() {
       }),
     });
     setMessage("提现税务复核已保存");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function updateWithdrawal(
@@ -520,7 +376,7 @@ export function AdminApp() {
       body: JSON.stringify({ reason: "后台人工处理" }),
     });
     setMessage(`提现申请已执行 ${action}`);
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function updateAlert(alert: OpsAlert, action: "resolve" | "ignore") {
@@ -532,20 +388,7 @@ export function AdminApp() {
       }),
     });
     setMessage(`告警已${action === "resolve" ? "处理" : "忽略"}`);
-    refreshLegacyFeatures();
-  }
-
-  function exportPicking(format: "summary" | "detail") {
-    window.location.href = `${apiBaseUrl}/api/admin/orders/export/picking.csv?format=${format}`;
-  }
-
-  async function pickupVerify(order: Order) {
-    await fetchJson(`/api/admin/orders/${order.id}/pickup-verify`, {
-      method: "POST",
-      body: JSON.stringify({ admin_remark: "后台核销自提" }),
-    });
-    setMessage(`订单 ${order.order_no} 已核销自提`);
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function loadStockLedger(item: InventoryItem) {
@@ -569,7 +412,7 @@ export function AdminApp() {
       body: JSON.stringify({ adjust_quantity: Number(adjustText), reason }),
     });
     setMessage("库存调整已保存");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function createPurchasePlan(item?: InventoryItem) {
@@ -619,7 +462,7 @@ export function AdminApp() {
       }),
     });
     setMessage("采购计划已创建");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function confirmPurchasePlan(plan: PurchasePlan) {
@@ -627,7 +470,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("采购计划已确认");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function cancelPurchasePlan(plan: PurchasePlan) {
@@ -635,7 +478,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("采购计划已取消");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function receivePurchasePlan(plan: PurchasePlan) {
@@ -653,7 +496,7 @@ export function AdminApp() {
       }),
     });
     setMessage("采购入库已完成");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function createSupplier() {
@@ -672,7 +515,7 @@ export function AdminApp() {
       }),
     });
     setMessage("供应商已创建");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function disableSupplier(supplier: Supplier) {
@@ -680,7 +523,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("供应商已禁用");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function loadBatchLedger(batch: ProductBatch) {
@@ -714,7 +557,7 @@ export function AdminApp() {
       }),
     });
     setMessage("损耗已记录");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function createStockCheck() {
@@ -749,7 +592,7 @@ export function AdminApp() {
       }),
     });
     setMessage("盘点单已创建");
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   async function confirmStockCheck(check: StockCheck) {
@@ -757,167 +600,7 @@ export function AdminApp() {
       method: "POST",
     });
     setMessage("盘点单已确认");
-    refreshLegacyFeatures();
-  }
-
-  async function reviewAfterSale(
-    item: AfterSaleCase,
-    status: "approved" | "rejected" | "reviewing",
-  ) {
-    const refundText =
-      status === "approved"
-        ? window.prompt(
-            "请输入审核通过退款金额（分，可留空）",
-            String(item.requested_refund_cents ?? 0),
-          )
-        : null;
-    const responsibility =
-      status === "approved"
-        ? window.prompt(
-            "请输入责任方：supplier / platform / leader / customer / unknown",
-            item.responsibility ?? "supplier",
-          )
-        : item.responsibility;
-    const adminNote =
-      window.prompt(
-        "请输入售后审核备注",
-        status === "rejected" ? "售后审核拒绝" : "售后审核处理",
-      ) ?? "";
-    await fetchJson(`/api/admin/after-sales/${item.id}/review`, {
-      method: "POST",
-      body: JSON.stringify({
-        status,
-        approved_refund_cents:
-          refundText === null ? undefined : Number(refundText),
-        resolution_type: status === "approved" ? "partial_refund" : "reject",
-        responsibility,
-        admin_note: adminNote,
-      }),
-    });
-    setMessage("售后审核已保存");
-    refreshLegacyFeatures();
-  }
-
-  async function resolveAfterSale(item: AfterSaleCase) {
-    const resolutionType = window.prompt(
-      "请输入处理结果：refund / partial_refund / resend / compensation_note / reject / manual_note",
-      item.resolution_type ?? "partial_refund",
-    );
-    if (!resolutionType) return;
-    const refundText =
-      resolutionType === "refund" || resolutionType === "partial_refund"
-        ? window.prompt(
-            "请输入确认退款金额（分）",
-            String(
-              item.approved_refund_cents ?? item.requested_refund_cents ?? 0,
-            ),
-          )
-        : null;
-    const adminNote =
-      window.prompt("请输入售后解决备注", "售后客服人工处理") ?? "";
-    await fetchJson(`/api/admin/after-sales/${item.id}/resolve`, {
-      method: "POST",
-      body: JSON.stringify({
-        resolution_type: resolutionType,
-        approved_refund_cents:
-          refundText === null ? undefined : Number(refundText),
-        admin_note: adminNote,
-      }),
-    });
-    setMessage("售后处理已完成");
-    refreshLegacyFeatures();
-  }
-
-  async function addAfterSaleNote(item: AfterSaleCase) {
-    const note = window.prompt("请输入售后备注", "售后客服补充备注");
-    if (!note) return;
-    await fetchJson(`/api/admin/after-sales/${item.id}/add-note`, {
-      method: "POST",
-      body: JSON.stringify({ admin_note: note }),
-    });
-    setMessage("售后备注已追加");
-    refreshLegacyFeatures();
-  }
-
-  async function linkAfterSaleLoss(item: AfterSaleCase) {
-    const productId = window.prompt(
-      "请输入损耗商品 ID",
-      item.product_id ?? inventoryOverview?.items[0]?.product_id ?? "",
-    );
-    if (!productId) return;
-    const batchId = window.prompt("请输入批次 ID（可留空）", "") ?? "";
-    const quantityText = window.prompt("请输入损耗数量（基础库存单位）", "1");
-    if (!quantityText) return;
-    const remark = window.prompt("请输入损耗备注", "售后问题关联损耗") ?? "";
-    await fetchJson(`/api/admin/after-sales/${item.id}/link-loss`, {
-      method: "POST",
-      body: JSON.stringify({
-        product_id: productId,
-        batch_id: batchId || undefined,
-        quantity: Number(quantityText),
-        reason: `after_sale_${item.type}`,
-        remark,
-      }),
-    });
-    setMessage("售后损耗已关联");
-    refreshLegacyFeatures();
-  }
-
-  async function loadClosureWorkbench(groupBuyId: string) {
-    if (!groupBuyId) return;
-    const [summary, refundOrders] = await Promise.all([
-      fetchJson<ClosureSummary>(`/api/admin/group-buys/${groupBuyId}/closure-summary`),
-      fetchJson<ManualRefundOrderResponse>(`/api/admin/group-buys/${groupBuyId}/manual-refund-orders`),
-    ]);
-    setClosureSummary(summary);
-    setManualRefundOrders(refundOrders.items);
-  }
-
-  async function markSelectedGroupBuyFailed() {
-    if (!selectedClosureGroupBuyId) return;
-    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/mark-failed`, { method: "POST", body: JSON.stringify({ reason: "Admin 人工确认团购失败", admin_note: "标记失败不等于退款完成" }) });
-    await loadClosureWorkbench(selectedClosureGroupBuyId);
-  }
-
-  async function closeSelectedUnpaidOrders() {
-    if (!selectedClosureGroupBuyId) return;
-    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/close-unpaid-orders`, { method: "POST", body: JSON.stringify({ admin_note: "关闭未支付订单不会触发退款" }) });
-    await loadClosureWorkbench(selectedClosureGroupBuyId);
-  }
-
-  async function closeSelectedGroupBuyFinally() {
-    if (!selectedClosureGroupBuyId) return;
-    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/close`, { method: "POST", body: JSON.stringify({ admin_note: "最终关闭要求所有待办已完成" }) });
-    await loadClosureWorkbench(selectedClosureGroupBuyId);
-  }
-
-  async function confirmRefundHandled(order: ManualRefundOrder) {
-    if (!selectedClosureGroupBuyId || !order.latest_refund_id) {
-      setMessage("确认退款已完成必须基于成功退款记录");
-      return;
-    }
-    await fetchJson(`/api/admin/group-buys/${selectedClosureGroupBuyId}/orders/${order.order_id}/confirm-refund`, { method: "POST", body: JSON.stringify({ refund_id: order.latest_refund_id, admin_note: "确认退款已完成必须基于成功退款记录" }) });
-    await loadClosureWorkbench(selectedClosureGroupBuyId);
-  }
-
-  async function cloneGroupBuy(groupBuy: GroupBuy) {
-    const endTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const pickupTime = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-    await fetchJson(`/api/admin/group-buys/${groupBuy.id}/clone`, {
-      method: "POST",
-      body: JSON.stringify({ end_time: endTime, pickup_time: pickupTime }),
-    });
-    setMessage("已一键再开团");
-    refreshLegacyFeatures();
-  }
-
-  async function markOrder(order: Order, nextStatus: string) {
-    await fetchJson<Order>(`/api/orders/${order.id}/status`, {
-      method: "POST",
-      body: JSON.stringify({ next_status: nextStatus }),
-    });
-    setMessage(`订单 ${order.order_no} 已更新为 ${nextStatus}`);
-    refreshLegacyFeatures();
+    refreshSalesAndLegacyFeatures();
   }
 
   if (view === "login" || !adminSession) {
@@ -979,148 +662,32 @@ export function AdminApp() {
           <CatalogProductsPage refreshVersion={catalogRefreshVersion} />
         </div>
 
-        {view === "groupBuys" ? (
-          <Card title="团购列表">
-            <Table
-              rowKey="id"
-              dataSource={groupBuys}
-              columns={[
-                {
-                  title: "商品",
-                  render: (_: unknown, groupBuy: GroupBuy) =>
-                    groupBuy.product?.name ?? "-",
-                },
-                {
-                  title: "社区",
-                  render: (_: unknown, groupBuy: GroupBuy) =>
-                    groupBuy.community?.name ?? "-",
-                },
-                {
-                  title: "团购价",
-                  render: (_: unknown, groupBuy: GroupBuy) =>
-                    `¥${formatYuan(groupBuy.price_cents)}`,
-                },
-                {
-                  title: "人数",
-                  render: (_: unknown, groupBuy: GroupBuy) =>
-                    `${groupBuy.current_people}/${groupBuy.min_people}`,
-                },
-                {
-                  title: "数量",
-                  render: (_: unknown, groupBuy: GroupBuy) =>
-                    `${groupBuy.current_quantity}/${groupBuy.min_quantity}`,
-                },
-                { title: "状态", dataIndex: "status" },
-                {
-                  title: "截止时间",
-                  render: (_: unknown, groupBuy: GroupBuy) =>
-                    new Date(groupBuy.end_time).toLocaleString(),
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, groupBuy: GroupBuy) => (
-                    <Button onClick={() => cloneGroupBuy(groupBuy)}>
-                      一键再开团
-                    </Button>
-                  ),
-                },
-              ]}
+        <div
+          hidden={
+            view !== "groupBuys" && view !== "failedGroupBuyClosure"
+          }
+        >
+          <AdminErrorBoundary resetKey={String(groupBuysRefreshVersion)}>
+            <GroupBuyManagementPage
+              refreshVersion={groupBuysRefreshVersion}
+              activeView={
+                view === "failedGroupBuyClosure"
+                  ? "failedGroupBuyClosure"
+                  : "groupBuys"
+              }
+              onMessage={setMessage}
+              onMutationCommitted={refreshSalesAndLegacyFeatures}
             />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
-
-
-        {view === "failedGroupBuyClosure" ? (
-          <Card title="失败团购人工关闭工作台">
-            <Typography.Paragraph>
-              “标记失败”不等于退款完成；“关闭未支付订单”不会触发退款；“确认退款已完成”必须基于成功退款记录；“最终关闭”要求所有待办已完成。
-            </Typography.Paragraph>
-            <Space wrap>
-              <Select
-                style={{ width: 360 }}
-                placeholder="选择团购"
-                value={selectedClosureGroupBuyId || undefined}
-                onChange={(value: string) => {
-                  setSelectedClosureGroupBuyId(value);
-                  void loadClosureWorkbench(value);
-                }}
-                options={groupBuys.map((groupBuy) => ({ label: `${groupBuy.product?.name ?? "团购"} / ${groupBuy.status} / ${new Date(groupBuy.end_time).toLocaleString()}`, value: groupBuy.id }))}
-              />
-              <Button onClick={() => selectedClosureGroupBuyId && loadClosureWorkbench(selectedClosureGroupBuyId)}>查看关闭摘要</Button>
-              <Button onClick={markSelectedGroupBuyFailed}>标记失败</Button>
-              <Button onClick={closeSelectedUnpaidOrders}>关闭未支付订单</Button>
-              <Button type="primary" danger onClick={closeSelectedGroupBuyFinally}>最终关闭</Button>
-            </Space>
-            {closureSummary ? (
-              <Card title="团购关闭摘要" style={{ marginTop: 16 }}>
-                <Typography.Paragraph>
-                  状态：{closureSummary.status}；目标：{closureSummary.target_count}；有效已支付数量：{closureSummary.paid_quantity}；未支付待关闭：{closureSummary.unpaid_order_count}；待人工退款：{closureSummary.paid_pending_refund_count}；退款成功：{closureSummary.refund_success_count}；待退金额：¥{formatYuan(closureSummary.pending_refund_amount_cents)}；已退金额：¥{formatYuan(closureSummary.total_refunded_amount_cents)}；库存扣减/回补/剩余：{closureSummary.inventory_deducted_quantity}/{closureSummary.inventory_restored_quantity}/{closureSummary.inventory_remaining_restorable_quantity}；可关闭：{closureSummary.closable ? "是" : "否"}
-                </Typography.Paragraph>
-                {closureSummary.blockers.length > 0 ? (
-                  <Typography.Paragraph type="danger">
-                    阻塞原因：{closureSummary.blockers.map((blocker) => `${blocker.type}(${blocker.count})`).join("，")}
-                  </Typography.Paragraph>
-                ) : null}
-              </Card>
-            ) : null}
-            <Table
-              rowKey="order_id"
-              dataSource={manualRefundOrders}
-              columns={[
-                { title: "订单号", dataIndex: "order_no" },
-                { title: "用户", dataIndex: "user_id" },
-                { title: "数量", dataIndex: "quantity" },
-                { title: "实付", render: (_: unknown, order: ManualRefundOrder) => `¥${formatYuan(order.pay_amount_cents)}` },
-                { title: "已退", render: (_: unknown, order: ManualRefundOrder) => `¥${formatYuan(order.refund_amount_cents)}` },
-                { title: "退款状态", dataIndex: "refund_status" },
-                { title: "关闭状态", dataIndex: "closure_status" },
-                { title: "最新退款单", dataIndex: "latest_refund_id" },
-                { title: "操作", render: (_: unknown, order: ManualRefundOrder) => <Button onClick={() => confirmRefundHandled(order)}>确认退款已完成</Button> },
-              ]}
+        <div hidden={view !== "fulfillment"}>
+          <AdminErrorBoundary resetKey={String(fulfillmentRefreshVersion)}>
+            <FulfillmentOverviewPage
+              refreshVersion={fulfillmentRefreshVersion}
             />
-          </Card>
-        ) : null}
-
-        {view === "fulfillment" && fulfillmentOverview ? (
-          <Card title="履约看板">
-            <Typography.Paragraph>
-              今日团购：{fulfillmentOverview.today_group_buys}；待备货：
-              {fulfillmentOverview.pending_prepare_orders}；待自提：
-              {fulfillmentOverview.ready_pickup_orders}；已自提：
-              {fulfillmentOverview.picked_orders}；已完成：
-              {fulfillmentOverview.completed_orders}；异常：
-              {fulfillmentOverview.abnormal_orders}
-            </Typography.Paragraph>
-            <Typography.Title level={4}>按社区</Typography.Title>
-            <Table
-              rowKey="community_id"
-              dataSource={fulfillmentOverview.by_community}
-              pagination={false}
-              columns={[
-                { title: "社区", dataIndex: "community_name" },
-                { title: "订单数", dataIndex: "order_count" },
-                { title: "数量", dataIndex: "quantity" },
-                {
-                  title: "金额",
-                  render: (_: unknown, item: { amount_cents: number }) =>
-                    `¥${formatYuan(item.amount_cents)}`,
-                },
-              ]}
-            />
-            <Typography.Title level={4}>按商品</Typography.Title>
-            <Table
-              rowKey="product_id"
-              dataSource={fulfillmentOverview.by_product}
-              pagination={false}
-              columns={[
-                { title: "商品", dataIndex: "product_name" },
-                { title: "数量", dataIndex: "quantity" },
-                { title: "订单数", dataIndex: "order_count" },
-              ]}
-            />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
         {view === "inventory" && inventoryOverview ? (
           <Card
@@ -1260,135 +827,15 @@ export function AdminApp() {
           </Card>
         ) : null}
 
-        {view === "orders" ? (
-          <Card
-            title="订单列表"
-            extra={
-              <Space>
-                <Button onClick={() => exportPicking("detail")}>
-                  导出明细分拣单 CSV
-                </Button>
-                <Button onClick={() => exportPicking("summary")}>
-                  导出汇总分拣单 CSV
-                </Button>
-              </Space>
-            }
-          >
-            <Table
-              rowKey="id"
-              dataSource={orders}
-              columns={[
-                { title: "订单号", dataIndex: "order_no" },
-                {
-                  title: "商品",
-                  render: (_: unknown, order: Order) =>
-                    order.group_buy?.product?.name ?? order.product?.name ?? "-",
-                },
-                {
-                  title: "用户",
-                  render: (_: unknown, order: Order) =>
-                    order.user?.nickname ?? "-",
-                },
-                {
-                  title: "金额",
-                  render: (_: unknown, order: Order) =>
-                    `¥${formatYuan(order.pay_amount_cents)}`,
-                },
-                { title: "支付状态", dataIndex: "pay_status" },
-                { title: "订单状态", dataIndex: "order_status" },
-                { title: "收货人", dataIndex: "receiver_name" },
-                {
-                  title: "操作",
-                  render: (_: unknown, order: Order) => (
-                    <Space>
-                      <Button onClick={() => loadOrderContext(order)}>
-                        详情
-                      </Button>
-                      <Button onClick={() => markOrder(order, "preparing")}>
-                        备货中
-                      </Button>
-                      <Button onClick={() => markOrder(order, "ready")}>
-                        待自提
-                      </Button>
-                      <Button onClick={() => pickupVerify(order)}>
-                        核销自提
-                      </Button>
-                      <Button onClick={() => markOrder(order, "picked")}>
-                        已自提
-                      </Button>
-                      <Button onClick={() => markOrder(order, "completed")}>
-                        完成
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "orders"}>
+          <AdminErrorBoundary resetKey={String(ordersRefreshVersion)}>
+            <OrdersPage
+              refreshVersion={ordersRefreshVersion}
+              onMessage={setMessage}
+              onMutationCommitted={refreshSalesAndLegacyFeatures}
             />
-          </Card>
-        ) : null}
-
-        {view === "orders" && selectedOrderContext ? (
-          <Card title="订单全链路详情">
-            <Typography.Title level={4}>订单基础信息</Typography.Title>
-            <Typography.Paragraph>
-              订单号：{selectedOrderContext.order.order_no}；状态：
-              {selectedOrderContext.order.order_status}；支付状态：
-              {selectedOrderContext.order.pay_status}；实付：¥
-              {formatYuan(selectedOrderContext.order.pay_amount_cents)}
-            </Typography.Paragraph>
-            <Typography.Paragraph>
-              消费额度抵扣：¥
-              {formatYuan(selectedOrderContext.credit_usage?.amount_cents ?? 0)}
-              ；来源：
-              {selectedOrderContext.credit_usage?.from_reward_conversion
-                ? "开团服务奖励转平台消费额度"
-                : "-"}
-            </Typography.Paragraph>
-            <Typography.Title level={4}>
-              支付 / 退款 / 开团服务奖励 / 提现或转消费额度信息
-            </Typography.Title>
-            <Typography.Paragraph>
-              支付、退款、开团服务奖励与提现或转消费额度信息通过下方
-              BusinessEventLog、OpsAlertLog 与 AI context 汇总展示。
-            </Typography.Paragraph>
-            <Typography.Title level={4}>
-              OrderTimelineLog 时间线
-            </Typography.Title>
-            <Table
-              rowKey="id"
-              dataSource={selectedOrderContext.timeline}
-              pagination={false}
-              columns={[
-                { title: "事件", dataIndex: "event_type" },
-                { title: "标题", dataIndex: "title" },
-                { title: "时间", dataIndex: "created_at" },
-              ]}
-            />
-            <Typography.Title level={4}>BusinessEventLog</Typography.Title>
-            <Table
-              rowKey="id"
-              dataSource={selectedOrderContext.business_events}
-              pagination={false}
-              columns={[
-                { title: "事件", dataIndex: "event_type" },
-                { title: "级别", dataIndex: "event_level" },
-                { title: "说明", dataIndex: "message" },
-              ]}
-            />
-            <Typography.Title level={4}>OpsAlertLog</Typography.Title>
-            <Table
-              rowKey="id"
-              dataSource={selectedOrderContext.alerts}
-              pagination={false}
-              columns={[
-                { title: "类型", dataIndex: "alert_type" },
-                { title: "级别", dataIndex: "alert_level" },
-                { title: "状态", dataIndex: "status" },
-                { title: "标题", dataIndex: "title" },
-              ]}
-            />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
         {view === "suppliers" ? (
           <Card
@@ -1544,82 +991,18 @@ export function AdminApp() {
           </Card>
         ) : null}
 
-        {view === "afterSales" ? (
-          <Card title="售后客服">
-            <Table
-              rowKey="id"
-              dataSource={afterSales}
-              columns={[
-                { title: "售后单", dataIndex: "id" },
-                {
-                  title: "订单号",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    item.order?.order_no ?? item.order_id,
-                },
-                {
-                  title: "用户",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    item.order?.user?.nickname ?? item.user_id ?? "-",
-                },
-                {
-                  title: "商品",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    item.product?.name ?? item.product_id ?? "-",
-                },
-                { title: "类型", dataIndex: "type" },
-                { title: "状态", dataIndex: "status" },
-                {
-                  title: "责任方",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    item.responsibility ?? "-",
-                },
-                {
-                  title: "申请退款",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    `¥${formatYuan(item.requested_refund_cents ?? 0)}`,
-                },
-                {
-                  title: "审核退款",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    `¥${formatYuan(item.approved_refund_cents ?? 0)}`,
-                },
-                { title: "原因", dataIndex: "reason" },
-                {
-                  title: "证据 URL",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    (item.evidence_image_urls ?? []).join("；") || "-",
-                },
-                {
-                  title: "创建时间",
-                  render: (_: unknown, item: AfterSaleCase) =>
-                    new Date(item.created_at).toLocaleString(),
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, item: AfterSaleCase) => (
-                    <Space>
-                      <Button onClick={() => reviewAfterSale(item, "approved")}>
-                        审核通过
-                      </Button>
-                      <Button onClick={() => reviewAfterSale(item, "rejected")}>
-                        审核拒绝
-                      </Button>
-                      <Button onClick={() => resolveAfterSale(item)}>
-                        解决
-                      </Button>
-                      <Button onClick={() => addAfterSaleNote(item)}>
-                        追加备注
-                      </Button>
-                      <Button onClick={() => linkAfterSaleLoss(item)}>
-                        关联损耗
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "afterSales"}>
+          <AdminErrorBoundary resetKey={String(afterSalesRefreshVersion)}>
+            <AfterSalesPage
+              refreshVersion={afterSalesRefreshVersion}
+              defaultLossProductId={
+                inventoryOverview?.items[0]?.product_id ?? ""
+              }
+              onMessage={setMessage}
+              onMutationCommitted={refreshSalesAndLegacyFeatures}
             />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
         {view === "withdrawals" ? (
           <Card title="提现管理">

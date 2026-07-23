@@ -29,8 +29,13 @@ let categoryRequestCount = 0;
 let productRequestCount = 0;
 let financeRequestCount = 0;
 let operationsRequestCount = 0;
+let groupBuyRequestCount = 0;
+let orderRequestCount = 0;
+let fulfillmentRequestCount = 0;
+let afterSalesRequestCount = 0;
 let catalogFailureInjected = false;
 let operationsFailureInjected = false;
+let orderFailureInjected = false;
 
 page.on('request', (request) => {
   const pathname = new URL(request.url()).pathname;
@@ -48,6 +53,18 @@ page.on('request', (request) => {
   if (pathname.startsWith('/api/admin/operations/dashboard/')) {
     operationsRequestCount += 1;
   }
+  if (pathname === '/api/group-buys') {
+    groupBuyRequestCount += 1;
+  }
+  if (pathname === '/api/orders') {
+    orderRequestCount += 1;
+  }
+  if (pathname === '/api/admin/fulfillment/overview') {
+    fulfillmentRequestCount += 1;
+  }
+  if (pathname === '/api/admin/after-sales') {
+    afterSalesRequestCount += 1;
+  }
 });
 
 try {
@@ -58,6 +75,18 @@ try {
   await page.getByRole('button', { name: /登\s*录/ }).click();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
+  await waitForCount(page, () => groupBuyRequestCount, 1, 'group-buy initial load');
+  await waitForCount(page, () => orderRequestCount, 1, 'order initial load');
+  await waitForCount(page, () => fulfillmentRequestCount, 1, 'fulfillment initial load');
+  await waitForCount(page, () => afterSalesRequestCount, 1, 'after-sales initial load');
+  await page.waitForLoadState('networkidle');
+  const readA32RequestCounts = () => ({
+    groupBuys: groupBuyRequestCount,
+    orders: orderRequestCount,
+    fulfillment: fulfillmentRequestCount,
+    afterSales: afterSalesRequestCount,
+  });
+  const a32RequestsAfterInitial = readA32RequestCounts();
 
   const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
   const buttons = shell.getByRole('button');
@@ -158,6 +187,11 @@ try {
   assert.equal(productRequestCount, catalogRequestsBeforeFailure.products + 1);
   assert.equal(catalogRequestCount, catalogRequestsBeforeFailure.total + 2);
 
+  const catalogRequestsBeforeA32 = catalogRequestCount;
+  const financeRequestsBeforeA32 = financeRequestCount;
+  const operationsRequestsBeforeA32 = operationsRequestCount;
+  assert.deepEqual(readA32RequestCounts(), a32RequestsAfterInitial);
+
   const groupBuysButton = shell.getByRole('button', {
     name: '团购管理',
     exact: true,
@@ -165,6 +199,133 @@ try {
   await groupBuysButton.click();
   await assertActive(groupBuysButton, '团购管理');
   await page.getByText('团购列表', { exact: true }).waitFor();
+
+  const a32RequestsBeforeGroupBuyRefresh = readA32RequestCounts();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await waitForCount(
+    page,
+    () => groupBuyRequestCount,
+    a32RequestsBeforeGroupBuyRefresh.groupBuys + 1,
+    'group-buy active refresh',
+  );
+  assert.equal(
+    groupBuyRequestCount,
+    a32RequestsBeforeGroupBuyRefresh.groupBuys + 1,
+  );
+  assert.equal(orderRequestCount, a32RequestsBeforeGroupBuyRefresh.orders);
+  assert.equal(
+    fulfillmentRequestCount,
+    a32RequestsBeforeGroupBuyRefresh.fulfillment,
+  );
+  assert.equal(
+    afterSalesRequestCount,
+    a32RequestsBeforeGroupBuyRefresh.afterSales,
+  );
+  assert.equal(catalogRequestCount, catalogRequestsBeforeA32);
+  assert.equal(financeRequestCount, financeRequestsBeforeA32);
+  assert.equal(operationsRequestCount, operationsRequestsBeforeA32);
+
+  const ordersButton = shell.getByRole('button', {
+    name: '订单管理',
+    exact: true,
+  });
+  await ordersButton.click();
+  await assertActive(ordersButton, '订单管理');
+  await page.getByText('订单列表', { exact: true }).waitFor();
+
+  const orderFailureRoute = async (route) => {
+    assert.equal(route.request().method(), 'GET');
+    assert.equal(orderFailureInjected, false);
+    orderFailureInjected = true;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        code: 'E2E_ORDER_FAILURE',
+        message: '模拟订单列表失败',
+      }),
+    });
+  };
+  await page.route('**/api/orders', orderFailureRoute);
+  const a32RequestsBeforeOrderFailure = readA32RequestCounts();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await page.getByText('订单列表加载失败', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
+  await page.getByRole('button', { name: /刷\s*新/ }).waitFor();
+  await page.getByRole('button', { name: '退出登录', exact: true }).waitFor();
+  assert.equal(orderFailureInjected, true);
+  await waitForCount(
+    page,
+    () => orderRequestCount,
+    a32RequestsBeforeOrderFailure.orders + 1,
+    'order failed refresh',
+  );
+  assert.equal(
+    groupBuyRequestCount,
+    a32RequestsBeforeOrderFailure.groupBuys,
+  );
+  assert.equal(orderRequestCount, a32RequestsBeforeOrderFailure.orders + 1);
+  assert.equal(
+    fulfillmentRequestCount,
+    a32RequestsBeforeOrderFailure.fulfillment,
+  );
+  assert.equal(
+    afterSalesRequestCount,
+    a32RequestsBeforeOrderFailure.afterSales,
+  );
+  await page.unroute('**/api/orders', orderFailureRoute);
+
+  const afterSalesButton = shell.getByRole('button', {
+    name: '售后客服',
+    exact: true,
+  });
+  const a32RequestsDuringOrderError = readA32RequestCounts();
+  await afterSalesButton.click();
+  await assertActive(afterSalesButton, '售后客服');
+  await page.getByRole('columnheader', { name: '售后单' }).waitFor();
+  assert.equal(await page.getByText('售后客服加载失败').count(), 0);
+  assert.deepEqual(readA32RequestCounts(), a32RequestsDuringOrderError);
+
+  await ordersButton.click();
+  await assertActive(ordersButton, '订单管理');
+  await page.getByText('订单列表加载失败', { exact: true }).waitFor();
+
+  const a32RequestsBeforeOrderRetry = readA32RequestCounts();
+  const orderRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/orders' && response.ok(),
+  );
+  await page.getByRole('button', { name: /重\s*试/ }).click();
+  const orderResponse = await orderRetryResponse;
+  const orderEnvelope = await orderResponse.json();
+  assert.equal(orderEnvelope.success, true);
+  assert.equal(Array.isArray(orderEnvelope.data), true);
+  await page.getByText('正在刷新订单列表…').waitFor({ state: 'detached' });
+  await page.getByText('订单列表加载失败').waitFor({ state: 'detached' });
+  await page.getByText('订单列表', { exact: true }).waitFor();
+  await waitForCount(
+    page,
+    () => orderRequestCount,
+    a32RequestsBeforeOrderRetry.orders + 1,
+    'order retry',
+  );
+  assert.equal(
+    groupBuyRequestCount,
+    a32RequestsBeforeOrderRetry.groupBuys,
+  );
+  assert.equal(orderRequestCount, a32RequestsBeforeOrderRetry.orders + 1);
+  assert.equal(
+    fulfillmentRequestCount,
+    a32RequestsBeforeOrderRetry.fulfillment,
+  );
+  assert.equal(
+    afterSalesRequestCount,
+    a32RequestsBeforeOrderRetry.afterSales,
+  );
+  assert.equal(catalogRequestCount, catalogRequestsBeforeA32);
+  assert.equal(financeRequestCount, financeRequestsBeforeA32);
+  assert.equal(operationsRequestCount, operationsRequestsBeforeA32);
+
   await productButton.click();
   await assertActive(productButton, '商品管理');
   await page.getByText('商品目录加载失败', { exact: true }).waitFor();
@@ -302,6 +463,9 @@ try {
   const remainingNavigation = navigation.filter(
     (label) =>
       label !== '商品管理' &&
+      label !== '团购管理' &&
+      label !== '订单管理' &&
+      label !== '售后客服' &&
       label !== '财务对账' &&
       label !== '运营看板',
   );
