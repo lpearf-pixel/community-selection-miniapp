@@ -4,6 +4,7 @@ import {
   initialFeatureResourceState,
   reduceFeatureResource,
 } from './feature-resource';
+import { isCurrentFeatureLoad } from './use-feature-resource-loader';
 
 describe('feature resource state', () => {
   it('keeps prior data visible while a refresh starts', () => {
@@ -33,5 +34,29 @@ describe('feature resource state', () => {
 
   it('does not expose arbitrary object fields as an error message', () => {
     expect(featureErrorMessage({ token: 'secret' })).toBe('页面数据加载失败');
+  });
+
+  it('settles only the latest non-aborted feature load', () => {
+    expect(
+      isCurrentFeatureLoad({
+        aborted: false,
+        generation: 3,
+        currentGeneration: 3,
+      }),
+    ).toBe(true);
+    expect(
+      isCurrentFeatureLoad({
+        aborted: false,
+        generation: 2,
+        currentGeneration: 3,
+      }),
+    ).toBe(false);
+    expect(
+      isCurrentFeatureLoad({
+        aborted: true,
+        generation: 3,
+        currentGeneration: 3,
+      }),
+    ).toBe(false);
   });
 });

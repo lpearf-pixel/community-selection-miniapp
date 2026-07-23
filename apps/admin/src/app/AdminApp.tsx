@@ -25,6 +25,13 @@ import { GroupBuyManagementPage } from "../features/sales/group-buys/GroupBuyMan
 import { OrdersPage } from "../features/sales/orders/OrdersPage";
 import { FulfillmentOverviewPage } from "../features/fulfillment/overview/FulfillmentOverviewPage";
 import { AfterSalesPage } from "../features/sales/after-sales/AfterSalesPage";
+import { InventoryOverviewPage } from "../features/inventory/overview/InventoryOverviewPage";
+import { PurchasePlansPage } from "../features/supply/purchase-plans/PurchasePlansPage";
+import { SuppliersPage } from "../features/supply/suppliers/SuppliersPage";
+import { InventoryBatchesPage } from "../features/inventory/batches/InventoryBatchesPage";
+import { ExpiryAlertsPage } from "../features/inventory/expiry-alerts/ExpiryAlertsPage";
+import { StockChecksPage } from "../features/inventory/stock-checks/StockChecksPage";
+import type { InventoryProductReference } from "../features/inventory/shared/types";
 import { DEFAULT_ADMIN_VIEW, type AdminViewKey } from "./admin-view";
 import { AdminErrorBoundary } from "./AdminErrorBoundary";
 import { AdminFeatureWorkspace } from "./AdminFeatureWorkspace";
@@ -68,136 +75,6 @@ type TaxRecord = {
 
 
 
-type InventoryItem = {
-  product_id: string;
-  product_name: string;
-  stock: number;
-  unit: string;
-  stock_unit: string;
-  sale_unit: string;
-  sale_spec_name?: string | null;
-  stock_deduct_quantity: number;
-  display_stock: string;
-  display_sale_spec: string;
-  status: string;
-  low_stock_threshold: number;
-  suggest_purchase_quantity: number;
-};
-
-type InventoryOverview = {
-  low_stock_count: number;
-  out_of_stock_count: number;
-  total_sku_count: number;
-  items: InventoryItem[];
-};
-
-type StockLedger = {
-  id: string;
-  source_type: string;
-  direction: string;
-  quantity: number;
-  stock_before: number;
-  stock_after: number;
-  remark?: string | null;
-  created_at: string;
-};
-
-type PurchasePlanItem = {
-  id: string;
-  product_id: string;
-  product_name_snapshot: string;
-  planned_quantity: number;
-  received_quantity: number;
-  purchase_unit?: string | null;
-  purchase_quantity?: number | null;
-  stock_in_quantity?: number | null;
-  cost_price_cents: number;
-  subtotal_cents: number;
-};
-
-type PurchasePlan = {
-  id: string;
-  plan_no: string;
-  status: string;
-  target_date: string;
-  supplier_name?: string | null;
-  total_quantity: number;
-  total_amount_cents: number;
-  items: PurchasePlanItem[];
-};
-
-type Supplier = {
-  id: string;
-  name: string;
-  contact_name?: string | null;
-  contact_phone?: string | null;
-  status: string;
-  remark?: string | null;
-};
-
-type ProductBatch = {
-  id: string;
-  batch_no: string;
-  product_id: string;
-  product_name_snapshot: string;
-  supplier_name_snapshot?: string | null;
-  stock_unit: string;
-  initial_quantity: number;
-  remaining_quantity: number;
-  arrival_date: string;
-  expire_at?: string | null;
-  shelf_life_days?: number | null;
-  status: string;
-  days_to_expire?: number | null;
-  status_hint?: string;
-};
-
-type BatchStockLedger = {
-  id: string;
-  source_type: string;
-  direction: string;
-  quantity: number;
-  batch_quantity_before: number;
-  batch_quantity_after: number;
-  product_stock_before?: number | null;
-  product_stock_after?: number | null;
-  remark?: string | null;
-};
-
-type ExpiryAlert = {
-  batch_id: string;
-  batch_no: string;
-  product_id: string;
-  product_name: string;
-  supplier_name?: string | null;
-  remaining_quantity: number;
-  stock_unit: string;
-  expire_at?: string | null;
-  days_to_expire?: number | null;
-  status_hint: string;
-};
-
-type StockCheckItem = {
-  id: string;
-  product_id: string;
-  batch_id?: string | null;
-  book_quantity: number;
-  actual_quantity: number;
-  diff_quantity: number;
-  stock_unit: string;
-  reason?: string | null;
-};
-
-type StockCheck = {
-  id: string;
-  check_no: string;
-  status: string;
-  remark?: string | null;
-  created_at: string;
-  confirmed_at?: string | null;
-  items: StockCheckItem[];
-};
-
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${url}`, {
     credentials: "include",
@@ -215,15 +92,11 @@ export function AdminApp() {
     username: string;
     role: string;
   } | null>(null);
-  const [inventoryOverview, setInventoryOverview] =
-    useState<InventoryOverview | null>(null);
-  const [stockLedgers, setStockLedgers] = useState<StockLedger[]>([]);
-  const [purchasePlans, setPurchasePlans] = useState<PurchasePlan[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [batches, setBatches] = useState<ProductBatch[]>([]);
-  const [batchLedgers, setBatchLedgers] = useState<BatchStockLedger[]>([]);
-  const [expiryAlerts, setExpiryAlerts] = useState<ExpiryAlert[]>([]);
-  const [stockChecks, setStockChecks] = useState<StockCheck[]>([]);
+  const [
+    defaultInventoryProductReference,
+    setDefaultInventoryProductReference,
+  ] = useState<InventoryProductReference | null>(null);
+  const [defaultBatchId, setDefaultBatchId] = useState("");
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [alerts, setAlerts] = useState<OpsAlert[]>([]);
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
@@ -232,55 +105,44 @@ export function AdminApp() {
   const [ordersRefreshVersion, setOrdersRefreshVersion] = useState(0);
   const [fulfillmentRefreshVersion, setFulfillmentRefreshVersion] = useState(0);
   const [afterSalesRefreshVersion, setAfterSalesRefreshVersion] = useState(0);
+  const [inventoryRefreshVersion, setInventoryRefreshVersion] = useState(0);
+  const [purchasePlansRefreshVersion, setPurchasePlansRefreshVersion] =
+    useState(0);
+  const [suppliersRefreshVersion, setSuppliersRefreshVersion] = useState(0);
+  const [batchesRefreshVersion, setBatchesRefreshVersion] = useState(0);
+  const [expiryAlertsRefreshVersion, setExpiryAlertsRefreshVersion] =
+    useState(0);
+  const [stockChecksRefreshVersion, setStockChecksRefreshVersion] =
+    useState(0);
   const [catalogRefreshVersion, setCatalogRefreshVersion] = useState(0);
   const [financeRefreshVersion, setFinanceRefreshVersion] = useState(0);
   const [operationsRefreshVersion, setOperationsRefreshVersion] = useState(0);
 
   function refreshLegacyFeatures() {
     void Promise.all([
-      fetchJson<InventoryOverview>("/api/admin/inventory/overview"),
-      fetchJson<PurchasePlan[]>("/api/admin/purchase-plans"),
-      fetchJson<Supplier[]>("/api/admin/suppliers"),
-      fetchJson<ProductBatch[]>("/api/admin/inventory/batches"),
-      fetchJson<{ items: ExpiryAlert[] }>(
-        "/api/admin/inventory/expiry-alerts?days=7",
-      ),
-      fetchJson<StockCheck[]>("/api/admin/stock-checks"),
       fetchJson<Withdrawal[]>("/api/admin/withdrawals"),
       fetchJson<OpsAlert[]>("/api/admin/logs/alerts"),
       fetchJson<TaxRecord[]>("/api/admin/tax-records"),
     ])
-      .then(
-        ([
-          inventoryData,
-          purchasePlanData,
-          supplierData,
-          batchData,
-          expiryData,
-          stockCheckData,
-          withdrawalData,
-          alertData,
-          taxRecordData,
-        ]) => {
-          setInventoryOverview(inventoryData);
-          setPurchasePlans(purchasePlanData);
-          setSuppliers(supplierData);
-          setBatches(batchData);
-          setExpiryAlerts(expiryData.items);
-          setStockChecks(stockCheckData);
-          setWithdrawals(withdrawalData);
-          setAlerts(alertData);
-          setTaxRecords(taxRecordData);
-        },
-      )
+      .then(([withdrawalData, alertData, taxRecordData]) => {
+        setWithdrawals(withdrawalData);
+        setAlerts(alertData);
+        setTaxRecords(taxRecordData);
+      })
       .catch((error: Error) => setMessage(error.message));
   }
 
-  function refreshSalesAndLegacyFeatures() {
+  function refreshBusinessFeatures() {
     setGroupBuysRefreshVersion((version) => version + 1);
     setOrdersRefreshVersion((version) => version + 1);
     setFulfillmentRefreshVersion((version) => version + 1);
     setAfterSalesRefreshVersion((version) => version + 1);
+    setInventoryRefreshVersion((version) => version + 1);
+    setPurchasePlansRefreshVersion((version) => version + 1);
+    setSuppliersRefreshVersion((version) => version + 1);
+    setBatchesRefreshVersion((version) => version + 1);
+    setExpiryAlertsRefreshVersion((version) => version + 1);
+    setStockChecksRefreshVersion((version) => version + 1);
     refreshLegacyFeatures();
   }
 
@@ -300,6 +162,30 @@ export function AdminApp() {
     }
     if (target === "after-sales") {
       setAfterSalesRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "inventory") {
+      setInventoryRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "purchase-plans") {
+      setPurchasePlansRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "suppliers") {
+      setSuppliersRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "batches") {
+      setBatchesRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "expiry-alerts") {
+      setExpiryAlertsRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "stock-checks") {
+      setStockChecksRefreshVersion((version) => version + 1);
       return;
     }
     if (target === "catalog") {
@@ -364,7 +250,7 @@ export function AdminApp() {
       }),
     });
     setMessage("提现税务复核已保存");
-    refreshSalesAndLegacyFeatures();
+    refreshBusinessFeatures();
   }
 
   async function updateWithdrawal(
@@ -376,7 +262,7 @@ export function AdminApp() {
       body: JSON.stringify({ reason: "后台人工处理" }),
     });
     setMessage(`提现申请已执行 ${action}`);
-    refreshSalesAndLegacyFeatures();
+    refreshBusinessFeatures();
   }
 
   async function updateAlert(alert: OpsAlert, action: "resolve" | "ignore") {
@@ -388,219 +274,7 @@ export function AdminApp() {
       }),
     });
     setMessage(`告警已${action === "resolve" ? "处理" : "忽略"}`);
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function loadStockLedger(item: InventoryItem) {
-    const ledgers = await fetchJson<StockLedger[]>(
-      `/api/admin/inventory/ledger?product_id=${item.product_id}`,
-    );
-    setStockLedgers(ledgers);
-    setMessage(`已加载 ${item.product_name} 库存流水`);
-  }
-
-  async function adjustInventory(item: InventoryItem) {
-    const adjustText = window.prompt(
-      `请输入 ${item.product_name} 调整数量（基础库存单位：${item.stock_unit}，可为负数）`,
-      "1",
-    );
-    if (!adjustText) return;
-    const reason = window.prompt("请输入库存调整原因", "后台人工调整");
-    if (!reason) return;
-    await fetchJson(`/api/admin/inventory/products/${item.product_id}/adjust`, {
-      method: "POST",
-      body: JSON.stringify({ adjust_quantity: Number(adjustText), reason }),
-    });
-    setMessage("库存调整已保存");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function createPurchasePlan(item?: InventoryItem) {
-    const target = item ?? inventoryOverview?.items[0];
-    if (!target) {
-      setMessage("暂无商品可创建采购计划");
-      return;
-    }
-    const purchaseQuantityText = window.prompt(
-      "请输入采购数量（例如 3 箱中的 3）",
-      "1",
-    );
-    if (!purchaseQuantityText) return;
-    const purchaseUnit = window.prompt(
-      "请输入采购单位（例如 箱 / 袋 / 件）",
-      "箱",
-    );
-    if (!purchaseUnit) return;
-    const stockInQuantityText = window.prompt(
-      `请输入折算后的入库库存数量（基础库存单位：${target.stock_unit}）`,
-      String(
-        Math.max(
-          1,
-          target.suggest_purchase_quantity || target.stock_deduct_quantity || 1,
-        ),
-      ),
-    );
-    if (!stockInQuantityText) return;
-    const costPriceText = window.prompt("请输入每个采购单位成本（分）", "0");
-    if (costPriceText === null) return;
-    await fetchJson("/api/admin/purchase-plans", {
-      method: "POST",
-      body: JSON.stringify({
-        target_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        supplier_name: "默认供应商",
-        remark: "后台创建采购计划：采购数量与入库库存数量分开记录",
-        items: [
-          {
-            product_id: target.product_id,
-            purchase_quantity: Number(purchaseQuantityText),
-            purchase_unit: purchaseUnit,
-            stock_in_quantity: Number(stockInQuantityText),
-            cost_price_cents: Number(costPriceText),
-            remark: `采购 ${purchaseQuantityText}${purchaseUnit}，入库 ${stockInQuantityText}${target.stock_unit}`,
-          },
-        ],
-      }),
-    });
-    setMessage("采购计划已创建");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function confirmPurchasePlan(plan: PurchasePlan) {
-    await fetchJson(`/api/admin/purchase-plans/${plan.id}/confirm`, {
-      method: "POST",
-    });
-    setMessage("采购计划已确认");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function cancelPurchasePlan(plan: PurchasePlan) {
-    await fetchJson(`/api/admin/purchase-plans/${plan.id}/cancel`, {
-      method: "POST",
-    });
-    setMessage("采购计划已取消");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function receivePurchasePlan(plan: PurchasePlan) {
-    await fetchJson(`/api/admin/purchase-plans/${plan.id}/receive`, {
-      method: "POST",
-      body: JSON.stringify({
-        remark: "后台采购入库",
-        items: plan.items.map((item) => ({
-          item_id: item.id,
-          received_quantity: Math.max(
-            0,
-            item.planned_quantity - item.received_quantity,
-          ),
-        })),
-      }),
-    });
-    setMessage("采购入库已完成");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function createSupplier() {
-    const name = window.prompt("请输入供应商名称");
-    if (!name) return;
-    const contactName = window.prompt("请输入联系人", "") ?? "";
-    const contactPhone = window.prompt("请输入联系电话", "") ?? "";
-    const remark = window.prompt("请输入备注", "") ?? "";
-    await fetchJson("/api/admin/suppliers", {
-      method: "POST",
-      body: JSON.stringify({
-        name,
-        contact_name: contactName,
-        contact_phone: contactPhone,
-        remark,
-      }),
-    });
-    setMessage("供应商已创建");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function disableSupplier(supplier: Supplier) {
-    await fetchJson(`/api/admin/suppliers/${supplier.id}/disable`, {
-      method: "POST",
-    });
-    setMessage("供应商已禁用");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function loadBatchLedger(batch: ProductBatch) {
-    const ledgers = await fetchJson<BatchStockLedger[]>(
-      `/api/admin/inventory/batches/${batch.id}/ledger`,
-    );
-    setBatchLedgers(ledgers);
-    setMessage(`已加载批次 ${batch.batch_no} 流水`);
-  }
-
-  async function recordBatchLoss(batch: ProductBatch) {
-    const quantityText = window.prompt(
-      `请输入损耗数量（${batch.stock_unit}）`,
-      "1",
-    );
-    if (!quantityText) return;
-    const lossType = window.prompt(
-      "请输入损耗类型：damaged / expired / weight_loss / bad_fruit / manual_loss / other",
-      "bad_fruit",
-    );
-    if (!lossType) return;
-    const reason = window.prompt("请输入损耗原因", "坏果损耗");
-    if (!reason) return;
-    await fetchJson(`/api/admin/inventory/batches/${batch.id}/loss`, {
-      method: "POST",
-      body: JSON.stringify({
-        quantity: Number(quantityText),
-        loss_type: lossType,
-        reason,
-        responsible_type: "supplier",
-      }),
-    });
-    setMessage("损耗已记录");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function createStockCheck() {
-    const defaultBatchId = batches[0]?.id ?? "";
-    const batchId =
-      window.prompt(
-        "请输入批次 ID（留空则按商品总库存盘点）",
-        defaultBatchId,
-      ) ?? "";
-    const productId = batchId
-      ? undefined
-      : (window.prompt(
-          "请输入商品 ID",
-          inventoryOverview?.items[0]?.product_id ?? "",
-        ) ?? "");
-    if (!batchId && !productId) return;
-    const actualText = window.prompt("请输入实际库存数量（基础库存单位）", "0");
-    if (actualText === null) return;
-    const reason = window.prompt("请输入盘点原因", "后台盘点") ?? "";
-    await fetchJson("/api/admin/stock-checks", {
-      method: "POST",
-      body: JSON.stringify({
-        remark: "后台创建盘点",
-        items: [
-          {
-            batch_id: batchId || undefined,
-            product_id: productId || undefined,
-            actual_quantity: Number(actualText),
-            reason,
-          },
-        ],
-      }),
-    });
-    setMessage("盘点单已创建");
-    refreshSalesAndLegacyFeatures();
-  }
-
-  async function confirmStockCheck(check: StockCheck) {
-    await fetchJson(`/api/admin/stock-checks/${check.id}/confirm`, {
-      method: "POST",
-    });
-    setMessage("盘点单已确认");
-    refreshSalesAndLegacyFeatures();
+    refreshBusinessFeatures();
   }
 
   if (view === "login" || !adminSession) {
@@ -676,7 +350,7 @@ export function AdminApp() {
                   : "groupBuys"
               }
               onMessage={setMessage}
-              onMutationCommitted={refreshSalesAndLegacyFeatures}
+              onMutationCommitted={refreshBusinessFeatures}
             />
           </AdminErrorBoundary>
         </div>
@@ -689,317 +363,88 @@ export function AdminApp() {
           </AdminErrorBoundary>
         </div>
 
-        {view === "inventory" && inventoryOverview ? (
-          <Card
-            title="库存管理"
-            extra={
-              <Button onClick={() => createPurchasePlan()}>
-                按首个商品创建采购计划
-              </Button>
-            }
-          >
-            <Typography.Paragraph>
-              SKU：{inventoryOverview.total_sku_count}；低库存：
-              {inventoryOverview.low_stock_count}；缺货：
-              {inventoryOverview.out_of_stock_count}
-            </Typography.Paragraph>
-            <Table
-              rowKey="product_id"
-              dataSource={inventoryOverview.items}
-              columns={[
-                { title: "商品名", dataIndex: "product_name" },
-                {
-                  title: "当前库存",
-                  render: (_: unknown, item: InventoryItem) =>
-                    item.display_stock,
-                },
-                {
-                  title: "销售规格",
-                  render: (_: unknown, item: InventoryItem) =>
-                    item.sale_spec_name ?? "-",
-                },
-                { title: "销售单位", dataIndex: "sale_unit" },
-                {
-                  title: "每份扣减",
-                  render: (_: unknown, item: InventoryItem) =>
-                    `${item.stock_deduct_quantity} ${item.stock_unit}`,
-                },
-                { title: "状态", dataIndex: "status" },
-                {
-                  title: "低库存阈值",
-                  render: (_: unknown, item: InventoryItem) =>
-                    `${item.low_stock_threshold} ${item.stock_unit}`,
-                },
-                {
-                  title: "建议采购量",
-                  render: (_: unknown, item: InventoryItem) =>
-                    `${item.suggest_purchase_quantity} ${item.stock_unit}`,
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, item: InventoryItem) => (
-                    <Space>
-                      <Button onClick={() => loadStockLedger(item)}>
-                        查看流水
-                      </Button>
-                      <Button onClick={() => adjustInventory(item)}>
-                        库存调整
-                      </Button>
-                      <Button onClick={() => createPurchasePlan(item)}>
-                        创建采购计划
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "inventory"}>
+          <AdminErrorBoundary resetKey={String(inventoryRefreshVersion)}>
+            <InventoryOverviewPage
+              refreshVersion={inventoryRefreshVersion}
+              onDefaultProductReference={setDefaultInventoryProductReference}
+              onMessage={setMessage}
+              onMutationCommitted={refreshBusinessFeatures}
             />
-            {stockLedgers.length ? (
-              <Table
-                rowKey="id"
-                dataSource={stockLedgers}
-                pagination={{ pageSize: 5 }}
-                columns={[
-                  { title: "类型", dataIndex: "source_type" },
-                  { title: "方向", dataIndex: "direction" },
-                  { title: "数量", dataIndex: "quantity" },
-                  { title: "调整前", dataIndex: "stock_before" },
-                  { title: "调整后", dataIndex: "stock_after" },
-                  { title: "备注", dataIndex: "remark" },
-                ]}
-              />
-            ) : null}
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
-        {view === "purchasePlans" ? (
-          <Card
-            title="采购计划"
-            extra={
-              <Button onClick={() => createPurchasePlan()}>新增采购计划</Button>
-            }
-          >
-            <Table
-              rowKey="id"
-              dataSource={purchasePlans}
-              columns={[
-                { title: "计划编号", dataIndex: "plan_no" },
-                {
-                  title: "目标日期",
-                  render: (_: unknown, plan: PurchasePlan) =>
-                    new Date(plan.target_date).toLocaleDateString(),
-                },
-                { title: "供应商", dataIndex: "supplier_name" },
-                { title: "状态", dataIndex: "status" },
-                { title: "总数量", dataIndex: "total_quantity" },
-                {
-                  title: "总金额",
-                  render: (_: unknown, plan: PurchasePlan) =>
-                    `¥${formatYuan(plan.total_amount_cents)}`,
-                },
-                {
-                  title: "明细",
-                  render: (_: unknown, plan: PurchasePlan) =>
-                    plan.items
-                      .map(
-                        (item) =>
-                          `${item.product_name_snapshot} 采购${item.purchase_quantity ?? "-"}${item.purchase_unit ?? ""} / 入库${item.received_quantity}/${item.planned_quantity}`,
-                      )
-                      .join("；"),
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, plan: PurchasePlan) => (
-                    <Space>
-                      <Button onClick={() => confirmPurchasePlan(plan)}>
-                        确认
-                      </Button>
-                      <Button onClick={() => cancelPurchasePlan(plan)}>
-                        取消
-                      </Button>
-                      <Button onClick={() => receivePurchasePlan(plan)}>
-                        入库
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "purchasePlans"}>
+          <AdminErrorBoundary resetKey={String(purchasePlansRefreshVersion)}>
+            <PurchasePlansPage
+              refreshVersion={purchasePlansRefreshVersion}
+              defaultProductReference={defaultInventoryProductReference}
+              onMessage={setMessage}
+              onMutationCommitted={refreshBusinessFeatures}
             />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
         <div hidden={view !== "orders"}>
           <AdminErrorBoundary resetKey={String(ordersRefreshVersion)}>
             <OrdersPage
               refreshVersion={ordersRefreshVersion}
               onMessage={setMessage}
-              onMutationCommitted={refreshSalesAndLegacyFeatures}
+              onMutationCommitted={refreshBusinessFeatures}
             />
           </AdminErrorBoundary>
         </div>
 
-        {view === "suppliers" ? (
-          <Card
-            title="供应商管理"
-            extra={<Button onClick={createSupplier}>新增供应商</Button>}
-          >
-            <Table
-              rowKey="id"
-              dataSource={suppliers}
-              columns={[
-                { title: "供应商", dataIndex: "name" },
-                { title: "联系人", dataIndex: "contact_name" },
-                { title: "电话", dataIndex: "contact_phone" },
-                { title: "状态", dataIndex: "status" },
-                { title: "备注", dataIndex: "remark" },
-                {
-                  title: "操作",
-                  render: (_: unknown, supplier: Supplier) => (
-                    <Button onClick={() => disableSupplier(supplier)}>
-                      禁用
-                    </Button>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "suppliers"}>
+          <AdminErrorBoundary resetKey={String(suppliersRefreshVersion)}>
+            <SuppliersPage
+              refreshVersion={suppliersRefreshVersion}
+              onMessage={setMessage}
+              onMutationCommitted={refreshBusinessFeatures}
             />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
-        {view === "batches" ? (
-          <Card title="批次库存">
-            <Table
-              rowKey="id"
-              dataSource={batches}
-              columns={[
-                { title: "批次号", dataIndex: "batch_no" },
-                { title: "商品", dataIndex: "product_name_snapshot" },
-                { title: "供应商", dataIndex: "supplier_name_snapshot" },
-                {
-                  title: "剩余数量",
-                  render: (_: unknown, batch: ProductBatch) =>
-                    `${batch.remaining_quantity} ${batch.stock_unit}`,
-                },
-                {
-                  title: "到货日期",
-                  render: (_: unknown, batch: ProductBatch) =>
-                    new Date(batch.arrival_date).toLocaleDateString(),
-                },
-                {
-                  title: "过期日期",
-                  render: (_: unknown, batch: ProductBatch) =>
-                    batch.expire_at
-                      ? new Date(batch.expire_at).toLocaleDateString()
-                      : "-",
-                },
-                {
-                  title: "状态",
-                  render: (_: unknown, batch: ProductBatch) =>
-                    batch.status_hint ?? batch.status,
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, batch: ProductBatch) => (
-                    <Space>
-                      <Button onClick={() => recordBatchLoss(batch)}>
-                        记录损耗
-                      </Button>
-                      <Button onClick={() => loadBatchLedger(batch)}>
-                        查看批次流水
-                      </Button>
-                    </Space>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "batches"}>
+          <AdminErrorBoundary resetKey={String(batchesRefreshVersion)}>
+            <InventoryBatchesPage
+              refreshVersion={batchesRefreshVersion}
+              onDefaultBatchId={setDefaultBatchId}
+              onMessage={setMessage}
+              onMutationCommitted={refreshBusinessFeatures}
             />
-            {batchLedgers.length ? (
-              <Table
-                rowKey="id"
-                dataSource={batchLedgers}
-                pagination={{ pageSize: 5 }}
-                columns={[
-                  { title: "类型", dataIndex: "source_type" },
-                  { title: "方向", dataIndex: "direction" },
-                  { title: "数量", dataIndex: "quantity" },
-                  { title: "批次调整前", dataIndex: "batch_quantity_before" },
-                  { title: "批次调整后", dataIndex: "batch_quantity_after" },
-                  { title: "备注", dataIndex: "remark" },
-                ]}
-              />
-            ) : null}
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
-        {view === "expiryAlerts" ? (
-          <Card title="临期提醒（7 天）">
-            <Table
-              rowKey="batch_id"
-              dataSource={expiryAlerts}
-              columns={[
-                { title: "批次号", dataIndex: "batch_no" },
-                { title: "商品", dataIndex: "product_name" },
-                { title: "供应商", dataIndex: "supplier_name" },
-                {
-                  title: "剩余数量",
-                  render: (_: unknown, item: ExpiryAlert) =>
-                    `${item.remaining_quantity} ${item.stock_unit}`,
-                },
-                {
-                  title: "过期日期",
-                  render: (_: unknown, item: ExpiryAlert) =>
-                    item.expire_at
-                      ? new Date(item.expire_at).toLocaleDateString()
-                      : "-",
-                },
-                { title: "剩余天数", dataIndex: "days_to_expire" },
-                { title: "提示", dataIndex: "status_hint" },
-              ]}
-            />
-          </Card>
-        ) : null}
+        <div hidden={view !== "expiryAlerts"}>
+          <AdminErrorBoundary resetKey={String(expiryAlertsRefreshVersion)}>
+            <ExpiryAlertsPage refreshVersion={expiryAlertsRefreshVersion} />
+          </AdminErrorBoundary>
+        </div>
 
-        {view === "stockChecks" ? (
-          <Card
-            title="库存盘点"
-            extra={<Button onClick={createStockCheck}>新增盘点</Button>}
-          >
-            <Table
-              rowKey="id"
-              dataSource={stockChecks}
-              columns={[
-                { title: "盘点单号", dataIndex: "check_no" },
-                { title: "状态", dataIndex: "status" },
-                { title: "备注", dataIndex: "remark" },
-                {
-                  title: "明细",
-                  render: (_: unknown, check: StockCheck) =>
-                    check.items
-                      .map(
-                        (item) =>
-                          `${item.batch_id ?? item.product_id}: ${item.book_quantity} -> ${item.actual_quantity} (${item.diff_quantity}) ${item.stock_unit}`,
-                      )
-                      .join("；"),
-                },
-                {
-                  title: "操作",
-                  render: (_: unknown, check: StockCheck) => (
-                    <Button onClick={() => confirmStockCheck(check)}>
-                      确认
-                    </Button>
-                  ),
-                },
-              ]}
+        <div hidden={view !== "stockChecks"}>
+          <AdminErrorBoundary resetKey={String(stockChecksRefreshVersion)}>
+            <StockChecksPage
+              refreshVersion={stockChecksRefreshVersion}
+              defaultBatchId={defaultBatchId}
+              defaultProductId={
+                defaultInventoryProductReference?.product_id ?? ""
+              }
+              onMessage={setMessage}
+              onMutationCommitted={refreshBusinessFeatures}
             />
-          </Card>
-        ) : null}
+          </AdminErrorBoundary>
+        </div>
 
         <div hidden={view !== "afterSales"}>
           <AdminErrorBoundary resetKey={String(afterSalesRefreshVersion)}>
             <AfterSalesPage
               refreshVersion={afterSalesRefreshVersion}
               defaultLossProductId={
-                inventoryOverview?.items[0]?.product_id ?? ""
+                defaultInventoryProductReference?.product_id ?? ""
               }
               onMessage={setMessage}
-              onMutationCommitted={refreshSalesAndLegacyFeatures}
+              onMutationCommitted={refreshBusinessFeatures}
             />
           </AdminErrorBoundary>
         </div>

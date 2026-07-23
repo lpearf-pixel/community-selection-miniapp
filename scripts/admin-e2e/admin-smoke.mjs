@@ -33,12 +33,20 @@ let groupBuyRequestCount = 0;
 let orderRequestCount = 0;
 let fulfillmentRequestCount = 0;
 let afterSalesRequestCount = 0;
+let inventoryOverviewRequestCount = 0;
+let purchasePlanRequestCount = 0;
+let supplierRequestCount = 0;
+let batchRequestCount = 0;
+let expiryAlertRequestCount = 0;
+let stockCheckRequestCount = 0;
 let catalogFailureInjected = false;
 let operationsFailureInjected = false;
 let orderFailureInjected = false;
+let purchasePlanFailureInjected = false;
 
 page.on('request', (request) => {
-  const pathname = new URL(request.url()).pathname;
+  const requestUrl = new URL(request.url());
+  const { pathname } = requestUrl;
   if (pathname === '/api/categories') {
     categoryRequestCount += 1;
     catalogRequestCount += 1;
@@ -65,6 +73,27 @@ page.on('request', (request) => {
   if (pathname === '/api/admin/after-sales') {
     afterSalesRequestCount += 1;
   }
+  if (pathname === '/api/admin/inventory/overview') {
+    inventoryOverviewRequestCount += 1;
+  }
+  if (pathname === '/api/admin/purchase-plans') {
+    purchasePlanRequestCount += 1;
+  }
+  if (pathname === '/api/admin/suppliers') {
+    supplierRequestCount += 1;
+  }
+  if (pathname === '/api/admin/inventory/batches') {
+    batchRequestCount += 1;
+  }
+  if (
+    pathname === '/api/admin/inventory/expiry-alerts' &&
+    requestUrl.search === '?days=7'
+  ) {
+    expiryAlertRequestCount += 1;
+  }
+  if (pathname === '/api/admin/stock-checks') {
+    stockCheckRequestCount += 1;
+  }
 });
 
 try {
@@ -79,6 +108,12 @@ try {
   await waitForCount(page, () => orderRequestCount, 1, 'order initial load');
   await waitForCount(page, () => fulfillmentRequestCount, 1, 'fulfillment initial load');
   await waitForCount(page, () => afterSalesRequestCount, 1, 'after-sales initial load');
+  await waitForCount(page, () => inventoryOverviewRequestCount, 1, 'inventory initial load');
+  await waitForCount(page, () => purchasePlanRequestCount, 1, 'purchase-plan initial load');
+  await waitForCount(page, () => supplierRequestCount, 1, 'supplier initial load');
+  await waitForCount(page, () => batchRequestCount, 1, 'batch initial load');
+  await waitForCount(page, () => expiryAlertRequestCount, 1, 'expiry-alert initial load');
+  await waitForCount(page, () => stockCheckRequestCount, 1, 'stock-check initial load');
   await page.waitForLoadState('networkidle');
   const readA32RequestCounts = () => ({
     groupBuys: groupBuyRequestCount,
@@ -87,6 +122,22 @@ try {
     afterSales: afterSalesRequestCount,
   });
   const a32RequestsAfterInitial = readA32RequestCounts();
+  const readA33RequestCounts = () => ({
+    inventory: inventoryOverviewRequestCount,
+    purchasePlans: purchasePlanRequestCount,
+    suppliers: supplierRequestCount,
+    batches: batchRequestCount,
+    expiryAlerts: expiryAlertRequestCount,
+    stockChecks: stockCheckRequestCount,
+  });
+  const a33RequestsAfterInitial = readA33RequestCounts();
+  const readBusinessRequestCounts = () => ({
+    catalog: catalogRequestCount,
+    finance: financeRequestCount,
+    operations: operationsRequestCount,
+    ...readA32RequestCounts(),
+    ...readA33RequestCounts(),
+  });
 
   const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
   const buttons = shell.getByRole('button');
@@ -325,6 +376,110 @@ try {
   assert.equal(catalogRequestCount, catalogRequestsBeforeA32);
   assert.equal(financeRequestCount, financeRequestsBeforeA32);
   assert.equal(operationsRequestCount, operationsRequestsBeforeA32);
+  assert.deepEqual(readA33RequestCounts(), a33RequestsAfterInitial);
+
+  const inventoryButton = shell.getByRole('button', {
+    name: '库存管理',
+    exact: true,
+  });
+  await inventoryButton.click();
+  await assertActive(inventoryButton, '库存管理');
+  await page.getByRole('columnheader', { name: '商品名' }).waitFor();
+
+  const businessRequestsBeforeInventoryRefresh = readBusinessRequestCounts();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await waitForCount(
+    page,
+    () => inventoryOverviewRequestCount,
+    businessRequestsBeforeInventoryRefresh.inventory + 1,
+    'inventory active refresh',
+  );
+  assert.deepEqual(readBusinessRequestCounts(), {
+    ...businessRequestsBeforeInventoryRefresh,
+    inventory: businessRequestsBeforeInventoryRefresh.inventory + 1,
+  });
+
+  const purchasePlansButton = shell.getByRole('button', {
+    name: '采购计划',
+    exact: true,
+  });
+  await purchasePlansButton.click();
+  await assertActive(purchasePlansButton, '采购计划');
+  await page.getByRole('columnheader', { name: '计划编号' }).waitFor();
+
+  const purchasePlanFailureRoute = async (route) => {
+    assert.equal(route.request().method(), 'GET');
+    assert.equal(purchasePlanFailureInjected, false);
+    purchasePlanFailureInjected = true;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        code: 'E2E_PURCHASE_PLAN_FAILURE',
+        message: '模拟采购计划列表失败',
+      }),
+    });
+  };
+  await page.route('**/api/admin/purchase-plans', purchasePlanFailureRoute);
+  const businessRequestsBeforePurchaseFailure = readBusinessRequestCounts();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await page.getByText('采购计划加载失败', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
+  await page.getByRole('button', { name: /刷\s*新/ }).waitFor();
+  await page.getByRole('button', { name: '退出登录', exact: true }).waitFor();
+  assert.equal(purchasePlanFailureInjected, true);
+  await waitForCount(
+    page,
+    () => purchasePlanRequestCount,
+    businessRequestsBeforePurchaseFailure.purchasePlans + 1,
+    'purchase-plan failed refresh',
+  );
+  assert.deepEqual(readBusinessRequestCounts(), {
+    ...businessRequestsBeforePurchaseFailure,
+    purchasePlans: businessRequestsBeforePurchaseFailure.purchasePlans + 1,
+  });
+  await page.unroute('**/api/admin/purchase-plans', purchasePlanFailureRoute);
+
+  const batchesButton = shell.getByRole('button', {
+    name: '批次库存',
+    exact: true,
+  });
+  const businessRequestsDuringPurchaseError = readBusinessRequestCounts();
+  await batchesButton.click();
+  await assertActive(batchesButton, '批次库存');
+  await page.getByRole('columnheader', { name: '批次号' }).waitFor();
+  assert.equal(await page.getByText('批次库存加载失败').count(), 0);
+  assert.deepEqual(readBusinessRequestCounts(), businessRequestsDuringPurchaseError);
+
+  await purchasePlansButton.click();
+  await assertActive(purchasePlansButton, '采购计划');
+  await page.getByText('采购计划加载失败', { exact: true }).waitFor();
+  assert.deepEqual(readBusinessRequestCounts(), businessRequestsDuringPurchaseError);
+
+  const businessRequestsBeforePurchaseRetry = readBusinessRequestCounts();
+  const purchasePlanRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/admin/purchase-plans' &&
+    response.ok(),
+  );
+  await page.getByRole('button', { name: /重\s*试/ }).click();
+  const purchasePlanResponse = await purchasePlanRetryResponse;
+  const purchasePlanEnvelope = await purchasePlanResponse.json();
+  assert.equal(purchasePlanEnvelope.success, true);
+  assert.equal(Array.isArray(purchasePlanEnvelope.data), true);
+  await page.getByText('正在刷新采购计划…').waitFor({ state: 'detached' });
+  await page.getByText('采购计划加载失败').waitFor({ state: 'detached' });
+  await page.getByRole('columnheader', { name: '计划编号' }).waitFor();
+  await waitForCount(
+    page,
+    () => purchasePlanRequestCount,
+    businessRequestsBeforePurchaseRetry.purchasePlans + 1,
+    'purchase-plan retry',
+  );
+  assert.deepEqual(readBusinessRequestCounts(), {
+    ...businessRequestsBeforePurchaseRetry,
+    purchasePlans: businessRequestsBeforePurchaseRetry.purchasePlans + 1,
+  });
 
   await productButton.click();
   await assertActive(productButton, '商品管理');
@@ -466,6 +621,9 @@ try {
       label !== '团购管理' &&
       label !== '订单管理' &&
       label !== '售后客服' &&
+      label !== '库存管理' &&
+      label !== '采购计划' &&
+      label !== '批次库存' &&
       label !== '财务对账' &&
       label !== '运营看板',
   );
@@ -496,7 +654,7 @@ try {
   await page.getByText('后台登录', { exact: true }).waitFor();
 
   console.log(
-    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; catalog requests=${catalogRequestCount}; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}.`,
+    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; catalog requests=${catalogRequestCount}; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}; inventory requests=${inventoryOverviewRequestCount}; purchase-plan requests=${purchasePlanRequestCount}; suppliers requests=${supplierRequestCount}; batches requests=${batchRequestCount}; expiry-alert requests=${expiryAlertRequestCount}; stock-check requests=${stockCheckRequestCount}.`,
   );
 } finally {
   await context.close();

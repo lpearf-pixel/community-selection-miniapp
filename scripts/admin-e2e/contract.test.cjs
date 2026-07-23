@@ -272,14 +272,30 @@ function assertA32SmokeContract(smoke) {
         receiver: 'page',
         target: {
           kind: 'string',
+          value: '**/api/admin/purchase-plans',
+        },
+      },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
           value: '**/api/admin/operations/dashboard/overview',
         },
       },
     ],
-    'route registration whitelist: only the three approved failure interceptors',
+    'route registration whitelist: only the four approved failure interceptors',
   );
-  const [catalogRegistration, orderRegistration, operationsRegistration] =
-    routeRegistrations;
+  const [
+    catalogRegistration,
+    orderRegistration,
+    purchasePlanRegistration,
+    operationsRegistration,
+  ] = routeRegistrations;
+  assert.equal(
+    purchasePlanRegistration.target.value,
+    '**/api/admin/purchase-plans',
+    'route registration whitelist: purchase plans use the approved target',
+  );
   assert.ok(
     catalogRegistration.start >= catalogFailureSetupRange.start &&
       catalogRegistration.end <= catalogFailureSetupRange.end,
@@ -475,7 +491,7 @@ function assertA32SmokeContract(smoke) {
   const orderRetry = sourceBetween(
     smoke,
     /const a32RequestsBeforeOrderRetry = readA32RequestCounts\(\);/,
-    /await productButton\.click\(\);/,
+    /const inventoryButton = shell\.getByRole/,
     'successful real order retry and exact isolation',
   );
   assertSourceOrder(
@@ -586,18 +602,21 @@ function assertA32SmokeContract(smoke) {
     '团购管理',
     '订单管理',
     '售后客服',
+    '库存管理',
+    '采购计划',
+    '批次库存',
     '财务对账',
     '运营看板',
   ];
   assert.deepEqual(
     exclusions,
     explicitNavigation,
-    'navigation exclusion/count contract: six explicit destinations',
+    'navigation exclusion/count contract: nine explicit destinations',
   );
   assert.equal(
     navigationLabels.filter((label) => !exclusions.includes(label)).length,
-    17,
-    'navigation exclusion/count contract: 17 remaining destinations',
+    14,
+    'navigation exclusion/count contract: 14 remaining destinations',
   );
   assertSourceOrder(
     smoke,
@@ -605,6 +624,9 @@ function assertA32SmokeContract(smoke) {
       ['group-buy explicit click', /await groupBuysButton\.click\(\);/],
       ['orders explicit click', /await ordersButton\.click\(\);/],
       ['after-sales explicit click', /await afterSalesButton\.click\(\);/],
+      ['inventory explicit click', /await inventoryButton\.click\(\);/],
+      ['purchase-plan explicit click', /await purchasePlansButton\.click\(\);/],
+      ['batches explicit click', /await batchesButton\.click\(\);/],
       ['product explicit click', /await productButton\.click\(\);/],
       ['finance explicit click', /await financeButton\.click\(\);/],
       ['operations explicit click', /await operationsButton\.click\(\);/],
@@ -618,6 +640,370 @@ function assertA32SmokeContract(smoke) {
       ],
     ],
     'navigation exclusion/count contract',
+  );
+}
+
+function assertA33SmokeContract(smoke) {
+  assertSourceOrder(
+    smoke,
+    [
+      [
+        'inventory exact primary counter',
+        /if \(pathname === '\/api\/admin\/inventory\/overview'\) \{\s*inventoryOverviewRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'purchase-plan exact primary counter',
+        /if \(pathname === '\/api\/admin\/purchase-plans'\) \{\s*purchasePlanRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'supplier exact primary counter',
+        /if \(pathname === '\/api\/admin\/suppliers'\) \{\s*supplierRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'batches exact primary counter',
+        /if \(pathname === '\/api\/admin\/inventory\/batches'\) \{\s*batchRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'expiry-alert exact primary counter',
+        /if \(\s*pathname === '\/api\/admin\/inventory\/expiry-alerts' &&\s*requestUrl\.search === '\?days=7'\s*\) \{\s*expiryAlertRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'stock-check exact primary counter',
+        /if \(pathname === '\/api\/admin\/stock-checks'\) \{\s*stockCheckRequestCount \+= 1;\s*\}/,
+      ],
+    ],
+    'exact A3.3 primary request routing',
+  );
+
+  const initialMounts = sourceBetween(
+    smoke,
+    /await page\.getByText\(`当前管理员：\$\{credentials\.username\}`\)\.waitFor\(\);/,
+    /const shell = page\.getByRole/,
+    'A3.3 hidden-mount settlement and initial baseline',
+  );
+  assertSourceOrder(
+    initialMounts,
+    [
+      [
+        'inventory hidden mount started',
+        /await waitForCount\(page, \(\) => inventoryOverviewRequestCount, 1, 'inventory initial load'\);/,
+      ],
+      [
+        'purchase-plan hidden mount started',
+        /await waitForCount\(page, \(\) => purchasePlanRequestCount, 1, 'purchase-plan initial load'\);/,
+      ],
+      [
+        'supplier hidden mount started',
+        /await waitForCount\(page, \(\) => supplierRequestCount, 1, 'supplier initial load'\);/,
+      ],
+      [
+        'batches hidden mount started',
+        /await waitForCount\(page, \(\) => batchRequestCount, 1, 'batch initial load'\);/,
+      ],
+      [
+        'expiry-alert hidden mount started',
+        /await waitForCount\(page, \(\) => expiryAlertRequestCount, 1, 'expiry-alert initial load'\);/,
+      ],
+      [
+        'stock-check hidden mount started',
+        /await waitForCount\(page, \(\) => stockCheckRequestCount, 1, 'stock-check initial load'\);/,
+      ],
+      [
+        'hidden mounts settled',
+        /await page\.waitForLoadState\('networkidle'\);/,
+      ],
+      [
+        'relative A3.3 counter reader',
+        /const readA33RequestCounts = \(\) => \(\{\s*inventory: inventoryOverviewRequestCount,\s*purchasePlans: purchasePlanRequestCount,\s*suppliers: supplierRequestCount,\s*batches: batchRequestCount,\s*expiryAlerts: expiryAlertRequestCount,\s*stockChecks: stockCheckRequestCount,\s*\}\);/,
+      ],
+      [
+        'initial A3.3 snapshot',
+        /const a33RequestsAfterInitial = readA33RequestCounts\(\);/,
+      ],
+      [
+        'all-slice counter reader',
+        /const readBusinessRequestCounts = \(\) => \(\{\s*catalog: catalogRequestCount,\s*finance: financeRequestCount,\s*operations: operationsRequestCount,\s*\.\.\.readA32RequestCounts\(\),\s*\.\.\.readA33RequestCounts\(\),\s*\}\);/,
+      ],
+    ],
+    'A3.3 hidden-mount settlement and initial baseline',
+  );
+  assert.doesNotMatch(
+    initialMounts,
+    /assert\.equal\((?:inventoryOverview|purchasePlan|supplier|batch|expiryAlert|stockCheck)RequestCount,\s*\d+\)/,
+    'initial A3.3 baselines must not use fixed absolute counts',
+  );
+
+  const inventoryRefresh = sourceBetween(
+    smoke,
+    /assert\.deepEqual\(readA33RequestCounts\(\), a33RequestsAfterInitial\);/,
+    /const purchasePlansButton = shell\.getByRole/,
+    'inventory active refresh exact isolation',
+  );
+  assertSourceOrder(
+    inventoryRefresh,
+    [
+      [
+        'inventory navigation',
+        /const inventoryButton = shell\.getByRole\('button', \{\s*name: '库存管理',\s*exact: true,\s*\}\);\s*await inventoryButton\.click\(\);\s*await assertActive\(inventoryButton, '库存管理'\);\s*await page\.getByRole\('columnheader', \{ name: '商品名' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'inventory refresh-relative snapshot',
+        /const businessRequestsBeforeInventoryRefresh = readBusinessRequestCounts\(\);/,
+      ],
+      [
+        'active Shell refresh',
+        /await shell\.getByRole\('button', \{ name: \/刷\\s\*新\/ \}\)\.click\(\);/,
+      ],
+      [
+        'inventory response counted',
+        /await waitForCount\(\s*page,\s*\(\) => inventoryOverviewRequestCount,\s*businessRequestsBeforeInventoryRefresh\.inventory \+ 1,\s*'inventory active refresh',\s*\);/,
+      ],
+      [
+        'only inventory changed',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), \{\s*\.\.\.businessRequestsBeforeInventoryRefresh,\s*inventory: businessRequestsBeforeInventoryRefresh\.inventory \+ 1,\s*\}\);/,
+      ],
+    ],
+    'inventory active refresh exact isolation',
+  );
+
+  const purchaseFailureSetupRange = sourceRange(
+    smoke,
+    /const purchasePlansButton = shell\.getByRole/,
+    /const businessRequestsBeforePurchaseFailure = readBusinessRequestCounts\(\);/,
+    'purchase-plan active one-shot failure setup',
+  );
+  const purchaseFailureSetup = purchaseFailureSetupRange.source;
+  assertSourceOrder(
+    purchaseFailureSetup,
+    [
+      [
+        'purchase plans active before route',
+        /name: '采购计划',\s*exact: true,\s*\}\);\s*await purchasePlansButton\.click\(\);\s*await assertActive\(purchasePlansButton, '采购计划'\);\s*await page\.getByRole\('columnheader', \{ name: '计划编号' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'one-shot purchase-plan guard',
+        /const purchasePlanFailureRoute = async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(purchasePlanFailureInjected, false\);\s*purchasePlanFailureInjected = true;/,
+      ],
+      [
+        'one-shot purchase-plan 500 only',
+        /await route\.fulfill\(\{\s*status: 500,\s*contentType: 'application\/json',\s*body: JSON\.stringify\(\{\s*success: false,\s*code: 'E2E_PURCHASE_PLAN_FAILURE',/,
+      ],
+      [
+        'approved purchase-plan route',
+        /await page\.route\('\*\*\/api\/admin\/purchase-plans', purchasePlanFailureRoute\);/,
+      ],
+    ],
+    'purchase-plan active one-shot failure setup',
+  );
+  assert.match(
+    smoke,
+    /let purchasePlanFailureInjected = false;/,
+    'one-shot purchase-plan failure starts disarmed',
+  );
+  assert.doesNotMatch(
+    purchaseFailureSetup,
+    /(?:status:\s*2\d\d|success:\s*true)/,
+    'purchase-plan failure setup cannot mock success',
+  );
+  assert.equal(
+    (purchaseFailureSetup.match(/\broute\s*\.\s*fulfill\s*\(/g) ?? []).length,
+    1,
+    'purchase-plan failure handler fulfills exactly once',
+  );
+
+  const routeRegistrations = registeredRoutes(smoke);
+  assert.deepEqual(
+    routeRegistrations.map(({ receiver, target }) => ({ receiver, target })),
+    [
+      {
+        receiver: 'page',
+        target: { kind: 'string', value: '**/api/categories' },
+      },
+      {
+        receiver: 'page',
+        target: { kind: 'string', value: '**/api/orders' },
+      },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/purchase-plans',
+        },
+      },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/operations/dashboard/overview',
+        },
+      },
+    ],
+    'A3.3 route registration whitelist: only four approved failure interceptors',
+  );
+  const purchasePlanRegistration = routeRegistrations[2];
+  assert.ok(
+    purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
+      purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
+    'purchase-plan interceptor stays in its one-shot failure setup',
+  );
+  assert.equal(
+    purchasePlanRegistration.handler,
+    'purchasePlanFailureRoute',
+    'purchase-plan interceptor uses the named one-shot 500 handler',
+  );
+
+  const purchaseFailure = sourceBetween(
+    smoke,
+    /const businessRequestsBeforePurchaseFailure = readBusinessRequestCounts\(\);/,
+    /const batchesButton = shell\.getByRole/,
+    'purchase-plan local failure and Shell availability',
+  );
+  assertSourceOrder(
+    purchaseFailure,
+    [
+      [
+        'active purchase-plan refresh',
+        /await shell\.getByRole\('button', \{ name: \/刷\\s\*新\/ \}\)\.click\(\);/,
+      ],
+      [
+        'purchase-plan local load error',
+        /await page\.getByText\('采购计划加载失败', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+      [
+        'Shell heading available',
+        /await page\.getByRole\('heading', \{ name: '社区甄选管理后台' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'Shell refresh available',
+        /await page\.getByRole\('button', \{ name: \/刷\\s\*新\/ \}\)\.waitFor\(\);/,
+      ],
+      [
+        'Shell logout available',
+        /await page\.getByRole\('button', \{ name: '退出登录', exact: true \}\)\.waitFor\(\);/,
+      ],
+      [
+        '500 was injected',
+        /assert\.equal\(purchasePlanFailureInjected, true\);/,
+      ],
+      [
+        'failed purchase-plan response counted',
+        /await waitForCount\(\s*page,\s*\(\) => purchasePlanRequestCount,\s*businessRequestsBeforePurchaseFailure\.purchasePlans \+ 1,\s*'purchase-plan failed refresh',\s*\);/,
+      ],
+      [
+        'only purchase plans changed on failure',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), \{\s*\.\.\.businessRequestsBeforePurchaseFailure,\s*purchasePlans: businessRequestsBeforePurchaseFailure\.purchasePlans \+ 1,\s*\}\);/,
+      ],
+      [
+        'purchase-plan route cleanup',
+        /await page\.unroute\('\*\*\/api\/admin\/purchase-plans', purchasePlanFailureRoute\);/,
+      ],
+    ],
+    'purchase-plan local failure and Shell availability',
+  );
+
+  const batchesRoundTrip = sourceBetween(
+    smoke,
+    /const batchesButton = shell\.getByRole/,
+    /const businessRequestsBeforePurchaseRetry = readBusinessRequestCounts\(\);/,
+    'batches round trip and persisted purchase-plan error',
+  );
+  assertSourceOrder(
+    batchesRoundTrip,
+    [
+      [
+        'snapshot before leaving purchase-plan error',
+        /const businessRequestsDuringPurchaseError = readBusinessRequestCounts\(\);/,
+      ],
+      ['batches click', /await batchesButton\.click\(\);/],
+      [
+        'batches active',
+        /await assertActive\(batchesButton, '批次库存'\);/,
+      ],
+      [
+        'already-loaded batches rendered',
+        /await page\.getByRole\('columnheader', \{ name: '批次号' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'no batches failure',
+        /assert\.equal\(await page\.getByText\('批次库存加载失败'\)\.count\(\), 0\);/,
+      ],
+      [
+        'navigation caused no business request',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), businessRequestsDuringPurchaseError\);/,
+      ],
+      ['return to purchase plans', /await purchasePlansButton\.click\(\);/],
+      [
+        'purchase plans active again',
+        /await assertActive\(purchasePlansButton, '采购计划'\);/,
+      ],
+      [
+        'persisted purchase-plan error',
+        /await page\.getByText\('采购计划加载失败', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+      [
+        'round trip caused no business request',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), businessRequestsDuringPurchaseError\);/,
+      ],
+    ],
+    'batches round trip and persisted purchase-plan error',
+  );
+
+  const purchaseRetry = sourceBetween(
+    smoke,
+    /const businessRequestsBeforePurchaseRetry = readBusinessRequestCounts\(\);/,
+    /await productButton\.click\(\);/,
+    'successful real purchase-plan retry and exact isolation',
+  );
+  assertSourceOrder(
+    purchaseRetry,
+    [
+      [
+        'successful purchase-plan response listener',
+        /const purchasePlanRetryResponse = page\.waitForResponse\(\(response\) =>\s*new URL\(response\.url\(\)\)\.pathname === '\/api\/admin\/purchase-plans' &&\s*response\.ok\(\),\s*\);/,
+      ],
+      [
+        'local purchase-plan retry click',
+        /await page\.getByRole\('button', \{ name: \/重\\s\*试\/ \}\)\.click\(\);/,
+      ],
+      [
+        'successful purchase-plan response awaited',
+        /const purchasePlanResponse = await purchasePlanRetryResponse;/,
+      ],
+      [
+        'real purchase-plan response parsed',
+        /const purchasePlanEnvelope = await purchasePlanResponse\.json\(\);/,
+      ],
+      [
+        'purchase-plan success envelope',
+        /assert\.equal\(purchasePlanEnvelope\.success, true\);/,
+      ],
+      [
+        'purchase-plan array envelope',
+        /assert\.equal\(Array\.isArray\(purchasePlanEnvelope\.data\), true\);/,
+      ],
+      [
+        'purchase-plan error disappears',
+        /await page\.getByText\('采购计划加载失败'\)\.waitFor\(\{ state: 'detached' \}\);/,
+      ],
+      [
+        'purchase-plan table renders',
+        /await page\.getByRole\('columnheader', \{ name: '计划编号' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'purchase-plan retry counted',
+        /await waitForCount\(\s*page,\s*\(\) => purchasePlanRequestCount,\s*businessRequestsBeforePurchaseRetry\.purchasePlans \+ 1,\s*'purchase-plan retry',\s*\);/,
+      ],
+      [
+        'only purchase plans changed on retry',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), \{\s*\.\.\.businessRequestsBeforePurchaseRetry,\s*purchasePlans: businessRequestsBeforePurchaseRetry\.purchasePlans \+ 1,\s*\}\);/,
+      ],
+    ],
+    'successful real purchase-plan retry and exact isolation',
+  );
+  assert.doesNotMatch(
+    purchaseRetry,
+    /(?:page\.route|context\.route|route\.fulfill)/,
+    'successful purchase-plan response must not be mocked',
   );
 }
 
@@ -717,6 +1103,15 @@ test('Admin E2E proves A3.2 request isolation and order-local recovery', () => {
   );
 
   assert.doesNotThrow(() => assertA32SmokeContract(smoke));
+});
+
+test('Admin E2E proves A3.3 request isolation and purchase-plan recovery', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotThrow(() => assertA33SmokeContract(smoke));
 });
 
 test('A3.2 source contract rejects weakened behavior evidence', () => {
@@ -846,6 +1241,145 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
     assert.notEqual(weakened, smoke, `${mutation.name}: mutation applied`);
     assert.throws(
       () => assertA32SmokeContract(weakened),
+      mutation.expected,
+      mutation.name,
+    );
+  }
+});
+
+test('A3.3 source contract rejects weakened behavior evidence', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+  const mutations = [
+    {
+      name: 'A3.3 hidden-mount settlement',
+      expected: /A3\.3 hidden-mount settlement and initial baseline/,
+      weaken: (source) =>
+        source.replace(
+          "  await waitForCount(page, () => stockCheckRequestCount, 1, 'stock-check initial load');\n",
+          '',
+        ),
+    },
+    {
+      name: 'purchase-plan route cleanup',
+      expected: /purchase-plan route cleanup/,
+      weaken: (source) =>
+        source.replace(
+          "  await page.unroute('**/api/admin/purchase-plans', purchasePlanFailureRoute);\n",
+          '',
+        ),
+    },
+    {
+      name: 'batches round trip and persisted purchase-plan error',
+      expected: /batches round trip and persisted purchase-plan error/,
+      weaken: (source) =>
+        source.replace(
+          /  await purchasePlansButton\.click\(\);\n  await assertActive\(purchasePlansButton, '采购计划'\);\n  await page\.getByText\('采购计划加载失败', \{ exact: true \}\)\.waitFor\(\);\n  assert\.deepEqual\(readBusinessRequestCounts\(\), businessRequestsDuringPurchaseError\);\n\n(?=  const businessRequestsBeforePurchaseRetry)/,
+          '',
+        ),
+    },
+    {
+      name: 'purchase-plan success envelope validation',
+      expected: /successful real purchase-plan retry and exact isolation/,
+      weaken: (source) =>
+        source.replace(
+          "  assert.equal(purchasePlanEnvelope.success, true);\n  assert.equal(Array.isArray(purchasePlanEnvelope.data), true);\n",
+          '',
+        ),
+    },
+    {
+      name: 'inventory exact isolation assertion',
+      expected: /inventory active refresh exact isolation/,
+      weaken: (source) =>
+        source.replace(
+          '    inventory: businessRequestsBeforeInventoryRefresh.inventory + 1,\n',
+          '',
+        ),
+    },
+    {
+      name: 'purchase-plan failure exact isolation assertion',
+      expected: /purchase-plan local failure and Shell availability/,
+      weaken: (source) =>
+        source.replace(
+          '    purchasePlans: businessRequestsBeforePurchaseFailure.purchasePlans + 1,\n',
+          '',
+        ),
+    },
+    {
+      name: 'purchase-plan retry exact isolation assertion',
+      expected: /successful real purchase-plan retry and exact isolation/,
+      weaken: (source) =>
+        source.replace(
+          '    purchasePlans: businessRequestsBeforePurchaseRetry.purchasePlans + 1,\n',
+          '',
+        ),
+    },
+    {
+      name: 'successful purchase-plan response mock',
+      expected:
+        /A3\.3 route registration whitelist|successful purchase-plan response must not be mocked/,
+      weaken: (source) =>
+        source.replace(
+          '  const purchasePlanRetryResponse = page.waitForResponse',
+          "  await page.route('**/api/admin/purchase-plans', async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) }));\n  const purchasePlanRetryResponse = page.waitForResponse",
+        ),
+    },
+    {
+      name: 'broad glob successful purchase-plan route',
+      expected: /A3\.3 route registration whitelist/,
+      weaken: (source) =>
+        source.replace(
+          'try {\n',
+          "await page.route('**/api/admin/**', async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) }));\n\n" +
+            'try {\n',
+        ),
+    },
+    {
+      name: 'RegExp successful purchase-plan route',
+      expected: /A3\.3 route registration whitelist/,
+      weaken: (source) =>
+        source.replace(
+          'try {\n',
+          'await context.route(/\\/api\\/admin\\/purchase-plans(?:\\?.*)?$/, async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) }));\n\n' +
+            'try {\n',
+        ),
+    },
+    {
+      name: 'predeclared purchase-plan success handler replaces failure',
+      expected:
+        /approved purchase-plan route|purchase-plan interceptor uses the named one-shot 500 handler/,
+      weaken: (source) =>
+        source.replace(
+          "  await page.route('**/api/admin/purchase-plans', purchasePlanFailureRoute);\n",
+          '  const e2ePurchasePlanSuccessHandler = async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) });\n' +
+            '  await page.route("**/api/admin/purchase-plans", e2ePurchasePlanSuccessHandler);\n',
+        ),
+    },
+    {
+      name: 'approved purchase-plan registration relocated into retry',
+      expected:
+        /approved purchase-plan route|purchase-plan interceptor stays in its one-shot failure setup/,
+      weaken: (source) =>
+        source
+          .replace(
+            "  await page.route('**/api/admin/purchase-plans', purchasePlanFailureRoute);\n",
+            '',
+          )
+          .replace(
+            '  const businessRequestsBeforePurchaseRetry = readBusinessRequestCounts();',
+            "  await page.route('**/api/admin/purchase-plans', purchasePlanFailureRoute);\n" +
+              '  const businessRequestsBeforePurchaseRetry = readBusinessRequestCounts();',
+          ),
+    },
+  ];
+
+  for (const mutation of mutations) {
+    const weakened = mutation.weaken(smoke);
+    assert.notEqual(weakened, smoke, `${mutation.name}: mutation applied`);
+    assert.throws(
+      () => assertA33SmokeContract(weakened),
       mutation.expected,
       mutation.name,
     );

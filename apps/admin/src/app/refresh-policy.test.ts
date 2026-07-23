@@ -14,10 +14,7 @@ function namedFunctionSource(source: string, name: string): string {
   let match: ts.FunctionDeclaration | undefined;
 
   function visit(node: ts.Node) {
-    if (
-      ts.isFunctionDeclaration(node) &&
-      node.name?.text === name
-    ) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) {
       match = node;
       return;
     }
@@ -27,19 +24,6 @@ function namedFunctionSource(source: string, name: string): string {
   visit(sourceFile);
   expect(match, `function ${name}`).toBeDefined();
   return match!.getText(sourceFile);
-}
-
-function sourceSection(
-  source: string,
-  start: string,
-  end: string,
-  label: string,
-): string {
-  const startIndex = source.indexOf(start);
-  expect(startIndex, `${label}: start`).toBeGreaterThanOrEqual(0);
-  const endIndex = source.indexOf(end, startIndex + start.length);
-  expect(endIndex, `${label}: end`).toBeGreaterThan(startIndex);
-  return source.slice(startIndex, endIndex);
 }
 
 describe('admin refresh policy', () => {
@@ -52,97 +36,143 @@ describe('admin refresh policy', () => {
     ['orders', 'orders'],
     ['fulfillment', 'fulfillment'],
     ['afterSales', 'after-sales'],
-    ['inventory', 'legacy'],
+    ['inventory', 'inventory'],
+    ['purchasePlans', 'purchase-plans'],
+    ['suppliers', 'suppliers'],
+    ['batches', 'batches'],
+    ['expiryAlerts', 'expiry-alerts'],
+    ['stockChecks', 'stock-checks'],
+    ['withdrawals', 'legacy'],
   ] as const)('routes %s refresh to %s', (view, target) => {
     expect(adminRefreshTarget(view)).toBe(target);
   });
 
-  it('keeps extracted endpoints and rendering outside AdminApp', () => {
-    const source = readFileSync(new URL('./AdminApp.tsx', import.meta.url), 'utf8');
-    expect(source).not.toContain('/api/admin/finance/reconciliation/');
-    expect(source).not.toContain('/api/admin/operations/dashboard/');
-    expect(source).not.toContain('"/api/categories"');
-    expect(source).not.toContain('"/api/products"');
-    expect(source).not.toContain('type Product =');
-    expect(source).not.toContain('type Category =');
-    expect(source).not.toContain('"/api/group-buys"');
-    expect(source).not.toContain('"/api/orders"');
-    expect(source).not.toContain('"/api/admin/fulfillment/overview"');
-    expect(source).not.toContain('"/api/admin/after-sales"');
-    expect(source).not.toContain('type GroupBuy =');
-    expect(source).not.toContain('type Order =');
-    expect(source).not.toContain('type FulfillmentOverview =');
-    expect(source).not.toContain('type AfterSaleCase =');
-    expect(source).toContain('CatalogProductsPage');
-    expect(source).toContain('hidden={view !== "products"}');
-    expect(source).toContain('FinanceReconciliationPage');
-    expect(source).toContain('OperationsDashboardPage');
-    expect(source).toContain('GroupBuyManagementPage');
-    expect(source).toContain('OrdersPage');
-    expect(source).toContain('FulfillmentOverviewPage');
-    expect(source).toContain('AfterSalesPage');
+  it('keeps all extracted endpoints, DTOs, and rendering outside AdminApp', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
+    const endpoints = [
+      '/api/admin/finance/reconciliation/',
+      '/api/admin/operations/dashboard/',
+      '"/api/categories"',
+      '"/api/products"',
+      '"/api/group-buys"',
+      '"/api/orders"',
+      '"/api/admin/fulfillment/overview"',
+      '"/api/admin/after-sales"',
+      '"/api/admin/inventory/overview"',
+      '"/api/admin/purchase-plans"',
+      '"/api/admin/suppliers"',
+      '"/api/admin/inventory/batches"',
+      '"/api/admin/inventory/expiry-alerts?days=7"',
+      '"/api/admin/stock-checks"',
+    ];
+    for (const endpoint of endpoints) {
+      expect(source, endpoint).not.toContain(endpoint);
+    }
+
+    for (const typeName of [
+      'Product',
+      'Category',
+      'GroupBuy',
+      'Order',
+      'FulfillmentOverview',
+      'AfterSaleCase',
+      'InventoryOverview',
+      'PurchasePlan',
+      'Supplier',
+      'ProductBatch',
+      'ExpiryAlert',
+      'StockCheck',
+    ]) {
+      expect(source).not.toContain(`type ${typeName} =`);
+    }
+
+    for (const page of [
+      'CatalogProductsPage',
+      'FinanceReconciliationPage',
+      'OperationsDashboardPage',
+      'GroupBuyManagementPage',
+      'OrdersPage',
+      'FulfillmentOverviewPage',
+      'AfterSalesPage',
+      'InventoryOverviewPage',
+      'PurchasePlansPage',
+      'SuppliersPage',
+      'InventoryBatchesPage',
+      'ExpiryAlertsPage',
+      'StockChecksPage',
+    ]) {
+      expect(source).toContain(page);
+    }
   });
 
-  it('keeps preloading the remaining legacy views after session restore and login', () => {
-    const source = readFileSync(new URL('./AdminApp.tsx', import.meta.url), 'utf8');
+  it('preloads only the remaining legacy views after session restore and login', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
     expect(source).toMatch(
       /setAdminSession\(admin\);[\s\S]{0,160}setView\(DEFAULT_ADMIN_VIEW\);[\s\S]{0,160}refreshLegacyFeatures\(\);/,
     );
     expect(source).toMatch(
       /setAdminSession\(result\.admin_user\);[\s\S]{0,160}setView\(DEFAULT_ADMIN_VIEW\);[\s\S]{0,160}refreshLegacyFeatures\(\);/,
     );
+    const legacyRefresh = namedFunctionSource(source, 'refreshLegacyFeatures');
+    expect(legacyRefresh).toContain('"/api/admin/withdrawals"');
+    expect(legacyRefresh).toContain('"/api/admin/logs/alerts"');
+    expect(legacyRefresh).toContain('"/api/admin/tax-records"');
+    expect(legacyRefresh.match(/\bfetchJson</g)).toHaveLength(3);
   });
 
-  it('refreshes extracted sales slices after every remaining successful mutation', () => {
-    const source = readFileSync(new URL('./AdminApp.tsx', import.meta.url), 'utf8');
-    const mutationHandlers = [
+  it('uses the full business invalidation after each remaining mutation', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
+    for (const handler of [
       'reviewWithdrawalTax',
       'updateWithdrawal',
       'updateAlert',
-      'adjustInventory',
-      'createPurchasePlan',
-      'confirmPurchasePlan',
-      'cancelPurchasePlan',
-      'receivePurchasePlan',
-      'createSupplier',
-      'disableSupplier',
-      'recordBatchLoss',
-      'createStockCheck',
-      'confirmStockCheck',
-    ];
-
-    for (const handler of mutationHandlers) {
+    ]) {
       const handlerSource = namedFunctionSource(source, handler);
-      expect(handlerSource, handler).toMatch(
-        /\brefreshSalesAndLegacyFeatures\(\);/,
-      );
+      expect(handlerSource, handler).toMatch(/\brefreshBusinessFeatures\(\);/);
       expect(handlerSource, handler).not.toMatch(
         /\brefreshLegacyFeatures\(\);/,
       );
     }
+    expect(source).not.toContain('refreshSalesAndLegacyFeatures');
   });
 
-  it('keeps authentication and the Shell legacy fallback on legacy-only refresh', () => {
-    const source = readFileSync(new URL('./AdminApp.tsx', import.meta.url), 'utf8');
+  it('keeps authentication and the Shell fallback on legacy-only refresh', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
     const loginSource = namedFunctionSource(source, 'loginAdmin');
-    const shellRefreshSource = namedFunctionSource(source, 'refreshActiveFeature');
+    const shellRefreshSource = namedFunctionSource(
+      source,
+      'refreshActiveFeature',
+    );
 
     expect(source).toMatch(
       /useEffect\(\(\) => \{[\s\S]*?setAdminSession\(admin\);[\s\S]*?setView\(DEFAULT_ADMIN_VIEW\);[\s\S]*?refreshLegacyFeatures\(\);[\s\S]*?\}, \[\]\);/,
     );
     expect(loginSource).toMatch(/\brefreshLegacyFeatures\(\);/);
-    expect(loginSource).not.toMatch(/\brefreshSalesAndLegacyFeatures\(\);/);
+    expect(loginSource).not.toMatch(/\brefreshBusinessFeatures\(\);/);
     expect(shellRefreshSource).toMatch(/\brefreshLegacyFeatures\(\);/);
-    expect(shellRefreshSource).not.toMatch(
-      /\brefreshSalesAndLegacyFeatures\(\);/,
-    );
+    expect(shellRefreshSource).not.toMatch(/\brefreshBusinessFeatures\(\);/);
   });
 
-  it('composes all four extracted refreshes with the remaining legacy refresh', () => {
-    const source = readFileSync(new URL('./AdminApp.tsx', import.meta.url), 'utf8');
+  it('composes all ten extracted refreshes with remaining legacy refresh', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
     const composedRefresh = namedFunctionSource(
       source,
-      'refreshSalesAndLegacyFeatures',
+      'refreshBusinessFeatures',
     );
 
     for (const setter of [
@@ -150,65 +180,85 @@ describe('admin refresh policy', () => {
       'setOrdersRefreshVersion',
       'setFulfillmentRefreshVersion',
       'setAfterSalesRefreshVersion',
+      'setInventoryRefreshVersion',
+      'setPurchasePlansRefreshVersion',
+      'setSuppliersRefreshVersion',
+      'setBatchesRefreshVersion',
+      'setExpiryAlertsRefreshVersion',
+      'setStockChecksRefreshVersion',
     ]) {
-      expect(composedRefresh).toContain(`${setter}((version) => version + 1);`);
+      expect(composedRefresh).toContain(
+        `${setter}((version) => version + 1);`,
+      );
     }
     expect(composedRefresh).toMatch(/\brefreshLegacyFeatures\(\);/);
   });
 
-  it('isolates every hidden A3.2 slice behind its own resettable boundary', () => {
-    const source = readFileSync(new URL('./AdminApp.tsx', import.meta.url), 'utf8');
+  it('isolates every hidden A3.2 and A3.3 slice behind its own boundary', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
     const boundarySource = readFileSync(
       new URL('./AdminErrorBoundary.tsx', import.meta.url),
       'utf8',
     );
-    const groupBuys = sourceSection(
-      source,
-      '<div\n          hidden={\n            view !== "groupBuys" && view !== "failedGroupBuyClosure"\n          }\n        >',
-      '<div hidden={view !== "fulfillment"}>',
-      'group-buy hidden slice',
-    );
-    const fulfillment = sourceSection(
-      source,
-      '<div hidden={view !== "fulfillment"}>',
-      '{view === "inventory"',
-      'fulfillment hidden slice',
-    );
-    const orders = sourceSection(
-      source,
-      '<div hidden={view !== "orders"}>',
-      '{view === "suppliers"',
-      'orders hidden slice',
-    );
-    const afterSales = sourceSection(
-      source,
-      '<div hidden={view !== "afterSales"}>',
-      '{view === "withdrawals"',
-      'after-sales hidden slice',
-    );
-
     const slices = [
-      [groupBuys, 'groupBuysRefreshVersion', 'GroupBuyManagementPage'],
-      [fulfillment, 'fulfillmentRefreshVersion', 'FulfillmentOverviewPage'],
-      [orders, 'ordersRefreshVersion', 'OrdersPage'],
-      [afterSales, 'afterSalesRefreshVersion', 'AfterSalesPage'],
+      ['fulfillment', 'fulfillmentRefreshVersion', 'FulfillmentOverviewPage'],
+      ['inventory', 'inventoryRefreshVersion', 'InventoryOverviewPage'],
+      ['purchasePlans', 'purchasePlansRefreshVersion', 'PurchasePlansPage'],
+      ['orders', 'ordersRefreshVersion', 'OrdersPage'],
+      ['suppliers', 'suppliersRefreshVersion', 'SuppliersPage'],
+      ['batches', 'batchesRefreshVersion', 'InventoryBatchesPage'],
+      ['expiryAlerts', 'expiryAlertsRefreshVersion', 'ExpiryAlertsPage'],
+      ['stockChecks', 'stockChecksRefreshVersion', 'StockChecksPage'],
+      ['afterSales', 'afterSalesRefreshVersion', 'AfterSalesPage'],
     ] as const;
-    for (const [section, refreshVersion, page] of slices) {
-      expect(section).toMatch(
+
+    expect(source).toMatch(
+      /<div\s+hidden=\{\s*view !== "groupBuys"\s*&&\s*view !== "failedGroupBuyClosure"\s*\}\s*>[\s\S]*?<AdminErrorBoundary resetKey=\{String\(groupBuysRefreshVersion\)\}>[\s\S]*?<GroupBuyManagementPage\b[\s\S]*?<\/AdminErrorBoundary>[\s\S]*?<\/div>/,
+    );
+    for (const [view, version, page] of slices) {
+      expect(source, view).toMatch(
         new RegExp(
-          `<AdminErrorBoundary resetKey=\\{String\\(${refreshVersion}\\)\\}>[\\s\\S]*?<${page}\\b[\\s\\S]*?<\\/AdminErrorBoundary>`,
+          `<div hidden=\\{view !== "${view}"\\}>\\s*<AdminErrorBoundary resetKey=\\{String\\(${version}\\)\\}>[\\s\\S]*?<${page}\\b[\\s\\S]*?<\\/AdminErrorBoundary>\\s*<\\/div>`,
         ),
       );
-      expect(section.match(/<AdminErrorBoundary\b/g)).toHaveLength(1);
-      expect(section.match(/<\/AdminErrorBoundary>/g)).toHaveLength(1);
     }
 
-    expect(source.match(/<AdminErrorBoundary\b/g)).toHaveLength(5);
+    expect(source.match(/<AdminErrorBoundary\b/g)).toHaveLength(11);
     expect(source).toMatch(
       /<AdminErrorBoundary resetKey=\{view\}>\s*<AdminFeatureWorkspace render=\{renderFeatureContent\} \/>\s*<\/AdminErrorBoundary>/,
     );
     expect(boundarySource).toMatch(
       /previous\.resetKey !== this\.props\.resetKey && this\.state\.error[\s\S]*?this\.setState\(\{ error: null \}\)/,
+    );
+  });
+
+  it('bridges only the compact product and batch defaults', () => {
+    const source = readFileSync(
+      new URL('./AdminApp.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).toContain('InventoryProductReference');
+    expect(source).toMatch(
+      /useState<InventoryProductReference \| null>\(null\)/,
+    );
+    expect(source).toMatch(/useState\(""\)/);
+    expect(source).toContain(
+      'onDefaultProductReference={setDefaultInventoryProductReference}',
+    );
+    expect(source).toContain('onDefaultBatchId={setDefaultBatchId}');
+    expect(source).toContain(
+      'defaultProductReference={defaultInventoryProductReference}',
+    );
+    expect(source).toContain('defaultBatchId={defaultBatchId}');
+    expect(source).toMatch(
+      /defaultProductId=\{\s*defaultInventoryProductReference\?\.product_id \?\? ""\s*\}/,
+    );
+    expect(source).toMatch(
+      /defaultLossProductId=\{\s*defaultInventoryProductReference\?\.product_id \?\? ""\s*\}/,
     );
   });
 });
