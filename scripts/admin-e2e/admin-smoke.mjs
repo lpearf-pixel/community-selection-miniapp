@@ -12,9 +12,48 @@ const navigation = [
   '自提工作台', '配送预留', '管理配送规则',
 ];
 
+async function waitForCount(page, readCount, minimum, label) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (readCount() >= minimum) return;
+    await page.waitForTimeout(100);
+  }
+  assert.fail(`${label}: expected at least ${minimum}, received ${readCount()}`);
+}
+
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
+
+let financeRequestCount = 0;
+let operationsRequestCount = 0;
+let operationsFailureInjected = false;
+
+page.on('request', (request) => {
+  const pathname = new URL(request.url()).pathname;
+  if (pathname.startsWith('/api/admin/finance/reconciliation/')) {
+    financeRequestCount += 1;
+  }
+  if (pathname.startsWith('/api/admin/operations/dashboard/')) {
+    operationsRequestCount += 1;
+  }
+});
+
+await page.route('**/api/admin/operations/dashboard/overview', async (route) => {
+  if (!operationsFailureInjected) {
+    operationsFailureInjected = true;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        code: 'E2E_OPERATIONS_FAILURE',
+        message: '模拟运营看板失败',
+      }),
+    });
+    return;
+  }
+  await route.continue();
+});
 
 try {
   await page.goto(baseURL, { waitUntil: 'networkidle' });
@@ -27,13 +66,55 @@ try {
 
   const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
   const buttons = shell.getByRole('button');
-  for (const label of navigation) {
+  const assertActive = async (button, label) => {
+    const className = await button.getAttribute('class');
+    assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
+  };
+
+  const financeRequestsBeforeSelection = financeRequestCount;
+  const operationsRequestsBeforeSelection = operationsRequestCount;
+  assert.equal(financeRequestsBeforeSelection, 0);
+  assert.equal(operationsRequestsBeforeSelection, 0);
+
+  const financeButton = shell.getByRole('button', {
+    name: '财务对账',
+    exact: true,
+  });
+  await financeButton.click();
+  await assertActive(financeButton, '财务对账');
+  await page.getByText('订单对账表', { exact: true }).waitFor();
+  await waitForCount(page, () => financeRequestCount, 4, 'finance initial load');
+  assert.equal(operationsRequestCount, 0);
+
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await waitForCount(page, () => financeRequestCount, 8, 'finance active refresh');
+  assert.equal(operationsRequestCount, 0);
+  assert.equal(await page.getByText('财务对账加载失败').count(), 0);
+
+  const operationsButton = shell.getByRole('button', {
+    name: '运营看板',
+    exact: true,
+  });
+  await operationsButton.click();
+  await assertActive(operationsButton, '运营看板');
+  await page.getByText('运营看板加载失败', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
+  assert.equal(operationsFailureInjected, true);
+  await waitForCount(page, () => operationsRequestCount, 6, 'operations failed load');
+
+  await page.getByRole('button', { name: /重\s*试/ }).click();
+  await page.getByText('近 7 日趋势表', { exact: true }).waitFor();
+  await page.getByText('运营看板加载失败').waitFor({ state: 'detached' });
+  await waitForCount(page, () => operationsRequestCount, 12, 'operations retry');
+  assert.equal(financeRequestCount, 8);
+
+  const remainingNavigation = navigation.filter(
+    (label) => label !== '财务对账' && label !== '运营看板',
+  );
+  for (const label of remainingNavigation) {
     const button = shell.getByRole('button', { name: label, exact: true });
     await button.click();
-    await assert.doesNotReject(async () => {
-      const className = await button.getAttribute('class');
-      assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
-    });
+    await assertActive(button, label);
     await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   }
   assert.equal(await buttons.filter({ hasText: /./ }).count() >= 25, true);
@@ -56,7 +137,9 @@ try {
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByText('后台登录', { exact: true }).waitFor();
 
-  console.log(`L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items.`);
+  console.log(
+    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}.`,
+  );
 } finally {
   await context.close();
   await browser.close();
