@@ -27,6 +27,14 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma Client
         run: pnpm db:generate
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build
       - name: Verify Admin auth runtime
         run: node --import tsx --test scripts/admin-e2e/admin-auth-runtime.test.ts
       - name: Verify Admin E2E contract
