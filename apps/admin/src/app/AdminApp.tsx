@@ -168,9 +168,6 @@ type TaxRecord = {
 };
 
 
-  paid_amount: number; refunded_amount: number; net_sales_amount: number; after_sale_case_count: number; inventory_loss_estimated_amount: number; service_reward_estimated_amount: number; tax_review_pending_count: number; withdrawal_paid_amount: number;
-};
-
 
 
 
