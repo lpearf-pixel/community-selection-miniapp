@@ -21,7 +21,7 @@ if (command === 'docker' && args.includes('up') && scenario === 'database-start'
 }
 if (
   command === 'pnpm'
-  && args.includes('fixture.ts')
+  && args.some((arg) => arg.endsWith('/fixture.ts'))
   && args.includes('setup')
   && scenario === 'fixture-setup'
 ) {
