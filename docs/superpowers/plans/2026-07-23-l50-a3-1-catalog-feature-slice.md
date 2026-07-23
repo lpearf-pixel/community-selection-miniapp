@@ -349,7 +349,7 @@ git commit -m "refactor(admin): isolate catalog refresh"
 The contract must require the smoke to:
 
 - count `/api/categories` and `/api/products` requests as the catalog group;
-- prove the default products view loads exactly the two catalog endpoints after Session login;
+- prove the default products view loads only the two catalog endpoint identities after Session login; React StrictMode may duplicate the initial mount attempt, so assert balanced per-endpoint counts rather than a total of exactly two requests;
 - click Shell refresh on products and prove only catalog counts increase among extracted catalog/finance/operations groups;
 - fail the first category request on an isolated catalog refresh with a `500` envelope;
 - prove local catalog error and `重试` are visible while navigation remains usable;
@@ -369,7 +369,7 @@ Expected: fail because catalog isolation assertions are absent.
 
 - [ ] **Step 3: Implement minimal Playwright assertions**
 
-Use request counters and a route handler limited to the first category failure. Do not mock login, Session Cookie, successful catalog data, finance success, operations retry success, or any legacy page.
+Use per-endpoint request counters, refresh-relative baselines, and a route handler limited to the first category failure. Do not mock login, Session Cookie, successful catalog data, finance success, operations retry success, or any legacy page.
 
 - [ ] **Step 4: Run contract GREEN**
 

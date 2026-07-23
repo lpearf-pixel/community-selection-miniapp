@@ -25,6 +25,8 @@ const context = await browser.newContext();
 const page = await context.newPage();
 
 let catalogRequestCount = 0;
+let categoryRequestCount = 0;
+let productRequestCount = 0;
 let financeRequestCount = 0;
 let operationsRequestCount = 0;
 let catalogFailureInjected = false;
@@ -32,7 +34,12 @@ let operationsFailureInjected = false;
 
 page.on('request', (request) => {
   const pathname = new URL(request.url()).pathname;
-  if (pathname === '/api/categories' || pathname === '/api/products') {
+  if (pathname === '/api/categories') {
+    categoryRequestCount += 1;
+    catalogRequestCount += 1;
+  }
+  if (pathname === '/api/products') {
+    productRequestCount += 1;
     catalogRequestCount += 1;
   }
   if (pathname.startsWith('/api/admin/finance/reconciliation/')) {
@@ -60,19 +67,45 @@ try {
   };
 
   await page.getByText('商品列表', { exact: true }).waitFor();
-  await waitForCount(page, () => catalogRequestCount, 2, 'catalog initial load');
-  const catalogRequestsAfterInitial = catalogRequestCount;
-  assert.equal(catalogRequestsAfterInitial, 2);
+  await waitForCount(page, () => categoryRequestCount, 1, 'category initial load');
+  await waitForCount(page, () => productRequestCount, 1, 'product initial load');
+  const catalogRequestsAfterInitial = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
+  assert.equal(
+    catalogRequestsAfterInitial.categories,
+    catalogRequestsAfterInitial.products,
+  );
+  assert.equal(
+    catalogRequestsAfterInitial.total,
+    catalogRequestsAfterInitial.categories + catalogRequestsAfterInitial.products,
+  );
   assert.equal(financeRequestCount, 0);
   assert.equal(operationsRequestCount, 0);
 
+  const catalogRequestsBeforeRefresh = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
   await shell.getByRole('button', { name: /刷\s*新/ }).click();
   await waitForCount(
     page,
-    () => catalogRequestCount,
-    catalogRequestsAfterInitial + 2,
-    'catalog active refresh',
+    () => categoryRequestCount,
+    catalogRequestsBeforeRefresh.categories + 1,
+    'category active refresh',
   );
+  await waitForCount(
+    page,
+    () => productRequestCount,
+    catalogRequestsBeforeRefresh.products + 1,
+    'product active refresh',
+  );
+  assert.equal(categoryRequestCount, catalogRequestsBeforeRefresh.categories + 1);
+  assert.equal(productRequestCount, catalogRequestsBeforeRefresh.products + 1);
+  assert.equal(catalogRequestCount, catalogRequestsBeforeRefresh.total + 2);
   assert.equal(financeRequestCount, 0);
   assert.equal(operationsRequestCount, 0);
 
@@ -93,28 +126,54 @@ try {
     await route.continue();
   });
 
-  const catalogRequestsBeforeFailure = catalogRequestCount;
+  const catalogRequestsBeforeFailure = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
   await shell.getByRole('button', { name: /刷\s*新/ }).click();
   await page.getByText('商品目录加载失败', { exact: true }).waitFor();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   assert.equal(catalogFailureInjected, true);
   await waitForCount(
     page,
-    () => catalogRequestCount,
-    catalogRequestsBeforeFailure + 2,
-    'catalog failed refresh',
+    () => categoryRequestCount,
+    catalogRequestsBeforeFailure.categories + 1,
+    'category failed refresh',
   );
+  await waitForCount(
+    page,
+    () => productRequestCount,
+    catalogRequestsBeforeFailure.products + 1,
+    'product failed refresh',
+  );
+  assert.equal(categoryRequestCount, catalogRequestsBeforeFailure.categories + 1);
+  assert.equal(productRequestCount, catalogRequestsBeforeFailure.products + 1);
+  assert.equal(catalogRequestCount, catalogRequestsBeforeFailure.total + 2);
 
-  const catalogRequestsAfterFailure = catalogRequestCount;
+  const catalogRequestsAfterFailure = {
+    categories: categoryRequestCount,
+    products: productRequestCount,
+    total: catalogRequestCount,
+  };
   await page.getByRole('button', { name: /重\s*试/ }).click();
   await page.getByText('商品目录加载失败').waitFor({ state: 'detached' });
   await page.getByText('商品列表', { exact: true }).waitFor();
   await waitForCount(
     page,
-    () => catalogRequestCount,
-    catalogRequestsAfterFailure + 2,
-    'catalog retry',
+    () => categoryRequestCount,
+    catalogRequestsAfterFailure.categories + 1,
+    'category retry',
   );
+  await waitForCount(
+    page,
+    () => productRequestCount,
+    catalogRequestsAfterFailure.products + 1,
+    'product retry',
+  );
+  assert.equal(categoryRequestCount, catalogRequestsAfterFailure.categories + 1);
+  assert.equal(productRequestCount, catalogRequestsAfterFailure.products + 1);
+  assert.equal(catalogRequestCount, catalogRequestsAfterFailure.total + 2);
   const catalogRequestsAfterRetry = catalogRequestCount;
 
   const financeRequestsBeforeSelection = financeRequestCount;
@@ -130,11 +189,19 @@ try {
   await assertActive(financeButton, '财务对账');
   await page.getByText('订单对账表', { exact: true }).waitFor();
   await waitForCount(page, () => financeRequestCount, 4, 'finance initial load');
+  const financeRequestsAfterInitial = financeRequestCount;
+  assert.equal(financeRequestsAfterInitial % 4, 0);
   assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(operationsRequestCount, 0);
 
   await shell.getByRole('button', { name: /刷\s*新/ }).click();
-  await waitForCount(page, () => financeRequestCount, 8, 'finance active refresh');
+  await waitForCount(
+    page,
+    () => financeRequestCount,
+    financeRequestsAfterInitial + 4,
+    'finance active refresh',
+  );
+  assert.equal(financeRequestCount, financeRequestsAfterInitial + 4);
   assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(operationsRequestCount, 0);
   assert.equal(await page.getByText('财务对账加载失败').count(), 0);
