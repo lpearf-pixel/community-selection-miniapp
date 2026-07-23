@@ -18,7 +18,7 @@ const page = await context.newPage();
 
 try {
   await page.goto(baseURL, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: '后台登录' }).waitFor();
+  await page.getByText('后台登录', { exact: true }).waitFor();
   await page.getByLabel('用户名').fill(credentials.username);
   await page.getByLabel('密码').fill(credentials.password);
   await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -51,9 +51,9 @@ try {
 
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await page.getByRole('button', { name: '退出登录', exact: true }).click();
-  await page.getByRole('heading', { name: '后台登录' }).waitFor();
+  await page.getByText('后台登录', { exact: true }).waitFor();
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: '后台登录' }).waitFor();
+  await page.getByText('后台登录', { exact: true }).waitFor();
 
   console.log(`L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items.`);
 } finally {
