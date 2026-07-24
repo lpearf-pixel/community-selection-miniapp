@@ -337,7 +337,7 @@ describe.sequential('Admin pickup verification executor on PostgreSQL', () => {
       (item): item is PromiseRejectedResult => item.status === 'rejected',
     );
     expect(rejected?.reason).toBeInstanceOf(AdminPickupVerificationError);
-    expect(rejected?.reason.code).toBe('ADMIN_ORDER_VERSION_CONFLICT');
+    expect(rejected?.reason.code).toBe('ADMIN_PICKUP_STATE_CONFLICT');
     await expect(sideEffectCounts()).resolves.toEqual({
       events: 1,
       timeline: 1,
