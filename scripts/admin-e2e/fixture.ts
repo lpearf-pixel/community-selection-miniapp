@@ -14,18 +14,46 @@ const communityName = 'L50-B3 E2E 社区';
 const pickupStoreId = 'l50-b3-e2e-pickup-store';
 
 async function cleanup() {
-  await prisma.order.deleteMany({
-    where: { order_no: 'L50-B3-E2E-ORDER' },
+  const orders = await prisma.order.findMany({
+    where: { order_no: orderNo },
+    select: { id: true },
   });
+  const orderIds = orders.map((order) => order.id);
+  if (orderIds.length) {
+    await prisma.adminCommandReceipt.deleteMany({
+      where: { target_id: { in: orderIds } },
+    });
+    await prisma.businessEventLog.deleteMany({
+      where: { order_id: { in: orderIds } },
+    });
+    await prisma.adminAuditLog.deleteMany({
+      where: { target_type: 'Order', target_id: { in: orderIds } },
+    });
+    await prisma.orderTimelineLog.deleteMany({
+      where: { order_id: { in: orderIds } },
+    });
+    await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
+  }
   await prisma.product.deleteMany({ where: { name: productName } });
   await prisma.category.deleteMany({ where: { name: categoryName } });
   await prisma.user.deleteMany({ where: { openid: customerOpenid } });
   await prisma.community.deleteMany({ where: { name: communityName } });
   await prisma.pickupStore.deleteMany({ where: { id: pickupStoreId } });
-  const users = await prisma.adminUser.findMany({ where: { username }, select: { id: true } });
+  const users = await prisma.adminUser.findMany({
+    where: { username },
+    select: { id: true },
+  });
   const ids = users.map((user) => user.id);
   if (ids.length) {
-    await prisma.adminSession.deleteMany({ where: { admin_user_id: { in: ids } } });
+    await prisma.adminCommandReceipt.deleteMany({
+      where: { admin_user_id: { in: ids } },
+    });
+    await prisma.adminAuditLog.deleteMany({
+      where: { admin_user_id: { in: ids } },
+    });
+    await prisma.adminSession.deleteMany({
+      where: { admin_user_id: { in: ids } },
+    });
     await prisma.adminUser.deleteMany({ where: { id: { in: ids } } });
   }
   await rm(fixturePath, { force: true });
@@ -85,26 +113,8 @@ async function setup() {
       status: 'active',
     },
   });
-  await prisma.order.upsert({
-    where: { order_no: 'L50-B3-E2E-ORDER' },
-    update: {
-      user_id: customer.id,
-      product_id: product.id,
-      community_id: community.id,
-      total_amount_cents: 2590,
-      product_amount_cents: 2590,
-      pay_amount_cents: 2590,
-      quantity: 1,
-      pay_status: 'paid',
-      order_status: 'preparing',
-      refund_status: 'none',
-      pickup_type: 'delivery',
-      receiver_name: '浏览器测试用户',
-      receiver_phone: '13812348000',
-      receiver_address: '测试市测试区测试路 100 号',
-      paid_at: new Date(),
-    },
-    create: {
+  const order = await prisma.order.create({
+    data: {
       order_no: orderNo,
       user_id: customer.id,
       product_id: product.id,
@@ -114,7 +124,8 @@ async function setup() {
       pay_amount_cents: 2590,
       quantity: 1,
       pay_status: 'paid',
-      order_status: 'preparing',
+      order_status: 'paid',
+      version: 1,
       refund_status: 'none',
       pickup_type: 'delivery',
       receiver_name: '浏览器测试用户',
@@ -131,7 +142,16 @@ async function setup() {
       totp_enabled: false,
     },
   });
-  await writeFile(fixturePath, JSON.stringify({ username, password }), { mode: 0o600 });
+  await writeFile(
+    fixturePath,
+    JSON.stringify({
+      username,
+      password,
+      orderId: order.id,
+      orderNo: order.order_no,
+    }),
+    { mode: 0o600 },
+  );
 }
 
 const action = process.argv[2];
