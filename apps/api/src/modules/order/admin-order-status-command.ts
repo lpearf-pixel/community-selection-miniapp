@@ -3,7 +3,7 @@ import { OrderStatus } from '@prisma/client';
 
 const OPERATION = 'admin.order.status.update.v1';
 const INVALID_MESSAGE = '订单状态命令不合法';
-const IDEMPOTENCY_KEY = /^[\x21-\x7e]{16,128}$/;
+const IDEMPOTENCY_KEY = /^[\x20-\x7e]{16,128}$/;
 const fulfillmentStatuses = new Set<OrderStatus>([
   OrderStatus.preparing,
   OrderStatus.ready,
@@ -60,6 +60,7 @@ export function parseAdminOrderStatusCommand(
     !Number.isSafeInteger(body.expected_version) ||
     Number(body.expected_version) < 1 ||
     typeof body.idempotency_key !== 'string' ||
+    body.idempotency_key !== body.idempotency_key.trim() ||
     !IDEMPOTENCY_KEY.test(body.idempotency_key)
   ) {
     return invalidCommand();
