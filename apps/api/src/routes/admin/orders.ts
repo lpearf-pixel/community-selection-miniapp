@@ -1,5 +1,10 @@
 import type { Prisma } from '@prisma/client';
-import type { FastifyInstance } from 'fastify';
+import type {
+  FastifyError,
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+} from 'fastify';
 import {
   buildPaginationMetadata,
   contractFail,
@@ -87,12 +92,39 @@ function publicAfterSale(item: any) {
   };
 }
 
+function adminOrderStatusV1ErrorHandler(
+  error: FastifyError,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const invalidCommand = error.statusCode === 400;
+  request.log.error(
+    {
+      error_name: error.name,
+      trace_id: String(request.id),
+    },
+    'Admin order status request failed before handler',
+  );
+  reply.code(invalidCommand ? 400 : 500).send(
+    contractFail({
+      code: invalidCommand
+        ? 'INVALID_ADMIN_ORDER_STATUS_COMMAND'
+        : 'ADMIN_ORDER_STATUS_UPDATE_FAILED',
+      message: invalidCommand
+        ? '订单状态命令不合法'
+        : '订单状态更新失败',
+      traceId: String(request.id),
+    }),
+  );
+}
+
 export function registerAdminOrderRoutes(app: FastifyInstance) {
   app.post(
     '/api/admin/orders/:id/status',
     {
       config: { adminContractV1: true },
       preHandler: requireAdminPermissionV1('order.manage'),
+      errorHandler: adminOrderStatusV1ErrorHandler,
     },
     async (request, reply) => {
       const traceId = String(request.id);
