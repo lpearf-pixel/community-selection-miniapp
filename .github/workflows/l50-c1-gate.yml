@@ -43,8 +43,28 @@ jobs:
           grep -nE "PaginatedData|contractOk" packages/shared/src/index.ts packages/shared/dist/index.d.ts
           readlink -f apps/admin/node_modules/@community-selection/shared
           pnpm --filter @community-selection/config build
-          pnpm --filter @community-selection/admin exec tsc -p tsconfig.json --noEmit --traceResolution --pretty false > /tmp/l50-c1-admin-trace.log 2>&1 || true
-          grep -nE "@community-selection/shared|packages/shared/(src|dist)|PaginatedData" /tmp/l50-c1-admin-trace.log | tail -80
+          node --input-type=module <<'NODE'
+          import ts from 'typescript';
+          const configFile = ts.readConfigFile('apps/admin/tsconfig.json', ts.sys.readFile);
+          const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, 'apps/admin');
+          const program = ts.createProgram(parsed.fileNames, parsed.options);
+          const checker = program.getTypeChecker();
+          const shared = program.getSourceFiles().find((file) => file.fileName.endsWith('/packages/shared/dist/index.d.ts'));
+          const typesFile = program.getSourceFiles().find((file) => file.fileName.endsWith('/features/sales/orders/types.ts'));
+          const moduleSymbol = shared && checker.getSymbolAtLocation(shared);
+          console.log('shared-source', shared?.fileName);
+          console.log('shared-exports', moduleSymbol ? checker.getExportsOfModule(moduleSymbol).map((symbol) => symbol.name).sort() : []);
+          let imported;
+          const visit = (node) => {
+            if (ts.isImportSpecifier(node) && node.name.text === 'PaginatedData') imported = node.name;
+            ts.forEachChild(node, visit);
+          };
+          if (typesFile) visit(typesFile);
+          const importSymbol = imported && checker.getSymbolAtLocation(imported);
+          console.log('import-symbol', importSymbol?.name, importSymbol?.flags);
+          console.log('alias-target', importSymbol && (importSymbol.flags & ts.SymbolFlags.Alias) ? checker.getAliasedSymbol(importSymbol).name : null);
+          console.log('diagnostics', ts.getPreEmitDiagnostics(program).filter((diagnostic) => diagnostic.file?.fileName.endsWith('/features/sales/orders/types.ts')).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')));
+          NODE
           pnpm --workspace-concurrency=1 -r typecheck
       - name: Test with bounded workspace concurrency
         run: |
