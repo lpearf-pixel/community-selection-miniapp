@@ -117,6 +117,20 @@ try {
   await page.getByRole('button', { name: /登\s*录/ }).click();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
+  const roleWorkbench = page.getByRole('region', {
+    name: '今日经营角色工作台',
+  });
+  await roleWorkbench.waitFor();
+  await waitForCount(
+    page,
+    () => operationsRequestCount,
+    6,
+    'role-workbench operations load',
+  );
+  await page.getByText('近 7 日趋势表', { exact: true }).waitFor();
+  await roleWorkbench
+    .getByText('当前工作台：经营负责人', { exact: true })
+    .waitFor();
   await waitForCount(page, () => groupBuyRequestCount, 1, 'group-buy initial load');
   await waitForCount(page, () => orderRequestCount, 1, 'order initial load');
   await waitForCount(page, () => fulfillmentRequestCount, 1, 'fulfillment initial load');
@@ -193,13 +207,24 @@ try {
     const className = await button.getAttribute('class');
     assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
   };
+  const workbenchOrdersButton = roleWorkbench.getByRole('button', {
+    name: '订单管理',
+    exact: true,
+  });
+  const ordersNavigationButton = groupedNavigation.getByRole('button', {
+    name: '订单管理',
+    exact: true,
+  });
+  await workbenchOrdersButton.click();
+  await assertActive(ordersNavigationButton, '订单管理');
   const productButton = groupedNavigation.getByRole('button', {
     name: '商品管理',
     exact: true,
   });
+  await productButton.click();
   await assertActive(productButton, '商品管理');
-
   await page.getByText('商品列表', { exact: true }).waitFor();
+  operationsRequestCount = 0;
   await waitForCount(page, () => categoryRequestCount, 1, 'category initial load');
   await waitForCount(page, () => productRequestCount, 1, 'product initial load');
   const catalogRequestsAfterInitial = {
