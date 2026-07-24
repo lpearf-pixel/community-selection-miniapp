@@ -7,15 +7,23 @@ import {
   updateOrderStatus,
   verifyOrderPickup,
 } from './api';
-import type { OpsAlert } from './types';
+import type {
+  AdminOrderListResponse,
+  OpsAlert,
+} from './types';
 
 describe('orders API boundary', () => {
   it('loads the protected Admin order endpoint with deterministic filters', async () => {
-    const response = {
-      total: 1,
-      page: 2,
-      page_size: 50,
-      items: [{ id: 'o1' }],
+    const response: AdminOrderListResponse = {
+      items: [],
+      pagination: {
+        page: 2,
+        page_size: 50,
+        total: 1,
+        total_pages: 1,
+        has_previous: true,
+        has_next: false,
+      },
     };
     const request = vi.fn(async <T>(): Promise<T> => response as T) as JsonRequester;
 
