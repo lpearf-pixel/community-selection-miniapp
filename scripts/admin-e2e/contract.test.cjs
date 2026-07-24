@@ -754,7 +754,7 @@ function assertA33SmokeContract(smoke) {
 
   const inventoryRefresh = sourceBetween(
     smoke,
-    /assert\.deepEqual\(readA33RequestCounts\(\), a33RequestsAfterInitial\);/,
+    /assert\.deepEqual\(readA33RequestCounts\(\), a33RequestsAfterOrderMutation\);/,
     /const purchasePlansButton = groupedNavigation\.getByRole/,
     'inventory active refresh exact isolation',
   );
@@ -1088,7 +1088,7 @@ function assertA34SmokeContract(smoke) {
 
   const withdrawalRefresh = sourceBetween(
     smoke,
-    /assert\.deepEqual\(readA34RequestCounts\(\), a34RequestsAfterInitial\);/,
+    /assert\.deepEqual\(readA34RequestCounts\(\), a34RequestsAfterOrderMutation\);/,
     /const alertsButton = groupedNavigation\.getByRole/,
     'withdrawal active refresh exact isolation',
   );
