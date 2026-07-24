@@ -137,6 +137,36 @@ afterAll(async () => {
 });
 
 describe.sequential('POST /api/admin/orders/:id/pickup-verify', () => {
+  it('retires the legacy pickup workbench mutation with zero side effects', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/pickup/orders/${orderId}/verify`,
+      headers: headers('super_admin'),
+      payload: {
+        pickup_code: `PICK-${ids.orderNo.slice(-6).toUpperCase()}`,
+        remark: 'legacy bypass',
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    const [order, receipts, events, timeline, audits] = await Promise.all([
+      prisma.order.findUniqueOrThrow({ where: { id: orderId } }),
+      prisma.adminCommandReceipt.count({
+        where: { admin_user_id: ids.admin },
+      }),
+      prisma.businessEventLog.count({ where: { order_id: orderId } }),
+      prisma.orderTimelineLog.count({ where: { order_id: orderId } }),
+      prisma.adminAuditLog.count({
+        where: { target_type: 'Order', target_id: orderId },
+      }),
+    ]);
+    expect(order).toMatchObject({
+      order_status: 'ready',
+      version: 1,
+    });
+    expect([receipts, events, timeline, audits]).toEqual([0, 0, 0, 0]);
+  });
+
   it('returns a traceable V1 401 without Admin identity', async () => {
     const response = await app.inject({
       method: 'POST',
