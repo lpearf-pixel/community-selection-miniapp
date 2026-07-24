@@ -614,7 +614,7 @@ try {
     );
   });
   await orderFilter
-    .getByRole('button', { name: /查\\s*询/ })
+    .getByRole('button', { name: /查\s*询/ })
     .click();
   const pickupFilteredEnvelope = await (
     await pickupFilteredResponse
