@@ -11,8 +11,11 @@ for (const entry of entries) {
   seen.add(entry);
   const sqlPath = join(migrationDir, entry, 'migration.sql');
   const sql = readFileSync(sqlPath, 'utf8').trim();
+  const executableSql = sql
+    .replace(/--[^\r\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   if (!sql) problems.push(`Empty migration: ${entry}`);
-  if (/DROP\s+TABLE\s+(?!IF\s+EXISTS)/i.test(sql)) problems.push(`Unsafe DROP TABLE without IF EXISTS in ${entry}`);
+  if (/DROP\s+TABLE\s+(?!IF\s+EXISTS)/i.test(executableSql)) problems.push(`Unsafe DROP TABLE without IF EXISTS in ${entry}`);
 }
 
 if (entries.length === 0) problems.push('No Prisma migrations found');
