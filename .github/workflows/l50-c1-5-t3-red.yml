@@ -1,0 +1,44 @@
+name: L50 C1.5 T3 RED
+
+on:
+  push:
+    branches:
+      - codex/l50-c1-5-group-buy-page-governance
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l50-c1-5-t3-red
+  cancel-in-progress: true
+
+jobs:
+  admin-c1-5-t3-red:
+    runs-on: [self-hosted, Linux, X64, home, docker, community-selection-miniapp]
+    timeout-minutes: 10
+    env:
+      CI: "true"
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MIN_THREADS: "1"
+      VITEST_MAX_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prove the structure contract is RED
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @community-selection/admin test --             src/features/sales/group-buys/group-buy-page-structure.test.ts             > /tmp/l50-c1-5-t3-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/l50-c1-5-t3-red.log
+          test "$status" -ne 0
+          grep -F "keeps the orchestrator at or below 200 lines" /tmp/l50-c1-5-t3-red.log
+          grep -F "delegates the list and closure workbench views" /tmp/l50-c1-5-t3-red.log
