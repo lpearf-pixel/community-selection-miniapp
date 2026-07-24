@@ -172,3 +172,32 @@ test('requires one V1 pickup verification write boundary and no legacy mutation'
   assert.match(executor, /await recordAdminAudit\(tx,/);
   assert.match(executor, /await tx\.adminCommandReceipt\.update\(/);
 });
+
+
+test('exposes only the eligible pickup action and refreshes pickup conflicts', () => {
+  const api = read('apps/admin/src/features/sales/orders/api.ts');
+  const page = read(
+    'apps/admin/src/features/sales/orders/OrdersPage.tsx',
+  );
+  const table = read(
+    'apps/admin/src/features/sales/orders/OrdersTable.tsx',
+  );
+  const types = read('apps/admin/src/features/sales/orders/types.ts');
+
+  assert.match(types, /AdminPickupVerificationResult/);
+  assert.match(api, /expected_version:\s*expectedVersion/);
+  assert.match(api, /idempotency_key:\s*idempotencyKey/);
+  assert.match(page, /verifyOrderPickup\([\s\S]*?order\.version/);
+  assert.match(page, /crypto\.randomUUID\(\)/);
+  assert.match(page, /ADMIN_PICKUP_TYPE_CONFLICT/);
+  assert.match(page, /ADMIN_PICKUP_STATE_CONFLICT/);
+  assert.match(page, /ADMIN_ORDER_VERSION_CONFLICT/);
+  assert.match(page, /pendingPickupOrderIds/);
+  assert.match(
+    table,
+    /order\.pickup_type === 'store'\s*&&\s*order\.order_status === 'ready'/,
+  );
+  assert.match(table, /disabled=\{props\.pendingPickupOrderIds\.has\(order\.id\)\}/);
+  assert.doesNotMatch(table, /onMarkOrder\(order, 'picked'\)/);
+  assert.doesNotMatch(table, /已自提/);
+});
