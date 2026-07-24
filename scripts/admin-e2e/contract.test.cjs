@@ -269,6 +269,13 @@ function assertA32SmokeContract(smoke) {
       },
       {
         receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
+        },
+      },
+      {
+        receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
@@ -293,11 +300,12 @@ function assertA32SmokeContract(smoke) {
         },
       },
     ],
-    'route registration whitelist: five failure interceptors plus one real status proxy',
+    'route registration whitelist: five failure interceptors plus two real command proxies',
   );
   const [
     catalogRegistration,
     statusRaceRegistration,
+    pickupRaceRegistration,
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
@@ -307,6 +315,11 @@ function assertA32SmokeContract(smoke) {
     statusRaceRegistration.handler,
     'statusRaceRoute',
     'route registration whitelist: status race uses the named real proxy',
+  );
+  assert.equal(
+    pickupRaceRegistration.handler,
+    'pickupRaceRoute',
+    'route registration whitelist: pickup race uses the named real proxy',
   );
   assert.equal(
     purchasePlanRegistration.target.value,
@@ -856,6 +869,13 @@ function assertA33SmokeContract(smoke) {
       },
       {
         receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
+        },
+      },
+      {
+        receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
@@ -880,9 +900,9 @@ function assertA33SmokeContract(smoke) {
         },
       },
     ],
-    'A3.3 route registration whitelist: five failure interceptors plus one real status proxy',
+    'A3.3 route registration whitelist: five failure interceptors plus two real command proxies',
   );
-  const purchasePlanRegistration = routeRegistrations[3];
+  const purchasePlanRegistration = routeRegistrations[4];
   assert.ok(
     purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
       purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
