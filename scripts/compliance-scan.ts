@@ -47,7 +47,7 @@ function isAllowedLine(path: string, line: string, term: string) {
   if (
     term === ['le', 'vel'].join('') &&
     path === 'apps/admin/src/app/AdminShell.tsx' &&
-    /^\s*level=\{\d+\}/.test(line)
+    /^\s*level=\{\d+\}\s*$/.test(line)
   ) return true;
   return false;
 }
