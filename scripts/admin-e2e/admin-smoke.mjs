@@ -114,6 +114,9 @@ try {
     `${baseURL}/api/admin/orders?page=1&page_size=20`,
   );
   assert.equal(unauthenticatedOrdersResponse.status(), 401);
+  const unauthenticatedOrdersEnvelope =
+    await unauthenticatedOrdersResponse.json();
+  assert.equal(unauthenticatedOrdersEnvelope.success, false);
   await page.goto(baseURL, { waitUntil: 'networkidle' });
   await page.getByText('后台登录', { exact: true }).waitFor();
   await page.getByLabel('用户名').fill(credentials.username);
@@ -127,7 +130,13 @@ try {
   const initialOrdersResponse = await initialOrdersResponsePromise;
   const initialOrdersEnvelope = await initialOrdersResponse.json();
   assert.equal(initialOrdersEnvelope.success, true);
+  assert.equal(initialOrdersEnvelope.code, 'ADMIN_ORDERS_LISTED');
+  assert.equal(typeof initialOrdersEnvelope.trace_id, 'string');
   assert.equal(Array.isArray(initialOrdersEnvelope.data.items), true);
+  assert.equal(
+    typeof initialOrdersEnvelope.data.pagination.total,
+    'number',
+  );
   assert.ok(initialOrdersEnvelope.data.items.length > 0);
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
@@ -398,6 +407,22 @@ try {
     `${baseURL}/api/admin/orders?pay_status=unknown`,
   );
   assert.equal(invalidOrdersResponse.status(), 400);
+  const invalidOrdersEnvelope = await invalidOrdersResponse.json();
+  assert.equal(
+    invalidOrdersEnvelope.code,
+    'INVALID_ADMIN_ORDER_QUERY',
+  );
+  assert.equal(typeof invalidOrdersEnvelope.trace_id, 'string');
+  const oversizedPageResponse = await context.request.get(
+    `${baseURL}/api/admin/orders?page=10001&page_size=100`,
+  );
+  assert.equal(oversizedPageResponse.status(), 400);
+  const oversizedPageEnvelope = await oversizedPageResponse.json();
+  assert.equal(
+    oversizedPageEnvelope.code,
+    'INVALID_ADMIN_ORDER_QUERY',
+  );
+  assert.equal(typeof oversizedPageEnvelope.trace_id, 'string');
   const filteredOrder = filteredOrdersEnvelope.data.items[0];
   assert.equal(Object.hasOwn(filteredOrder, 'receiver_phone'), false);
   assert.equal(Object.hasOwn(filteredOrder, 'receiver_address'), false);
