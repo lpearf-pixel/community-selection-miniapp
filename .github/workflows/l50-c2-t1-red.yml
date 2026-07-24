@@ -49,6 +49,8 @@ jobs:
             src/modules/order/admin-order-status-executor.integration.test.ts
           pnpm --filter @community-selection/api test -- \
             src/routes/admin/order-status-route.integration.test.ts
+          pnpm --filter @community-selection/api test -- \
+            src/routes/admin/order-auxiliary-security.integration.test.ts
           pnpm lint
           pnpm --workspace-concurrency=1 -r typecheck
           node --test scripts/admin-e2e/contract.test.cjs
