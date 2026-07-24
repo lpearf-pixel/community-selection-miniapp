@@ -47,6 +47,7 @@ jobs:
           pnpm --filter @community-selection/shared build
           pnpm --filter @community-selection/config build
           pnpm --filter @community-selection/api test --             src/modules/order/admin-pickup-verification-executor.integration.test.ts
+          pnpm --filter @community-selection/api test --             src/routes/admin/order-pickup-verification-route.integration.test.ts
       - name: Cleanup C2 T2 resources
         if: always()
         shell: bash
