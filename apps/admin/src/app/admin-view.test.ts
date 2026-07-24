@@ -36,8 +36,8 @@ describe('admin view contract', () => {
     expect(new Set(ADMIN_VIEW_KEYS).size).toBe(ADMIN_VIEW_KEYS.length);
   });
 
-  it('uses products as the authenticated landing view', () => {
+  it('uses today operations as the authenticated landing view', () => {
     const landing: AdminViewKey = DEFAULT_ADMIN_VIEW;
-    expect(landing).toBe('products');
+    expect(landing).toBe('operations');
   });
 });
