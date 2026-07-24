@@ -100,6 +100,10 @@ do not change during C1. The Admin order workbench changes only how it reads
 pagination metadata; filtering, refresh, retry, details, status updates,
 pickup verification, and exports remain unchanged.
 
+The Admin workspace ambient declaration must expose the same C1 public
+contract types and helpers as `@community-selection/shared`; otherwise it
+shadows the package declaration during the complete workspace typecheck.
+
 The public aliases `CanonicalId`, `ExpectedVersion`, and `IdempotencyKey`
 define C2's type boundary only. No runtime write semantics are introduced in
 C1.
