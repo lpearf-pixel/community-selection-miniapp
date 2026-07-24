@@ -1380,13 +1380,23 @@ function assertB3OmnichannelOrdersContract(
 ) {
   assert.match(
     fixture,
-    /await prisma\.order\.upsert\(\{[\s\S]*order_no: 'L50-B3-E2E-ORDER'/,
-    'B3 E2E must create a deterministic real order in the fresh database',
+    /const runSuffix = String\(process\.env\.GITHUB_RUN_ID \?\? process\.pid\)/,
+    'B3 E2E fixture identity must be deterministic within one isolated run',
   );
   assert.match(
     fixture,
-    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: 'L50-B3-E2E-ORDER' \},\s*\}\);/,
-    'B3 E2E must remove its deterministic order during cleanup',
+    /const pickupOrder = await prisma\.order\.create\(\{[\s\S]*?order_no: pickupOrderNo/,
+    'B3 E2E must create the store pickup order in the fresh database',
+  );
+  assert.match(
+    fixture,
+    /const order = await prisma\.order\.create\(\{[\s\S]*?order_no: orderNo/,
+    'B3 E2E must create the delivery order in the fresh database',
+  );
+  assert.match(
+    fixture,
+    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: \{ in: \[orderNo, pickupOrderNo\] \} \},\s*\}\);/,
+    'B3 E2E must remove both run-isolated orders during cleanup',
   );
   assert.match(
     orderFilters,
