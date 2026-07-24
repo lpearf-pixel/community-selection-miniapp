@@ -177,6 +177,10 @@ test('requires one V1 pickup verification write boundary and no legacy mutation'
     /export async function pickupVerify/,
   );
   assert.doesNotMatch(
+    orderService,
+    /allowedFulfillmentStatuses[\s\S]{0,240}OrderStatus\.picked/,
+  );
+  assert.doesNotMatch(
     executor,
     /safeRecord(?:BusinessEvent|OrderTimeline)/,
   );
@@ -278,6 +282,8 @@ test('routes the pickup workbench through the reliable command', () => {
   );
   assert.match(pickupApi, /expected_version:\s*expectedVersion/);
   assert.match(pickupApi, /idempotency_key:\s*idempotencyKey/);
+  assert.match(pickupApi, /class PickupWorkbenchApiError extends Error/);
+  assert.match(pickupApi, /public readonly code:/);
   assert.doesNotMatch(
     pickupApi,
     /\/api\/admin\/pickup\/orders\/\$\{orderId\}\/verify/,
@@ -289,5 +295,12 @@ test('routes the pickup workbench through the reliable command', () => {
   assert.match(
     pickupPage,
     /verifyPickupWorkbenchOrder\([\s\S]*?order\.version[\s\S]*?crypto\.randomUUID\(\)/,
+  );
+  assert.match(pickupPage, /ADMIN_PICKUP_TYPE_CONFLICT/);
+  assert.match(pickupPage, /ADMIN_PICKUP_STATE_CONFLICT/);
+  assert.match(pickupPage, /ADMIN_ORDER_VERSION_CONFLICT/);
+  assert.match(
+    pickupPage,
+    /setSelectedOrder\(\(current\)[\s\S]*?current\?\.order_id === order\.order_id[\s\S]*?null/,
   );
 });
