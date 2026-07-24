@@ -483,12 +483,6 @@ try {
   assert.equal(externalEnvelope.data.order_status, 'picked');
   assert.equal(externalEnvelope.data.version, 3);
 
-  const conflictResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname ===
-        `/api/admin/orders/${credentials.orderId}/status` &&
-      response.request().method() === 'POST',
-  );
   const conflictRefreshPromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -497,8 +491,21 @@ try {
       response.ok()
     );
   });
-  await fixtureRow.getByRole('button', { name: '完成' }).click();
-  const conflictResponse = await conflictResponsePromise;
+  const completionButton = fixtureRow.getByRole('button', {
+    name: '完成',
+    exact: true,
+  });
+  await completionButton.scrollIntoViewIfNeeded();
+  await completionButton.waitFor();
+  const [conflictResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname ===
+          `/api/admin/orders/${credentials.orderId}/status` &&
+        response.request().method() === 'POST',
+    ),
+    completionButton.click({ force: true }),
+  ]);
   assert.equal(conflictResponse.status(), 409);
   const conflictCommand = conflictResponse.request().postDataJSON();
   assert.equal(conflictCommand.expected_version, 2);
