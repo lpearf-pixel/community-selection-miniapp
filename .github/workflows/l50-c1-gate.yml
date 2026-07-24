@@ -43,6 +43,8 @@ jobs:
           grep -nE "PaginatedData|contractOk" packages/shared/src/index.ts packages/shared/dist/index.d.ts
           readlink -f apps/admin/node_modules/@community-selection/shared
           pnpm --filter @community-selection/config build
+          pnpm --filter @community-selection/admin exec tsc -p tsconfig.json --noEmit --traceResolution --pretty false > /tmp/l50-c1-admin-trace.log 2>&1 || true
+          grep -nE "@community-selection/shared|packages/shared/(src|dist)|PaginatedData" /tmp/l50-c1-admin-trace.log | tail -80
           pnpm --workspace-concurrency=1 -r typecheck
       - name: Test with bounded workspace concurrency
         run: |
