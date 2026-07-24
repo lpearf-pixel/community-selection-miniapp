@@ -163,7 +163,7 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
     });
   });
 
-  it('wraps malformed JSON and permission lookup failures in safe V1 errors', async () => {
+  it('wraps malformed JSON in a safe V1 error', async () => {
     const malformed = await app.inject({
       method: 'POST',
       url: `/api/admin/orders/${orderId}/status`,
@@ -181,29 +181,6 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
       message: '订单状态命令不合法',
       trace_id: expect.any(String),
     });
-
-    const lookup = vi
-      .spyOn(prisma.adminUser, 'findUnique')
-      .mockRejectedValueOnce(new Error('sensitive database detail'));
-    try {
-      const failed = await app.inject({
-        method: 'POST',
-        url: `/api/admin/orders/${orderId}/status`,
-        headers: headers('super_admin'),
-        payload: command,
-      });
-      expect(failed.statusCode).toBe(500);
-      expect(failed.json()).toEqual({
-        success: false,
-        data: null,
-        code: 'ADMIN_ORDER_STATUS_UPDATE_FAILED',
-        message: '订单状态更新失败',
-        trace_id: expect.any(String),
-      });
-      expect(failed.body).not.toContain('sensitive database detail');
-    } finally {
-      lookup.mockRestore();
-    }
   });
 
   it('validates the body and returns the versioned result', async () => {
@@ -269,4 +246,29 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
       prisma.businessEventLog.count({ where: { order_id: orderId } }),
     ).resolves.toBe(1);
   });
+
+  it('wraps permission lookup failures in a safe V1 error', async () => {
+    const lookup = vi
+      .spyOn(prisma.adminUser, 'findUnique')
+      .mockRejectedValueOnce(new Error('sensitive database detail'));
+    try {
+      const failed = await app.inject({
+        method: 'POST',
+        url: `/api/admin/orders/${orderId}/status`,
+        headers: headers('super_admin'),
+        payload: command,
+      });
+      expect(failed.statusCode).toBe(500);
+      expect(failed.json()).toEqual({
+        success: false,
+        data: null,
+        code: 'ADMIN_ORDER_STATUS_UPDATE_FAILED',
+        message: '订单状态更新失败',
+        trace_id: expect.any(String),
+      });
+      expect(failed.body).not.toContain('sensitive database detail');
+    } finally {
+      lookup.mockRestore();
+    }
+
 });
