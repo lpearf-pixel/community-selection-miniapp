@@ -435,6 +435,13 @@ try {
   const fixtureRow = page
     .getByRole('row')
     .filter({ hasText: credentials.orderNo });
+  const deliveryRow = fixtureRow;
+  assert.equal(
+    await deliveryRow
+      .getByRole('button', { name: '核销自提', exact: true })
+      .count(),
+    0,
+  );
   const orderRequestsBeforeStatusRace = orderRequestCount;
   const statusRaceResponses = [];
   const captureStatusRaceResponse = (response) => {
@@ -539,7 +546,7 @@ try {
   await page.route('**/api/admin/orders/*/status', statusRaceRoute);
 
   const sameVersionStatusButton = fixtureRow.getByRole('button', {
-    name: '待自提',
+    name: '完成',
     exact: true,
   });
   await sameVersionStatusButton.scrollIntoViewIfNeeded();
@@ -559,7 +566,7 @@ try {
   );
   assert.equal(statusRaceEntries.length, 2);
   for (const entry of statusRaceEntries) {
-    assert.equal(entry.command.next_status, 'ready');
+    assert.equal(entry.command.next_status, 'completed');
     assert.equal(entry.command.expected_version, 1);
     assert.match(entry.command.idempotency_key, /^[\x21-\x7e]{16,128}$/);
   }
@@ -580,7 +587,7 @@ try {
   assert.equal(statusEnvelope.success, true);
   assert.equal(statusEnvelope.code, 'ADMIN_ORDER_STATUS_UPDATED');
   assert.equal(statusEnvelope.data.order_id, credentials.orderId);
-  assert.equal(statusEnvelope.data.order_status, 'ready');
+  assert.equal(statusEnvelope.data.order_status, 'completed');
   assert.equal(statusEnvelope.data.version, 2);
 
   const conflictResponse = statusRaceResponses.find(
@@ -593,23 +600,223 @@ try {
   await page
     .getByText('订单已被其他操作更新，已刷新列表，请重试', { exact: true })
     .waitFor();
-  await fixtureRow.getByText('ready', { exact: true }).waitFor();
+  await fixtureRow.getByText('completed', { exact: true }).waitFor();
+  await page.waitForLoadState('networkidle');
+
+  await orderFilter.getByLabel('订单关键词').fill(credentials.pickupOrderNo);
+  const pickupFilteredResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/admin/orders' &&
+      url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+      url.searchParams.get('page') === '1' &&
+      response.ok()
+    );
+  });
+  await orderFilter
+    .getByRole('button', { name: /查\\s*询/ })
+    .click();
+  const pickupFilteredEnvelope = await (
+    await pickupFilteredResponse
+  ).json();
+  assert.equal(pickupFilteredEnvelope.success, true);
+  assert.equal(pickupFilteredEnvelope.data.items.length, 1);
+  const pickupFilteredOrder = pickupFilteredEnvelope.data.items[0];
+  assert.equal(pickupFilteredOrder.id, credentials.pickupOrderId);
+  assert.equal(pickupFilteredOrder.version, 1);
+  assert.equal(pickupFilteredOrder.pickup_type, 'store');
+  assert.equal(pickupFilteredOrder.order_status, 'ready');
+
+  const pickupRow = page
+    .getByRole('row')
+    .filter({ hasText: credentials.pickupOrderNo });
+  const sameVersionPickupButton = pickupRow.getByRole('button', {
+    name: '核销自提',
+    exact: true,
+  });
+  assert.equal(await sameVersionPickupButton.count(), 1);
+
+  const orderRequestsBeforePickupRace = orderRequestCount;
+  const pickupRaceResponses = [];
+  const capturePickupRaceResponse = (response) => {
+    const request = response.request();
+    if (
+      new URL(response.url()).pathname ===
+        `/api/admin/orders/${credentials.pickupOrderId}/pickup-verify` &&
+      request.method() === 'POST'
+    ) {
+      pickupRaceResponses.push(response);
+    }
+  };
+  page.on('response', capturePickupRaceResponse);
+
+  let releasePickupRace;
+  const pickupRaceReady = new Promise((resolve) => {
+    releasePickupRace = resolve;
+  });
+  let settlePickupRace;
+  const pickupRaceFinished = new Promise((resolve, reject) => {
+    settlePickupRace = { resolve, reject };
+  });
+  const pickupRaceEntries = [];
+  const pickupRaceRoute = async (route) => {
+    try {
+      const request = route.request();
+      assert.equal(request.method(), 'POST');
+      assert.equal(
+        new URL(request.url()).pathname,
+        `/api/admin/orders/${credentials.pickupOrderId}/pickup-verify`,
+      );
+      const entry = {
+        route,
+        command: request.postDataJSON(),
+        response: null,
+      };
+      pickupRaceEntries.push(entry);
+      assert.ok(pickupRaceEntries.length <= 2);
+      if (pickupRaceEntries.length === 2) {
+        releasePickupRace();
+      }
+      await pickupRaceReady;
+      entry.response = await route.fetch();
+
+      if (pickupRaceEntries.every((candidate) => candidate.response !== null)) {
+        const successfulEntries = pickupRaceEntries.filter(
+          (candidate) => candidate.response.status() === 200,
+        );
+        const conflictingEntries = pickupRaceEntries.filter(
+          (candidate) => candidate.response.status() === 409,
+        );
+        assert.equal(successfulEntries.length, 1);
+        assert.equal(conflictingEntries.length, 1);
+
+        const successRefreshPromise = page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === '/api/admin/orders' &&
+            url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+            response.ok()
+          );
+        });
+        await successfulEntries[0].route.fulfill({
+          response: successfulEntries[0].response,
+        });
+        await successRefreshPromise;
+        await waitForCount(
+          page,
+          () => orderRequestCount,
+          orderRequestsBeforePickupRace + 1,
+          'pickup success refresh',
+        );
+        assert.equal(orderRequestCount, orderRequestsBeforePickupRace + 1);
+
+        const conflictRefreshPromise = page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === '/api/admin/orders' &&
+            url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+            response.ok()
+          );
+        });
+        await conflictingEntries[0].route.fulfill({
+          response: conflictingEntries[0].response,
+        });
+        await conflictRefreshPromise;
+        await waitForCount(
+          page,
+          () => orderRequestCount,
+          orderRequestsBeforePickupRace + 2,
+          'pickup conflict refresh',
+        );
+        assert.equal(orderRequestCount, orderRequestsBeforePickupRace + 2);
+        settlePickupRace.resolve();
+      }
+      await pickupRaceFinished;
+    } catch (error) {
+      settlePickupRace.reject(error);
+      throw error;
+    }
+  };
+  await page.route('**/api/admin/orders/*/pickup-verify', pickupRaceRoute);
+
+  await sameVersionPickupButton.evaluate((button) => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await pickupRaceFinished;
+  await page.unroute(
+    '**/api/admin/orders/*/pickup-verify',
+    pickupRaceRoute,
+  );
+  page.off('response', capturePickupRaceResponse);
+
+  await waitForCount(
+    page,
+    () => pickupRaceResponses.length,
+    2,
+    'same-version pickup responses',
+  );
+  assert.equal(pickupRaceEntries.length, 2);
+  for (const entry of pickupRaceEntries) {
+    assert.equal(entry.command.expected_version, 1);
+    assert.match(
+      entry.command.idempotency_key,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    assert.equal(entry.command.admin_remark, '后台核销自提');
+  }
+  assert.notEqual(
+    pickupRaceEntries[0].command.idempotency_key,
+    pickupRaceEntries[1].command.idempotency_key,
+  );
+  const pickupRaceCodes = pickupRaceResponses
+    .map((response) => response.status())
+    .sort((left, right) => left - right);
+  assert.deepEqual(pickupRaceCodes, [200, 409]);
+
+  const pickupResponse = pickupRaceResponses.find(
+    (response) => response.status() === 200,
+  );
+  assert.ok(pickupResponse);
+  const pickupEnvelope = await pickupResponse.json();
+  assert.equal(pickupEnvelope.success, true);
+  assert.equal(pickupEnvelope.code, 'ADMIN_PICKUP_VERIFIED');
+  assert.equal(pickupEnvelope.data.order_id, credentials.pickupOrderId);
+  assert.equal(pickupEnvelope.data.order_status, 'picked');
+  assert.equal(pickupEnvelope.data.version, 2);
+
+  const pickupConflictResponse = pickupRaceResponses.find(
+    (response) => response.status() === 409,
+  );
+  assert.ok(pickupConflictResponse);
+  const pickupConflictEnvelope = await pickupConflictResponse.json();
+  assert.equal(
+    pickupConflictEnvelope.code,
+    'ADMIN_PICKUP_STATE_CONFLICT',
+  );
+  assert.equal(typeof pickupConflictEnvelope.trace_id, 'string');
+  await page
+    .getByText('订单已被其他操作更新，已刷新列表，请重试', {
+      exact: true,
+    })
+    .waitFor();
+  await pickupRow.getByText('picked', { exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
-    inventory: a33RequestsAfterInitial.inventory + 1,
-    purchasePlans: a33RequestsAfterInitial.purchasePlans + 1,
-    suppliers: a33RequestsAfterInitial.suppliers + 1,
-    batches: a33RequestsAfterInitial.batches + 1,
-    expiryAlerts: a33RequestsAfterInitial.expiryAlerts + 1,
-    stockChecks: a33RequestsAfterInitial.stockChecks + 1,
+    inventory: a33RequestsAfterInitial.inventory + 2,
+    purchasePlans: a33RequestsAfterInitial.purchasePlans + 2,
+    suppliers: a33RequestsAfterInitial.suppliers + 2,
+    batches: a33RequestsAfterInitial.batches + 2,
+    expiryAlerts: a33RequestsAfterInitial.expiryAlerts + 2,
+    stockChecks: a33RequestsAfterInitial.stockChecks + 2,
   });
   const a34RequestsAfterOrderMutation = readA34RequestCounts();
   assert.deepEqual(a34RequestsAfterOrderMutation, {
-    withdrawals: a34RequestsAfterInitial.withdrawals + 1,
-    alerts: a34RequestsAfterInitial.alerts + 1,
-    taxReview: a34RequestsAfterInitial.taxReview + 1,
+    withdrawals: a34RequestsAfterInitial.withdrawals + 2,
+    alerts: a34RequestsAfterInitial.alerts + 2,
+    taxReview: a34RequestsAfterInitial.taxReview + 2,
   });
 
   const orderFailureRoute = async (route) => {
