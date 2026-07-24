@@ -10,12 +10,32 @@ import {
 import type { OpsAlert } from './types';
 
 describe('orders API boundary', () => {
-  it('loads the existing order endpoint', async () => {
-    const request = vi.fn(async <T>(): Promise<T> => [{ id: 'o1' }] as T) as JsonRequester;
+  it('loads the protected Admin order endpoint with deterministic filters', async () => {
+    const response = {
+      total: 1,
+      page: 2,
+      page_size: 50,
+      items: [{ id: 'o1' }],
+    };
+    const request = vi.fn(async <T>(): Promise<T> => response as T) as JsonRequester;
 
-    await expect(loadOrders(request)).resolves.toEqual([{ id: 'o1' }]);
+    await expect(
+      loadOrders(
+        {
+          keyword: 'WX-100',
+          order_type: 'group_buy',
+          pickup_type: 'delivery',
+          page: 2,
+          page_size: 50,
+        },
+        request,
+      ),
+    ).resolves.toEqual(response);
 
-    expect(request).toHaveBeenCalledWith('/api/orders', { signal: undefined });
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/orders?keyword=WX-100&order_type=group_buy&pickup_type=delivery&page=2&page_size=50',
+      { signal: undefined },
+    );
   });
 
   it('keeps the existing order alert DTO shape', () => {
