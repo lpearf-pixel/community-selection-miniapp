@@ -47,8 +47,8 @@ async function main() {
   assert(paymentLedger?.quantity === 3 && paymentLedger.quantity_delta === -3 && paymentLedger.stock_before === 20 && paymentLedger.stock_after === 17, 'normal order payment deduction ledger should record exact stock movement');
   assert(await prisma.commission.count({ where: { order_id: order.id } }) === 0, 'paid normal order should still not create service reward');
 
-  const list = await json(await app.inject({ method: 'GET', url: '/api/orders' }));
-  const listed = list.find((item: any) => item.id === order.id);
+  const list = await json(await app.inject({ method: 'GET', url: '/api/me/orders?type=normal', headers: { 'x-user-id': user.id } }));
+  const listed = list.items.find((item: any) => item.order_id === order.id);
   assert(listed, 'normal order should be in order list');
   assert(listed.product?.name === product.name, 'normal order list should include product name');
 
