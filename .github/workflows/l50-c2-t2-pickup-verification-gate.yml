@@ -34,5 +34,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Verify focused pickup command contracts
         run: |
+          pnpm db:generate
           pnpm --filter @community-selection/api test --             src/modules/order/admin-pickup-verification-command.test.ts             src/modules/order/admin-order-status-command.test.ts
           node --test scripts/admin-e2e/l50-c2-order-source-contract.test.cjs
