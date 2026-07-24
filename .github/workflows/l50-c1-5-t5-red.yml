@@ -1,32 +1,61 @@
-name: L50 C1.5 T5 RED
+name: L50 C1.5 T5
 on:
   pull_request:
     branches: [stable/l50-a3-4-business-base]
 permissions:
   contents: read
 concurrency:
-  group: l50-c1-5-t5-red-${{ github.event.pull_request.number }}
+  group: l50-c1-5-t5-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
-  admin-c1-5-t5-red:
+  admin-c1-5-t5:
     runs-on: self-hosted
-    timeout-minutes: 10
-    env: { CI: "true", NODE_OPTIONS: "--max-old-space-size=3072" }
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NODE_OPTIONS: "--max-old-space-size=3072"
+      VITEST_POOL: threads
+      VITEST_MIN_THREADS: "1"
+      VITEST_MAX_THREADS: "2"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with: { version: 9.15.4 }
       - uses: actions/setup-node@v4
         with: { node-version: 20.19.0, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - name: Prove the withdrawals structure contract is RED
-        shell: bash
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Run focused withdrawals contracts
         run: |
-          set +e
-          pnpm --filter @community-selection/admin test -- src/features/finance/withdrawals/withdrawals-page-structure.test.ts > /tmp/t5-red.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/t5-red.log
-          test "$status" -ne 0
-          grep -F "keeps the orchestrator at or below 200 lines" /tmp/t5-red.log
-          grep -F "delegates the workbench and detail drawer views" /tmp/t5-red.log
+          pnpm --filter @community-selection/admin test -- \
+            src/features/finance/withdrawals/withdrawals-page-structure.test.ts \
+            src/features/finance/withdrawals/api.test.ts \
+            src/features/a3-4-pages-source-contract.test.ts
+          node --test scripts/admin-e2e/contract.test.cjs
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+          pnpm --workspace-concurrency=1 -r typecheck
+      - name: Run full bounded test suite
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+      - name: Verify Admin auth runtime
+        run: node --test scripts/admin-auth-runtime.test.cjs
+      - name: Verify source and cleanup contracts
+        run: |
+          node --test scripts/admin-e2e/contract.test.cjs
+          node --test scripts/admin-e2e/cleanup-contract.test.cjs
+      - name: Install Admin E2E dependencies
+        run: pnpm setup:admin:e2e
+      - name: Run real Admin E2E
+        run: pnpm e2e:admin
+      - name: Clean Admin E2E resources
+        if: always()
+        run: |
+          docker compose -p community-selection-admin-e2e-${GITHUB_RUN_ID} -f scripts/admin-e2e/docker-compose.yml down --volumes --remove-orphans || true
