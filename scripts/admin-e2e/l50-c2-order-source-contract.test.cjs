@@ -347,6 +347,6 @@ test('keeps compliance exclusions narrow and deployable code scanned', () => {
   assert.match(scanner, /\[\.\.\.value\]\.every/);
   assert.match(
     scanner,
-    /path === 'apps\/admin\/src\/app\/AdminShell\.tsx'[\s\S]{0,120}level=/,
+    /path === 'apps\/admin\/src\/app\/AdminShell\.tsx'[\s\S]{0,180}const prefix =/,
   );
 });
