@@ -282,6 +282,13 @@ function assertA32SmokeContract(smoke) {
           value: '**/api/admin/operations/dashboard/overview',
         },
       },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/logs/alerts',
+        },
+      },
     ],
     'route registration whitelist: only the four approved failure interceptors',
   );
@@ -290,6 +297,7 @@ function assertA32SmokeContract(smoke) {
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
+    alertRegistration,
   ] = routeRegistrations;
   assert.equal(
     purchasePlanRegistration.target.value,
@@ -345,6 +353,11 @@ function assertA32SmokeContract(smoke) {
     operationsRegistration.handler,
     /(?:status:\s*2\d\d|success:\s*true)/,
     'route registration whitelist: operations handler cannot mock success',
+  );
+  assert.equal(
+    alertRegistration.handler,
+    'alertFailureRoute',
+    'route registration whitelist: alerts use the named one-shot 500 handler',
   );
   const orderInterceptionPattern =
     /(?<![\w$.])(page|context)\s*\.\s*route\s*\(\s*(['"])\*\*\/api\/orders\2\s*,/g;
@@ -607,16 +620,19 @@ function assertA32SmokeContract(smoke) {
     '批次库存',
     '财务对账',
     '运营看板',
+    '提现管理',
+    '告警中心',
+    '税务人工 Review',
   ];
   assert.deepEqual(
     exclusions,
     explicitNavigation,
-    'navigation exclusion/count contract: nine explicit destinations',
+    'navigation exclusion/count contract: twelve explicit destinations',
   );
   assert.equal(
     navigationLabels.filter((label) => !exclusions.includes(label)).length,
-    14,
-    'navigation exclusion/count contract: 14 remaining destinations',
+    11,
+    'navigation exclusion/count contract: 11 remaining destinations',
   );
   assertSourceOrder(
     smoke,
@@ -630,6 +646,9 @@ function assertA32SmokeContract(smoke) {
       ['product explicit click', /await productButton\.click\(\);/],
       ['finance explicit click', /await financeButton\.click\(\);/],
       ['operations explicit click', /await operationsButton\.click\(\);/],
+      ['withdrawals explicit click', /await withdrawalsButton\.click\(\);/],
+      ['alerts explicit click', /await alertsButton\.click\(\);/],
+      ['tax review explicit click', /await taxReviewButton\.click\(\);/],
       [
         'remaining navigation loop',
         /for \(const label of remainingNavigation\) \{\s*const button = shell\.getByRole\('button', \{ name: label, exact: true \}\);\s*await button\.click\(\);/,
@@ -722,7 +741,7 @@ function assertA33SmokeContract(smoke) {
       ],
       [
         'all-slice counter reader',
-        /const readBusinessRequestCounts = \(\) => \(\{\s*catalog: catalogRequestCount,\s*finance: financeRequestCount,\s*operations: operationsRequestCount,\s*\.\.\.readA32RequestCounts\(\),\s*\.\.\.readA33RequestCounts\(\),\s*\}\);/,
+        /const readBusinessRequestCounts = \(\) => \(\{\s*catalog: catalogRequestCount,\s*finance: financeRequestCount,\s*operations: operationsRequestCount,\s*\.\.\.readA32RequestCounts\(\),\s*\.\.\.readA33RequestCounts\(\),\s*\.\.\.readA34RequestCounts\(\),\s*\}\);/,
       ],
     ],
     'A3.3 hidden-mount settlement and initial baseline',
@@ -837,8 +856,15 @@ function assertA33SmokeContract(smoke) {
           value: '**/api/admin/operations/dashboard/overview',
         },
       },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/logs/alerts',
+        },
+      },
     ],
-    'A3.3 route registration whitelist: only four approved failure interceptors',
+    'A3.3 route registration whitelist: only five approved failure interceptors',
   );
   const purchasePlanRegistration = routeRegistrations[2];
   assert.ok(
@@ -1007,6 +1033,202 @@ function assertA33SmokeContract(smoke) {
   );
 }
 
+function assertA34SmokeContract(smoke) {
+  assertSourceOrder(
+    smoke,
+    [
+      [
+        'withdrawal exact primary counter',
+        /if \(pathname === '\/api\/admin\/withdrawals'\) \{\s*withdrawalRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'alert exact primary counter',
+        /if \(pathname === '\/api\/admin\/logs\/alerts'\) \{\s*alertRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'tax-review exact primary counter',
+        /if \(pathname === '\/api\/admin\/tax-records'\) \{\s*taxReviewRequestCount \+= 1;\s*\}/,
+      ],
+    ],
+    'exact A3.4 primary request routing',
+  );
+
+  const initialMounts = sourceBetween(
+    smoke,
+    /await page\.getByText\(`当前管理员：\$\{credentials\.username\}`\)\.waitFor\(\);/,
+    /const shell = page\.getByRole/,
+    'A3.4 hidden-mount settlement and initial baseline',
+  );
+  assertSourceOrder(
+    initialMounts,
+    [
+      [
+        'withdrawal hidden mount started',
+        /await waitForCount\(page, \(\) => withdrawalRequestCount, 1, 'withdrawal initial load'\);/,
+      ],
+      [
+        'alert hidden mount started',
+        /await waitForCount\(page, \(\) => alertRequestCount, 1, 'alert initial load'\);/,
+      ],
+      [
+        'tax-review hidden mount started',
+        /await waitForCount\(page, \(\) => taxReviewRequestCount, 1, 'tax-review initial load'\);/,
+      ],
+      [
+        'relative A3.4 counter reader',
+        /const readA34RequestCounts = \(\) => \(\{\s*withdrawals: withdrawalRequestCount,\s*alerts: alertRequestCount,\s*taxReview: taxReviewRequestCount,\s*\}\);/,
+      ],
+      [
+        'initial A3.4 snapshot',
+        /const a34RequestsAfterInitial = readA34RequestCounts\(\);/,
+      ],
+    ],
+    'A3.4 hidden-mount settlement and initial baseline',
+  );
+
+  const withdrawalRefresh = sourceBetween(
+    smoke,
+    /assert\.deepEqual\(readA34RequestCounts\(\), a34RequestsAfterInitial\);/,
+    /const alertsButton = shell\.getByRole/,
+    'withdrawal active refresh exact isolation',
+  );
+  assertSourceOrder(
+    withdrawalRefresh,
+    [
+      ['withdrawal navigation', /await withdrawalsButton\.click\(\);/],
+      [
+        'withdrawal refresh snapshot',
+        /const businessRequestsBeforeWithdrawalRefresh = readBusinessRequestCounts\(\);/,
+      ],
+      [
+        'active Shell refresh',
+        /await shell\.getByRole\('button', \{ name: \/刷\\s\*新\/ \}\)\.click\(\);/,
+      ],
+      [
+        'withdrawal response counted',
+        /businessRequestsBeforeWithdrawalRefresh\.withdrawals \+ 1,\s*'withdrawal active refresh'/,
+      ],
+      [
+        'only withdrawal changed',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), \{\s*\.\.\.businessRequestsBeforeWithdrawalRefresh,\s*withdrawals: businessRequestsBeforeWithdrawalRefresh\.withdrawals \+ 1,\s*\}\);/,
+      ],
+    ],
+    'withdrawal active refresh exact isolation',
+  );
+
+  const alertFailure = sourceBetween(
+    smoke,
+    /const alertsButton = shell\.getByRole/,
+    /const taxReviewButton = shell\.getByRole/,
+    'alert local failure and Shell availability',
+  );
+  assertSourceOrder(
+    alertFailure,
+    [
+      ['alert navigation', /await alertsButton\.click\(\);/],
+      [
+        'one-shot alert guard',
+        /const alertFailureRoute = async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(alertFailureInjected, false\);\s*alertFailureInjected = true;/,
+      ],
+      [
+        'one-shot alert failure',
+        /code: 'E2E_ALERT_FAILURE'/,
+      ],
+      [
+        'approved alert route',
+        /await page\.route\('\*\*\/api\/admin\/logs\/alerts', alertFailureRoute\);/,
+      ],
+      [
+        'alert local error',
+        /await page\.getByText\('运营告警加载失败', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+      [
+        'Shell survives',
+        /await page\.getByRole\('heading', \{ name: '社区甄选管理后台' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'only alert changed',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), \{\s*\.\.\.businessRequestsBeforeAlertFailure,\s*alerts: businessRequestsBeforeAlertFailure\.alerts \+ 1,\s*\}\);/,
+      ],
+      [
+        'alert route cleanup',
+        /await page\.unroute\('\*\*\/api\/admin\/logs\/alerts', alertFailureRoute\);/,
+      ],
+    ],
+    'alert local failure and Shell availability',
+  );
+
+  const taxRoundTrip = sourceBetween(
+    smoke,
+    /const taxReviewButton = shell\.getByRole/,
+    /const businessRequestsBeforeAlertRetry = readBusinessRequestCounts\(\);/,
+    'tax-review round trip and persisted alert error',
+  );
+  assertSourceOrder(
+    taxRoundTrip,
+    [
+      ['tax-review navigation', /await taxReviewButton\.click\(\);/],
+      [
+        'tax-review page rendered',
+        /getByText\('税务人工 Review 工作台', \{ exact: true \}\)/,
+      ],
+      [
+        'tax-review remains healthy',
+        /assert\.equal\(await page\.getByText\('税务人工 Review 加载失败'\)\.count\(\), 0\);/,
+      ],
+      [
+        'navigation caused no request',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), businessRequestsDuringAlertError\);/,
+      ],
+      ['return to alerts', /await alertsButton\.click\(\);/],
+      [
+        'alert error persisted',
+        /await page\.getByText\('运营告警加载失败', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+    ],
+    'tax-review round trip and persisted alert error',
+  );
+
+  const alertRetry = sourceBetween(
+    smoke,
+    /const businessRequestsBeforeAlertRetry = readBusinessRequestCounts\(\);/,
+    /const remainingNavigation = navigation\.filter\(/,
+    'successful real alert retry and exact isolation',
+  );
+  assertSourceOrder(
+    alertRetry,
+    [
+      [
+        'successful alert response listener',
+        /const alertRetryResponse = page\.waitForResponse/,
+      ],
+      [
+        'local alert retry',
+        /await page\.getByRole\('button', \{ name: \/重\\s\*试\/ \}\)\.click\(\);/,
+      ],
+      ['alert success envelope', /assert\.equal\(alertEnvelope\.success, true\);/],
+      [
+        'alert array envelope',
+        /assert\.equal\(Array\.isArray\(alertEnvelope\.data\), true\);/,
+      ],
+      [
+        'alert error disappears',
+        /await page\.getByText\('运营告警加载失败'\)\.waitFor\(\{ state: 'detached' \}\);/,
+      ],
+      [
+        'only alert changed on retry',
+        /assert\.deepEqual\(readBusinessRequestCounts\(\), \{\s*\.\.\.businessRequestsBeforeAlertRetry,\s*alerts: businessRequestsBeforeAlertRetry\.alerts \+ 1,\s*\}\);/,
+      ],
+    ],
+    'successful real alert retry and exact isolation',
+  );
+  assert.doesNotMatch(
+    alertRetry,
+    /(?:page\.route|context\.route|route\.fulfill)/,
+    'successful alert response must not be mocked',
+  );
+}
+
 test('L50 Admin browser smoke infrastructure is complete', () => {
   const required = [
     'scripts/admin-e2e/package.json',
@@ -1112,6 +1334,15 @@ test('Admin E2E proves A3.3 request isolation and purchase-plan recovery', () =>
   );
 
   assert.doesNotThrow(() => assertA33SmokeContract(smoke));
+});
+
+test('Admin E2E proves A3.4 request isolation and alert-local recovery', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotThrow(() => assertA34SmokeContract(smoke));
 });
 
 test('A3.2 source contract rejects weakened behavior evidence', () => {
