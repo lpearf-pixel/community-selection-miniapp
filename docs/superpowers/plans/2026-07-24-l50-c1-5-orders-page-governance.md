@@ -25,6 +25,8 @@
 - `OrdersTable.tsx`: list columns, pagination, and order action controls.
 - `OrderDetailsCard.tsx`: order context summary and three log tables.
 - `orders-page-structure.test.ts`: enforce the source boundary and size limit.
+- `scripts/admin-e2e/contract.test.cjs`: route existing B3/C1 source assertions
+  to the extracted filter and table files without weakening them.
 
 ### Task 1: Lock the structural boundary
 
@@ -513,37 +515,46 @@ git commit -m "refactor(admin): split orders page views"
 **Files:**
 
 - Verify all files changed since `stable/l50-a3-4-business-base`.
+- Modify: `scripts/admin-e2e/contract.test.cjs`
 
-- [ ] **Step 1: Run the complete local gate**
+- [ ] **Step 1: Route the existing B3/C1 source evidence**
+
+Read `OrdersFilters.tsx` when asserting the standard Ant Design submit path,
+and read `OrdersTable.tsx` when asserting the nested C1 pagination contract.
+Keep the existing negative assertion against `form.getFieldsValue()` across
+both the orchestrator and filter source.
+
+- [ ] **Step 2: Run the complete local gate**
 
 ```bash
 node_modules/.bin/vitest run apps/admin/src --maxWorkers=2 --minWorkers=1
 node_modules/.bin/tsc -p apps/admin/tsconfig.json --noEmit
-(cd apps/admin && ../../node_modules/.bin/vite build)
+(cd apps/admin && node_modules/.bin/vite build)
+node --test scripts/admin-e2e/contract.test.cjs
 git diff --check
 ```
 
 Expected: all Admin tests pass, TypeScript and Vite exit 0, and diff check has
 no output.
 
-- [ ] **Step 2: Review scope**
+- [ ] **Step 3: Review scope**
 
 ```bash
 git diff --stat codex/l50-c1-api-contracts...HEAD
 git diff --name-only codex/l50-c1-api-contracts...HEAD
 ```
 
-Expected: only the order feature’s four components, structure contract, and
-the C1.5 spec/plan are present.
+Expected: only the order feature’s four components, structure contract,
+global Admin E2E contract routing, and the C1.5 spec/plan are present.
 
-- [ ] **Step 3: Publish and run the remote gate**
+- [ ] **Step 4: Publish and run the remote gate**
 
 Create a branch from `stable/l50-a3-4-business-base`, publish the verified
 files byte-for-byte, open a PR, and use the same single-job resource limits as
 L50-C1. The remote gate must run full workspace typecheck/test/build plus the
 existing authenticated PostgreSQL + Playwright Admin order flow.
 
-- [ ] **Step 4: Merge only after final-head verification**
+- [ ] **Step 5: Merge only after final-head verification**
 
 Delete any temporary workflow, confirm the final delivery diff, confirm no
 Critical/Important review findings, re-read the exact PR head SHA, and merge
