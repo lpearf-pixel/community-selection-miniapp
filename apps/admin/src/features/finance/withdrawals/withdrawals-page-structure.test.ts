@@ -29,4 +29,17 @@ describe('withdrawals page source boundaries', () => {
     expect(page).not.toMatch(/<(Card|DatePicker\.RangePicker|Select|Input\.Search)\b/);
     expect(page).not.toContain('columns={[');
   });
+
+  it('keeps extracted views synchronous and side-effect free', () => {
+    for (const component of [
+      'WithdrawalsWorkbench',
+      'WithdrawalDetailDrawer',
+    ]) {
+      const view = source(`./${component}.tsx`);
+      expect(view).not.toMatch(/from ['"]\.\/api['"]/);
+      expect(view).not.toMatch(
+        /\b(useState|useEffect|useReducer|useRef|useFeatureResourceLoader|AbortController)\b/,
+      );
+    }
+  });
 });
