@@ -228,6 +228,7 @@ model GroupBuy {
 
 model Order {
   id                  String       @id @default(cuid())
+  version             Int          @default(1)
   order_no            String       @unique
   client_request_id   String?      @unique
   user_id             String
@@ -941,5 +942,23 @@ model AdminAuditLog {
 
   @@index([admin_user_id])
   @@index([action])
+  @@index([created_at])
+}
+
+model AdminCommandReceipt {
+  id                   String    @id @default(cuid())
+  admin_user_id        String
+  idempotency_key      String
+  operation            String
+  target_id            String
+  request_hash         String
+  response_http_status Int?
+  response_code        String?
+  response_data        Json?
+  completed_at         DateTime?
+  created_at           DateTime  @default(now())
+
+  @@unique([admin_user_id, idempotency_key])
+  @@index([operation, target_id])
   @@index([created_at])
 }
