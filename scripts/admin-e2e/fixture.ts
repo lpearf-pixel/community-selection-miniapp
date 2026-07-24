@@ -6,8 +6,22 @@ import { hashPassword } from '../../apps/api/src/services/admin-auth-service.js'
 const username = 'l50_e2e_admin';
 const password = 'L50-E2E-StrongPassword-123';
 const fixturePath = resolve('scripts/admin-e2e/.fixture.json');
+const orderNo = 'L50-B3-E2E-ORDER';
+const customerOpenid = 'l50-b3-e2e-customer';
+const categoryName = 'L50-B3 E2E 分类';
+const productName = 'L50-B3 E2E 商品';
+const communityName = 'L50-B3 E2E 社区';
+const pickupStoreId = 'l50-b3-e2e-pickup-store';
 
 async function cleanup() {
+  await prisma.order.deleteMany({
+    where: { order_no: 'L50-B3-E2E-ORDER' },
+  });
+  await prisma.product.deleteMany({ where: { name: productName } });
+  await prisma.category.deleteMany({ where: { name: categoryName } });
+  await prisma.user.deleteMany({ where: { openid: customerOpenid } });
+  await prisma.community.deleteMany({ where: { name: communityName } });
+  await prisma.pickupStore.deleteMany({ where: { id: pickupStoreId } });
   const users = await prisma.adminUser.findMany({ where: { username }, select: { id: true } });
   const ids = users.map((user) => user.id);
   if (ids.length) {
@@ -19,6 +33,96 @@ async function cleanup() {
 
 async function setup() {
   await cleanup();
+  const customer = await prisma.user.create({
+    data: {
+      openid: customerOpenid,
+      nickname: 'B3 浏览器测试用户',
+      phone: '13812348000',
+      role: 'customer',
+      status: 'active',
+    },
+  });
+  const category = await prisma.category.create({
+    data: {
+      name: categoryName,
+      sort_order: 999,
+      status: 'active',
+    },
+  });
+  const product = await prisma.product.create({
+    data: {
+      name: productName,
+      category_id: category.id,
+      cover_image: '/images/products/placeholder.png',
+      images: [],
+      description: 'L50-B3 全渠道订单浏览器测试商品',
+      price_cents: 2590,
+      cost_price_cents: 1800,
+      stock: 20,
+      unit: '份',
+      stock_unit: 'piece',
+      sale_unit: '份',
+      stock_deduct_quantity: 1,
+      is_group_enabled: false,
+      commission_type: 'none',
+      commission_value: 0,
+      status: 'active',
+    },
+  });
+  const community = await prisma.community.create({
+    data: {
+      name: communityName,
+      address: '测试路 100 号',
+      status: 'active',
+    },
+  });
+  await prisma.pickupStore.create({
+    data: {
+      id: pickupStoreId,
+      name: 'L50-B3 E2E 自提点',
+      address: '测试路 101 号',
+      phone: '021-88886666',
+      status: 'active',
+    },
+  });
+  await prisma.order.upsert({
+    where: { order_no: 'L50-B3-E2E-ORDER' },
+    update: {
+      user_id: customer.id,
+      product_id: product.id,
+      community_id: community.id,
+      total_amount_cents: 2590,
+      product_amount_cents: 2590,
+      pay_amount_cents: 2590,
+      quantity: 1,
+      pay_status: 'paid',
+      order_status: 'preparing',
+      refund_status: 'none',
+      pickup_type: 'delivery',
+      receiver_name: '浏览器测试用户',
+      receiver_phone: '13812348000',
+      receiver_address: '测试市测试区测试路 100 号',
+      paid_at: new Date(),
+    },
+    create: {
+      order_no: orderNo,
+      user_id: customer.id,
+      product_id: product.id,
+      community_id: community.id,
+      total_amount_cents: 2590,
+      product_amount_cents: 2590,
+      pay_amount_cents: 2590,
+      quantity: 1,
+      pay_status: 'paid',
+      order_status: 'preparing',
+      refund_status: 'none',
+      pickup_type: 'delivery',
+      receiver_name: '浏览器测试用户',
+      receiver_phone: '13812348000',
+      receiver_address: '测试市测试区测试路 100 号',
+      paid_at: new Date(),
+    },
+  });
   await prisma.adminUser.create({
     data: {
       username,
