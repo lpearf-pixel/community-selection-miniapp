@@ -162,13 +162,38 @@ try {
     ...readA34RequestCounts(),
   });
 
-  const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
-  const buttons = shell.getByRole('button');
+  const expectedNavigationSections = [
+    '今日经营',
+    '销售与履约',
+    '商品与价格',
+    '库存与供应链',
+    '财务与结算',
+    '数据分析',
+    '运维与风控',
+  ];
+  const groupedNavigation = page.getByRole('navigation', {
+    name: '后台功能导航',
+  });
+  await groupedNavigation.waitFor();
+  const visibleNavigationSections = await groupedNavigation
+    .getByRole('heading')
+    .allTextContents();
+  assert.deepEqual(visibleNavigationSections, expectedNavigationSections);
+  const hiddenNavigationSections = ['会员与营销', '门店与渠道', '系统管理'];
+  for (const label of hiddenNavigationSections) {
+    assert.equal(
+      await groupedNavigation.getByText(label, { exact: true }).count(),
+      0,
+    );
+  }
+
+  const shell = page.getByRole('region', { name: '社区甄选管理后台' });
+  const buttons = groupedNavigation.getByRole('button');
   const assertActive = async (button, label) => {
     const className = await button.getAttribute('class');
     assert.match(className ?? '', /ant-btn-primary/, `${label} did not become active`);
   };
-  const productButton = shell.getByRole('button', {
+  const productButton = groupedNavigation.getByRole('button', {
     name: '商品管理',
     exact: true,
   });
@@ -266,7 +291,7 @@ try {
   const operationsRequestsBeforeA32 = operationsRequestCount;
   assert.deepEqual(readA32RequestCounts(), a32RequestsAfterInitial);
 
-  const groupBuysButton = shell.getByRole('button', {
+  const groupBuysButton = groupedNavigation.getByRole('button', {
     name: '团购管理',
     exact: true,
   });
@@ -299,7 +324,7 @@ try {
   assert.equal(financeRequestCount, financeRequestsBeforeA32);
   assert.equal(operationsRequestCount, operationsRequestsBeforeA32);
 
-  const ordersButton = shell.getByRole('button', {
+  const ordersButton = groupedNavigation.getByRole('button', {
     name: '订单管理',
     exact: true,
   });
@@ -350,7 +375,7 @@ try {
   );
   await page.unroute('**/api/orders', orderFailureRoute);
 
-  const afterSalesButton = shell.getByRole('button', {
+  const afterSalesButton = groupedNavigation.getByRole('button', {
     name: '售后客服',
     exact: true,
   });
@@ -401,7 +426,7 @@ try {
   assert.equal(operationsRequestCount, operationsRequestsBeforeA32);
   assert.deepEqual(readA33RequestCounts(), a33RequestsAfterInitial);
 
-  const inventoryButton = shell.getByRole('button', {
+  const inventoryButton = groupedNavigation.getByRole('button', {
     name: '库存管理',
     exact: true,
   });
@@ -422,7 +447,7 @@ try {
     inventory: businessRequestsBeforeInventoryRefresh.inventory + 1,
   });
 
-  const purchasePlansButton = shell.getByRole('button', {
+  const purchasePlansButton = groupedNavigation.getByRole('button', {
     name: '采购计划',
     exact: true,
   });
@@ -464,7 +489,7 @@ try {
   });
   await page.unroute('**/api/admin/purchase-plans', purchasePlanFailureRoute);
 
-  const batchesButton = shell.getByRole('button', {
+  const batchesButton = groupedNavigation.getByRole('button', {
     name: '批次库存',
     exact: true,
   });
@@ -561,7 +586,7 @@ try {
   assert.equal(financeRequestsBeforeSelection, 0);
   assert.equal(operationsRequestsBeforeSelection, 0);
 
-  const financeButton = shell.getByRole('button', {
+  const financeButton = groupedNavigation.getByRole('button', {
     name: '财务对账',
     exact: true,
   });
@@ -587,7 +612,7 @@ try {
   assert.equal(await page.getByText('财务对账加载失败').count(), 0);
 
   const financeRequestsAfterRefresh = financeRequestCount;
-  const operationsButton = shell.getByRole('button', {
+  const operationsButton = groupedNavigation.getByRole('button', {
     name: '运营看板',
     exact: true,
   });
@@ -639,7 +664,7 @@ try {
   assert.equal(financeRequestCount, financeRequestsAfterRefresh);
 
   assert.deepEqual(readA34RequestCounts(), a34RequestsAfterInitial);
-  const withdrawalsButton = shell.getByRole('button', {
+  const withdrawalsButton = groupedNavigation.getByRole('button', {
     name: '提现管理',
     exact: true,
   });
@@ -660,7 +685,7 @@ try {
     withdrawals: businessRequestsBeforeWithdrawalRefresh.withdrawals + 1,
   });
 
-  const alertsButton = shell.getByRole('button', {
+  const alertsButton = groupedNavigation.getByRole('button', {
     name: '告警中心',
     exact: true,
   });
@@ -705,7 +730,7 @@ try {
   });
   await page.unroute('**/api/admin/logs/alerts', alertFailureRoute);
 
-  const taxReviewButton = shell.getByRole('button', {
+  const taxReviewButton = groupedNavigation.getByRole('button', {
     name: '税务人工 Review',
     exact: true,
   });
@@ -762,23 +787,23 @@ try {
       label !== '税务人工 Review',
   );
   for (const label of remainingNavigation) {
-    const button = shell.getByRole('button', { name: label, exact: true });
+    const button = groupedNavigation.getByRole('button', { name: label, exact: true });
     await button.click();
     await assertActive(button, label);
     await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   }
-  assert.equal(await buttons.filter({ hasText: /./ }).count() >= 25, true);
+  assert.equal(await buttons.count(), navigation.length);
 
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
-  await shell.getByRole('button', { name: '商品管理', exact: true }).waitFor();
+  await groupedNavigation.getByRole('button', { name: '商品管理', exact: true }).waitFor();
 
   await page.evaluate(() => { window.__ADMIN_E2E_FORCE_RENDER_ERROR__ = true; });
-  await shell.getByRole('button', { name: '订单管理', exact: true }).click();
+  await groupedNavigation.getByRole('button', { name: '订单管理', exact: true }).click();
   await page.getByText('当前页面加载失败').waitFor();
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.evaluate(() => { window.__ADMIN_E2E_FORCE_RENDER_ERROR__ = false; });
-  await shell.getByRole('button', { name: '商品管理', exact: true }).click();
+  await groupedNavigation.getByRole('button', { name: '商品管理', exact: true }).click();
   await page.getByText('当前页面加载失败').waitFor({ state: 'detached' });
 
   await shell.getByRole('button', { name: /刷\s*新/ }).click();

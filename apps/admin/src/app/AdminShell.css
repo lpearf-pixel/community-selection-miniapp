@@ -1,0 +1,152 @@
+.admin-shell {
+  min-height: 100vh;
+  padding: 20px;
+  background:
+    radial-gradient(circle at top left, rgb(22 119 255 / 8%), transparent 30%),
+    #f4f7fb;
+}
+
+.admin-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgb(31 45 61 / 6%);
+}
+
+.admin-shell__header .ant-typography {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.admin-shell__account-actions {
+  justify-content: flex-end;
+}
+
+.admin-shell__account {
+  display: flex;
+  flex-direction: column;
+  min-width: 156px;
+}
+
+.admin-shell__message {
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid #e8edf5;
+  border-radius: 10px;
+}
+
+.admin-shell__body {
+  display: flex;
+  gap: 20px;
+  background: transparent;
+}
+
+.admin-shell__sidebar {
+  align-self: flex-start;
+  overflow: hidden;
+  background: #fff !important;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgb(31 45 61 / 6%);
+}
+
+.admin-shell__navigation {
+  padding: 16px;
+}
+
+.admin-shell__navigation-group + .admin-shell__navigation-group {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #f0f2f5;
+}
+
+.admin-shell__navigation-heading.ant-typography {
+  margin: 0 10px 8px;
+  color: #637083;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.08em;
+}
+
+.admin-shell__navigation-group[data-active='true']
+  .admin-shell__navigation-heading.ant-typography {
+  color: #1677ff;
+}
+
+.admin-shell__navigation-items {
+  width: 100%;
+}
+
+.admin-shell__navigation-button {
+  height: auto;
+  min-height: 36px;
+  padding-block: 7px;
+  text-align: left;
+  white-space: normal;
+}
+
+.admin-shell__navigation-button > span {
+  width: 100%;
+  text-align: left;
+}
+
+.admin-shell__content {
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .admin-shell {
+    padding: 12px;
+  }
+
+  .admin-shell__header {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .admin-shell__body {
+    flex-direction: column;
+  }
+
+  .admin-shell__sidebar.ant-layout-sider {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: none !important;
+  }
+
+  .admin-shell__navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .admin-shell__navigation-group + .admin-shell__navigation-group {
+    padding-top: 0;
+    margin-top: 0;
+    border-top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-shell__header {
+    flex-direction: column;
+  }
+
+  .admin-shell__account-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-shell__navigation {
+    grid-template-columns: 1fr;
+  }
+}

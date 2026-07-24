@@ -156,7 +156,7 @@ function assertA32SmokeContract(smoke) {
   const groupRefresh = sourceBetween(
     smoke,
     /const catalogRequestsBeforeA32 = catalogRequestCount;/,
-    /const ordersButton = shell\.getByRole/,
+    /const ordersButton = groupedNavigation\.getByRole/,
     'group-buy exact isolation',
   );
   assertSourceOrder(
@@ -168,7 +168,7 @@ function assertA32SmokeContract(smoke) {
       ],
       [
         'group-buy navigation',
-        /const groupBuysButton = shell\.getByRole\('button', \{\s*name: '团购管理',\s*exact: true,\s*\}\);\s*await groupBuysButton\.click\(\);\s*await assertActive\(groupBuysButton, '团购管理'\);\s*await page\.getByText\('团购列表', \{ exact: true \}\)\.waitFor\(\);/,
+        /const groupBuysButton = groupedNavigation\.getByRole\('button', \{\s*name: '团购管理',\s*exact: true,\s*\}\);\s*await groupBuysButton\.click\(\);\s*await assertActive\(groupBuysButton, '团购管理'\);\s*await page\.getByText\('团购列表', \{ exact: true \}\)\.waitFor\(\);/,
       ],
       [
         'refresh-relative snapshot',
@@ -216,7 +216,7 @@ function assertA32SmokeContract(smoke) {
 
   const orderFailureSetupRange = sourceRange(
     smoke,
-    /const ordersButton = shell\.getByRole/,
+    /const ordersButton = groupedNavigation\.getByRole/,
     /const a32RequestsBeforeOrderFailure = readA32RequestCounts\(\);/,
     'orders active one-shot failure setup',
   );
@@ -396,7 +396,7 @@ function assertA32SmokeContract(smoke) {
   const orderFailure = sourceBetween(
     smoke,
     /const a32RequestsBeforeOrderFailure = readA32RequestCounts\(\);/,
-    /const afterSalesButton = shell\.getByRole/,
+    /const afterSalesButton = groupedNavigation\.getByRole/,
     'order-local failure and Shell availability',
   );
   assertSourceOrder(
@@ -456,7 +456,7 @@ function assertA32SmokeContract(smoke) {
 
   const afterSalesRoundTrip = sourceBetween(
     smoke,
-    /const afterSalesButton = shell\.getByRole/,
+    /const afterSalesButton = groupedNavigation\.getByRole/,
     /const a32RequestsBeforeOrderRetry = readA32RequestCounts\(\);/,
     'after-sales round trip and persisted order error',
   );
@@ -504,7 +504,7 @@ function assertA32SmokeContract(smoke) {
   const orderRetry = sourceBetween(
     smoke,
     /const a32RequestsBeforeOrderRetry = readA32RequestCounts\(\);/,
-    /const inventoryButton = shell\.getByRole/,
+    /const inventoryButton = groupedNavigation\.getByRole/,
     'successful real order retry and exact isolation',
   );
   assertSourceOrder(
@@ -651,7 +651,7 @@ function assertA32SmokeContract(smoke) {
       ['tax review explicit click', /await taxReviewButton\.click\(\);/],
       [
         'remaining navigation loop',
-        /for \(const label of remainingNavigation\) \{\s*const button = shell\.getByRole\('button', \{ name: label, exact: true \}\);\s*await button\.click\(\);/,
+        /for \(const label of remainingNavigation\) \{\s*const button = groupedNavigation\.getByRole\('button', \{ name: label, exact: true \}\);\s*await button\.click\(\);/,
       ],
       [
         '23/23 result',
@@ -755,7 +755,7 @@ function assertA33SmokeContract(smoke) {
   const inventoryRefresh = sourceBetween(
     smoke,
     /assert\.deepEqual\(readA33RequestCounts\(\), a33RequestsAfterInitial\);/,
-    /const purchasePlansButton = shell\.getByRole/,
+    /const purchasePlansButton = groupedNavigation\.getByRole/,
     'inventory active refresh exact isolation',
   );
   assertSourceOrder(
@@ -763,7 +763,7 @@ function assertA33SmokeContract(smoke) {
     [
       [
         'inventory navigation',
-        /const inventoryButton = shell\.getByRole\('button', \{\s*name: '库存管理',\s*exact: true,\s*\}\);\s*await inventoryButton\.click\(\);\s*await assertActive\(inventoryButton, '库存管理'\);\s*await page\.getByRole\('columnheader', \{ name: '商品名' \}\)\.waitFor\(\);/,
+        /const inventoryButton = groupedNavigation\.getByRole\('button', \{\s*name: '库存管理',\s*exact: true,\s*\}\);\s*await inventoryButton\.click\(\);\s*await assertActive\(inventoryButton, '库存管理'\);\s*await page\.getByRole\('columnheader', \{ name: '商品名' \}\)\.waitFor\(\);/,
       ],
       [
         'inventory refresh-relative snapshot',
@@ -787,7 +787,7 @@ function assertA33SmokeContract(smoke) {
 
   const purchaseFailureSetupRange = sourceRange(
     smoke,
-    /const purchasePlansButton = shell\.getByRole/,
+    /const purchasePlansButton = groupedNavigation\.getByRole/,
     /const businessRequestsBeforePurchaseFailure = readBusinessRequestCounts\(\);/,
     'purchase-plan active one-shot failure setup',
   );
@@ -881,7 +881,7 @@ function assertA33SmokeContract(smoke) {
   const purchaseFailure = sourceBetween(
     smoke,
     /const businessRequestsBeforePurchaseFailure = readBusinessRequestCounts\(\);/,
-    /const batchesButton = shell\.getByRole/,
+    /const batchesButton = groupedNavigation\.getByRole/,
     'purchase-plan local failure and Shell availability',
   );
   assertSourceOrder(
@@ -929,7 +929,7 @@ function assertA33SmokeContract(smoke) {
 
   const batchesRoundTrip = sourceBetween(
     smoke,
-    /const batchesButton = shell\.getByRole/,
+    /const batchesButton = groupedNavigation\.getByRole/,
     /const businessRequestsBeforePurchaseRetry = readBusinessRequestCounts\(\);/,
     'batches round trip and persisted purchase-plan error',
   );
@@ -1089,7 +1089,7 @@ function assertA34SmokeContract(smoke) {
   const withdrawalRefresh = sourceBetween(
     smoke,
     /assert\.deepEqual\(readA34RequestCounts\(\), a34RequestsAfterInitial\);/,
-    /const alertsButton = shell\.getByRole/,
+    /const alertsButton = groupedNavigation\.getByRole/,
     'withdrawal active refresh exact isolation',
   );
   assertSourceOrder(
@@ -1118,8 +1118,8 @@ function assertA34SmokeContract(smoke) {
 
   const alertFailure = sourceBetween(
     smoke,
-    /const alertsButton = shell\.getByRole/,
-    /const taxReviewButton = shell\.getByRole/,
+    /const alertsButton = groupedNavigation\.getByRole/,
+    /const taxReviewButton = groupedNavigation\.getByRole/,
     'alert local failure and Shell availability',
   );
   assertSourceOrder(
@@ -1160,7 +1160,7 @@ function assertA34SmokeContract(smoke) {
 
   const taxRoundTrip = sourceBetween(
     smoke,
-    /const taxReviewButton = shell\.getByRole/,
+    /const taxReviewButton = groupedNavigation\.getByRole/,
     /const businessRequestsBeforeAlertRetry = readBusinessRequestCounts\(\);/,
     'tax-review round trip and persisted alert error',
   );
@@ -1226,6 +1226,58 @@ function assertA34SmokeContract(smoke) {
     alertRetry,
     /(?:page\.route|context\.route|route\.fulfill)/,
     'successful alert response must not be mocked',
+  );
+}
+
+function assertB1ShellContract(smoke) {
+  const groupedNavigation = sourceBetween(
+    smoke,
+    /const expectedNavigationSections = \[/,
+    /const shell = page\.getByRole/,
+    'B1 grouped navigation evidence',
+  );
+
+  assertSourceOrder(
+    groupedNavigation,
+    [
+      [
+        'navigation landmark',
+        /getByRole\('navigation',\s*\{\s*name: '后台功能导航',?\s*\}\)/,
+      ],
+      [
+        'visible heading read',
+        /getByRole\('heading'\)\s*\.allTextContents\(\)/,
+      ],
+      [
+        'visible group order',
+        /assert\.deepEqual\(visibleNavigationSections, expectedNavigationSections\);/,
+      ],
+      [
+        'empty group contract',
+        /const hiddenNavigationSections = \['会员与营销', '门店与渠道', '系统管理'\];/,
+      ],
+      [
+        'empty groups absent',
+        /assert\.equal\(\s*await groupedNavigation\.getByText\(label, \{ exact: true \}\)\.count\(\),\s*0,\s*\);/,
+      ],
+    ],
+    'B1 grouped navigation evidence',
+  );
+
+  assert.match(
+    smoke,
+    /const buttons = groupedNavigation\.getByRole\('button'\);/,
+    'navigation button collection must be scoped to the grouped navigation landmark',
+  );
+  assert.match(
+    smoke,
+    /const button = groupedNavigation\.getByRole\('button', \{ name: label, exact: true \}\);/,
+    'remaining navigation clicks must not search the page content region',
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(await buttons\.count\(\), navigation\.length\);/,
+    'navigation evidence must count exactly the registered navigation items',
   );
 }
 
@@ -1343,6 +1395,15 @@ test('Admin E2E proves A3.4 request isolation and alert-local recovery', () => {
   );
 
   assert.doesNotThrow(() => assertA34SmokeContract(smoke));
+});
+
+test('Admin E2E proves B1 grouped navigation and hides empty modules', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotThrow(() => assertB1ShellContract(smoke));
 });
 
 test('A3.2 source contract rejects weakened behavior evidence', () => {
