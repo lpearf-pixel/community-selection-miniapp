@@ -139,3 +139,42 @@ test('defines the focused pickup verification command and closes generic picked 
     /\| 'picked'/,
   );
 });
+
+
+test('requires one V1 pickup verification write boundary and no legacy mutation', () => {
+  const adminOrders = read('apps/api/src/routes/admin/orders.ts');
+  const fulfillment = read('apps/api/src/routes/fulfillment.ts');
+  const orderService = read('apps/api/src/modules/order/order-service.ts');
+  const executor = read(
+    'apps/api/src/modules/order/admin-pickup-verification-executor.ts',
+  );
+
+  assert.match(
+    adminOrders,
+    /'\/api\/admin\/orders\/:id\/pickup-verify'/,
+  );
+  assert.match(
+    adminOrders,
+    /requireAdminPermissionV1\('pickup\.verify'\)/,
+  );
+  assert.match(adminOrders, /parseAdminPickupVerificationCommand/);
+  assert.match(adminOrders, /executeAdminPickupVerificationCommand/);
+  assert.match(adminOrders, /ADMIN_PICKUP_VERIFIED/);
+  assert.doesNotMatch(
+    fulfillment,
+    /\/api\/admin\/orders\/:id\/pickup-verify/,
+  );
+  assert.doesNotMatch(fulfillment, /\bpickupVerify\b/);
+  assert.doesNotMatch(
+    orderService,
+    /export async function pickupVerify/,
+  );
+  assert.doesNotMatch(
+    executor,
+    /safeRecord(?:BusinessEvent|OrderTimeline)/,
+  );
+  assert.match(executor, /await recordBusinessEvent\(tx,/);
+  assert.match(executor, /await recordOrderTimeline\(tx,/);
+  assert.match(executor, /await recordAdminAudit\(tx,/);
+  assert.match(executor, /await tx\.adminCommandReceipt\.update\(/);
+});
