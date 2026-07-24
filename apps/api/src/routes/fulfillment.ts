@@ -2,6 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { pickupVerify } from '../modules/order/order-service.js';
+import {
+  ADMIN_SCOPE_FORBIDDEN,
+  canAccessOrderDataScope,
+  requireAdminPermission,
+  resolveAdminAccessContext,
+} from '../modules/admin-access/admin-access-control.js';
 
 type OverviewQuery = { date?: string };
 
@@ -72,13 +78,34 @@ export function registerFulfillmentRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/admin/orders/:id/pickup-verify', async (request, reply) => {
+  app.post('/api/admin/orders/:id/pickup-verify', { preHandler: requireAdminPermission('pickup.verify') }, async (request, reply) => {
     try {
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return fail('ADMIN_UNAUTHORIZED: Admin identity required');
+      }
       const { id } = request.params as { id: string };
+      const order = await prisma.order.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          pickup_store_id: true,
+          community_id: true,
+        },
+      });
+      if (!order) {
+        reply.code(404);
+        return fail('订单不存在');
+      }
+      if (!canAccessOrderDataScope(context, order)) {
+        reply.code(403);
+        return fail(ADMIN_SCOPE_FORBIDDEN);
+      }
       const body = request.body as PickupVerifyBody;
       return ok(await pickupVerify({
         order_id: id,
-        admin_user_id: request.adminUser?.id ?? null,
+        admin_user_id: context.admin_user_id,
         ip_address: request.ip,
         user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
         admin_remark: body.admin_remark ?? null
