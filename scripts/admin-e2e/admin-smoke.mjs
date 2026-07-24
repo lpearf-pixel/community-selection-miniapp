@@ -68,7 +68,7 @@ page.on('request', (request) => {
   if (pathname === '/api/group-buys') {
     groupBuyRequestCount += 1;
   }
-  if (pathname === '/api/orders') {
+  if (pathname === '/api/admin/orders') {
     orderRequestCount += 1;
   }
   if (pathname === '/api/admin/fulfillment/overview') {
@@ -110,11 +110,25 @@ page.on('request', (request) => {
 });
 
 try {
+  const unauthenticatedOrdersResponse = await context.request.get(
+    `${baseURL}/api/admin/orders?page=1&page_size=20`,
+  );
+  assert.equal(unauthenticatedOrdersResponse.status(), 401);
   await page.goto(baseURL, { waitUntil: 'networkidle' });
   await page.getByText('后台登录', { exact: true }).waitFor();
   await page.getByLabel('用户名').fill(credentials.username);
   await page.getByLabel('密码').fill(credentials.password);
+  const initialOrdersResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/admin/orders' &&
+      response.ok(),
+  );
   await page.getByRole('button', { name: /登\s*录/ }).click();
+  const initialOrdersResponse = await initialOrdersResponsePromise;
+  const initialOrdersEnvelope = await initialOrdersResponse.json();
+  assert.equal(initialOrdersEnvelope.success, true);
+  assert.equal(Array.isArray(initialOrdersEnvelope.data.items), true);
+  assert.ok(initialOrdersEnvelope.data.items.length > 0);
   await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
   await page.getByText(`当前管理员：${credentials.username}`).waitFor();
   const roleWorkbench = page.getByRole('region', {
@@ -355,7 +369,40 @@ try {
   });
   await ordersButton.click();
   await assertActive(ordersButton, '订单管理');
-  await page.getByText('订单列表', { exact: true }).waitFor();
+  await page.getByText('全渠道订单', { exact: true }).waitFor();
+
+  const orderFilter = page.getByRole('form', {
+    name: '全渠道订单筛选',
+  });
+  const firstOrderNo = initialOrdersEnvelope.data.items[0].order_no;
+  await orderFilter.getByLabel('订单关键词').fill(firstOrderNo);
+  const filteredOrdersResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/admin/orders' &&
+      url.searchParams.get('keyword') === firstOrderNo &&
+      url.searchParams.get('page') === '1' &&
+      response.ok()
+    );
+  });
+  await orderFilter
+    .getByRole('button', { name: /查\s*询/ })
+    .click();
+  const filteredOrdersEnvelope = await (
+    await filteredOrdersResponse
+  ).json();
+  assert.equal(filteredOrdersEnvelope.success, true);
+  assert.equal(Array.isArray(filteredOrdersEnvelope.data.items), true);
+  assert.ok(filteredOrdersEnvelope.data.items.length > 0);
+  const invalidOrdersResponse = await context.request.get(
+    `${baseURL}/api/admin/orders?pay_status=unknown`,
+  );
+  assert.equal(invalidOrdersResponse.status(), 400);
+  const filteredOrder = filteredOrdersEnvelope.data.items[0];
+  assert.equal(Object.hasOwn(filteredOrder, 'receiver_phone'), false);
+  assert.equal(Object.hasOwn(filteredOrder, 'receiver_address'), false);
+  await page.getByRole('columnheader', { name: '渠道' }).waitFor();
+  await page.getByText('微信小程序', { exact: true }).first().waitFor();
 
   const orderFailureRoute = async (route) => {
     assert.equal(route.request().method(), 'GET');
@@ -371,7 +418,7 @@ try {
       }),
     });
   };
-  await page.route('**/api/orders', orderFailureRoute);
+  await page.route('**/api/admin/orders*', orderFailureRoute);
   const a32RequestsBeforeOrderFailure = readA32RequestCounts();
   await shell.getByRole('button', { name: /刷\s*新/ }).click();
   await page.getByText('订单列表加载失败', { exact: true }).waitFor();
@@ -398,7 +445,7 @@ try {
     afterSalesRequestCount,
     a32RequestsBeforeOrderFailure.afterSales,
   );
-  await page.unroute('**/api/orders', orderFailureRoute);
+  await page.unroute('**/api/admin/orders*', orderFailureRoute);
 
   const afterSalesButton = groupedNavigation.getByRole('button', {
     name: '售后客服',
@@ -417,16 +464,16 @@ try {
 
   const a32RequestsBeforeOrderRetry = readA32RequestCounts();
   const orderRetryResponse = page.waitForResponse((response) =>
-    new URL(response.url()).pathname === '/api/orders' && response.ok(),
+    new URL(response.url()).pathname === '/api/admin/orders' && response.ok(),
   );
   await page.getByRole('button', { name: /重\s*试/ }).click();
   const orderResponse = await orderRetryResponse;
   const orderEnvelope = await orderResponse.json();
   assert.equal(orderEnvelope.success, true);
-  assert.equal(Array.isArray(orderEnvelope.data), true);
+  assert.equal(Array.isArray(orderEnvelope.data.items), true);
   await page.getByText('正在刷新订单列表…').waitFor({ state: 'detached' });
   await page.getByText('订单列表加载失败').waitFor({ state: 'detached' });
-  await page.getByText('订单列表', { exact: true }).waitFor();
+  await page.getByText('全渠道订单', { exact: true }).waitFor();
   await waitForCount(
     page,
     () => orderRequestCount,

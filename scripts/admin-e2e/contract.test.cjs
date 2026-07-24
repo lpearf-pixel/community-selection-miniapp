@@ -93,7 +93,7 @@ function assertA32SmokeContract(smoke) {
       ],
       [
         'orders exact primary counter',
-        /if \(pathname === '\/api\/orders'\) \{\s*orderRequestCount \+= 1;\s*\}/,
+        /if \(pathname === '\/api\/admin\/orders'\) \{\s*orderRequestCount \+= 1;\s*\}/,
       ],
       [
         'fulfillment exact primary counter',
@@ -226,7 +226,7 @@ function assertA32SmokeContract(smoke) {
     [
       [
         'orders active before route',
-        /name: '订单管理',\s*exact: true,\s*\}\);\s*await ordersButton\.click\(\);\s*await assertActive\(ordersButton, '订单管理'\);\s*await page\.getByText\('订单列表', \{ exact: true \}\)\.waitFor\(\);/,
+        /name: '订单管理',\s*exact: true,\s*\}\);\s*await ordersButton\.click\(\);\s*await assertActive\(ordersButton, '订单管理'\);\s*await page\.getByText\('全渠道订单', \{ exact: true \}\)\.waitFor\(\);/,
       ],
       [
         'one-shot guard',
@@ -266,7 +266,7 @@ function assertA32SmokeContract(smoke) {
       },
       {
         receiver: 'page',
-        target: { kind: 'string', value: '**/api/orders' },
+        target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
         receiver: 'page',
@@ -360,7 +360,7 @@ function assertA32SmokeContract(smoke) {
     'route registration whitelist: alerts use the named one-shot 500 handler',
   );
   const orderInterceptionPattern =
-    /(?<![\w$.])(page|context)\s*\.\s*route\s*\(\s*(['"])\*\*\/api\/orders\2\s*,/g;
+    /(?<![\w$.])(page|context)\s*\.\s*route\s*\(\s*(['"])\*\*\/api\/admin\/orders\*\2\s*,/g;
   const orderInterceptions = [...smoke.matchAll(orderInterceptionPattern)];
   assert.equal(
     orderInterceptions.length,
@@ -379,7 +379,7 @@ function assertA32SmokeContract(smoke) {
   );
   assert.match(
     registeredOrderHandler,
-    /^(page|context)\s*\.\s*route\s*\(\s*(['"])\*\*\/api\/orders\2\s*,\s*orderFailureRoute\s*\);/,
+    /^(page|context)\s*\.\s*route\s*\(\s*(['"])\*\*\/api\/admin\/orders\*\2\s*,\s*orderFailureRoute\s*\);/,
     'order interception registration: uses the one-shot 500 handler',
   );
   assert.doesNotMatch(
@@ -448,7 +448,7 @@ function assertA32SmokeContract(smoke) {
       ],
       [
         'order route cleanup',
-        /await page\.unroute\('\*\*\/api\/orders', orderFailureRoute\);/,
+        /await page\.unroute\('\*\*\/api\/admin\/orders\*', orderFailureRoute\);/,
       ],
     ],
     'order-local failure and Shell availability',
@@ -512,7 +512,7 @@ function assertA32SmokeContract(smoke) {
     [
       [
         'successful response listener',
-        /const orderRetryResponse = page\.waitForResponse\(\(response\) =>\s*new URL\(response\.url\(\)\)\.pathname === '\/api\/orders' && response\.ok\(\),\s*\);/,
+        /const orderRetryResponse = page\.waitForResponse\(\(response\) =>\s*new URL\(response\.url\(\)\)\.pathname === '\/api\/admin\/orders' && response\.ok\(\),\s*\);/,
       ],
       [
         'local retry click',
@@ -532,7 +532,7 @@ function assertA32SmokeContract(smoke) {
       ],
       [
         'array data envelope',
-        /assert\.equal\(Array\.isArray\(orderEnvelope\.data\), true\);/,
+        /assert\.equal\(Array\.isArray\(orderEnvelope\.data\.items\), true\);/,
       ],
       [
         'order error disappears',
@@ -540,7 +540,7 @@ function assertA32SmokeContract(smoke) {
       ],
       [
         'order table renders',
-        /await page\.getByText\('订单列表', \{ exact: true \}\)\.waitFor\(\);/,
+        /await page\.getByText\('全渠道订单', \{ exact: true \}\)\.waitFor\(\);/,
       ],
       [
         'retry response counted',
@@ -840,7 +840,7 @@ function assertA33SmokeContract(smoke) {
       },
       {
         receiver: 'page',
-        target: { kind: 'string', value: '**/api/orders' },
+        target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
         receiver: 'page',
@@ -1336,6 +1336,106 @@ function assertB2RoleWorkbenchContract(smoke) {
   );
 }
 
+function assertB3OmnichannelOrdersContract(smoke, fixture, orderPage) {
+  assert.match(
+    fixture,
+    /await prisma\.order\.upsert\(\{[\s\S]*order_no: 'L50-B3-E2E-ORDER'/,
+    'B3 E2E must create a deterministic real order in the fresh database',
+  );
+  assert.match(
+    fixture,
+    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: 'L50-B3-E2E-ORDER' \},\s*\}\);/,
+    'B3 E2E must remove its deterministic order during cleanup',
+  );
+  assert.match(
+    orderPage,
+    /<Form[\s\S]*?onFinish=\{applyFilters\}[\s\S]*?<Button\s+type="primary"\s+htmlType="submit"\s*>/,
+    'B3 query must use the standard Ant Design submit path',
+  );
+  assert.doesNotMatch(
+    orderPage,
+    /form\.getFieldsValue\(\)/,
+    'B3 query must not duplicate Form submission in an explicit click handler',
+  );
+  assertSourceOrder(
+    smoke,
+    [
+      [
+        'protected order counter',
+        /if \(pathname === '\/api\/admin\/orders'\) \{\s*orderRequestCount \+= 1;\s*\}/,
+      ],
+      [
+        'unauthenticated list denied',
+        /const unauthenticatedOrdersResponse = await context\.request\.get\(\s*`\$\{baseURL\}\/api\/admin\/orders\?page=1&page_size=20`,\s*\);\s*assert\.equal\(unauthenticatedOrdersResponse\.status\(\), 401\);/,
+      ],
+      [
+        'initial paginated envelope',
+        /const initialOrdersEnvelope = await initialOrdersResponse\.json\(\);/,
+      ],
+      [
+        'workbench heading',
+        /await page\.getByText\('全渠道订单', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+      [
+        'filter landmark',
+        /const orderFilter = page\.getByRole\('form', \{\s*name: '全渠道订单筛选',\s*\}\);/,
+      ],
+      [
+        'keyword from real order',
+        /const firstOrderNo = initialOrdersEnvelope\.data\.items\[0\]\.order_no;/,
+      ],
+      [
+        'keyword input',
+        /await orderFilter\.getByLabel\('订单关键词'\)\.fill\(firstOrderNo\);/,
+      ],
+      [
+        'real filtered request',
+        /const filteredOrdersResponse = page\.waitForResponse\(/,
+      ],
+      [
+        'query submit',
+        /await orderFilter\s*\.getByRole\('button', \{ name: \/查\\s\*询\/ \}\)\s*\.click\(\);/,
+      ],
+      [
+        'paginated items verified',
+        /assert\.equal\(Array\.isArray\(filteredOrdersEnvelope\.data\.items\), true\);/,
+      ],
+      [
+        'invalid status rejected',
+        /const invalidOrdersResponse = await context\.request\.get\(\s*`\$\{baseURL\}\/api\/admin\/orders\?pay_status=unknown`,\s*\);\s*assert\.equal\(invalidOrdersResponse\.status\(\), 400\);/,
+      ],
+      [
+        'raw phone absent',
+        /assert\.equal\(Object\.hasOwn\(filteredOrder, 'receiver_phone'\), false\);/,
+      ],
+      [
+        'raw address absent',
+        /assert\.equal\(Object\.hasOwn\(filteredOrder, 'receiver_address'\), false\);/,
+      ],
+      [
+        'channel column visible',
+        /await page\.getByRole\('columnheader', \{ name: '渠道' \}\)\.waitFor\(\);/,
+      ],
+      [
+        'historical channel visible',
+        /await page\.getByText\('微信小程序', \{ exact: true \}\)\.first\(\)\.waitFor\(\);/,
+      ],
+    ],
+    'B3 omnichannel order workbench evidence',
+  );
+
+  assert.match(
+    smoke,
+    /await page\.route\('\*\*\/api\/admin\/orders\*', orderFailureRoute\);/,
+    'order failure evidence must target only the protected list route',
+  );
+  assert.match(
+    smoke,
+    /await page\.unroute\('\*\*\/api\/admin\/orders\*', orderFailureRoute\);/,
+    'protected order failure route must be removed before real retry',
+  );
+}
+
 test('L50 Admin browser smoke infrastructure is complete', () => {
   const required = [
     'scripts/admin-e2e/package.json',
@@ -1470,6 +1570,28 @@ test('Admin E2E proves B2 role workbench landing and shortcut navigation', () =>
   assert.doesNotThrow(() => assertB2RoleWorkbenchContract(smoke));
 });
 
+test('Admin E2E proves B3 protected omnichannel orders', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+  const fixture = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/fixture.ts'),
+    'utf8',
+  );
+  const orderPage = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/sales/orders/OrdersPage.tsx',
+    ),
+    'utf8',
+  );
+
+  assert.doesNotThrow(() =>
+    assertB3OmnichannelOrdersContract(smoke, fixture, orderPage),
+  );
+});
+
 test('A3.2 source contract rejects weakened behavior evidence', () => {
   const smoke = fs.readFileSync(
     path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
@@ -1487,7 +1609,7 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
       expected: /order route cleanup/,
       weaken: (source) =>
         source.replace(
-          "  await page.unroute('**/api/orders', orderFailureRoute);\n",
+          "  await page.unroute('**/api/admin/orders*', orderFailureRoute);\n",
           '',
         ),
     },
@@ -1505,7 +1627,7 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
       expected: /successful real order retry and exact isolation/,
       weaken: (source) =>
         source.replace(
-          "  assert.equal(orderEnvelope.success, true);\n  assert.equal(Array.isArray(orderEnvelope.data), true);\n",
+          "  assert.equal(orderEnvelope.success, true);\n  assert.equal(Array.isArray(orderEnvelope.data.items), true);\n",
           '',
         ),
     },
@@ -1534,7 +1656,7 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
       weaken: (source) =>
         source.replace(
           '  const orderRetryResponse = page.waitForResponse',
-          "  await page.route('**/api/orders', async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) }));\n  const orderRetryResponse = page.waitForResponse",
+          "  await page.route('**/api/admin/orders*', async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: { total: 0, page: 1, page_size: 20, items: [] } }) }));\n  const orderRetryResponse = page.waitForResponse",
         ),
     },
     {
@@ -1553,7 +1675,7 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
       weaken: (source) =>
         source.replace(
           'try {\n',
-          'await context.route(/\\/api\\/orders(?:\\?.*)?$/, async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) }));\n\n' +
+          'await context.route(/\\/api\\/admin\\/orders(?:\\?.*)?$/, async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: { total: 0, page: 1, page_size: 20, items: [] } }) }));\n\n' +
             'try {\n',
         ),
     },
@@ -1563,9 +1685,9 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
         /route registration whitelist: orders use the named one-shot 500 handler|order interception registration: uses the one-shot 500 handler/,
       weaken: (source) =>
         source.replace(
-          "  await page.route('**/api/orders', orderFailureRoute);\n",
+          "  await page.route('**/api/admin/orders*', orderFailureRoute);\n",
           '  const e2eOrderSuccessHandler = async (route) => route.fulfill({ body: JSON.stringify({ success: true, data: [] }) });\n' +
-            '  await page.route("**/api/orders", e2eOrderSuccessHandler);\n',
+            '  await page.route("**/api/admin/orders*", e2eOrderSuccessHandler);\n',
         ),
     },
     {
@@ -1575,12 +1697,12 @@ test('A3.2 source contract rejects weakened behavior evidence', () => {
       weaken: (source) =>
         source
           .replace(
-            "  await page.route('**/api/orders', orderFailureRoute);\n",
+            "  await page.route('**/api/admin/orders*', orderFailureRoute);\n",
             '',
           )
           .replace(
             '  const a32RequestsBeforeOrderRetry = readA32RequestCounts();',
-            "  await page.route('**/api/orders', orderFailureRoute);\n" +
+            "  await page.route('**/api/admin/orders*', orderFailureRoute);\n" +
               '  const a32RequestsBeforeOrderRetry = readA32RequestCounts();',
           ),
     },
