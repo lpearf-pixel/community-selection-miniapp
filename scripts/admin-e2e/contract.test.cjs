@@ -275,6 +275,13 @@ function assertA32SmokeContract(smoke) {
         },
       },
       {
+        receiver: 'pickupConflictPage',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
+        },
+      },
+      {
         receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
@@ -300,12 +307,13 @@ function assertA32SmokeContract(smoke) {
         },
       },
     ],
-    'route registration whitelist: five failure interceptors plus two real command proxies',
+    'route registration whitelist: five failure interceptors plus three real command proxies',
   );
   const [
     catalogRegistration,
     statusRaceRegistration,
     pickupRaceRegistration,
+    pickupConflictRaceRegistration,
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
@@ -320,6 +328,11 @@ function assertA32SmokeContract(smoke) {
     pickupRaceRegistration.handler,
     'pickupRaceRoute',
     'route registration whitelist: pickup race uses the named real proxy',
+  );
+  assert.equal(
+    pickupConflictRaceRegistration.handler,
+    'pickupRaceRoute',
+    'route registration whitelist: conflict page uses the named real proxy',
   );
   assert.equal(
     purchasePlanRegistration.target.value,
@@ -875,6 +888,13 @@ function assertA33SmokeContract(smoke) {
         },
       },
       {
+        receiver: 'pickupConflictPage',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
+        },
+      },
+      {
         receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
@@ -900,9 +920,9 @@ function assertA33SmokeContract(smoke) {
         },
       },
     ],
-    'A3.3 route registration whitelist: five failure interceptors plus two real command proxies',
+    'A3.3 route registration whitelist: five failure interceptors plus three real command proxies',
   );
-  const purchasePlanRegistration = routeRegistrations[4];
+  const purchasePlanRegistration = routeRegistrations[5];
   assert.ok(
     purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
       purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
