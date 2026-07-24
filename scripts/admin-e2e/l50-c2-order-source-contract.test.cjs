@@ -205,9 +205,17 @@ test('exposes only the eligible pickup action and refreshes pickup conflicts', (
 
 test('proves eligible pickup UI and deterministic real browser conflict', () => {
   const fixture = read('scripts/admin-e2e/fixture.ts');
+  const runner = read('scripts/admin-e2e/run.cjs');
   const smoke = read('scripts/admin-e2e/admin-smoke.mjs');
 
-  assert.match(fixture, /GITHUB_RUN_ID/);
+  assert.match(
+    runner,
+    /ADMIN_E2E_RUN_ID:\s*projectSuffix/,
+  );
+  assert.match(
+    fixture,
+    /process\.env\.ADMIN_E2E_RUN_ID\s*\?\?\s*process\.env\.GITHUB_RUN_ID/,
+  );
   assert.match(fixture, /pickupOrderNo/);
   assert.match(fixture, /pickup_type:\s*'store'/);
   assert.match(fixture, /order_status:\s*'ready'/);
