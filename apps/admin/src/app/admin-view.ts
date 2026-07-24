@@ -27,4 +27,4 @@ export const ADMIN_VIEW_KEYS = [
 
 export type AdminViewKey = (typeof ADMIN_VIEW_KEYS)[number];
 
-export const DEFAULT_ADMIN_VIEW: AdminViewKey = 'products';
+export const DEFAULT_ADMIN_VIEW: AdminViewKey = 'operations';
