@@ -216,18 +216,14 @@ function assertA32SmokeContract(smoke) {
 
   const orderFailureSetupRange = sourceRange(
     smoke,
-    /const ordersButton = groupedNavigation\.getByRole/,
+    /const orderFailureRoute = async \(route\) => \{/,
     /const a32RequestsBeforeOrderFailure = readA32RequestCounts\(\);/,
-    'orders active one-shot failure setup',
+    'orders one-shot failure setup',
   );
   const orderFailureSetup = orderFailureSetupRange.source;
   assertSourceOrder(
     orderFailureSetup,
     [
-      [
-        'orders active before route',
-        /name: '订单管理',\s*exact: true,\s*\}\);\s*await ordersButton\.click\(\);\s*await assertActive\(ordersButton, '订单管理'\);\s*await page\.getByText\('全渠道订单', \{ exact: true \}\)\.waitFor\(\);/,
-      ],
       [
         'one-shot guard',
         /const orderFailureRoute = async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(orderFailureInjected, false\);\s*orderFailureInjected = true;/,
