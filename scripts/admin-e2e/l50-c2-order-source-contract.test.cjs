@@ -196,6 +196,9 @@ test('exposes only the eligible pickup action and refreshes pickup conflicts', (
   const page = read(
     'apps/admin/src/features/sales/orders/OrdersPage.tsx',
   );
+  const pickupHook = read(
+    'apps/admin/src/features/sales/orders/usePickupVerification.ts',
+  );
   const table = read(
     'apps/admin/src/features/sales/orders/OrdersTable.tsx',
   );
@@ -204,16 +207,17 @@ test('exposes only the eligible pickup action and refreshes pickup conflicts', (
   assert.match(types, /AdminPickupVerificationResult/);
   assert.match(api, /expected_version:\s*expectedVersion/);
   assert.match(api, /idempotency_key:\s*idempotencyKey/);
-  assert.match(page, /verifyOrderPickup\([\s\S]*?order\.version/);
-  assert.match(page, /crypto\.randomUUID\(\)/);
-  assert.match(page, /ADMIN_PICKUP_TYPE_CONFLICT/);
-  assert.match(page, /ADMIN_PICKUP_STATE_CONFLICT/);
-  assert.match(page, /ADMIN_ORDER_VERSION_CONFLICT/);
-  assert.match(page, /pendingPickupOrderIds/);
-  assert.match(page, /useRef<Set<string>>/);
-  assert.match(page, /pendingPickupOrderIdsRef\.current\.has\(order\.id\)/);
-  assert.match(page, /pendingPickupOrderIdsRef\.current\.add\(order\.id\)/);
-  assert.match(page, /pendingPickupOrderIdsRef\.current\.delete\(order\.id\)/);
+  assert.match(page, /usePickupVerification/);
+  assert.match(pickupHook, /verifyOrderPickup\([\s\S]*?order\.version/);
+  assert.match(pickupHook, /crypto\.randomUUID\(\)/);
+  assert.match(pickupHook, /ADMIN_PICKUP_TYPE_CONFLICT/);
+  assert.match(pickupHook, /ADMIN_PICKUP_STATE_CONFLICT/);
+  assert.match(pickupHook, /ADMIN_ORDER_VERSION_CONFLICT/);
+  assert.match(pickupHook, /pendingPickupOrderIds/);
+  assert.match(pickupHook, /useRef<Set<string>>/);
+  assert.match(pickupHook, /pendingPickupOrderIdsRef\.current\.has\(order\.id\)/);
+  assert.match(pickupHook, /pendingPickupOrderIdsRef\.current\.add\(order\.id\)/);
+  assert.match(pickupHook, /pendingPickupOrderIdsRef\.current\.delete\(order\.id\)/);
   assert.match(
     table,
     /order\.pickup_type === 'store'\s*&&\s*order\.order_status === 'ready'/,
