@@ -14,7 +14,7 @@ describe('SQL migration safety', () => {
     expect(containsUnsafeDropTable('/* -- */ DROP TABLE audit;')).toBe(true);
     expect(containsUnsafeDropTable("SELECT '--'; DROP TABLE audit;")).toBe(true);
     expect(
-      containsUnsafeDropTable("SELECT E'abc\\\\'--not comment'; DROP TABLE audit;"),
+      containsUnsafeDropTable("SELECT E'abc\\'--not comment'; DROP TABLE audit;"),
     ).toBe(true);
   });
 
