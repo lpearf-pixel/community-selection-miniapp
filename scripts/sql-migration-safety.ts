@@ -1,12 +1,17 @@
 const UNSAFE_DROP_TABLE = /DROP\s+TABLE\s+(?!IF\s+EXISTS)/i;
 const DOLLAR_QUOTE_START = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/;
 
+function masked(character: string): string {
+  return character === '\n' || character === '\r' ? character : ' ';
+}
+
 export function stripSqlComments(sql: string): string {
   let output = '';
   let index = 0;
   let blockDepth = 0;
   let dollarTag: string | null = null;
   let quote: "'" | '"' | null = null;
+  let escapeString = false;
 
   while (index < sql.length) {
     const current = sql[index];
@@ -22,7 +27,7 @@ export function stripSqlComments(sql: string): string {
         output += '  ';
         index += 2;
       } else {
-        output += current === '\n' || current === '\r' ? current : ' ';
+        output += masked(current);
         index += 1;
       }
       continue;
@@ -30,25 +35,35 @@ export function stripSqlComments(sql: string): string {
 
     if (dollarTag !== null) {
       if (sql.startsWith(dollarTag, index)) {
-        output += dollarTag;
+        output += ' '.repeat(dollarTag.length);
         index += dollarTag.length;
         dollarTag = null;
       } else {
-        output += current;
+        output += masked(current);
         index += 1;
       }
       continue;
     }
 
     if (quote !== null) {
-      output += current;
+      if (escapeString && current === '\\') {
+        output += ' ';
+        index += 1;
+        if (index < sql.length) {
+          output += masked(sql[index]);
+          index += 1;
+        }
+        continue;
+      }
+      output += masked(current);
       index += 1;
       if (current === quote) {
         if (sql[index] === quote) {
-          output += sql[index];
+          output += ' ';
           index += 1;
         } else {
           quote = null;
+          escapeString = false;
         }
       }
       continue;
@@ -72,8 +87,14 @@ export function stripSqlComments(sql: string): string {
     }
 
     if (current === "'" || current === '"') {
+      const prefix = sql[index - 1];
+      const beforePrefix = sql[index - 2];
+      escapeString =
+        current === "'" &&
+        (prefix === 'E' || prefix === 'e') &&
+        (index < 2 || !/[A-Za-z0-9_$]/.test(beforePrefix));
       quote = current;
-      output += current;
+      output += ' ';
       index += 1;
       continue;
     }
@@ -82,7 +103,7 @@ export function stripSqlComments(sql: string): string {
       const match = sql.slice(index).match(DOLLAR_QUOTE_START);
       if (match) {
         dollarTag = match[0];
-        output += dollarTag;
+        output += ' '.repeat(dollarTag.length);
         index += dollarTag.length;
         continue;
       }
