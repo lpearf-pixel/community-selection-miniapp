@@ -206,6 +206,10 @@ test('exposes only the eligible pickup action and refreshes pickup conflicts', (
   assert.match(page, /ADMIN_PICKUP_STATE_CONFLICT/);
   assert.match(page, /ADMIN_ORDER_VERSION_CONFLICT/);
   assert.match(page, /pendingPickupOrderIds/);
+  assert.match(page, /useRef<Set<string>>/);
+  assert.match(page, /pendingPickupOrderIdsRef\.current\.has\(order\.id\)/);
+  assert.match(page, /pendingPickupOrderIdsRef\.current\.add\(order\.id\)/);
+  assert.match(page, /pendingPickupOrderIdsRef\.current\.delete\(order\.id\)/);
   assert.match(
     table,
     /order\.pickup_type === 'store'\s*&&\s*order\.order_status === 'ready'/,
@@ -247,4 +251,42 @@ test('proves eligible pickup UI and deterministic real browser conflict', () => 
   assert.match(smoke, /'pickup success refresh'/);
   assert.match(smoke, /'pickup conflict refresh'/);
   assert.match(smoke, /ADMIN_PICKUP_STATE_CONFLICT/);
+});
+
+
+test('routes the pickup workbench through the reliable command', () => {
+  const pickupRoutes = read('apps/api/src/routes/admin/pickup.ts');
+  const pickupApi = read('apps/admin/src/api/pickupWorkbench.ts');
+  const pickupPage = read(
+    'apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx',
+  );
+
+  assert.match(pickupRoutes, /pickup_type:\s*order\.pickup_type/);
+  assert.match(pickupRoutes, /version:\s*order\.version/);
+  assert.match(
+    pickupRoutes,
+    /PickupType\.store/,
+  );
+  assert.doesNotMatch(
+    pickupRoutes,
+    /app\.post\('\/api\/admin\/pickup\/orders\/:id\/verify'/,
+  );
+  assert.match(
+    pickupApi,
+    /\/api\/admin\/orders\/\$\{orderId\}\/pickup-verify/,
+  );
+  assert.match(pickupApi, /expected_version:\s*expectedVersion/);
+  assert.match(pickupApi, /idempotency_key:\s*idempotencyKey/);
+  assert.doesNotMatch(
+    pickupApi,
+    /\/api\/admin\/pickup\/orders\/\$\{orderId\}\/verify/,
+  );
+  assert.match(
+    pickupPage,
+    /order\.pickup_type === "store"\s*&&\s*order\.order_status === "ready"/,
+  );
+  assert.match(
+    pickupPage,
+    /verifyPickupWorkbenchOrder\([\s\S]*?order\.version[\s\S]*?crypto\.randomUUID\(\)/,
+  );
 });
