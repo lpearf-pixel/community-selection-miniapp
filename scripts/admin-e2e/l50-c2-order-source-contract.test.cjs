@@ -138,6 +138,7 @@ test('defines the focused pickup verification command and closes generic picked 
 test('requires one V1 pickup verification write boundary and no legacy mutation', () => {
   const adminOrders = read('apps/api/src/routes/admin/orders.ts');
   const fulfillment = read('apps/api/src/routes/fulfillment.ts');
+  const pickupWorkbench = read('apps/api/src/routes/admin/pickup.ts');
   const orderService = read('apps/api/src/modules/order/order-service.ts');
   const executor = read(
     'apps/api/src/modules/order/admin-pickup-verification-executor.ts',
@@ -159,6 +160,18 @@ test('requires one V1 pickup verification write boundary and no legacy mutation'
     /\/api\/admin\/orders\/:id\/pickup-verify/,
   );
   assert.doesNotMatch(fulfillment, /\bpickupVerify\b/);
+  assert.doesNotMatch(
+    pickupWorkbench,
+    /app\.post\('\/api\/admin\/pickup\/orders\/:id\/verify'/,
+  );
+  assert.doesNotMatch(
+    pickupWorkbench,
+    /order_status:\s*OrderStatus\.picked/,
+  );
+  assert.doesNotMatch(
+    pickupWorkbench,
+    /safeRecord(?:BusinessEvent|OrderTimeline)/,
+  );
   assert.doesNotMatch(
     orderService,
     /export async function pickupVerify/,
