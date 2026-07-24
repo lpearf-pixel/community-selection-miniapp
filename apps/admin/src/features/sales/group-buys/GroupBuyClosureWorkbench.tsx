@@ -46,23 +46,11 @@ export function GroupBuyClosureWorkbench(
       {summary ? (
         <Card title="团购关闭摘要" style={{ marginTop: 16 }}>
           <Typography.Paragraph>
-            状态：{summary.status}；目标：{summary.target_count}；有效已支付数量：
-            {summary.paid_quantity}；未支付待关闭：{summary.unpaid_order_count}
-            ；待人工退款：{summary.paid_pending_refund_count}；退款成功：
-            {summary.refund_success_count}；待退金额：¥
-            {formatYuan(summary.pending_refund_amount_cents)}；已退金额：¥
-            {formatYuan(summary.total_refunded_amount_cents)}
-            ；库存扣减/回补/剩余：{summary.inventory_deducted_quantity}/
-            {summary.inventory_restored_quantity}/
-            {summary.inventory_remaining_restorable_quantity}；可关闭：
-            {summary.closable ? '是' : '否'}
+            状态：{summary.status}；目标：{summary.target_count}；有效已支付数量：{summary.paid_quantity}；未支付待关闭：{summary.unpaid_order_count}；待人工退款：{summary.paid_pending_refund_count}；退款成功：{summary.refund_success_count}；待退金额：¥{formatYuan(summary.pending_refund_amount_cents)}；已退金额：¥{formatYuan(summary.total_refunded_amount_cents)}；库存扣减/回补/剩余：{summary.inventory_deducted_quantity}/{summary.inventory_restored_quantity}/{summary.inventory_remaining_restorable_quantity}；可关闭：{summary.closable ? '是' : '否'}
           </Typography.Paragraph>
           {summary.blockers.length > 0 ? (
             <Typography.Paragraph type="danger">
-              阻塞原因：
-              {summary.blockers
-                .map((blocker) => `${blocker.type}(${blocker.count})`)
-                .join('，')}
+              阻塞原因：{summary.blockers.map((blocker) => `${blocker.type}(${blocker.count})`).join('，')}
             </Typography.Paragraph>
           ) : null}
         </Card>
