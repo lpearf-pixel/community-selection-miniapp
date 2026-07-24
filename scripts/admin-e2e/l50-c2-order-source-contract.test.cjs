@@ -201,3 +201,29 @@ test('exposes only the eligible pickup action and refreshes pickup conflicts', (
   assert.doesNotMatch(table, /onMarkOrder\(order, 'picked'\)/);
   assert.doesNotMatch(table, /已自提/);
 });
+
+
+test('proves eligible pickup UI and deterministic real browser conflict', () => {
+  const fixture = read('scripts/admin-e2e/fixture.ts');
+  const smoke = read('scripts/admin-e2e/admin-smoke.mjs');
+
+  assert.match(fixture, /GITHUB_RUN_ID/);
+  assert.match(fixture, /pickupOrderNo/);
+  assert.match(fixture, /pickup_type:\s*'store'/);
+  assert.match(fixture, /order_status:\s*'ready'/);
+  assert.match(smoke, /credentials\.pickupOrderNo/);
+  assert.match(smoke, /deliveryRow[\s\S]*?核销自提[\s\S]*?count\(\)/);
+  assert.match(
+    smoke,
+    /await page\.route\('\*\*\/api\/admin\/orders\/\*\/pickup-verify', pickupRaceRoute\);/,
+  );
+  assert.match(smoke, /await route\.fetch\(\)/);
+  assert.match(
+    smoke,
+    /sameVersionPickupButton\.dispatchEvent\('click'\)[\s\S]*?sameVersionPickupButton\.dispatchEvent\('click'\)/,
+  );
+  assert.match(smoke, /assert\.deepEqual\(pickupRaceCodes, \[200, 409\]\);/);
+  assert.match(smoke, /'pickup success refresh'/);
+  assert.match(smoke, /'pickup conflict refresh'/);
+  assert.match(smoke, /ADMIN_PICKUP_STATE_CONFLICT/);
+});
