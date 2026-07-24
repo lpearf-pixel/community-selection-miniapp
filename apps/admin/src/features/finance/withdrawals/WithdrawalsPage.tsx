@@ -11,7 +11,11 @@ import {
 } from './api';
 import type { Withdrawal, WithdrawalDetail } from './types';
 import { WithdrawalDetailDrawer } from './WithdrawalDetailDrawer';
-import { WithdrawalFeedback, WithdrawalsWorkbench } from './WithdrawalsWorkbench';
+import {
+  WithdrawalActionError,
+  WithdrawalDetailError,
+  WithdrawalsWorkbench,
+} from './WithdrawalsWorkbench';
 
 export type WithdrawalsPageProps = {
   refreshVersion: number;
@@ -147,11 +151,13 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {errorAlert}
-      <WithdrawalFeedback
-        actionError={actionError}
-        detailError={detailError}
-        onClearActionError={() => setActionError('')}
-        onClearDetailError={() => setDetailError('')}
+      <WithdrawalActionError
+        error={actionError}
+        onClear={() => setActionError('')}
+      />
+      <WithdrawalDetailError
+        error={detailError}
+        onClear={() => setDetailError('')}
       />
       {state.status === 'refreshing' ? (
         <Typography.Text type="secondary">
