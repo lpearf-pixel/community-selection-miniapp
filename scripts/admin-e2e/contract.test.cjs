@@ -1592,6 +1592,101 @@ test('Admin E2E proves B3 protected omnichannel orders', () => {
   );
 });
 
+test('C1 defines the bounded traceable Admin order contract', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+  const shared = fs.readFileSync(
+    path.join(root, 'packages/shared/src/index.ts'),
+    'utf8',
+  );
+  const query = fs.readFileSync(
+    path.join(
+      root,
+      'apps/api/src/routes/admin/order-list-query.ts',
+    ),
+    'utf8',
+  );
+  const route = fs.readFileSync(
+    path.join(root, 'apps/api/src/routes/admin/orders.ts'),
+    'utf8',
+  );
+  const orderTypes = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/sales/orders/types.ts',
+    ),
+    'utf8',
+  );
+  const workspacePackages = fs.readFileSync(
+    path.join(root, 'apps/admin/src/workspace-packages.d.ts'),
+    'utf8',
+  );
+  const orderPage = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/sales/orders/OrdersPage.tsx',
+    ),
+    'utf8',
+  );
+
+  assert.match(shared, /export type PaginatedData<T>/);
+  assert.match(shared, /export function contractOk/);
+  assert.match(shared, /export function contractFail/);
+  assert.match(query, /MAX_ADMIN_ORDER_PAGE = 10_000/);
+  assert.match(route, /buildPaginationMetadata/);
+  assert.match(route, /contractOk/);
+  assert.match(route, /contractFail/);
+  assert.match(route, /const traceId = String\(request\.id\)/);
+  assert.match(route, /code: 'ADMIN_ORDERS_LISTED'/);
+  assert.match(route, /code: 'ADMIN_ORDERS_LIST_FAILED'/);
+  assert.match(route, /request\.log\.error/);
+  assert.match(
+    orderTypes,
+    /AdminOrderListResponse =\s*PaginatedData<AdminOrderListItem>/,
+  );
+  assert.match(workspacePackages, /export type PaginatedData<T>/);
+  assert.match(workspacePackages, /export function contractOk/);
+  assert.match(workspacePackages, /export function contractFail/);
+  assert.match(workspacePackages, /export function buildPaginationMetadata/);
+  assert.match(orderPage, /state\.data\.pagination\.page/);
+  assert.match(orderPage, /state\.data\.pagination\.page_size/);
+  assert.match(orderPage, /state\.data\.pagination\.total/);
+  assert.match(
+    smoke,
+    /const unauthenticatedOrdersEnvelope =\s*await unauthenticatedOrdersResponse\.json\(\);/,
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(unauthenticatedOrdersEnvelope\.success, false\);/,
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(initialOrdersEnvelope\.code, 'ADMIN_ORDERS_LISTED'\);/,
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(typeof initialOrdersEnvelope\.trace_id, 'string'\);/,
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(\s*typeof initialOrdersEnvelope\.data\.pagination\.total,\s*'number',\s*\);/,
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(\s*invalidOrdersEnvelope\.code,\s*'INVALID_ADMIN_ORDER_QUERY',\s*\);/,
+  );
+  assert.match(
+    smoke,
+    /\/api\/admin\/orders\?page=10001&page_size=100/,
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(oversizedPageResponse\.status\(\), 400\);/,
+  );
+});
+
 test('A3.2 source contract rejects weakened behavior evidence', () => {
   const smoke = fs.readFileSync(
     path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),

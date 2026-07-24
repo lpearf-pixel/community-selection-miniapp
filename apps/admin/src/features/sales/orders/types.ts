@@ -1,3 +1,4 @@
+import type { PaginatedData } from '@community-selection/shared';
 import type { Order } from '../shared/types';
 
 export type AdminOrderPayStatus =
@@ -82,12 +83,8 @@ export type AdminOrderListItem = {
   paid_at: string | null;
 };
 
-export type AdminOrderListResponse = {
-  total: number;
-  page: number;
-  page_size: number;
-  items: AdminOrderListItem[];
-};
+export type AdminOrderListResponse =
+  PaginatedData<AdminOrderListItem>;
 
 export type OpsAlert = {
   id: string;

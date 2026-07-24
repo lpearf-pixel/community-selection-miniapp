@@ -283,9 +283,9 @@ export function OrdersPage(props: OrdersPageProps) {
             rowKey="id"
             dataSource={orders}
             pagination={{
-              current: state.data.page,
-              pageSize: state.data.page_size,
-              total: state.data.total,
+              current: state.data.pagination.page,
+              pageSize: state.data.pagination.page_size,
+              total: state.data.pagination.total,
               showSizeChanger: true,
               showTotal: (total) => `共 ${total} 条`,
               onChange: (page, pageSize) =>

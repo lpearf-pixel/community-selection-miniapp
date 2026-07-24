@@ -30,6 +30,8 @@ const REFUND_STATUSES = [
   'rejected',
 ] as const;
 
+export const MAX_ADMIN_ORDER_PAGE = 10_000;
+
 export type AdminOrderListQuery = {
   keyword?: string;
   order_type?: (typeof ORDER_TYPES)[number];
@@ -43,7 +45,11 @@ export type AdminOrderListQuery = {
 
 export type AdminOrderListQueryResult =
   | { ok: true; value: AdminOrderListQuery }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      code: 'INVALID_ADMIN_ORDER_QUERY';
+      message: string;
+    };
 
 type PublicProductSource = {
   id: string;
@@ -118,7 +124,8 @@ function positiveInteger(
 function invalid(field: string, detail = `Unsupported ${field}`) {
   return {
     ok: false,
-    error: `INVALID_ADMIN_ORDER_QUERY: ${detail}`,
+    code: 'INVALID_ADMIN_ORDER_QUERY',
+    message: detail,
   } as const;
 }
 
@@ -127,6 +134,12 @@ export function parseAdminOrderListQuery(
 ): AdminOrderListQueryResult {
   const page = positiveInteger(input.page, 1);
   if (page === null) return invalid('page', 'page must be a positive integer');
+  if (page > MAX_ADMIN_ORDER_PAGE) {
+    return invalid(
+      'page',
+      `page must not exceed ${MAX_ADMIN_ORDER_PAGE}`,
+    );
+  }
   const requestedPageSize = positiveInteger(input.page_size, 20);
   if (requestedPageSize === null) {
     return invalid('page_size', 'page_size must be a positive integer');

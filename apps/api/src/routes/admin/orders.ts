@@ -1,6 +1,12 @@
 import type { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
-import { fail, ok } from '@community-selection/shared';
+import {
+  buildPaginationMetadata,
+  contractFail,
+  contractOk,
+  fail,
+  ok,
+} from '@community-selection/shared';
 import { prisma } from '../../db.js';
 import { getOrderInventorySummary } from '../../modules/inventory/inventory-order-service.js';
 import {
@@ -80,10 +86,15 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
     '/api/admin/orders',
     { preHandler: requireAdminPermission('order.view') },
     async (request, reply) => {
+      const traceId = String(request.id);
       const context = resolveAdminAccessContext(request);
       if (!context) {
         reply.code(401);
-        return fail('ADMIN_UNAUTHORIZED: Admin identity required');
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: 'ADMIN_UNAUTHORIZED: Admin identity required',
+          traceId,
+        });
       }
 
       const parsed = parseAdminOrderListQuery(
@@ -91,46 +102,81 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
       );
       if (!parsed.ok) {
         reply.code(400);
-        return fail(parsed.error);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
       }
 
       const scopeWhere = getScopedOrderWhere(context);
       if (!scopeWhere) {
-        return ok({
-          total: 0,
-          page: parsed.value.page,
-          page_size: parsed.value.page_size,
-          items: [],
-        });
+        return contractOk(
+          {
+            items: [],
+            pagination: buildPaginationMetadata({
+              page: parsed.value.page,
+              pageSize: parsed.value.page_size,
+              total: 0,
+            }),
+          },
+          {
+            code: 'ADMIN_ORDERS_LISTED',
+            message: '',
+            traceId,
+          },
+        );
       }
 
-      const where = buildAdminOrderListWhere(
-        parsed.value,
-        scopeWhere,
-      ) as Prisma.OrderWhereInput;
-      const [total, items] = await prisma.$transaction([
-        prisma.order.count({ where }),
-        prisma.order.findMany({
-          where,
-          include: {
-            user: { select: { id: true, nickname: true } },
-            product: true,
-            group_buy: { include: { product: true, community: true } },
-            pickup_store: true,
-            community: true,
-          },
-          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-          skip: (parsed.value.page - 1) * parsed.value.page_size,
-          take: parsed.value.page_size,
-        }),
-      ]);
+      try {
+        const where = buildAdminOrderListWhere(
+          parsed.value,
+          scopeWhere,
+        ) as Prisma.OrderWhereInput;
+        const [total, items] = await prisma.$transaction([
+          prisma.order.count({ where }),
+          prisma.order.findMany({
+            where,
+            include: {
+              user: { select: { id: true, nickname: true } },
+              product: true,
+              group_buy: { include: { product: true, community: true } },
+              pickup_store: true,
+              community: true,
+            },
+            orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+            skip: (parsed.value.page - 1) * parsed.value.page_size,
+            take: parsed.value.page_size,
+          }),
+        ]);
 
-      return ok({
-        total,
-        page: parsed.value.page,
-        page_size: parsed.value.page_size,
-        items: items.map(toAdminOrderListItem),
-      });
+        return contractOk(
+          {
+            items: items.map(toAdminOrderListItem),
+            pagination: buildPaginationMetadata({
+              page: parsed.value.page,
+              pageSize: parsed.value.page_size,
+              total,
+            }),
+          },
+          {
+            code: 'ADMIN_ORDERS_LISTED',
+            message: '',
+            traceId,
+          },
+        );
+      } catch (error) {
+        request.log.error(
+          { err: error, trace_id: traceId },
+          'Admin order list failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_ORDERS_LIST_FAILED',
+          message: '订单列表加载失败',
+          traceId,
+        });
+      }
     },
   );
 

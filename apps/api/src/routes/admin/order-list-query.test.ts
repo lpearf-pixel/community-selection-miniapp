@@ -77,11 +77,25 @@ describe('Admin order list query', () => {
     });
     expect(parseAdminOrderListQuery({ pay_status: 'unknown' })).toEqual({
       ok: false,
-      error: 'INVALID_ADMIN_ORDER_QUERY: Unsupported pay_status',
+      code: 'INVALID_ADMIN_ORDER_QUERY',
+      message: 'Unsupported pay_status',
     });
     expect(parseAdminOrderListQuery({ page: '0' })).toEqual({
       ok: false,
-      error: 'INVALID_ADMIN_ORDER_QUERY: page must be a positive integer',
+      code: 'INVALID_ADMIN_ORDER_QUERY',
+      message: 'page must be a positive integer',
+    });
+  });
+
+  it('accepts the maximum safe page and rejects a larger offset', () => {
+    expect(parseAdminOrderListQuery({ page: '10000' })).toEqual({
+      ok: true,
+      value: { page: 10_000, page_size: 20 },
+    });
+    expect(parseAdminOrderListQuery({ page: '10001' })).toEqual({
+      ok: false,
+      code: 'INVALID_ADMIN_ORDER_QUERY',
+      message: 'page must not exceed 10000',
     });
   });
 
