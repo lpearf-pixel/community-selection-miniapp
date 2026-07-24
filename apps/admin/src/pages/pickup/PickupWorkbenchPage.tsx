@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Input, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { getAdminScopeSummary } from "../../access/adminAccess";
@@ -19,6 +19,7 @@ export function PickupWorkbenchPage() {
   const [orders, setOrders] = useState<PickupWorkbenchOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<PickupWorkbenchOrder | null>(null);
   const [loading, setLoading] = useState(false);
+  const pendingOrderIdsRef = useRef<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState("");
   const canAccess = useMemo(hasPickupPermission, []);
   const scopeSummary = useMemo(getAdminScopeSummary, []);
@@ -61,16 +62,35 @@ export function PickupWorkbenchPage() {
   }
 
   async function verifyOrder(order: PickupWorkbenchOrder) {
+    if (!canVerify(order) || pendingOrderIdsRef.current.has(order.order_id)) {
+      return;
+    }
     if (!window.confirm("确认核销该订单？")) return;
+
+    pendingOrderIdsRef.current.add(order.order_id);
     setLoading(true);
     setErrorMessage("");
     try {
-      await verifyPickupWorkbenchOrder(order.order_id, order.pickup_code);
+      const result = await verifyPickupWorkbenchOrder(
+        order.order_id,
+        order.version,
+        crypto.randomUUID(),
+        "店员自提工作台核销",
+      );
       await loadData();
-      if (selectedOrder?.order_id === order.order_id) setSelectedOrder({ ...order, order_status: "picked", pickup_status: "picked" });
+      if (selectedOrder?.order_id === order.order_id) {
+        setSelectedOrder({
+          ...order,
+          order_status: result.order_status,
+          pickup_status: result.order_status,
+          version: result.version,
+        });
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "核销失败");
+      await loadData();
     } finally {
+      pendingOrderIdsRef.current.delete(order.order_id);
       setLoading(false);
     }
   }
@@ -94,7 +114,15 @@ export function PickupWorkbenchPage() {
     { title: "收货人", dataIndex: "receiver_name" },
     { title: "receiver_phone_masked", dataIndex: "receiver_phone_masked" },
     { title: "状态", dataIndex: "pickup_status" },
-    { title: "操作", render: (_, row) => verifyDone(row) ? "已核销" : <Button type="primary" onClick={() => verifyOrder(row)}>核销</Button> },
+    {
+      title: "操作",
+      render: (_, row) =>
+        verifyDone(row)
+          ? "已核销"
+          : canVerify(row)
+            ? <Button type="primary" onClick={() => verifyOrder(row)}>核销</Button>
+            : "不可核销",
+    },
   ];
 
   return <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -116,7 +144,7 @@ export function PickupWorkbenchPage() {
         <Button onClick={resetFilters}>重置</Button>
       </Space>
     </Card>
-    {selectedOrder ? <Card title="自提码查询结果" extra={verifyDone(selectedOrder) ? "已核销" : <Button type="primary" onClick={() => verifyOrder(selectedOrder)}>核销</Button>}>
+    {selectedOrder ? <Card title="自提码查询结果" extra={verifyDone(selectedOrder) ? "已核销" : canVerify(selectedOrder) ? <Button type="primary" onClick={() => verifyOrder(selectedOrder)}>核销</Button> : "不可核销"}>
       <Space direction="vertical">
         <Typography.Text>订单号：{selectedOrder.order_no}</Typography.Text>
         <Typography.Text>商品名：{selectedOrder.product_name}</Typography.Text>
@@ -131,6 +159,10 @@ export function PickupWorkbenchPage() {
       <Table rowKey="order_id" loading={loading} dataSource={orders} columns={columns} locale={{ emptyText: "暂无待自提订单" }} pagination={{ pageSize: 20 }} />
     </Card>
   </Space>;
+}
+
+function canVerify(order: PickupWorkbenchOrder) {
+  return order.pickup_type === "store" && order.order_status === "ready";
 }
 
 function verifyDone(order: PickupWorkbenchOrder) {
