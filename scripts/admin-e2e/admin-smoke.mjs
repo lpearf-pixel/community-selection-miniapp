@@ -24,13 +24,6 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
 
-page.on('console', (message) => {
-  console.log(`[browser:${message.type()}] ${message.text()}`);
-});
-page.on('pageerror', (error) => {
-  console.error(`[browser:pageerror] ${error.stack ?? error.message}`);
-});
-
 let catalogRequestCount = 0;
 let categoryRequestCount = 0;
 let productRequestCount = 0;
@@ -392,30 +385,9 @@ try {
       response.ok()
     );
   });
-  const queryButton = orderFilter.getByRole('button', {
-    name: '查询',
-    exact: true,
-  });
-  console.log(
-    '[b3-query:before]',
-    JSON.stringify({
-      input: await orderFilter.getByLabel('订单关键词').inputValue(),
-      disabled: await queryButton.isDisabled(),
-      orderRequestCount,
-    }),
-  );
   await orderFilter
-    .getByRole('button', { name: '查询', exact: true })
+    .getByRole('button', { name: /查\s*询/ })
     .click();
-  await page.waitForTimeout(250);
-  console.log(
-    '[b3-query:after]',
-    JSON.stringify({
-      input: await orderFilter.getByLabel('订单关键词').inputValue(),
-      disabled: await queryButton.isDisabled(),
-      orderRequestCount,
-    }),
-  );
   const filteredOrdersEnvelope = await (
     await filteredOrdersResponse
   ).json();
