@@ -13,6 +13,11 @@ jobs:
   admin-b1:
     runs-on: self-hosted
     timeout-minutes: 45
+    env:
+      CI: true
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MIN_THREADS: 1
+      VITEST_MAX_THREADS: 2
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -31,8 +36,15 @@ jobs:
             src/app/shell-model.test.ts
           node --test scripts/admin-e2e/contract.test.cjs
       - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
+      - name: Typecheck with bounded workspace concurrency
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+          pnpm --workspace-concurrency=1 -r typecheck
+      - name: Test with bounded workspace concurrency
+        run: |
+          node --test scripts/admin-e2e/contract.test.cjs
+          pnpm --workspace-concurrency=1 -r test
       - run: pnpm build
       - run: node --import tsx --test scripts/admin-e2e/admin-auth-runtime.test.ts
       - run: node --test scripts/admin-e2e/contract.test.cjs scripts/admin-e2e/run-cleanup.test.cjs
