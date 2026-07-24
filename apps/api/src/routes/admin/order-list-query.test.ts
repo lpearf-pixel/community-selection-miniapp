@@ -3,7 +3,7 @@ import {
   buildAdminOrderListWhere,
   parseAdminOrderListQuery,
   toAdminOrderListItem,
-} from './order-list-query';
+} from './order-list-query.js';
 
 const orderFixture = {
   id: 'order-1',
