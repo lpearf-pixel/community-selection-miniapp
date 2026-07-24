@@ -44,38 +44,35 @@ type WithdrawalsWorkbenchProps = {
   onMarkPaid: (item: Withdrawal) => void;
 };
 
-type WithdrawalFeedbackProps = {
-  actionError: string;
-  detailError: string;
-  onClearActionError: () => void;
-  onClearDetailError: () => void;
+type WithdrawalErrorProps = {
+  error: string;
+  onClear: () => void;
 };
 
-export function WithdrawalFeedback(props: WithdrawalFeedbackProps) {
-  return (
-    <>
-      {props.actionError ? (
-        <Alert
-          type="error"
-          showIcon
-          message="提现操作失败"
-          description={props.actionError}
-          closable
-          onClose={props.onClearActionError}
-        />
-      ) : null}
-      {props.detailError ? (
-        <Alert
-          type="error"
-          showIcon
-          message="提现详情加载失败"
-          description={props.detailError}
-          closable
-          onClose={props.onClearDetailError}
-        />
-      ) : null}
-    </>
-  );
+export function WithdrawalActionError(props: WithdrawalErrorProps) {
+  return props.error ? (
+    <Alert
+      type="error"
+      showIcon
+      message="提现操作失败"
+      description={props.error}
+      closable
+      onClose={props.onClear}
+    />
+  ) : null;
+}
+
+export function WithdrawalDetailError(props: WithdrawalErrorProps) {
+  return props.error ? (
+    <Alert
+      type="error"
+      showIcon
+      message="提现详情加载失败"
+      description={props.error}
+      closable
+      onClose={props.onClear}
+    />
+  ) : null;
 }
 
 export function WithdrawalsWorkbench(props: WithdrawalsWorkbenchProps) {
