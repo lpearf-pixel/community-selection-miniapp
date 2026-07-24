@@ -636,7 +636,51 @@ try {
   });
   assert.equal(await sameVersionPickupButton.count(), 1);
 
-  const orderRequestsBeforePickupRace = orderRequestCount;
+  const pickupConflictPage = await context.newPage();
+  await pickupConflictPage.goto(baseURL, { waitUntil: 'networkidle' });
+  await pickupConflictPage
+    .getByText(`当前管理员：${credentials.username}`)
+    .waitFor();
+  const pickupConflictNavigation = pickupConflictPage.getByRole(
+    'navigation',
+    { name: '后台功能导航' },
+  );
+  await pickupConflictNavigation
+    .getByRole('button', { name: '订单管理', exact: true })
+    .click();
+  await pickupConflictPage
+    .getByText('全渠道订单', { exact: true })
+    .waitFor();
+  const pickupConflictFilter = pickupConflictPage.getByRole('form', {
+    name: '全渠道订单筛选',
+  });
+  await pickupConflictFilter
+    .getByLabel('订单关键词')
+    .fill(credentials.pickupOrderNo);
+  const pickupConflictFilteredResponse =
+    pickupConflictPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/admin/orders' &&
+        url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+        url.searchParams.get('page') === '1' &&
+        response.ok()
+      );
+    });
+  await pickupConflictFilter
+    .getByRole('button', { name: /查\s*询/ })
+    .click();
+  await pickupConflictFilteredResponse;
+  const pickupConflictRow = pickupConflictPage
+    .getByRole('row')
+    .filter({ hasText: credentials.pickupOrderNo });
+  const conflictVersionPickupButton = pickupConflictRow.getByRole('button', {
+    name: '核销自提',
+    exact: true,
+  });
+  assert.equal(await conflictVersionPickupButton.count(), 1);
+
+  let pickupSuccessOnPrimaryPage = false;
   const pickupRaceResponses = [];
   const capturePickupRaceResponse = (response) => {
     const request = response.request();
