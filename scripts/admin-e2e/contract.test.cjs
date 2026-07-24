@@ -1499,10 +1499,10 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
     path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
     'utf8',
   );
-  const catalogPage = fs.readFileSync(
+  const catalogProductForm = fs.readFileSync(
     path.join(
       root,
-      'apps/admin/src/features/catalog/products/CatalogProductsPage.tsx',
+      'apps/admin/src/features/catalog/products/CatalogProductForm.tsx',
     ),
     'utf8',
   );
@@ -1527,7 +1527,7 @@ test('Admin E2E verifies lazy feature requests, active refresh, and local retry'
   assert.match(smoke, /财务对账加载失败/);
   assert.match(smoke, /运营看板加载失败/);
   assert.match(smoke, /getByRole\('button', \{ name: \/重\\s\*试\//);
-  assert.match(catalogPage, /aria-label="商品名称"/);
+  assert.match(catalogProductForm, /aria-label="商品名称"/);
 });
 
 test('Admin E2E proves A3.2 request isolation and order-local recovery', () => {
