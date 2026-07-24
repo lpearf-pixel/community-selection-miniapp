@@ -266,6 +266,13 @@ function assertA32SmokeContract(smoke) {
       },
       {
         receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/status',
+        },
+      },
+      {
+        receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
@@ -864,9 +871,9 @@ function assertA33SmokeContract(smoke) {
         },
       },
     ],
-    'A3.3 route registration whitelist: only five approved failure interceptors',
+    'A3.3 route registration whitelist: five failure interceptors plus one real status proxy',
   );
-  const purchasePlanRegistration = routeRegistrations[2];
+  const purchasePlanRegistration = routeRegistrations[3];
   assert.ok(
     purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
       purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
