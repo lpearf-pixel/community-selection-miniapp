@@ -16,6 +16,11 @@ describe('SQL migration safety', () => {
     expect(
       containsUnsafeDropTable("SELECT E'abc\\'--not comment'; DROP TABLE audit;"),
     ).toBe(true);
+    expect(
+      containsUnsafeDropTable(
+        'CREATE TABLE helper(foo$tag$ int); DROP TABLE users;',
+      ),
+    ).toBe(true);
   });
 
   it('handles nested block comments and still checks following SQL', () => {
