@@ -272,7 +272,13 @@ export function OrdersPage(props: OrdersPageProps) {
             </Form.Item>
             <Form.Item>
               <Space>
-                <Button type="primary" htmlType="submit">
+                <Button
+                  type="primary"
+                  htmlType="button"
+                  onClick={() =>
+                    applyFilters(form.getFieldsValue())
+                  }
+                >
                   查询
                 </Button>
                 <Button onClick={resetFilters}>重置</Button>
