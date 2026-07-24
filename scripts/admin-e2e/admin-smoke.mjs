@@ -666,7 +666,10 @@ try {
   });
   await alertsButton.click();
   await assertActive(alertsButton, '告警中心');
-  const alertsCardTitle = page\n    .locator('.ant-card-head-title')\n    .filter({ hasText: /^告警中心$/ });\n  await alertsCardTitle.waitFor();
+  const alertsCardTitle = page
+    .locator('.ant-card-head-title')
+    .filter({ hasText: /^告警中心$/ });
+  await alertsCardTitle.waitFor();
 
   const alertFailureRoute = async (route) => {
     assert.equal(route.request().method(), 'GET');
