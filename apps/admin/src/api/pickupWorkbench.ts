@@ -67,6 +67,16 @@ type ApiResponse<T> = {
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
+export class PickupWorkbenchApiError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "PickupWorkbenchApiError";
+  }
+}
+
 function buildQuery(params: Record<string, unknown>): string {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -93,7 +103,10 @@ async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const json = (await response.json()) as ApiResponse<T>;
   if (!json.success) {
-    throw new Error(json.message || "自提工作台请求失败");
+    throw new PickupWorkbenchApiError(
+      json.code ?? "PICKUP_WORKBENCH_REQUEST_FAILED",
+      json.message || "自提工作台请求失败",
+    );
   }
   return json.data;
 }
