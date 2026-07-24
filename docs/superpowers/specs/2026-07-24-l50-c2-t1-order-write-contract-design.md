@@ -300,11 +300,12 @@ Admin 分拣导出必须使用 `order.view` 并将 `getScopedOrderWhere()` 合�
 3. 两个不同键并发使用版本 N，只有一个 200，另一个 409；
 4. 相同键相同摘要串行和并发重试返回同一业务结果；
 5. 相同键不同状态、版本或订单 ID 返回 409；
-6. 重放不增加 `BusinessEventLog`、`AdminAuditLog`、`OrderTimelineLog` 或奖励记录；
-7. 模拟副作用失败时订单、日志和回执全部回滚；
-8. 旧公共接口返回 404；
-9. Admin 导出只包含 data scope 内订单；
-10. 自提安全门禁拒绝无权限和越权请求。
+6. 管理员权限或 data scope 被收窄后，历史回执不能绕过当前授权；
+7. 重放不增加 `BusinessEventLog`、`AdminAuditLog`、`OrderTimelineLog` 或奖励记录；
+8. 模拟副作用失败时订单、日志和回执全部回滚；
+9. 旧公共接口返回 404；
+10. Admin 导出只包含 data scope 内订单；
+11. 自提安全门禁拒绝无权限和越权请求。
 
 ### 11.3 浏览器证据
 
