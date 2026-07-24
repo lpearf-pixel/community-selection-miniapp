@@ -216,7 +216,7 @@ function assertA32SmokeContract(smoke) {
 
   const orderFailureSetupRange = sourceRange(
     smoke,
-    /const orderFailureRoute = async \(route\) => \{/,
+    /const orderFailureRoute =/,
     /const a32RequestsBeforeOrderFailure = readA32RequestCounts\(\);/,
     'orders one-shot failure setup',
   );
@@ -226,7 +226,7 @@ function assertA32SmokeContract(smoke) {
     [
       [
         'one-shot guard',
-        /const orderFailureRoute = async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(orderFailureInjected, false\);\s*orderFailureInjected = true;/,
+        /async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(orderFailureInjected, false\);\s*orderFailureInjected = true;/,
       ],
       [
         'one-shot 500 only',
