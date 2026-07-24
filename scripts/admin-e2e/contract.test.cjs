@@ -1336,7 +1336,7 @@ function assertB2RoleWorkbenchContract(smoke) {
   );
 }
 
-function assertB3OmnichannelOrdersContract(smoke, fixture) {
+function assertB3OmnichannelOrdersContract(smoke, fixture, orderPage) {
   assert.match(
     fixture,
     /await prisma\.order\.upsert\(\{[\s\S]*order_no: 'L50-B3-E2E-ORDER'/,
@@ -1346,6 +1346,11 @@ function assertB3OmnichannelOrdersContract(smoke, fixture) {
     fixture,
     /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: 'L50-B3-E2E-ORDER' \},\s*\}\);/,
     'B3 E2E must remove its deterministic order during cleanup',
+  );
+  assert.match(
+    orderPage,
+    /<Button\s+type="primary"\s+htmlType="button"\s+onClick=\{\(\) =>\s*applyFilters\(form\.getFieldsValue\(\)\)\s*\}/,
+    'B3 query click must explicitly apply the current retained Form values',
   );
   assertSourceOrder(
     smoke,
@@ -1569,9 +1574,16 @@ test('Admin E2E proves B3 protected omnichannel orders', () => {
     path.join(root, 'scripts/admin-e2e/fixture.ts'),
     'utf8',
   );
+  const orderPage = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/sales/orders/OrdersPage.tsx',
+    ),
+    'utf8',
+  );
 
   assert.doesNotThrow(() =>
-    assertB3OmnichannelOrdersContract(smoke, fixture),
+    assertB3OmnichannelOrdersContract(smoke, fixture, orderPage),
   );
 });
 
