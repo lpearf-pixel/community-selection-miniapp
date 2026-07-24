@@ -55,7 +55,7 @@ const noScopeContext = (): AdminAccessContext => ({
 
 function command(
   idempotencyKey: string,
-  nextStatus: 'ready' | 'picked' | 'completed' = 'ready',
+  nextStatus: 'ready' | 'completed' = 'ready',
 ) {
   return {
     order_id: orderId,
@@ -304,7 +304,7 @@ describe.sequential('Admin order status executor on PostgreSQL', () => {
     await executeAdminOrderStatusCommand(command(key));
 
     await expect(
-      executeAdminOrderStatusCommand(command(key, 'picked')),
+      executeAdminOrderStatusCommand(command(key, 'completed')),
     ).rejects.toMatchObject({
       statusCode: 409,
       code: 'ADMIN_IDEMPOTENCY_KEY_REUSED',
