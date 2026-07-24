@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import { fail, ok } from '@community-selection/shared';
+import { contractFail, fail, ok } from '@community-selection/shared';
 import { registerPublicRoutes } from './routes/public/index.js';
 import { registerAdminRoutes } from './routes/admin/index.js';
 import { requireAdminSession } from './routes/admin-auth.js';
@@ -11,6 +11,18 @@ export function buildApp() {
   app.addHook('preHandler', async (request, reply) => {
     if (!request.url.startsWith('/api/admin')) return;
     if (request.url.startsWith('/api/admin/auth/login')) return;
+    const isV1Contract = Boolean(
+      (request.routeOptions.config as { adminContractV1?: boolean })
+        .adminContractV1,
+    );
+    const unauthorized = (message: string) =>
+      isV1Contract
+        ? contractFail({
+            code: 'ADMIN_UNAUTHORIZED',
+            message: '管理员身份无效',
+            traceId: String(request.id),
+          })
+        : fail(message);
     const authMode =
       process.env.ADMIN_AUTH_MODE ??
       (process.env.NODE_ENV === 'production' ? 'session' : 'token');
@@ -20,14 +32,14 @@ export function buildApp() {
     if (authMode === 'token') {
       const token = request.headers['x-admin-token'];
       if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
-        reply.code(401).send(fail('后台访问需要管理员令牌'));
+        reply.code(401).send(unauthorized('后台访问需要管理员令牌'));
         return;
       }
       return;
     }
     const adminUser = await requireAdminSession(request);
     if (!adminUser) {
-      reply.code(401).send(fail('后台登录已失效'));
+      reply.code(401).send(unauthorized('后台登录已失效'));
       return;
     }
     request.adminUser = adminUser;
