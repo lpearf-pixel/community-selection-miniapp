@@ -40,6 +40,8 @@ jobs:
       - name: Typecheck with bounded workspace concurrency
         run: |
           pnpm --filter @community-selection/shared build
+          rg -n "PaginatedData|contractOk" packages/shared/src/index.ts packages/shared/dist/index.d.ts
+          readlink -f apps/admin/node_modules/@community-selection/shared
           pnpm --filter @community-selection/config build
           pnpm --workspace-concurrency=1 -r typecheck
       - name: Test with bounded workspace concurrency
