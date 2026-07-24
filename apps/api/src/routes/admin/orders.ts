@@ -1,5 +1,10 @@
 import type { Prisma } from '@prisma/client';
-import type { FastifyInstance } from 'fastify';
+import type {
+  FastifyError,
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+} from 'fastify';
 import {
   buildPaginationMetadata,
   contractFail,
@@ -14,6 +19,7 @@ import {
   canAccessOrderDataScope,
   getScopedOrderWhere,
   requireAdminPermission,
+  requireAdminPermissionV1,
   resolveAdminAccessContext,
 } from '../../modules/admin-access/admin-access-control.js';
 import {
@@ -21,6 +27,11 @@ import {
   parseAdminOrderListQuery,
   toAdminOrderListItem,
 } from './order-list-query.js';
+import { parseAdminOrderStatusCommand } from '../../modules/order/admin-order-status-command.js';
+import {
+  AdminOrderCommandError,
+  executeAdminOrderStatusCommand,
+} from '../../modules/order/admin-order-status-executor.js';
 
 function maskPhone(phone?: string | null) {
   return phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : null;
@@ -81,7 +92,116 @@ function publicAfterSale(item: any) {
   };
 }
 
+function adminOrderStatusV1ErrorHandler(
+  error: FastifyError,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const invalidCommand = error.statusCode === 400;
+  request.log.error(
+    {
+      error_name: error.name,
+      trace_id: String(request.id),
+    },
+    'Admin order status request failed before handler',
+  );
+  reply.code(invalidCommand ? 400 : 500).send(
+    contractFail({
+      code: invalidCommand
+        ? 'INVALID_ADMIN_ORDER_STATUS_COMMAND'
+        : 'ADMIN_ORDER_STATUS_UPDATE_FAILED',
+      message: invalidCommand
+        ? '订单状态命令不合法'
+        : '订单状态更新失败',
+      traceId: String(request.id),
+    }),
+  );
+}
+
 export function registerAdminOrderRoutes(app: FastifyInstance) {
+  app.post(
+    '/api/admin/orders/:id/status',
+    {
+      config: { adminContractV1: true },
+      preHandler: requireAdminPermissionV1('order.manage'),
+      errorHandler: adminOrderStatusV1ErrorHandler,
+    },
+    async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: '管理员身份无效',
+          traceId,
+        });
+      }
+      const { id } = request.params as { id: string };
+      const rawCommand = request.body as {
+        next_status?: unknown;
+        expected_version?: unknown;
+        idempotency_key?: unknown;
+      };
+      const parsed = parseAdminOrderStatusCommand(rawCommand);
+      if (!parsed.ok) {
+        reply.code(400);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
+      }
+
+      try {
+        const result = await executeAdminOrderStatusCommand({
+          order_id: id,
+          command: parsed.value,
+          context,
+          admin_meta: {
+            ip_address: request.ip,
+            user_agent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+        });
+        return contractOk(result, {
+          code: 'ADMIN_ORDER_STATUS_UPDATED',
+          message: '',
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AdminOrderCommandError) {
+          reply.code(error.statusCode);
+          const code =
+            error.code === 'ADMIN_ORDER_VERSION_CONFLICT'
+              ? 'ADMIN_ORDER_VERSION_CONFLICT'
+              : error.code;
+          return contractFail({
+            code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name: error instanceof Error ? error.name : 'UnknownError',
+            order_id: id,
+            trace_id: traceId,
+          },
+          'Admin order status update failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_ORDER_STATUS_UPDATE_FAILED',
+          message: '订单状态更新失败',
+          traceId,
+        });
+      }
+    },
+  );
+
   app.get(
     '/api/admin/orders',
     { preHandler: requireAdminPermission('order.view') },
@@ -250,6 +370,7 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
         remaining_refundable_amount_cents: remaining,
         pay_status: order.pay_status,
         order_status: order.order_status,
+        version: order.version,
         refund_status: order.refund_status,
         pickup_type: order.pickup_type,
         delivery_method: order.pickup_type,

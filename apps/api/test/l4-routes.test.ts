@@ -2,17 +2,25 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync(new URL('../src/routes/group-buys.ts', import.meta.url), 'utf8');
+const adminOrderSource = readFileSync(
+  new URL('../src/routes/admin/orders.ts', import.meta.url),
+  'utf8',
+);
 
 describe('L4 group-buy and order routes', () => {
-  it('registers the required group-buy and order API routes', () => {
+  it('keeps public order creation and protects Admin order routes', () => {
     expect(source.includes("/api/group-buys'")).toBe(true);
     expect(source.includes("/api/group-buys/:id'")).toBe(true);
     expect(source.includes("/api/group-buys/:id/join'")).toBe(true);
     expect(source.includes("/api/orders'")).toBe(true);
-    expect(source.includes("/api/orders/:id'")).toBe(true);
-    expect(source.includes("/api/orders/:id/complete'")).toBe(true);
-    expect(source.includes("/api/orders/:id/status'")).toBe(true);
-    expect(source.includes("/api/orders/export/picking.csv'")).toBe(true);
+    expect(source.includes("/api/orders/:id'")).toBe(false);
+    expect(source.includes("/api/orders/:id/complete'")).toBe(false);
+    expect(source.includes("/api/orders/:id/status'")).toBe(false);
+    expect(source.includes("/api/orders/export/picking.csv'")).toBe(false);
+    expect(adminOrderSource.includes("/api/admin/orders'")).toBe(true);
+    expect(adminOrderSource.includes("/api/admin/orders/:id'")).toBe(true);
+    expect(adminOrderSource.includes("/api/admin/orders/:id/status'")).toBe(true);
+    expect(source.includes("/api/admin/orders/export/picking.csv'")).toBe(true);
   });
 
   it('registers L5 mock payment API routes', () => {

@@ -72,6 +72,7 @@ type AdminOrderListRecord = {
   refund_amount_cents: number;
   pay_status: string;
   order_status: string;
+  version: number;
   refund_status: string;
   pickup_type: string;
   receiver_name: string;
@@ -258,6 +259,7 @@ export function toAdminOrderListItem(order: AdminOrderListRecord) {
     refund_amount_cents: order.refund_amount_cents,
     pay_status: order.pay_status,
     order_status: order.order_status,
+    version: order.version,
     refund_status: order.refund_status,
     pickup_type: order.pickup_type,
     pickup_store: order.pickup_store

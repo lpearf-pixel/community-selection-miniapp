@@ -216,21 +216,17 @@ function assertA32SmokeContract(smoke) {
 
   const orderFailureSetupRange = sourceRange(
     smoke,
-    /const ordersButton = groupedNavigation\.getByRole/,
+    /const orderFailureRoute =/,
     /const a32RequestsBeforeOrderFailure = readA32RequestCounts\(\);/,
-    'orders active one-shot failure setup',
+    'orders one-shot failure setup',
   );
   const orderFailureSetup = orderFailureSetupRange.source;
   assertSourceOrder(
     orderFailureSetup,
     [
       [
-        'orders active before route',
-        /name: '订单管理',\s*exact: true,\s*\}\);\s*await ordersButton\.click\(\);\s*await assertActive\(ordersButton, '订单管理'\);\s*await page\.getByText\('全渠道订单', \{ exact: true \}\)\.waitFor\(\);/,
-      ],
-      [
         'one-shot guard',
-        /const orderFailureRoute = async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(orderFailureInjected, false\);\s*orderFailureInjected = true;/,
+        /async \(route\) => \{\s*assert\.equal\(route\.request\(\)\.method\(\), 'GET'\);\s*assert\.equal\(orderFailureInjected, false\);\s*orderFailureInjected = true;/,
       ],
       [
         'one-shot 500 only',
@@ -266,6 +262,13 @@ function assertA32SmokeContract(smoke) {
       },
       {
         receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/status',
+        },
+      },
+      {
+        receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
@@ -290,15 +293,21 @@ function assertA32SmokeContract(smoke) {
         },
       },
     ],
-    'route registration whitelist: only the four approved failure interceptors',
+    'route registration whitelist: five failure interceptors plus one real status proxy',
   );
   const [
     catalogRegistration,
+    statusRaceRegistration,
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
     alertRegistration,
   ] = routeRegistrations;
+  assert.equal(
+    statusRaceRegistration.handler,
+    'statusRaceRoute',
+    'route registration whitelist: status race uses the named real proxy',
+  );
   assert.equal(
     purchasePlanRegistration.target.value,
     '**/api/admin/purchase-plans',
@@ -754,7 +763,7 @@ function assertA33SmokeContract(smoke) {
 
   const inventoryRefresh = sourceBetween(
     smoke,
-    /assert\.deepEqual\(readA33RequestCounts\(\), a33RequestsAfterInitial\);/,
+    /assert\.deepEqual\(readA33RequestCounts\(\), a33RequestsAfterOrderMutation\);/,
     /const purchasePlansButton = groupedNavigation\.getByRole/,
     'inventory active refresh exact isolation',
   );
@@ -840,6 +849,13 @@ function assertA33SmokeContract(smoke) {
       },
       {
         receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/status',
+        },
+      },
+      {
+        receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
       {
@@ -864,9 +880,9 @@ function assertA33SmokeContract(smoke) {
         },
       },
     ],
-    'A3.3 route registration whitelist: only five approved failure interceptors',
+    'A3.3 route registration whitelist: five failure interceptors plus one real status proxy',
   );
-  const purchasePlanRegistration = routeRegistrations[2];
+  const purchasePlanRegistration = routeRegistrations[3];
   assert.ok(
     purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
       purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
@@ -1088,7 +1104,7 @@ function assertA34SmokeContract(smoke) {
 
   const withdrawalRefresh = sourceBetween(
     smoke,
-    /assert\.deepEqual\(readA34RequestCounts\(\), a34RequestsAfterInitial\);/,
+    /assert\.deepEqual\(readA34RequestCounts\(\), a34RequestsAfterOrderMutation\);/,
     /const alertsButton = groupedNavigation\.getByRole/,
     'withdrawal active refresh exact isolation',
   );

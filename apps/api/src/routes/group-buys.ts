@@ -2,11 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { createGroupOrder, createNormalOrder, updateOrderStatus } from '../modules/order/order-service.js';
+import { createGroupOrder, createNormalOrder } from '../modules/order/order-service.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGroupBuyRefundHandled, getFailedGroupBuyClosureSummary, listExpiredPendingGroupBuys, listFailedGroupBuyPendingRefundOrders, markExpiredGroupBuyFailed, markGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
-import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, canAccessOrderDataScope, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, canAccessOrderDataScope, getScopedOrderWhere, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
 import { withCurrentLeader } from './current-user-route.js';
 
 type CreateGroupBuyBody = {
@@ -35,11 +35,6 @@ type CreateOrderBody = {
   credit_amount_cents?: number;
   credit_source_id?: string;
 };
-
-type UpdateOrderStatusBody = {
-  next_status?: 'preparing' | 'ready' | 'picked' | 'delivered' | 'completed';
-};
-
 
 async function toSafeGroupBuyDetail(groupBuy: any) {
   const paid = await prisma.order.aggregate({
@@ -345,97 +340,6 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/orders', async () => {
-    const orders = await prisma.order.findMany({
-      include: { product: true, group_buy: { include: { product: true, community: true } }, user: true, pickup_store: true },
-      orderBy: { created_at: 'desc' }
-    });
-    return ok(orders);
-  });
-
-  app.get('/api/orders/export/picking.csv', async (request, reply) => {
-    try {
-      const query = request.query as PickingCsvQuery;
-      const range = dayRange(query.date);
-      const orders = await prisma.order.findMany({
-        where: {
-          ...validPaidOrderWhere(),
-          ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
-          ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
-        },
-        include: { product: true, group_buy: { include: { product: true, community: true } }, pickup_store: true },
-        orderBy: { created_at: 'desc' }
-      });
-      reply.header('Content-Type', 'text/csv; charset=utf-8');
-      if (query.format === 'summary') {
-        const summary = new Map<string, { community_name: string; product_name: string; total_quantity: number; order_count: number }>();
-        for (const order of orders) {
-          const communityName = order.group_buy?.community?.name ?? '';
-          const productName = order.group_buy?.product?.name ?? '';
-          const key = `${communityName}::${productName}`;
-          const item = summary.get(key) ?? { community_name: communityName, product_name: productName, total_quantity: 0, order_count: 0 };
-          item.total_quantity += order.quantity;
-          item.order_count += 1;
-          summary.set(key, item);
-        }
-        return ['community_name,product_name,total_quantity,order_count', ...[...summary.values()].map((item) => csvLine([item.community_name, item.product_name, item.total_quantity, item.order_count]))].join('\n');
-      }
-      const header = 'order_no,community_name,product_name,quantity,receiver_name,receiver_phone_masked,pickup_store_name,order_status,remark';
-      const rows = orders.map((order) => csvLine([
-        order.order_no,
-        order.group_buy?.community?.name ?? '',
-        order.group_buy?.product?.name ?? order.product?.name ?? '',
-        order.quantity,
-        order.receiver_name,
-        maskPhone(order.receiver_phone),
-        order.pickup_store?.name ?? '',
-        order.order_status,
-        ''
-      ]));
-      return [header, ...rows].join('\n');
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '导出分拣单失败');
-    }
-  });
-
-  app.get('/api/orders/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: { product: true, group_buy: { include: { product: true, community: true } }, user: true, pickup_store: true }
-    });
-    if (!order) {
-      reply.code(404);
-      return fail('订单不存在');
-    }
-    return ok(order);
-  });
-
-  app.post('/api/orders/:id/status', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string };
-      return ok(await updateOrderStatus({ order_id: id, next_status: (request.body as UpdateOrderStatusBody).next_status, admin_meta: adminMetaFromAccess(request) }));
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '订单状态更新失败');
-    }
-  });
-
-  app.post('/api/orders/:id/complete', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string };
-      const body = request.body as UpdateOrderStatusBody;
-      if (!body.next_status) {
-        reply.code(400);
-        return fail('支付请使用 /api/payments/mock 或 /api/payments/wechat/jsapi');
-      }
-      return ok(await updateOrderStatus({ order_id: id, next_status: body.next_status, admin_meta: adminMetaFromAccess(request) }));
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '订单完成失败');
-    }
-  });
 
 }
 
@@ -588,10 +492,16 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/admin/orders/export/picking.csv', async (request, reply) => {
-    if (!request.adminUser?.id) {
+  app.get('/api/admin/orders/export/picking.csv', { preHandler: requireAdminPermission('order.view') }, async (request, reply) => {
+    const context = resolveAdminAccessContext(request);
+    if (!context) {
       reply.code(401);
-      return fail('后台登录已失效');
+      return fail('ADMIN_UNAUTHORIZED: Admin identity required');
+    }
+    const scopeWhere = getScopedOrderWhere(context);
+    if (!scopeWhere) {
+      reply.code(403);
+      return fail(ADMIN_SCOPE_FORBIDDEN);
     }
     try {
       const query = request.query as PickingCsvQuery;
@@ -599,6 +509,7 @@ export function registerAdminGroupBuyRoutes(app: FastifyInstance) {
       const orders = await prisma.order.findMany({
         where: {
           ...validPaidOrderWhere(),
+          ...scopeWhere,
           ...(query.group_buy_id ? { group_buy_id: query.group_buy_id } : {}),
           ...(query.community_id ? { group_buy: { community_id: query.community_id, ...(range ? { pickup_time: { gte: range.start, lt: range.end } } : {}) } } : range ? { group_buy: { pickup_time: { gte: range.start, lt: range.end } } } : {})
         },

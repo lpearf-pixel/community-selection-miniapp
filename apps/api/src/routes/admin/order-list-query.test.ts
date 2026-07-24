@@ -17,6 +17,7 @@ const orderFixture = {
   refund_amount_cents: 300,
   pay_status: 'paid',
   order_status: 'preparing',
+  version: 1,
   refund_status: 'pending',
   pickup_type: 'delivery',
   receiver_name: '张三',
@@ -165,6 +166,7 @@ describe('Admin order list query', () => {
       },
       receiver_phone_masked: '138****8000',
       receiver_address_masked: '南京市玄武区***',
+      version: 1,
     });
     expect(item).not.toHaveProperty('receiver_phone');
     expect(item).not.toHaveProperty('receiver_address');

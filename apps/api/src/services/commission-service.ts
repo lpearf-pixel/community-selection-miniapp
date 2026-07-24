@@ -1,7 +1,13 @@
 import type { Commission, CommissionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 type DbClient = Prisma.TransactionClient | typeof prisma;
-import { safeRaiseOpsAlert, safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
+import {
+  recordBusinessEvent,
+  recordOrderTimeline,
+  safeRaiseOpsAlert,
+  safeRecordBusinessEvent,
+  safeRecordOrderTimeline,
+} from './logging-service.js';
 
 const rewardAvailabilityDelayDays = 3;
 const reviewStates = new Set(['converted', 'withdrawing', 'withdrawn']);
@@ -61,8 +67,8 @@ export async function markCommissionPendingForCompletedOrder(orderId: string, tx
   const commission = order.commissions.find((item) => item.leader_user_id === order.leader_user_id);
   if (!commission || commission.status !== 'estimated') return commission ?? null;
   const updated = await client.commission.update({ where: { id: commission.id }, data: { status: 'pending', available_at: addDays(order.completed_at, rewardAvailabilityDelayDays) } });
-  await safeRecordBusinessEvent(client, { event_type: 'commission_pending', event_source: 'commission-service', order_id: order.id, commission_id: commission.id, before_snapshot: commission, after_snapshot: updated });
-  await safeRecordOrderTimeline(client, { order_id: order.id, event_type: 'commission_pending', title: '开团服务奖励进入待可用', from_status: commission.status, to_status: updated.status, payload: { commission_id: commission.id, available_at: updated.available_at?.toISOString() ?? null } });
+  await recordBusinessEvent(client, { event_type: 'commission_pending', event_source: 'commission-service', order_id: order.id, commission_id: commission.id, before_snapshot: commission, after_snapshot: updated });
+  await recordOrderTimeline(client, { order_id: order.id, event_type: 'commission_pending', title: '开团服务奖励进入待可用', from_status: commission.status, to_status: updated.status, payload: { commission_id: commission.id, available_at: updated.available_at?.toISOString() ?? null } });
   return updated;
 }
 

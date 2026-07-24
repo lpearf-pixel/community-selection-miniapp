@@ -58,19 +58,29 @@ describe('orders API boundary', () => {
     }>();
   });
 
-  it('uses the existing order action contracts', async () => {
+  it('uses the versioned Admin order status command', async () => {
     const request = vi.fn(async <T>(): Promise<T> => ({ order: { id: 'o1' } }) as T) as JsonRequester;
 
     await loadOrderAiContext('o1', request);
-    await updateOrderStatus('o1', 'ready', request);
+    await updateOrderStatus(
+      'o1',
+      'ready',
+      3,
+      'idem-123456789012',
+      request,
+    );
     await verifyOrderPickup('o1', '后台核销自提', request);
 
     expect(request).toHaveBeenCalledWith('/api/admin/logs/orders/o1/ai-context', {
       signal: undefined,
     });
-    expect(request).toHaveBeenCalledWith('/api/orders/o1/status', {
+    expect(request).toHaveBeenCalledWith('/api/admin/orders/o1/status', {
       method: 'POST',
-      body: JSON.stringify({ next_status: 'ready' }),
+      body: JSON.stringify({
+        next_status: 'ready',
+        expected_version: 3,
+        idempotency_key: 'idem-123456789012',
+      }),
     });
     expect(request).toHaveBeenCalledWith('/api/admin/orders/o1/pickup-verify', {
       method: 'POST',

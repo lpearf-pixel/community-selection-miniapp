@@ -8,6 +8,7 @@ import {
   Spin,
   Typography,
 } from 'antd';
+import { AdminApiError } from '../../../shared/api/errors';
 import {
   featureErrorMessage,
   initialFeatureResourceState,
@@ -88,13 +89,19 @@ export function OrdersPage(props: OrdersPageProps) {
     props.onMutationCommitted();
   };
 
-  const markOrder = async (
-    order: AdminOrderListItem,
-    nextStatus: string,
-  ) => {
-    await updateOrderStatus(order.id, nextStatus);
-    props.onMessage(`订单 ${order.order_no} 已更新为 ${nextStatus}`);
-    props.onMutationCommitted();
+  const markOrder = async (order: AdminOrderListItem, nextStatus: string) => {
+    try {
+      await updateOrderStatus(order.id, nextStatus, order.version, crypto.randomUUID());
+      props.onMessage(`订单 ${order.order_no} 已更新为 ${nextStatus}`);
+      props.onMutationCommitted();
+    } catch (error) {
+      if (
+        !(error instanceof AdminApiError) ||
+        error.code !== 'ADMIN_ORDER_VERSION_CONFLICT'
+      ) throw error;
+      props.onMessage('订单已被其他操作更新，已刷新列表，请重试');
+      setRetryVersion((value) => value + 1);
+    }
   };
 
   const resetFilters = () => {
