@@ -178,9 +178,10 @@ model AdminCommandReceipt {
   operation           String
   target_id           String
   request_hash        String
-  response_http_status Int
-  response_code       String
-  response_data       Json
+  response_http_status Int?
+  response_code       String?
+  response_data       Json?
+  completed_at        DateTime?
   created_at          DateTime @default(now())
 
   @@unique([admin_user_id, idempotency_key])
@@ -193,7 +194,8 @@ model AdminCommandReceipt {
 
 - 幂等键按管理员作用域唯一，避免不同管理员偶然使用相同 UUID 相互阻塞；
 - `request_hash` 是规范化命令的 SHA-256，不保存敏感原始 body；
-- 只保存成功提交的回执；业务事务失败时回执随事务回滚；
+- 新事务先创建仅在当前事务内可见的占位回执；提交前必须一次性填满 response 字段和 completed_at；
+- 业务事务失败时占位回执随事务回滚；读取到任何不完整回执时 fail closed 并记录内部错误，不能重做业务写入；
 - 回执不设置短期自动清理，避免在重试窗口内丢失幂等语义；后续统一保留策略另行设计；
 - response 仅保存安全 DTO，不保存手机号、地址、token 或数据库异常。
 
@@ -215,13 +217,14 @@ migration 只增加列、表、唯一键和索引，不删除或改写现有字�
 2. 解析管理员 context，计算规范请求摘要；
 3. 开启 PostgreSQL 事务；
 4. 尝试创建 `(admin_user_id, idempotency_key)` 回执占位；
-5. 若唯一键冲突，在首次事务提交后读取既有回执：摘要相同则返回保存结果，摘要不同则返回 409；
-6. 在事务内读取订单并执行 data scope、支付状态和现有目标状态校验；
-7. 使用 `id + version = expected_version` 条件更新订单并递增版本；
-8. 条件更新数量为 0 时返回版本冲突，整个事务（包括回执占位）回滚；
-9. 写业务事件、管理员审计、订单时间线；
-10. 若目标为 completed，执行现有奖励副作用；
-11. 写入安全 response snapshot 并提交事务。
+5. 若唯一键冲突，当前候选事务回滚；在事务外等待首次事务完成后读取既有回执；
+6. 对既有回执先比较摘要：不同则返回 409；相同时重新读取目标订单并按管理员当前 data scope 授权，通过后才返回保存结果；
+7. 新命令在事务内读取订单并执行 data scope、支付状态和现有目标状态校验；
+8. 使用 `id + version = expected_version` 条件更新订单并递增版本；
+9. 条件更新数量为 0 时返回版本冲突，整个事务（包括回执占位）回滚；
+10. 写业务事件、管理员审计、订单时间线；
+11. 若目标为 completed，执行现有奖励副作用；
+12. 写入安全 response snapshot、response code、HTTP status 和 completed_at 后提交事务。
 
 并发保证：
 
