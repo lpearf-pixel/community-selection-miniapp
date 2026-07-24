@@ -35,7 +35,7 @@ async function adminGet(url: string, cookie: string) {
 
 async function main() {
   const adminPassword = `${prefix}-AdminPass123!`;
-  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'operator', status: 'active' } });
+  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'admin', status: 'active' } });
   const login = await app.inject({ method: 'POST', url: '/api/admin/auth/login', payload: { username: adminUser.username, password: adminPassword } });
   assert(login.statusCode === 200, 'admin login should succeed');
   const setCookie = login.headers['set-cookie'];
