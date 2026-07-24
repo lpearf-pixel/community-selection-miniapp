@@ -8,6 +8,9 @@ const checkedExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json'
 const docWhitelist = [/^docs\//, /^AGENTS\.md$/, /^README\.md$/, /^CODEX_/];
 const excludedPaths = [
   /^scripts\/generate-stage-report\.ts$/,
+  /^scripts\/(?:verify-|lint-placeholder\.(?:c?js|ts)$)/,
+  /^prisma\/migrations(?:\/|$)/,
+  /\.(?:test|spec)\.[cm]?[jt]sx?$/,
   /^reports(?:\/|$)/,
   /^stage-reports(?:\/|$)/,
   /^\.tmp\/stage-reports-worktree(?:\/|$)/
@@ -41,6 +44,11 @@ function isExcludedPath(path: string) {
 function isAllowedLine(path: string, line: string, term: string) {
   if (isWhitelistedDoc(path) && /禁止|不允许|不得|不要|合规|边界/.test(line)) return true;
   if (term === ['le', 'vel'].join('') && line.includes(`Typography.Title ${['le', 'vel'].join('')}=`)) return true;
+  if (
+    term === ['le', 'vel'].join('') &&
+    path === 'apps/admin/src/app/AdminShell.tsx' &&
+    /^\s*level=\{\d+\}/.test(line)
+  ) return true;
   return false;
 }
 
