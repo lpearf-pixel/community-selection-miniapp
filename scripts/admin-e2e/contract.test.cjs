@@ -60,7 +60,8 @@ function registeredRoutes(source) {
       ts.isPropertyAccessExpression(node.expression) &&
       ts.isIdentifier(node.expression.expression) &&
       (node.expression.expression.text === 'page' ||
-        node.expression.expression.text === 'context') &&
+        node.expression.expression.text === 'context' ||
+        node.expression.expression.text === 'pickupConflictPage') &&
       node.expression.name.text === 'route'
     ) {
       const [target, handler] = node.arguments;
