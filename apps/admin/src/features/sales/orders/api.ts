@@ -1,6 +1,5 @@
 import { adminApiUrl, adminJsonRequest } from '../../../shared/api/admin-api';
 import type { JsonRequester } from '../../../shared/api/client';
-import type { Order } from '../shared/types';
 import type {
   AdminOrderListQuery,
   AdminOrderListResponse,
