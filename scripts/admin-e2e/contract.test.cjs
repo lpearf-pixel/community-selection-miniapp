@@ -1263,6 +1263,22 @@ function assertB1ShellContract(smoke) {
     ],
     'B1 grouped navigation evidence',
   );
+
+  assert.match(
+    smoke,
+    /const buttons = groupedNavigation\.getByRole\('button'\);/,
+    'navigation button collection must be scoped to the grouped navigation landmark',
+  );
+  assert.match(
+    smoke,
+    /const button = groupedNavigation\.getByRole\('button', \{ name: label, exact: true \}\);/,
+    'remaining navigation clicks must not search the page content region',
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(await buttons\.count\(\), navigation\.length\);/,
+    'navigation evidence must count exactly the registered navigation items',
+  );
 }
 
 test('L50 Admin browser smoke infrastructure is complete', () => {
