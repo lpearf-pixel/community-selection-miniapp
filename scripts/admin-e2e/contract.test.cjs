@@ -1229,6 +1229,42 @@ function assertA34SmokeContract(smoke) {
   );
 }
 
+function assertB1ShellContract(smoke) {
+  const groupedNavigation = sourceBetween(
+    smoke,
+    /const expectedNavigationSections = \[/,
+    /const shell = page\.getByRole/,
+    'B1 grouped navigation evidence',
+  );
+
+  assertSourceOrder(
+    groupedNavigation,
+    [
+      [
+        'navigation landmark',
+        /getByRole\('navigation',\s*\{\s*name: '后台功能导航',?\s*\}\)/,
+      ],
+      [
+        'visible heading read',
+        /getByRole\('heading'\)\s*\.allTextContents\(\)/,
+      ],
+      [
+        'visible group order',
+        /assert\.deepEqual\(visibleNavigationSections, expectedNavigationSections\);/,
+      ],
+      [
+        'empty group contract',
+        /const hiddenNavigationSections = \['会员与营销', '门店与渠道', '系统管理'\];/,
+      ],
+      [
+        'empty groups absent',
+        /assert\.equal\(\s*await groupedNavigation\.getByText\(label, \{ exact: true \}\)\.count\(\),\s*0,\s*\);/,
+      ],
+    ],
+    'B1 grouped navigation evidence',
+  );
+}
+
 test('L50 Admin browser smoke infrastructure is complete', () => {
   const required = [
     'scripts/admin-e2e/package.json',
@@ -1343,6 +1379,15 @@ test('Admin E2E proves A3.4 request isolation and alert-local recovery', () => {
   );
 
   assert.doesNotThrow(() => assertA34SmokeContract(smoke));
+});
+
+test('Admin E2E proves B1 grouped navigation and hides empty modules', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotThrow(() => assertB1ShellContract(smoke));
 });
 
 test('A3.2 source contract rejects weakened behavior evidence', () => {
