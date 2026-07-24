@@ -35,13 +35,16 @@ async function main() {
   assert(order.product_id === product.id, 'normal order should reference product');
   assert(order.pay_amount_cents === product.price_cents * 3, 'normal order pay amount mismatch');
   assert(await prisma.commission.count({ where: { order_id: order.id } }) === 0, 'normal order should not create service reward');
+  const unpaidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+  assert(unpaidProduct.stock === 20, 'unpaid normal order should not deduct stock');
 
   await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
   const paidOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   const paidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(paidOrder.pay_status === 'paid', 'normal order should be paid by mock payment');
   assert(paidProduct.stock === 17, `normal order should deduct stock, got ${paidProduct.stock}`);
-  assert(await prisma.stockLedger.count({ where: { product_id: product.id, source_type: 'order_lock', source_id: order.id } }) > 0, 'normal order stock ledger missing');
+  const paymentLedger = await prisma.stockLedger.findFirst({ where: { product_id: product.id, source_type: 'order_payment', source_id: order.id, event_type: 'order_paid_deduct' } });
+  assert(paymentLedger?.quantity === 3 && paymentLedger.quantity_delta === -3 && paymentLedger.stock_before === 20 && paymentLedger.stock_after === 17, 'normal order payment deduction ledger should record exact stock movement');
   assert(await prisma.commission.count({ where: { order_id: order.id } }) === 0, 'paid normal order should still not create service reward');
 
   const list = await json(await app.inject({ method: 'GET', url: '/api/orders' }));
