@@ -99,7 +99,29 @@ export function stripSqlComments(sql: string): string {
       continue;
     }
 
-    if (current === '$') {
+    if (
+      current === '
+      if (match) {
+        dollarTag = match[0];
+        output += ' '.repeat(dollarTag.length);
+        index += dollarTag.length;
+        continue;
+      }
+    }
+
+    output += current;
+    index += 1;
+  }
+
+  return output;
+}
+
+export function containsUnsafeDropTable(sql: string): boolean {
+  return UNSAFE_DROP_TABLE.test(stripSqlComments(sql));
+}
+ &&
+      (index === 0 || !/[A-Za-z0-9_$\u0080-\uFFFF]/.test(sql[index - 1]))
+    ) {
       const match = sql.slice(index).match(DOLLAR_QUOTE_START);
       if (match) {
         dollarTag = match[0];
