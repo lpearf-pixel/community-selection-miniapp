@@ -1,4 +1,5 @@
 import { getAdminScopeHeaders } from "../access/adminAccess";
+
 export type PickupWorkbenchFilters = {
   date?: string;
   pickup_store_id?: string;
@@ -11,6 +12,8 @@ export type PickupWorkbenchFilters = {
 export type PickupWorkbenchOrder = {
   order_id: string;
   order_no: string;
+  version: number;
+  pickup_type: "store" | "delivery";
   order_type: string;
   product_name?: string | null;
   product_cover_image?: string | null;
@@ -51,48 +54,91 @@ export type PickupWorkbenchSummary = {
 export type PickupVerifyResult = {
   order_id: string;
   order_no: string;
-  pickup_status: string;
-  order_status: string;
-  verified_at: string;
-  receiver_name: string;
-  receiver_phone_masked?: string | null;
-  product_name?: string | null;
-  quantity: number;
+  order_status: "picked";
+  version: number;
 };
 
-type ApiResponse<T> = { success: boolean; data: T; message?: string };
+type ApiResponse<T> = {
+  success: boolean;
+  data: T;
+  code?: string;
+  message?: string;
+};
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
 function buildQuery(params: Record<string, unknown>): string {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).trim() !== "") query.set(key, String(value));
+    if (
+      value !== undefined &&
+      value !== null &&
+      String(value).trim() !== ""
+    ) {
+      query.set(key, String(value));
+    }
   });
   return query.toString();
 }
 
 async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...getAdminScopeHeaders(), ...(init?.headers ?? {}) } });
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    credentials: "include",
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...getAdminScopeHeaders(),
+      ...(init?.headers ?? {}),
+    },
+  });
   const json = (await response.json()) as ApiResponse<T>;
-  if (!json.success) throw new Error(json.message || "自提工作台请求失败");
+  if (!json.success) {
+    throw new Error(json.message || "自提工作台请求失败");
+  }
   return json.data;
 }
 
-export function getPickupWorkbenchOrders(params: PickupWorkbenchFilters): Promise<PickupWorkbenchList> {
+export function getPickupWorkbenchOrders(
+  params: PickupWorkbenchFilters,
+): Promise<PickupWorkbenchList> {
   const query = buildQuery(params);
-  return readJson<PickupWorkbenchList>(`/api/admin/pickup/orders${query ? `?${query}` : ""}`);
+  return readJson<PickupWorkbenchList>(
+    `/api/admin/pickup/orders${query ? `?${query}` : ""}`,
+  );
 }
 
-export function getPickupWorkbenchOrderByCode(code: string): Promise<PickupWorkbenchOrder> {
-  return readJson<PickupWorkbenchOrder>(`/api/admin/pickup/orders/by-code/${encodeURIComponent(code)}`);
+export function getPickupWorkbenchOrderByCode(
+  code: string,
+): Promise<PickupWorkbenchOrder> {
+  return readJson<PickupWorkbenchOrder>(
+    `/api/admin/pickup/orders/by-code/${encodeURIComponent(code)}`,
+  );
 }
 
-export function verifyPickupWorkbenchOrder(orderId: string, pickup_code?: string): Promise<PickupVerifyResult> {
-  return readJson<PickupVerifyResult>(`/api/admin/pickup/orders/${orderId}/verify`, { method: "POST", body: JSON.stringify({ pickup_code, remark: "店员自提工作台核销" }) });
+export function verifyPickupWorkbenchOrder(
+  orderId: string,
+  expectedVersion: number,
+  idempotencyKey: string,
+  adminRemark: string,
+): Promise<PickupVerifyResult> {
+  return readJson<PickupVerifyResult>(
+    `/api/admin/orders/${orderId}/pickup-verify`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        expected_version: expectedVersion,
+        idempotency_key: idempotencyKey,
+        admin_remark: adminRemark,
+      }),
+    },
+  );
 }
 
-export function getPickupWorkbenchSummary(params: Pick<PickupWorkbenchFilters, "date" | "pickup_store_id">): Promise<PickupWorkbenchSummary> {
+export function getPickupWorkbenchSummary(
+  params: Pick<PickupWorkbenchFilters, "date" | "pickup_store_id">,
+): Promise<PickupWorkbenchSummary> {
   const query = buildQuery(params);
-  return readJson<PickupWorkbenchSummary>(`/api/admin/pickup/summary${query ? `?${query}` : ""}`);
+  return readJson<PickupWorkbenchSummary>(
+    `/api/admin/pickup/summary${query ? `?${query}` : ""}`,
+  );
 }
