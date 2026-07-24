@@ -1281,6 +1281,61 @@ function assertB1ShellContract(smoke) {
   );
 }
 
+function assertB2RoleWorkbenchContract(smoke) {
+  assertSourceOrder(
+    smoke,
+    [
+      [
+        'workbench landmark',
+        /const roleWorkbench = page\.getByRole\('region', \{\s*name: '今日经营角色工作台',\s*\}\);/,
+      ],
+      [
+        'workbench visible after login',
+        /await roleWorkbench\.waitFor\(\);/,
+      ],
+      [
+        'initial operations settled',
+        /await waitForCount\(\s*page,\s*\(\) => operationsRequestCount,\s*6,\s*'role-workbench operations load',\s*\);/,
+      ],
+      [
+        'operations dashboard visible',
+        /await page\.getByText\('近 7 日趋势表', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+      [
+        'owner profile',
+        /await roleWorkbench\s*\.getByText\('当前工作台：经营负责人', \{ exact: true \}\)\s*\.waitFor\(\);/,
+      ],
+      [
+        'workbench-scoped order shortcut',
+        /const workbenchOrdersButton = roleWorkbench\.getByRole\('button', \{\s*name: '订单管理',\s*exact: true,\s*\}\);/,
+      ],
+      ['order shortcut click', /await workbenchOrdersButton\.click\(\);/],
+      [
+        'navigation order activation',
+        /await assertActive\(ordersNavigationButton, '订单管理'\);/,
+      ],
+      ['product navigation click', /await productButton\.click\(\);/],
+      [
+        'legacy product baseline restored',
+        /await page\.getByText\('商品列表', \{ exact: true \}\)\.waitFor\(\);/,
+      ],
+      ['operations counter reset', /operationsRequestCount = 0;/],
+    ],
+    'B2 role workbench evidence',
+  );
+
+  assert.match(
+    smoke,
+    /const ordersNavigationButton = groupedNavigation\.getByRole\('button', \{\s*name: '订单管理',\s*exact: true,\s*\}\);/,
+    'shortcut result must be verified in the navigation landmark',
+  );
+  assert.match(
+    smoke,
+    /assert\.equal\(await buttons\.count\(\), navigation\.length\);/,
+    'B2 must retain exact coverage for all registered navigation items',
+  );
+}
+
 test('L50 Admin browser smoke infrastructure is complete', () => {
   const required = [
     'scripts/admin-e2e/package.json',
@@ -1404,6 +1459,15 @@ test('Admin E2E proves B1 grouped navigation and hides empty modules', () => {
   );
 
   assert.doesNotThrow(() => assertB1ShellContract(smoke));
+});
+
+test('Admin E2E proves B2 role workbench landing and shortcut navigation', () => {
+  const smoke = fs.readFileSync(
+    path.join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotThrow(() => assertB2RoleWorkbenchContract(smoke));
 });
 
 test('A3.2 source contract rejects weakened behavior evidence', () => {
