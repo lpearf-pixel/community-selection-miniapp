@@ -1,0 +1,35 @@
+name: L50 C2 T2 Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+  workflow_dispatch:
+
+concurrency:
+  group: l50-c2-t2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pickup-c2-t2:
+    runs-on: [self-hosted, Linux, X64, home, community-selection]
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify focused pickup command contracts
+        run: |
+          pnpm --filter @community-selection/api test --             src/modules/order/admin-pickup-verification-command.test.ts             src/modules/order/admin-order-status-command.test.ts
+          node --test scripts/admin-e2e/l50-c2-order-source-contract.test.cjs
