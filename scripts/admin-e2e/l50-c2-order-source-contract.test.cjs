@@ -72,6 +72,9 @@ test('requires strict atomic effects and complete runtime evidence', () => {
     'apps/api/src/modules/order/admin-order-status-executor.integration.test.ts',
   );
   const smoke = read('scripts/admin-e2e/admin-smoke.mjs');
+  const auxiliaryRuntime = read(
+    'apps/api/src/routes/admin/order-auxiliary-security.integration.test.ts',
+  );
 
   assert.doesNotMatch(executor, /safeRecord(?:BusinessEvent|OrderTimeline)/);
   assert.match(executor, /await recordBusinessEvent\(tx,/);
@@ -100,4 +103,14 @@ test('requires strict atomic effects and complete runtime evidence', () => {
   assert.match(smoke, /'order success refresh'/);
   assert.match(smoke, /'order conflict refresh'/);
   assert.match(smoke, /ADMIN_ORDER_VERSION_CONFLICT/);
+  assert.match(auxiliaryRuntime, /returns 403 when export scope is empty/);
+  assert.match(auxiliaryRuntime, /exports only in-scope orders/);
+  assert.match(
+    auxiliaryRuntime,
+    /rejects pickup without permission and preserves order side effects/,
+  );
+  assert.match(
+    auxiliaryRuntime,
+    /rejects out-of-scope pickup and preserves order side effects/,
+  );
 });
