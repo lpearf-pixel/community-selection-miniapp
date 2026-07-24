@@ -23,39 +23,31 @@ jobs:
         with: { version: 9.15.4 }
       - uses: actions/setup-node@v4
         with: { node-version: 20.19.0, cache: pnpm }
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Generate Prisma client
-        run: pnpm db:generate
-      - name: Run focused withdrawals contracts
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Verify L50 C1.5 withdrawals page boundaries
         run: |
           pnpm --filter @community-selection/admin test -- \
             src/features/finance/withdrawals/withdrawals-page-structure.test.ts \
             src/features/finance/withdrawals/api.test.ts \
             src/features/a3-4-pages-source-contract.test.ts
           node --test scripts/admin-e2e/contract.test.cjs
-      - name: Lint
-        run: pnpm lint
-      - name: Typecheck
+      - run: pnpm lint
+      - name: Typecheck with bounded workspace concurrency
         run: |
           pnpm --filter @community-selection/shared build
           pnpm --filter @community-selection/config build
           pnpm --workspace-concurrency=1 -r typecheck
-      - name: Run full bounded test suite
-        run: pnpm test
-      - name: Build
-        run: pnpm build
-      - name: Verify Admin auth runtime
-        run: node --test scripts/admin-auth-runtime.test.cjs
-      - name: Verify source and cleanup contracts
+      - name: Test with bounded workspace concurrency
         run: |
           node --test scripts/admin-e2e/contract.test.cjs
-          node --test scripts/admin-e2e/cleanup-contract.test.cjs
-      - name: Install Admin E2E dependencies
-        run: pnpm setup:admin:e2e
-      - name: Run real Admin E2E
-        run: pnpm e2e:admin
-      - name: Clean Admin E2E resources
+          pnpm --workspace-concurrency=1 -r test
+      - run: pnpm build
+      - run: node --import tsx --test scripts/admin-e2e/admin-auth-runtime.test.ts
+      - run: node --test scripts/admin-e2e/contract.test.cjs scripts/admin-e2e/run-cleanup.test.cjs
+      - run: pnpm setup:admin:e2e
+      - run: pnpm e2e:admin
+      - name: Cleanup current E2E resources
         if: always()
         run: |
           docker compose -p community-selection-admin-e2e-${GITHUB_RUN_ID} -f scripts/admin-e2e/docker-compose.yml down --volumes --remove-orphans || true
