@@ -326,3 +326,18 @@ test('keeps the legacy migration exception exact and comment-only', () => {
     /^-- Rollback \(manual\): DROP TABLE "WithdrawalCommission"; no historical Withdrawal\/Commission rows are modified\.$/m,
   );
 });
+
+
+test('keeps compliance exclusions narrow and deployable code scanned', () => {
+  const scanner = read('scripts/compliance-scan.ts');
+
+  assert.match(scanner, /\^scripts\\\/\(\?:verify-/);
+  assert.match(scanner, /\^prisma\\\/migrations/);
+  assert.match(scanner, /\\\.\(\?:test\|spec\)/);
+  assert.doesNotMatch(scanner, /\^scripts\(\?:\\\/\|\$\)/);
+  assert.match(scanner, /const levelTerm = \['le', 'vel'\]\.join\(''\)/);
+  assert.match(
+    scanner,
+    /path === 'apps\/admin\/src\/app\/AdminShell\.tsx'[\s\S]{0,120}level=/,
+  );
+});
