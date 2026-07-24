@@ -6,13 +6,16 @@ on:
       - stable/l50-a3-4-business-base
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: l50-c2-t2-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   pickup-c2-t2:
-    runs-on: [self-hosted, Linux, X64, home, community-selection]
+    runs-on: self-hosted
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=3072
