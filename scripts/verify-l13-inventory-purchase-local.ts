@@ -79,11 +79,11 @@ async function main() {
 
   const afterAppleOrder = await prisma.product.findUniqueOrThrow({ where: { id: apple.id } });
   assert(afterAppleOrder.stock === 45000, 'apple stock should decrease by sale quantity multiplied by stock_deduct_quantity');
-  const appleOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: apple.id, source_type: 'order_lock', source_id: appleOrder.id } });
-  assert(appleOrderLedger?.direction === 'out', 'apple order lock ledger should be out');
-  assert(appleOrderLedger.quantity === 5000 && appleOrderLedger.stock_before === 50000 && appleOrderLedger.stock_after === 45000, 'apple order lock ledger stock should be correct');
+  const appleOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: apple.id, source_type: 'order_payment', source_id: appleOrder.id, event_type: 'order_paid_deduct' } });
+  assert(appleOrderLedger?.direction === 'out', 'apple payment deduction ledger should be out');
+  assert(appleOrderLedger.quantity === 5000 && appleOrderLedger.quantity_delta === -5000 && appleOrderLedger.stock_before === 50000 && appleOrderLedger.stock_after === 45000, 'apple payment deduction ledger stock should be correct');
   const appleOrderPayload = payloadOf(appleOrderLedger.payload);
-  assert(appleOrderPayload.sale_quantity === 2 && appleOrderPayload.stock_deduct_quantity === 2500 && appleOrderPayload.stock_unit === 'g', 'apple order ledger payload should keep sale and stock unit context');
+  assert(appleOrderPayload.order_id === appleOrder.id && appleOrderPayload.order_quantity === 2 && appleOrderPayload.stock_deduct_quantity === 2500, 'apple payment deduction payload should keep order and stock conversion context');
 
   const egg = await prisma.product.create({
     data: {
@@ -109,8 +109,8 @@ async function main() {
   assert(eggPayment.pay_status === 'paid', 'egg order payment should succeed before inventory is deducted');
   const afterEggOrder = await prisma.product.findUniqueOrThrow({ where: { id: egg.id } });
   assert(afterEggOrder.stock === 810, 'egg stock should decrease by 90 eggs');
-  const eggOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: egg.id, source_type: 'order_lock', source_id: eggOrder.id } });
-  assert(eggOrderLedger?.quantity === 90, 'egg order lock ledger should record 90 base units');
+  const eggOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: egg.id, source_type: 'order_payment', source_id: eggOrder.id, event_type: 'order_paid_deduct' } });
+  assert(eggOrderLedger?.quantity === 90 && eggOrderLedger.quantity_delta === -90, 'egg payment deduction ledger should record 90 base units');
 
   const inventoryOverview = await json(await adminGet('/api/admin/inventory/overview', adminCookie));
   assert(inventoryOverview.items.some((item: any) => item.product_id === apple.id && item.stock === 45000 && item.stock_unit === 'g' && item.display_sale_spec === '5斤装 / 份'), 'inventory overview should include unit-aware apple stock');
