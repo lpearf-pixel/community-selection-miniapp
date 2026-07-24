@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { prisma } from '../../db.js';
 
@@ -114,6 +114,29 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
     });
   });
 
+  it('returns 404 for retired public routes while user order routes remain registered', async () => {
+    const retired = [
+      { method: 'GET', url: '/api/orders' },
+      { method: 'GET', url: `/api/orders/${orderId}` },
+      { method: 'GET', url: '/api/orders/export/picking.csv' },
+      { method: 'POST', url: `/api/orders/${orderId}/status`, payload: {} },
+      { method: 'POST', url: `/api/orders/${orderId}/complete`, payload: {} },
+    ] as const;
+    for (const request of retired) {
+      const response = await app.inject(request);
+      expect(response.statusCode, `${request.method} ${request.url}`).toBe(404);
+    }
+
+    for (const request of [
+      { method: 'POST', url: '/api/orders', payload: {} },
+      { method: 'POST', url: '/api/orders/normal', payload: {} },
+      { method: 'GET', url: '/api/me/orders' },
+    ] as const) {
+      const response = await app.inject(request);
+      expect(response.statusCode, `${request.method} ${request.url}`).not.toBe(404);
+    }
+  });
+
   it('returns V1 403 for missing permission and current data scope', async () => {
     const forbidden = await app.inject({
       method: 'POST',
@@ -138,6 +161,49 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
       code: 'ADMIN_ORDER_SCOPE_FORBIDDEN',
       trace_id: expect.any(String),
     });
+  });
+
+  it('wraps malformed JSON and permission lookup failures in safe V1 errors', async () => {
+    const malformed = await app.inject({
+      method: 'POST',
+      url: `/api/admin/orders/${orderId}/status`,
+      headers: {
+        ...headers('super_admin'),
+        'content-type': 'application/json',
+      },
+      payload: '{',
+    });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json()).toEqual({
+      success: false,
+      data: null,
+      code: 'INVALID_ADMIN_ORDER_STATUS_COMMAND',
+      message: '订单状态命令不合法',
+      trace_id: expect.any(String),
+    });
+
+    const lookup = vi
+      .spyOn(prisma.adminUser, 'findUnique')
+      .mockRejectedValueOnce(new Error('sensitive database detail'));
+    try {
+      const failed = await app.inject({
+        method: 'POST',
+        url: `/api/admin/orders/${orderId}/status`,
+        headers: headers('super_admin'),
+        payload: command,
+      });
+      expect(failed.statusCode).toBe(500);
+      expect(failed.json()).toEqual({
+        success: false,
+        data: null,
+        code: 'ADMIN_ORDER_STATUS_UPDATE_FAILED',
+        message: '订单状态更新失败',
+        trace_id: expect.any(String),
+      });
+      expect(failed.body).not.toContain('sensitive database detail');
+    } finally {
+      lookup.mockRestore();
+    }
   });
 
   it('validates the body and returns the versioned result', async () => {
