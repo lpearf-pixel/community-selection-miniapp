@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   admin-a3-4:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
