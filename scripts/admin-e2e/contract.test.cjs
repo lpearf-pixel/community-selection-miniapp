@@ -1619,6 +1619,10 @@ test('C1 defines the bounded traceable Admin order contract', () => {
     ),
     'utf8',
   );
+  const workspacePackages = fs.readFileSync(
+    path.join(root, 'apps/admin/src/workspace-packages.d.ts'),
+    'utf8',
+  );
   const orderPage = fs.readFileSync(
     path.join(
       root,
@@ -1642,6 +1646,10 @@ test('C1 defines the bounded traceable Admin order contract', () => {
     orderTypes,
     /AdminOrderListResponse =\s*PaginatedData<AdminOrderListItem>/,
   );
+  assert.match(workspacePackages, /export type PaginatedData<T>/);
+  assert.match(workspacePackages, /export function contractOk/);
+  assert.match(workspacePackages, /export function contractFail/);
+  assert.match(workspacePackages, /export function buildPaginationMetadata/);
   assert.match(orderPage, /state\.data\.pagination\.page/);
   assert.match(orderPage, /state\.data\.pagination\.page_size/);
   assert.match(orderPage, /state\.data\.pagination\.total/);
