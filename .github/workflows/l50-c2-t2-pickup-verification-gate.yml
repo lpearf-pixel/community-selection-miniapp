@@ -36,6 +36,7 @@ jobs:
         run: |
           pnpm db:generate
           pnpm --filter @community-selection/api test --             src/modules/order/admin-pickup-verification-command.test.ts             src/modules/order/admin-order-status-command.test.ts
+          pnpm --filter @community-selection/admin test --             src/features/sales/orders/api.test.ts
           node --test scripts/admin-e2e/l50-c2-order-source-contract.test.cjs
       - name: Verify pickup executor on PostgreSQL
         env:
