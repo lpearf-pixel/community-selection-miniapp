@@ -142,8 +142,12 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
       } catch (error) {
         if (error instanceof AdminOrderCommandError) {
           reply.code(error.statusCode);
+          const code =
+            error.code === 'ADMIN_ORDER_VERSION_CONFLICT'
+              ? 'ADMIN_ORDER_VERSION_CONFLICT'
+              : error.code;
           return contractFail({
-            code: error.code,
+            code,
             message: error.message,
             traceId,
           });
