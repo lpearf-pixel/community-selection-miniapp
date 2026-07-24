@@ -243,9 +243,10 @@ test('proves eligible pickup UI and deterministic real browser conflict', () => 
     /await page\.route\('\*\*\/api\/admin\/orders\/\*\/pickup-verify', pickupRaceRoute\);/,
   );
   assert.match(smoke, /await route\.fetch\(\)/);
+  assert.match(smoke, /const pickupConflictPage = await context\.newPage\(\)/);
   assert.match(
     smoke,
-    /sameVersionPickupButton\.evaluate\([\s\S]*?button\.dispatchEvent\(new MouseEvent\('click'[\s\S]*?button\.dispatchEvent\(new MouseEvent\('click'/,
+    /sameVersionPickupButton\.dispatchEvent\('click'\)[\s\S]*?conflictVersionPickupButton\.dispatchEvent\('click'\)/,
   );
   assert.match(smoke, /assert\.deepEqual\(pickupRaceCodes, \[200, 409\]\);/);
   assert.match(smoke, /'pickup success refresh'/);
