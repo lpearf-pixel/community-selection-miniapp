@@ -3,10 +3,9 @@ import { resolve } from 'node:path';
 import { prisma } from '../../apps/api/src/db.js';
 import { hashPassword } from '../../apps/api/src/services/admin-auth-service.js';
 
-const runSuffix = String(process.env.GITHUB_RUN_ID ?? process.pid).replace(
-  /[^a-zA-Z0-9_-]/g,
-  '-',
-);
+const runSuffix = String(
+  process.env.ADMIN_E2E_RUN_ID ?? process.env.GITHUB_RUN_ID ?? 'local',
+).replace(/[^a-zA-Z0-9_-]/g, '-');
 const username = `l50_e2e_admin_${runSuffix}`;
 const password = 'L50-E2E-StrongPassword-123';
 const fixturePath = resolve('scripts/admin-e2e/.fixture.json');
