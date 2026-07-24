@@ -47,7 +47,7 @@ jobs:
           grep -F "retires unauthenticated order read and write handlers" source-red.log
       - name: Prove the PostgreSQL transaction executor RED
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:15432/community_selection?schema=public
+          DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
         shell: bash
         run: |
           docker compose \
