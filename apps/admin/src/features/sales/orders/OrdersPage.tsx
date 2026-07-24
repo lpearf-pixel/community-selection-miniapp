@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -58,6 +58,7 @@ export function OrdersPage(props: OrdersPageProps) {
   const [pendingPickupOrderIds, setPendingPickupOrderIds] = useState<
     ReadonlySet<string>
   >(new Set());
+  const pendingPickupOrderIdsRef = useRef<Set<string>>(new Set());
   const [selectedOrderContext, setSelectedOrderContext] =
     useState<AiContext | null>(null);
   const [state, dispatch] = useReducer(
@@ -93,8 +94,9 @@ export function OrdersPage(props: OrdersPageProps) {
   };
 
   const pickupVerify = async (order: AdminOrderListItem) => {
-    if (pendingPickupOrderIds.has(order.id)) return;
+    if (pendingPickupOrderIdsRef.current.has(order.id)) return;
 
+    pendingPickupOrderIdsRef.current.add(order.id);
     setPendingPickupOrderIds((current) => {
       const next = new Set(current);
       next.add(order.id);
@@ -118,6 +120,7 @@ export function OrdersPage(props: OrdersPageProps) {
       props.onMessage('订单已被其他操作更新，已刷新列表，请重试');
       setRetryVersion((value) => value + 1);
     } finally {
+      pendingPickupOrderIdsRef.current.delete(order.id);
       setPendingPickupOrderIds((current) => {
         const next = new Set(current);
         next.delete(order.id);
