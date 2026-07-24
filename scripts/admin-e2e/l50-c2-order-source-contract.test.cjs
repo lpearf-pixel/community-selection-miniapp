@@ -114,3 +114,28 @@ test('requires strict atomic effects and complete runtime evidence', () => {
     /rejects out-of-scope pickup and preserves order side effects/,
   );
 });
+
+
+test('defines the focused pickup verification command and closes generic picked writes', () => {
+  const pickupCommand = read(
+    'apps/api/src/modules/order/admin-pickup-verification-command.ts',
+  );
+  const statusCommand = read(
+    'apps/api/src/modules/order/admin-order-status-command.ts',
+  );
+  assert.match(
+    pickupCommand,
+    /admin\.order\.pickup\.verify\.v1/,
+  );
+  assert.match(pickupCommand, /expected_version/);
+  assert.match(pickupCommand, /idempotency_key/);
+  assert.match(pickupCommand, /admin_remark/);
+  assert.doesNotMatch(
+    statusCommand,
+    /OrderStatus\.picked/,
+  );
+  assert.doesNotMatch(
+    statusCommand,
+    /\| 'picked'/,
+  );
+});
