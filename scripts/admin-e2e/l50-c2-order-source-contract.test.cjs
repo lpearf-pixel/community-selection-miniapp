@@ -335,7 +335,13 @@ test('keeps compliance exclusions narrow and deployable code scanned', () => {
   assert.match(scanner, /\^prisma\\\/migrations/);
   assert.match(scanner, /\\\.\(\?:test\|spec\)/);
   assert.doesNotMatch(scanner, /\^scripts\(\?:\\\/\|\$\)/);
+  const excludedPaths = scanner.slice(
+    scanner.indexOf('const excludedPaths'),
+    scanner.indexOf('const forbidden'),
+  );
+  assert.doesNotMatch(excludedPaths, /\^apps|\^packages/);
   assert.match(scanner, /const levelTerm = \['le', 'vel'\]\.join\(''\)/);
+  assert.match(scanner, /level=\\\{\\d\+\\\}\\s\*\\\$\//);
   assert.match(
     scanner,
     /path === 'apps\/admin\/src\/app\/AdminShell\.tsx'[\s\S]{0,120}level=/,
