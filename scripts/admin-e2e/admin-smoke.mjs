@@ -693,6 +693,7 @@ try {
     }
   };
   page.on('response', capturePickupRaceResponse);
+  pickupConflictPage.on('response', capturePickupRaceResponse);
 
   let releasePickupRace;
   const pickupRaceReady = new Promise((resolve) => {
@@ -714,6 +715,7 @@ try {
       const entry = {
         route,
         command: request.postDataJSON(),
+        ownerPage: request.frame().page(),
         response: null,
       };
       pickupRaceEntries.push(entry);
@@ -734,7 +736,10 @@ try {
         assert.equal(successfulEntries.length, 1);
         assert.equal(conflictingEntries.length, 1);
 
-        const successRefreshPromise = page.waitForResponse((response) => {
+        pickupSuccessOnPrimaryPage =
+          successfulEntries[0].ownerPage === page;
+        const successRefreshPromise =
+          successfulEntries[0].ownerPage.waitForResponse((response) => {
           const url = new URL(response.url());
           return (
             url.pathname === '/api/admin/orders' &&
@@ -745,16 +750,15 @@ try {
         await successfulEntries[0].route.fulfill({
           response: successfulEntries[0].response,
         });
-        await successRefreshPromise;
-        await waitForCount(
-          page,
-          () => orderRequestCount,
-          orderRequestsBeforePickupRace + 1,
+        const successRefreshResponse = await successRefreshPromise;
+        assert.equal(
+          successRefreshResponse.ok(),
+          true,
           'pickup success refresh',
         );
-        assert.equal(orderRequestCount, orderRequestsBeforePickupRace + 1);
 
-        const conflictRefreshPromise = page.waitForResponse((response) => {
+        const conflictRefreshPromise =
+          conflictingEntries[0].ownerPage.waitForResponse((response) => {
           const url = new URL(response.url());
           return (
             url.pathname === '/api/admin/orders' &&
@@ -765,14 +769,12 @@ try {
         await conflictingEntries[0].route.fulfill({
           response: conflictingEntries[0].response,
         });
-        await conflictRefreshPromise;
-        await waitForCount(
-          page,
-          () => orderRequestCount,
-          orderRequestsBeforePickupRace + 2,
+        const conflictRefreshResponse = await conflictRefreshPromise;
+        assert.equal(
+          conflictRefreshResponse.ok(),
+          true,
           'pickup conflict refresh',
         );
-        assert.equal(orderRequestCount, orderRequestsBeforePickupRace + 2);
         settlePickupRace.resolve();
       }
       await pickupRaceFinished;
@@ -782,17 +784,26 @@ try {
     }
   };
   await page.route('**/api/admin/orders/*/pickup-verify', pickupRaceRoute);
+  await pickupConflictPage.route(
+    '**/api/admin/orders/*/pickup-verify',
+    pickupRaceRoute,
+  );
 
-  await sameVersionPickupButton.evaluate((button) => {
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  });
+  await Promise.all([
+    sameVersionPickupButton.dispatchEvent('click'),
+    conflictVersionPickupButton.dispatchEvent('click'),
+  ]);
   await pickupRaceFinished;
   await page.unroute(
     '**/api/admin/orders/*/pickup-verify',
     pickupRaceRoute,
   );
+  await pickupConflictPage.unroute(
+    '**/api/admin/orders/*/pickup-verify',
+    pickupRaceRoute,
+  );
   page.off('response', capturePickupRaceResponse);
+  pickupConflictPage.off('response', capturePickupRaceResponse);
 
   await waitForCount(
     page,
@@ -839,28 +850,45 @@ try {
     'ADMIN_PICKUP_STATE_CONFLICT',
   );
   assert.equal(typeof pickupConflictEnvelope.trace_id, 'string');
-  await page
+  const pickupConflictEntry = pickupRaceEntries.find(
+    (entry) => entry.response?.status() === 409,
+  );
+  assert.ok(pickupConflictEntry);
+  await pickupConflictEntry.ownerPage
     .getByText('订单已被其他操作更新，已刷新列表，请重试', {
       exact: true,
     })
     .waitFor();
   await pickupRow.getByText('picked', { exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
+  await pickupConflictPage.close();
+
+  const primaryBusinessRefreshes =
+    1 + (pickupSuccessOnPrimaryPage ? 1 : 0);
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
-    inventory: a33RequestsAfterInitial.inventory + 2,
-    purchasePlans: a33RequestsAfterInitial.purchasePlans + 2,
-    suppliers: a33RequestsAfterInitial.suppliers + 2,
-    batches: a33RequestsAfterInitial.batches + 2,
-    expiryAlerts: a33RequestsAfterInitial.expiryAlerts + 2,
-    stockChecks: a33RequestsAfterInitial.stockChecks + 2,
+    inventory:
+      a33RequestsAfterInitial.inventory + primaryBusinessRefreshes,
+    purchasePlans:
+      a33RequestsAfterInitial.purchasePlans + primaryBusinessRefreshes,
+    suppliers:
+      a33RequestsAfterInitial.suppliers + primaryBusinessRefreshes,
+    batches:
+      a33RequestsAfterInitial.batches + primaryBusinessRefreshes,
+    expiryAlerts:
+      a33RequestsAfterInitial.expiryAlerts + primaryBusinessRefreshes,
+    stockChecks:
+      a33RequestsAfterInitial.stockChecks + primaryBusinessRefreshes,
   });
   const a34RequestsAfterOrderMutation = readA34RequestCounts();
   assert.deepEqual(a34RequestsAfterOrderMutation, {
-    withdrawals: a34RequestsAfterInitial.withdrawals + 2,
-    alerts: a34RequestsAfterInitial.alerts + 2,
-    taxReview: a34RequestsAfterInitial.taxReview + 2,
+    withdrawals:
+      a34RequestsAfterInitial.withdrawals + primaryBusinessRefreshes,
+    alerts:
+      a34RequestsAfterInitial.alerts + primaryBusinessRefreshes,
+    taxReview:
+      a34RequestsAfterInitial.taxReview + primaryBusinessRefreshes,
   });
 
   const orderFailureRoute = async (route) => {
