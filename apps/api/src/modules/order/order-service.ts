@@ -326,18 +326,3 @@ export async function updateOrderStatus(input: { order_id: string; next_status?:
     return updatedOrder;
   });
 }
-
-export async function pickupVerify(input: { order_id: string; admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null; admin_remark?: string | null }) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const existing = await tx.order.findUnique({ where: { id: input.order_id } });
-    if (!existing) throw new Error('订单不存在');
-    if (existing.order_status === 'picked') return existing;
-    if (['refunded', 'closed', 'completed'].includes(existing.order_status)) throw new Error('当前订单不可核销自提');
-    if (existing.order_status !== 'ready') throw new Error('当前订单不可核销自提');
-    const updated = await tx.order.update({ where: { id: input.order_id }, data: { order_status: 'picked' } });
-    await safeRecordOrderTimeline(tx, { order_id: input.order_id, event_type: 'pickup_verified', title: '自提已核销', from_status: existing.order_status, to_status: 'picked', actor_type: 'admin', actor_user_id: input.admin_user_id ?? null, payload: { admin_remark: input.admin_remark ?? null } });
-    await safeRecordBusinessEvent(tx, { event_type: 'pickup_verified', event_source: 'order-service', order_id: input.order_id, before_snapshot: existing, after_snapshot: updated, payload: { admin_remark: input.admin_remark ?? null } });
-    await recordAdminAudit(tx, { admin_user_id: input.admin_user_id ?? null, action: 'order_pickup_verified', target_type: 'Order', target_id: input.order_id, ip_address: input.ip_address ?? null, user_agent: input.user_agent ?? null, payload: { admin_remark: input.admin_remark ?? null } });
-    return updated;
-  });
-}
