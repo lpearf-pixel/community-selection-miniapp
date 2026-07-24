@@ -341,7 +341,10 @@ test('keeps compliance exclusions narrow and deployable code scanned', () => {
   );
   assert.doesNotMatch(excludedPaths, /\^apps|\^packages/);
   assert.match(scanner, /const levelTerm = \['le', 'vel'\]\.join\(''\)/);
-  assert.match(scanner, /level=\\\{\\d\+\\\}\\s\*\\\$\//);
+  assert.equal(
+    scanner.includes('/^\\s*level=\\{\\d+\\}\\s*$/'),
+    true,
+  );
   assert.match(
     scanner,
     /path === 'apps\/admin\/src\/app\/AdminShell\.tsx'[\s\S]{0,120}level=/,
