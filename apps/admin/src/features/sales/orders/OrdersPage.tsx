@@ -8,6 +8,7 @@ import {
   Spin,
   Typography,
 } from 'antd';
+import { AdminApiError } from '../../../shared/api/errors';
 import {
   featureErrorMessage,
   initialFeatureResourceState,
@@ -35,7 +36,6 @@ import type {
   AdminOrderListResponse,
   AiContext,
 } from './types';
-
 
 export type OrdersPageProps = {
   refreshVersion: number;
@@ -89,7 +89,7 @@ export function OrdersPage(props: OrdersPageProps) {
     onConflict: () => setRetryVersion((value) => value + 1),
   });
 
-  const markOrder/ = async (order: AdminOrderListItem, nextStatus: string) => {
+  const markOrder = async (order: AdminOrderListItem, nextStatus: string) => {
     try {
       await updateOrderStatus(order.id, nextStatus, order.version, crypto.randomUUID());
       props.onMessage(`订单 ${order.order_no} 已更新为 ${nextStatus}`);
