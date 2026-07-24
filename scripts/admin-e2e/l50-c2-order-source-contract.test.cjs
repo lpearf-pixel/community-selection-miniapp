@@ -57,3 +57,36 @@ test('exposes order version to the Admin client and list projection', () => {
   assert.match(types, /AdminOrderListItem\s*=\s*\{[\s\S]*?\bversion:\s*number/);
   assert.match(query, /version:\s*order\.version/);
 });
+
+
+test('requires strict atomic effects and complete runtime evidence', () => {
+  const executor = read(
+    'apps/api/src/modules/order/admin-order-status-executor.ts',
+  );
+  const commission = read('apps/api/src/services/commission-service.ts');
+  const route = read('apps/api/src/routes/admin/orders.ts');
+  const runtime = read(
+    'apps/api/src/routes/admin/order-status-route.integration.test.ts',
+  );
+  const transaction = read(
+    'apps/api/src/modules/order/admin-order-status-executor.integration.test.ts',
+  );
+  const smoke = read('scripts/admin-e2e/admin-smoke.mjs');
+
+  assert.doesNotMatch(executor, /safeRecord(?:BusinessEvent|OrderTimeline)/);
+  assert.match(executor, /await recordBusinessEvent\(tx,/);
+  assert.match(executor, /await recordOrderTimeline\(tx,/);
+  assert.match(
+    commission,
+    /markCommissionPendingForCompletedOrder[\s\S]*?await recordBusinessEvent\(client,[\s\S]*?await recordOrderTimeline\(client,/,
+  );
+  assert.match(route, /errorHandler:\s*adminOrderStatusV1ErrorHandler/);
+  assert.match(runtime, /malformed JSON/);
+  assert.match(runtime, /retired public routes/);
+  assert.match(runtime, /\/api\/me\/orders/);
+  assert.match(transaction, /real completion commission once/);
+  assert.match(transaction, /strict reward event logging fails/);
+  assert.match(smoke, /externalAdvance\.status\(\), 200/);
+  assert.match(smoke, /conflictResponse\.status\(\), 409/);
+  assert.match(smoke, /ADMIN_ORDER_VERSION_CONFLICT/);
+});
