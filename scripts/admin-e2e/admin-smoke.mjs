@@ -404,7 +404,9 @@ try {
       orderRequestCount,
     }),
   );
-  await queryButton.click();
+  await orderFilter
+    .getByRole('button', { name: '查询', exact: true })
+    .click();
   await page.waitForTimeout(250);
   console.log(
     '[b3-query:after]',
