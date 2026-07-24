@@ -220,7 +220,7 @@ test('proves eligible pickup UI and deterministic real browser conflict', () => 
   assert.match(smoke, /await route\.fetch\(\)/);
   assert.match(
     smoke,
-    /sameVersionPickupButton\.dispatchEvent\('click'\)[\s\S]*?sameVersionPickupButton\.dispatchEvent\('click'\)/,
+    /sameVersionPickupButton\.evaluate\([\s\S]*?button\.dispatchEvent\(new MouseEvent\('click'[\s\S]*?button\.dispatchEvent\(new MouseEvent\('click'/,
   );
   assert.match(smoke, /assert\.deepEqual\(pickupRaceCodes, \[200, 409\]\);/);
   assert.match(smoke, /'pickup success refresh'/);
