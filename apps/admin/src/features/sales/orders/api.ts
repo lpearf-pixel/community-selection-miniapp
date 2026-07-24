@@ -1,13 +1,34 @@
 import { adminApiUrl, adminJsonRequest } from '../../../shared/api/admin-api';
 import type { JsonRequester } from '../../../shared/api/client';
 import type { Order } from '../shared/types';
-import type { AiContext } from './types';
+import type {
+  AdminOrderListQuery,
+  AdminOrderListResponse,
+  AiContext,
+} from './types';
+
+function buildAdminOrderListSearch(query: AdminOrderListQuery): string {
+  const search = new URLSearchParams();
+  if (query.keyword) search.set('keyword', query.keyword);
+  if (query.order_type) search.set('order_type', query.order_type);
+  if (query.pickup_type) search.set('pickup_type', query.pickup_type);
+  if (query.pay_status) search.set('pay_status', query.pay_status);
+  if (query.order_status) search.set('order_status', query.order_status);
+  if (query.refund_status) search.set('refund_status', query.refund_status);
+  search.set('page', String(query.page));
+  search.set('page_size', String(query.page_size));
+  return search.toString();
+}
 
 export function loadOrders(
+  query: AdminOrderListQuery,
   request: JsonRequester = adminJsonRequest,
   signal?: AbortSignal,
-): Promise<Order[]> {
-  return request<Order[]>('/api/orders', { signal });
+): Promise<AdminOrderListResponse> {
+  return request<AdminOrderListResponse>(
+    `/api/admin/orders?${buildAdminOrderListSearch(query)}`,
+    { signal },
+  );
 }
 
 export function loadOrderAiContext(
