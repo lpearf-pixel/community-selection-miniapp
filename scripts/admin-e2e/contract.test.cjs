@@ -1389,7 +1389,7 @@ function assertB3OmnichannelOrdersContract(smoke, fixture, orderPage) {
       ],
       [
         'query submit',
-        /await orderFilter\s*\.getByRole\('button', \{ name: '查询', exact: true \}\)\s*\.click\(\);/,
+        /await orderFilter\s*\.getByRole\('button', \{ name: \/查\\s\*询\/ \}\)\s*\.click\(\);/,
       ],
       [
         'paginated items verified',
