@@ -467,6 +467,7 @@ try {
   assert.equal(statusEnvelope.data.version, 2);
   await refreshedOrderPromise;
   await fixtureRow.getByText('ready', { exact: true }).waitFor();
+  await page.waitForLoadState('networkidle');
 
   const externalAdvance = await context.request.post(
     `${baseURL}/api/admin/orders/${credentials.orderId}/status`,
@@ -483,14 +484,7 @@ try {
   assert.equal(externalEnvelope.data.order_status, 'picked');
   assert.equal(externalEnvelope.data.version, 3);
 
-  const conflictRefreshPromise = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === '/api/admin/orders' &&
-      url.searchParams.get('keyword') === credentials.orderNo &&
-      response.ok()
-    );
-  });
+  const orderRequestsBeforeConflict = orderRequestCount;
   const completionButton = fixtureRow.getByRole('button', {
     name: '完成',
     exact: true,
@@ -512,7 +506,12 @@ try {
   const conflictEnvelope = await conflictResponse.json();
   assert.equal(conflictEnvelope.code, 'ADMIN_ORDER_VERSION_CONFLICT');
   assert.equal(typeof conflictEnvelope.trace_id, 'string');
-  await conflictRefreshPromise;
+  await waitForCount(
+    page,
+    () => orderRequestCount,
+    orderRequestsBeforeConflict + 1,
+    'order conflict refresh',
+  );
   await page
     .getByText('订单已被其他操作更新，已刷新列表，请重试', { exact: true })
     .waitFor();
