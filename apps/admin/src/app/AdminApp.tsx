@@ -35,6 +35,7 @@ import { DEFAULT_ADMIN_VIEW, type AdminViewKey } from "./admin-view";
 import { AdminErrorBoundary } from "./AdminErrorBoundary";
 import { AdminFeatureWorkspace } from "./AdminFeatureWorkspace";
 import { AdminShell } from "./AdminShell";
+import { RoleWorkbench } from "./RoleWorkbench";
 import { adminRefreshTarget } from "./refresh-policy";
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
@@ -237,7 +238,15 @@ export function AdminApp() {
   const renderFeatureContent = () => (
     <>
         {view === "operations" ? (
-          <OperationsDashboardPage refreshVersion={operationsRefreshVersion} />
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <RoleWorkbench
+              role={adminSession.role}
+              onNavigate={setView}
+            />
+            <OperationsDashboardPage
+              refreshVersion={operationsRefreshVersion}
+            />
+          </Space>
         ) : null}
 
         {view === "refundLedger" ? <FinanceRefundLedgerPage /> : null}
