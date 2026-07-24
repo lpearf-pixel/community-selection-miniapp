@@ -37,6 +37,12 @@ import type {
   AiContext,
 } from './types';
 
+const PICKUP_CONFLICT_CODES: ReadonlySet<string> = new Set([
+  'ADMIN_ORDER_VERSION_CONFLICT',
+  'ADMIN_PICKUP_TYPE_CONFLICT',
+  'ADMIN_PICKUP_STATE_CONFLICT',
+]);
+
 export type OrdersPageProps = {
   refreshVersion: number;
   onMessage: (message: string) => void;
@@ -49,6 +55,9 @@ export function OrdersPage(props: OrdersPageProps) {
     DEFAULT_ADMIN_ORDER_QUERY,
   );
   const [retryVersion, setRetryVersion] = useState(0);
+  const [pendingPickupOrderIds, setPendingPickupOrderIds] = useState<
+    ReadonlySet<string>
+  >(new Set());
   const [selectedOrderContext, setSelectedOrderContext] =
     useState<AiContext | null>(null);
   const [state, dispatch] = useReducer(
@@ -84,9 +93,37 @@ export function OrdersPage(props: OrdersPageProps) {
   };
 
   const pickupVerify = async (order: AdminOrderListItem) => {
-    await verifyOrderPickup(order.id, '后台核销自提');
-    props.onMessage(`订单 ${order.order_no} 已核销自提`);
-    props.onMutationCommitted();
+    if (pendingPickupOrderIds.has(order.id)) return;
+
+    setPendingPickupOrderIds((current) => {
+      const next = new Set(current);
+      next.add(order.id);
+      return next;
+    });
+
+    try {
+      await verifyOrderPickup(
+        order.id,
+        order.version,
+        crypto.randomUUID(),
+        '后台核销自提',
+      );
+      props.onMessage(`订单 ${order.order_no} 已核销自提`);
+      props.onMutationCommitted();
+    } catch (error) {
+      if (
+        !(error instanceof AdminApiError) ||
+        !PICKUP_CONFLICT_CODES.has(error.code)
+      ) throw error;
+      props.onMessage('订单已被其他操作更新，已刷新列表，请重试');
+      setRetryVersion((value) => value + 1);
+    } finally {
+      setPendingPickupOrderIds((current) => {
+        const next = new Set(current);
+        next.delete(order.id);
+        return next;
+      });
+    }
   };
 
   const markOrder = async (order: AdminOrderListItem, nextStatus: string) => {
@@ -187,6 +224,7 @@ export function OrdersPage(props: OrdersPageProps) {
             onLoadContext={loadOrderContext}
             onMarkOrder={markOrder}
             onVerifyPickup={pickupVerify}
+            pendingPickupOrderIds={pendingPickupOrderIds}
           />
         </Space>
       </Card>
