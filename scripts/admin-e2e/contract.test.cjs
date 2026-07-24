@@ -297,15 +297,21 @@ function assertA32SmokeContract(smoke) {
         },
       },
     ],
-    'route registration whitelist: only the four approved failure interceptors',
+    'route registration whitelist: five failure interceptors plus one real status proxy',
   );
   const [
     catalogRegistration,
+    statusRaceRegistration,
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
     alertRegistration,
   ] = routeRegistrations;
+  assert.equal(
+    statusRaceRegistration.handler,
+    'statusRaceRoute',
+    'route registration whitelist: status race uses the named real proxy',
+  );
   assert.equal(
     purchasePlanRegistration.target.value,
     '**/api/admin/purchase-plans',
@@ -844,6 +850,13 @@ function assertA33SmokeContract(smoke) {
       {
         receiver: 'page',
         target: { kind: 'string', value: '**/api/categories' },
+      },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/status',
+        },
       },
       {
         receiver: 'page',
