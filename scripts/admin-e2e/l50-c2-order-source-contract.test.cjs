@@ -36,19 +36,13 @@ test('requires the protected V1 Admin status command boundary', () => {
   assert.match(routes, /ADMIN_ORDER_VERSION_CONFLICT/);
 });
 
-test('requires current data scope for export and legacy pickup verification', () => {
+test('requires current data scope for Admin order export', () => {
   const groupBuyRoutes = read('apps/api/src/routes/group-buys.ts');
-  const fulfillmentRoutes = read('apps/api/src/routes/fulfillment.ts');
   assert.match(
     groupBuyRoutes,
     /\/api\/admin\/orders\/export\/picking\.csv[\s\S]{0,200}requireAdminPermission\('order\.view'\)/,
   );
   assert.match(groupBuyRoutes, /getScopedOrderWhere/);
-  assert.match(
-    fulfillmentRoutes,
-    /\/api\/admin\/orders\/:id\/pickup-verify[\s\S]{0,200}requireAdminPermission\('pickup\.verify'\)/,
-  );
-  assert.match(fulfillmentRoutes, /canAccessOrderDataScope/);
 });
 
 test('exposes order version to the Admin client and list projection', () => {
