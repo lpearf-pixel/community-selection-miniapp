@@ -51,25 +51,6 @@ type WithdrawalFeedbackProps = {
   onClearDetailError: () => void;
 };
 
-export function WithdrawalLoadError(props: {
-  error: string;
-  onRetry: () => void;
-}) {
-  return props.error ? (
-    <Alert
-      type="error"
-      showIcon
-      message="提现管理加载失败"
-      description={props.error}
-      action={
-        <Button size="small" onClick={props.onRetry}>
-          重试
-        </Button>
-      }
-    />
-  ) : null;
-}
-
 export function WithdrawalFeedback(props: WithdrawalFeedbackProps) {
   return (
     <>
