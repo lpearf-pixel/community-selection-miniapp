@@ -314,6 +314,7 @@ git commit -m "fix(api): bound Admin order pagination"
 **Files:**
 
 - Modify: `apps/api/src/routes/admin/orders.ts`
+- Modify: `apps/admin/src/workspace-packages.d.ts`
 - Modify: `apps/admin/src/features/sales/orders/types.ts`
 - Modify: `apps/admin/src/features/sales/orders/api.test.ts`
 - Modify: `apps/admin/src/features/sales/orders/OrdersPage.tsx`
@@ -322,6 +323,8 @@ git commit -m "fix(api): bound Admin order pagination"
 
 - Consumes `contractOk`, `contractFail`, `buildPaginationMetadata`, and
   `PaginatedData`.
+- Keeps the Admin workspace-package declaration synchronized with the
+  generated shared-package declaration.
 - Produces `AdminOrderListResponse = PaginatedData<AdminOrderListItem>`.
 - Keeps query serialization and all mutation endpoints unchanged.
 
@@ -419,6 +422,7 @@ Expected: all focused tests, Admin typecheck, and the static contract pass.
 
 ```bash
 git add apps/api/src/routes/admin/orders.ts \
+  apps/admin/src/workspace-packages.d.ts \
   apps/admin/src/features/sales/orders/types.ts \
   apps/admin/src/features/sales/orders/api.test.ts \
   apps/admin/src/features/sales/orders/OrdersPage.tsx \
