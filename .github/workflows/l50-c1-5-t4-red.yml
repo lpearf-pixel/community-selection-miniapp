@@ -1,0 +1,36 @@
+name: L50 C1.5 T4 RED
+on:
+  pull_request:
+    branches: [stable/l50-a3-4-business-base]
+permissions:
+  contents: read
+concurrency:
+  group: l50-c1-5-t4-red-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  admin-c1-5-t4-red:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    env:
+      CI: "true"
+      NODE_OPTIONS: --max-old-space-size=3072
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.4 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prove the catalog structure contract is RED
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @community-selection/admin test -- src/features/catalog/products/catalog-products-page-structure.test.ts > /tmp/t4-red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/t4-red.log
+          test "$status" -ne 0
+          grep -F "keeps the orchestrator at or below 200 lines" /tmp/t4-red.log
+          grep -F "delegates the table and form views" /tmp/t4-red.log
