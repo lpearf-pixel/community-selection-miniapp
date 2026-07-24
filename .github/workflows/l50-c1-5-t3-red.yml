@@ -1,4 +1,4 @@
-name: L50 C1.5 T3 RED
+name: L50 C1.5 T3 Gate
 
 on:
   pull_request:
@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: l50-c1-5-t3-red-${{ github.event.pull_request.number }}
+  group: l50-c1-5-t3-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  admin-c1-5-t3-red:
+  admin-c1-5-t3:
     runs-on: self-hosted
-    timeout-minutes: 10
+    timeout-minutes: 45
     env:
       CI: "true"
       NODE_OPTIONS: --max-old-space-size=3072
@@ -31,14 +31,26 @@ jobs:
           node-version: 20.19.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prove the structure contract is RED
-        shell: bash
+      - run: pnpm db:generate
+      - name: Verify L50 C1.5 group buy page boundaries
         run: |
-          set +e
-          pnpm --filter @community-selection/admin test -- src/features/sales/group-buys/group-buy-page-structure.test.ts > /tmp/l50-c1-5-t3-red.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/l50-c1-5-t3-red.log
-          test "$status" -ne 0
-          grep -F "keeps the orchestrator at or below 200 lines" /tmp/l50-c1-5-t3-red.log
-          grep -F "delegates the list and closure workbench views" /tmp/l50-c1-5-t3-red.log
+          pnpm --filter @community-selection/admin test -- src/features/sales/group-buys/group-buy-page-structure.test.ts src/features/sales/group-buys/api.test.ts src/features/sales/group-buys/page-model.test.ts
+          node --test scripts/admin-e2e/contract.test.cjs
+      - run: pnpm lint
+      - name: Typecheck with bounded workspace concurrency
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+          pnpm --workspace-concurrency=1 -r typecheck
+      - name: Test with bounded workspace concurrency
+        run: |
+          node --test scripts/admin-e2e/contract.test.cjs
+          pnpm --workspace-concurrency=1 -r test
+      - run: pnpm build
+      - run: node --import tsx --test scripts/admin-e2e/admin-auth-runtime.test.ts
+      - run: node --test scripts/admin-e2e/contract.test.cjs scripts/admin-e2e/run-cleanup.test.cjs
+      - run: pnpm setup:admin:e2e
+      - run: pnpm e2e:admin
+      - name: Cleanup current E2E resources
+        if: always()
+        run: node scripts/admin-e2e/cleanup-resources.cjs "$GITHUB_RUN_ID"
