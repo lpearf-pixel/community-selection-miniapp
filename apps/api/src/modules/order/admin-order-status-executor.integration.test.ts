@@ -55,7 +55,7 @@ const noScopeContext = (): AdminAccessContext => ({
 
 function command(
   idempotencyKey: string,
-  nextStatus: 'ready' | 'completed' = 'ready',
+  nextStatus: 'preparing' | 'ready' | 'completed' = 'ready',
 ) {
   return {
     order_id: orderId,
@@ -248,7 +248,7 @@ describe.sequential('Admin order status executor on PostgreSQL', () => {
   it('allows only one different-key writer for the same expected version', async () => {
     const settled = await Promise.allSettled([
       executeAdminOrderStatusCommand(command('different-key-0001')),
-      executeAdminOrderStatusCommand(command('different-key-0002', 'picked')),
+      executeAdminOrderStatusCommand(command('different-key-0002', 'preparing')),
     ]);
 
     expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(1);
