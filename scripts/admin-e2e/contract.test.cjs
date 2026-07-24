@@ -1380,7 +1380,7 @@ function assertB3OmnichannelOrdersContract(
 ) {
   assert.match(
     fixture,
-    /const runSuffix = String\(process\.env\.GITHUB_RUN_ID \?\? process\.pid\)/,
+    /const runSuffix = String\(\s*process\.env\.ADMIN_E2E_RUN_ID \?\? process\.env\.GITHUB_RUN_ID/,
     'B3 E2E fixture identity must be deterministic within one isolated run',
   );
   assert.match(
