@@ -95,7 +95,10 @@ async function findByPickupCode(code: string) {
   const suffix = code.toUpperCase().startsWith('PICK-') ? code.slice(5) : code;
   if (!suffix.trim()) return null;
   const orders = await prisma.order.findMany({
-    where: { order_no: { endsWith: suffix.toUpperCase() } },
+    where: {
+      pickup_type: PickupType.store,
+      order_no: { endsWith: suffix.toUpperCase() },
+    },
     include: { product: true, group_buy: { include: { product: true } }, pickup_store: true },
     orderBy: { created_at: 'desc' },
     take: 2
@@ -166,7 +169,16 @@ export function registerAdminPickupRoutes(app: FastifyInstance) {
         reply.code(403);
         return fail(ADMIN_SCOPE_FORBIDDEN);
       }
-      const where: Prisma.OrderWhereInput = { AND: [{ created_at: { gte: range.start, lt: range.end } }, scopeWhere as Prisma.OrderWhereInput, ...(query.pickup_store_id ? [{ pickup_store_id: query.pickup_store_id }] : [])] };
+      const where: Prisma.OrderWhereInput = {
+        AND: [
+          { created_at: { gte: range.start, lt: range.end } },
+          { pickup_type: PickupType.store },
+          scopeWhere as Prisma.OrderWhereInput,
+          ...(query.pickup_store_id
+            ? [{ pickup_store_id: query.pickup_store_id }]
+            : []),
+        ],
+      };
       const orders = await prisma.order.findMany({ where: { AND: [where, { order_status: { in: [OrderStatus.paid, OrderStatus.ready, OrderStatus.picked, OrderStatus.completed] } }] }, select: { order_status: true, quantity: true } });
       return ok({ date: range.date, pickup_store_id: query.pickup_store_id ?? null, pending_count: orders.filter((order) => order.order_status === OrderStatus.paid).length, ready_count: orders.filter((order) => order.order_status === OrderStatus.ready).length, picked_count: orders.filter((order) => order.order_status === OrderStatus.picked).length, completed_count: orders.filter((order) => order.order_status === OrderStatus.completed).length, total_quantity: orders.reduce((sum, order) => sum + order.quantity, 0) });
     } catch (error) {
