@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - codex/l50-c1-5-group-buy-page-governance
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
 
 permissions:
   contents: read
 
 concurrency:
-  group: l50-c1-5-t3-red
+  group: l50-c1-5-t3-red-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm --filter @community-selection/admin test --             src/features/sales/group-buys/group-buy-page-structure.test.ts             > /tmp/l50-c1-5-t3-red.log 2>&1
+          pnpm --filter @community-selection/admin test -- src/features/sales/group-buys/group-buy-page-structure.test.ts > /tmp/l50-c1-5-t3-red.log 2>&1
           status=$?
           set -e
           cat /tmp/l50-c1-5-t3-red.log
