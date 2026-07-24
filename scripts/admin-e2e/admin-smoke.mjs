@@ -383,7 +383,7 @@ try {
   const orderFilter = page.getByRole('form', {
     name: '全渠道订单筛选',
   });
-  const firstOrderNo = initialOrdersEnvelope.data.items[0].order_no;
+  const firstOrderNo = credentials.orderNo;
   await orderFilter.getByLabel('订单关键词').fill(firstOrderNo);
   const filteredOrdersResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -428,6 +428,44 @@ try {
   assert.equal(Object.hasOwn(filteredOrder, 'receiver_address'), false);
   await page.getByRole('columnheader', { name: '渠道' }).waitFor();
   await page.getByText('微信小程序', { exact: true }).first().waitFor();
+  assert.equal(filteredOrder.id, credentials.orderId);
+  assert.equal(filteredOrder.version, 1);
+
+  const fixtureRow = page
+    .getByRole('row')
+    .filter({ hasText: credentials.orderNo });
+  const statusResponsePromise = page.waitForResponse((response) =>
+    new URL(response.url()).pathname ===
+      `/api/admin/orders/${credentials.orderId}/status`,
+  );
+  const refreshedOrderPromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/admin/orders' &&
+      url.searchParams.get('keyword') === credentials.orderNo &&
+      response.ok()
+    );
+  });
+  await fixtureRow.getByRole('button', { name: '待自提' }).click();
+  const statusResponse = await statusResponsePromise;
+  const statusRequest = statusResponse.request();
+  assert.equal(statusRequest.method(), 'POST');
+  const statusCommand = statusRequest.postDataJSON();
+  assert.equal(statusCommand.next_status, 'ready');
+  assert.equal(statusCommand.expected_version, 1);
+  assert.match(
+    statusCommand.idempotency_key,
+    /^[\x21-\x7e]{16,128}$/,
+  );
+  assert.equal(statusResponse.status(), 200);
+  const statusEnvelope = await statusResponse.json();
+  assert.equal(statusEnvelope.success, true);
+  assert.equal(statusEnvelope.code, 'ADMIN_ORDER_STATUS_UPDATED');
+  assert.equal(statusEnvelope.data.order_id, credentials.orderId);
+  assert.equal(statusEnvelope.data.order_status, 'ready');
+  assert.equal(statusEnvelope.data.version, 2);
+  await refreshedOrderPromise;
+  await fixtureRow.getByText('ready', { exact: true }).waitFor();
 
   const orderFailureRoute = async (route) => {
     assert.equal(route.request().method(), 'GET');
