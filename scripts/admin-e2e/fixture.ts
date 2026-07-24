@@ -32,7 +32,9 @@ async function cleanup() {
     await prisma.orderTimelineLog.deleteMany({
       where: { order_id: { in: orderIds } },
     });
-    await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
+    await prisma.order.deleteMany({
+      where: { order_no: 'L50-B3-E2E-ORDER' },
+    });
   }
   await prisma.product.deleteMany({ where: { name: productName } });
   await prisma.category.deleteMany({ where: { name: categoryName } });
@@ -113,9 +115,28 @@ async function setup() {
       status: 'active',
     },
   });
-  const order = await prisma.order.create({
-    data: {
-      order_no: orderNo,
+  const order = await prisma.order.upsert({
+    where: { order_no: 'L50-B3-E2E-ORDER' },
+    update: {
+      user_id: customer.id,
+      product_id: product.id,
+      community_id: community.id,
+      total_amount_cents: 2590,
+      product_amount_cents: 2590,
+      pay_amount_cents: 2590,
+      quantity: 1,
+      pay_status: 'paid',
+      order_status: 'paid',
+      version: 1,
+      refund_status: 'none',
+      pickup_type: 'delivery',
+      receiver_name: '浏览器测试用户',
+      receiver_phone: '13812348000',
+      receiver_address: '测试市测试区测试路 100 号',
+      paid_at: new Date(),
+    },
+    create: {
+      order_no: 'L50-B3-E2E-ORDER',
       user_id: customer.id,
       product_id: product.id,
       community_id: community.id,
