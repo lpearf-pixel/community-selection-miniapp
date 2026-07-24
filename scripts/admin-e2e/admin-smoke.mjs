@@ -467,6 +467,22 @@ try {
   assert.equal(statusEnvelope.data.version, 2);
   await refreshedOrderPromise;
   await fixtureRow.getByText('ready', { exact: true }).waitFor();
+  await page.waitForLoadState('networkidle');
+  const a33RequestsAfterOrderMutation = readA33RequestCounts();
+  assert.deepEqual(a33RequestsAfterOrderMutation, {
+    inventory: a33RequestsAfterInitial.inventory + 1,
+    purchasePlans: a33RequestsAfterInitial.purchasePlans + 1,
+    suppliers: a33RequestsAfterInitial.suppliers + 1,
+    batches: a33RequestsAfterInitial.batches + 1,
+    expiryAlerts: a33RequestsAfterInitial.expiryAlerts + 1,
+    stockChecks: a33RequestsAfterInitial.stockChecks + 1,
+  });
+  const a34RequestsAfterOrderMutation = readA34RequestCounts();
+  assert.deepEqual(a34RequestsAfterOrderMutation, {
+    withdrawals: a34RequestsAfterInitial.withdrawals + 1,
+    alerts: a34RequestsAfterInitial.alerts + 1,
+    taxReview: a34RequestsAfterInitial.taxReview + 1,
+  });
 
   const orderFailureRoute = async (route) => {
     assert.equal(route.request().method(), 'GET');
@@ -560,7 +576,7 @@ try {
   assert.equal(catalogRequestCount, catalogRequestsBeforeA32);
   assert.equal(financeRequestCount, financeRequestsBeforeA32);
   assert.equal(operationsRequestCount, operationsRequestsBeforeA32);
-  assert.deepEqual(readA33RequestCounts(), a33RequestsAfterInitial);
+  assert.deepEqual(readA33RequestCounts(), a33RequestsAfterOrderMutation);
 
   const inventoryButton = groupedNavigation.getByRole('button', {
     name: '库存管理',
@@ -799,7 +815,7 @@ try {
   assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(financeRequestCount, financeRequestsAfterRefresh);
 
-  assert.deepEqual(readA34RequestCounts(), a34RequestsAfterInitial);
+  assert.deepEqual(readA34RequestCounts(), a34RequestsAfterOrderMutation);
   const withdrawalsButton = groupedNavigation.getByRole('button', {
     name: '提现管理',
     exact: true,
