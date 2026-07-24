@@ -467,6 +467,49 @@ try {
   assert.equal(statusEnvelope.data.version, 2);
   await refreshedOrderPromise;
   await fixtureRow.getByText('ready', { exact: true }).waitFor();
+
+  const externalAdvance = await context.request.post(
+    `${baseURL}/api/admin/orders/${credentials.orderId}/status`,
+    {
+      data: {
+        next_status: 'picked',
+        expected_version: 2,
+        idempotency_key: 'e2e-external-advance-01',
+      },
+    },
+  );
+  assert.equal(externalAdvance.status(), 200);
+  const externalEnvelope = await externalAdvance.json();
+  assert.equal(externalEnvelope.data.order_status, 'picked');
+  assert.equal(externalEnvelope.data.version, 3);
+
+  const conflictResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+        `/api/admin/orders/${credentials.orderId}/status` &&
+      response.request().method() === 'POST',
+  );
+  const conflictRefreshPromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/admin/orders' &&
+      url.searchParams.get('keyword') === credentials.orderNo &&
+      response.ok()
+    );
+  });
+  await fixtureRow.getByRole('button', { name: '完成' }).click();
+  const conflictResponse = await conflictResponsePromise;
+  assert.equal(conflictResponse.status(), 409);
+  const conflictCommand = conflictResponse.request().postDataJSON();
+  assert.equal(conflictCommand.expected_version, 2);
+  const conflictEnvelope = await conflictResponse.json();
+  assert.equal(conflictEnvelope.code, 'ADMIN_ORDER_VERSION_CONFLICT');
+  assert.equal(typeof conflictEnvelope.trace_id, 'string');
+  await conflictRefreshPromise;
+  await page
+    .getByText('订单已被其他操作更新，已刷新列表，请重试', { exact: true })
+    .waitFor();
+  await fixtureRow.getByText('picked', { exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
