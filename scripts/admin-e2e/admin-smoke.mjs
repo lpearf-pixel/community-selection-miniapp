@@ -666,7 +666,7 @@ try {
   });
   await alertsButton.click();
   await assertActive(alertsButton, '告警中心');
-  await page.getByText('告警中心', { exact: true }).waitFor();
+  const alertsCardTitle = page\n    .locator('.ant-card-head-title')\n    .filter({ hasText: /^告警中心$/ });\n  await alertsCardTitle.waitFor();
 
   const alertFailureRoute = async (route) => {
     assert.equal(route.request().method(), 'GET');
@@ -731,7 +731,7 @@ try {
   assert.equal(alertEnvelope.success, true);
   assert.equal(Array.isArray(alertEnvelope.data), true);
   await page.getByText('运营告警加载失败').waitFor({ state: 'detached' });
-  await page.getByText('告警中心', { exact: true }).waitFor();
+  await alertsCardTitle.waitFor();
   await waitForCount(
     page,
     () => alertRequestCount,
