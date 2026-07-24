@@ -22,6 +22,19 @@ describe('Admin order status command contract', () => {
     });
   });
 
+  it('accepts printable ASCII with internal spaces', () => {
+    expect(
+      parseAdminOrderStatusCommand({
+        next_status: 'ready',
+        expected_version: 1,
+        idempotency_key: 'idem internal key 01',
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: { idempotency_key: 'idem internal key 01' },
+    });
+  });
+
   it.each([
     null,
     [],
@@ -31,6 +44,7 @@ describe('Admin order status command contract', () => {
     { next_status: 'ready', expected_version: 1.5, idempotency_key: 'idem-123456789012' },
     { next_status: 'ready', expected_version: 1, idempotency_key: 'short' },
     { next_status: 'ready', expected_version: 1, idempotency_key: ' idem-123456789012' },
+    { next_status: 'ready', expected_version: 1, idempotency_key: 'idem-123456789012 ' },
     { next_status: 'ready', expected_version: 1, idempotency_key: '幂等键-12345678901234' },
   ])('rejects an invalid command: %j', (input) => {
     expect(parseAdminOrderStatusCommand(input)).toEqual({
