@@ -6,8 +6,8 @@ import {
 } from '../admin-access/admin-access-control.js';
 import {
   recordAdminAudit,
-  safeRecordBusinessEvent,
-  safeRecordOrderTimeline,
+  recordBusinessEvent,
+  recordOrderTimeline,
 } from '../audit/audit-service.js';
 import { markCommissionPendingForCompletedOrder } from '../finance/finance-service.js';
 import {
@@ -215,7 +215,7 @@ export async function executeAdminOrderStatusCommand(input: {
       const eventType = isCompleted
         ? 'order_completed'
         : 'order_status_changed';
-      await safeRecordBusinessEvent(tx, {
+      await recordBusinessEvent(tx, {
         event_type: eventType,
         event_source: 'admin-order-status-command',
         order_id: input.order_id,
@@ -244,7 +244,7 @@ export async function executeAdminOrderStatusCommand(input: {
           idempotency_key: input.command.idempotency_key,
         },
       });
-      await safeRecordOrderTimeline(tx, {
+      await recordOrderTimeline(tx, {
         order_id: input.order_id,
         event_type: eventType,
         title: isCompleted ? '订单已完成' : '订单状态已更新',
