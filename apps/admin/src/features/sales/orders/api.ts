@@ -4,6 +4,7 @@ import type { Order } from '../shared/types';
 import type {
   AdminOrderListQuery,
   AdminOrderListResponse,
+  AdminOrderStatusResult,
   AiContext,
 } from './types';
 
@@ -44,12 +45,21 @@ export function loadOrderAiContext(
 export function updateOrderStatus(
   orderId: string,
   nextStatus: string,
+  expectedVersion: number,
+  idempotencyKey: string,
   request: JsonRequester = adminJsonRequest,
-): Promise<Order> {
-  return request<Order>(`/api/orders/${orderId}/status`, {
-    method: 'POST',
-    body: JSON.stringify({ next_status: nextStatus }),
-  });
+): Promise<AdminOrderStatusResult> {
+  return request<AdminOrderStatusResult>(
+    `/api/admin/orders/${orderId}/status`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        next_status: nextStatus,
+        expected_version: expectedVersion,
+        idempotency_key: idempotencyKey,
+      }),
+    },
+  );
 }
 
 export function verifyOrderPickup(
