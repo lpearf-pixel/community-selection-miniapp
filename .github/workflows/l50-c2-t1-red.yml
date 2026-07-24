@@ -54,6 +54,8 @@ jobs:
             -p community-selection-c2-red-${GITHUB_RUN_ID} \
             -f docker-compose.yml up -d --wait postgres
           pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
           pnpm --filter @community-selection/api test -- \
             src/modules/order/admin-order-status-executor.integration.test.ts
       - name: Cleanup RED PostgreSQL
