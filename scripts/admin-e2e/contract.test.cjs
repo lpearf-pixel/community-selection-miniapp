@@ -1336,7 +1336,12 @@ function assertB2RoleWorkbenchContract(smoke) {
   );
 }
 
-function assertB3OmnichannelOrdersContract(smoke, fixture, orderPage) {
+function assertB3OmnichannelOrdersContract(
+  smoke,
+  fixture,
+  orderPage,
+  orderFilters,
+) {
   assert.match(
     fixture,
     /await prisma\.order\.upsert\(\{[\s\S]*order_no: 'L50-B3-E2E-ORDER'/,
@@ -1348,12 +1353,12 @@ function assertB3OmnichannelOrdersContract(smoke, fixture, orderPage) {
     'B3 E2E must remove its deterministic order during cleanup',
   );
   assert.match(
-    orderPage,
-    /<Form[\s\S]*?onFinish=\{applyFilters\}[\s\S]*?<Button\s+type="primary"\s+htmlType="submit"\s*>/,
+    orderFilters,
+    /<Form[\s\S]*?onFinish=\{props\.onFinish\}[\s\S]*?<Button\s+type="primary"\s+htmlType="submit"\s*>/,
     'B3 query must use the standard Ant Design submit path',
   );
   assert.doesNotMatch(
-    orderPage,
+    `${orderPage}\n${orderFilters}`,
     /form\.getFieldsValue\(\)/,
     'B3 query must not duplicate Form submission in an explicit click handler',
   );
@@ -1586,9 +1591,21 @@ test('Admin E2E proves B3 protected omnichannel orders', () => {
     ),
     'utf8',
   );
+  const orderFilters = fs.readFileSync(
+    path.join(
+      root,
+      'apps/admin/src/features/sales/orders/OrdersFilters.tsx',
+    ),
+    'utf8',
+  );
 
   assert.doesNotThrow(() =>
-    assertB3OmnichannelOrdersContract(smoke, fixture, orderPage),
+    assertB3OmnichannelOrdersContract(
+      smoke,
+      fixture,
+      orderPage,
+      orderFilters,
+    ),
   );
 });
 
@@ -1623,10 +1640,10 @@ test('C1 defines the bounded traceable Admin order contract', () => {
     path.join(root, 'apps/admin/src/workspace-packages.d.ts'),
     'utf8',
   );
-  const orderPage = fs.readFileSync(
+  const ordersTable = fs.readFileSync(
     path.join(
       root,
-      'apps/admin/src/features/sales/orders/OrdersPage.tsx',
+      'apps/admin/src/features/sales/orders/OrdersTable.tsx',
     ),
     'utf8',
   );
@@ -1650,9 +1667,9 @@ test('C1 defines the bounded traceable Admin order contract', () => {
   assert.match(workspacePackages, /export function contractOk/);
   assert.match(workspacePackages, /export function contractFail/);
   assert.match(workspacePackages, /export function buildPaginationMetadata/);
-  assert.match(orderPage, /state\.data\.pagination\.page/);
-  assert.match(orderPage, /state\.data\.pagination\.page_size/);
-  assert.match(orderPage, /state\.data\.pagination\.total/);
+  assert.match(ordersTable, /props\.data\.pagination\.page/);
+  assert.match(ordersTable, /props\.data\.pagination\.page_size/);
+  assert.match(ordersTable, /props\.data\.pagination\.total/);
   assert.match(
     smoke,
     /const unauthenticatedOrdersEnvelope =\s*await unauthenticatedOrdersResponse\.json\(\);/,
