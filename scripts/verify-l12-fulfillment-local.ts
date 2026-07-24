@@ -48,7 +48,8 @@ async function main() {
   const leader = await prisma.user.create({ data: { openid: `${prefix}-leader`, nickname: 'L12开团人', role: 'leader' } });
   const user = await prisma.user.create({ data: { openid: `${prefix}-user`, nickname: 'L12用户', role: 'customer' } });
   const product = await prisma.product.create({ data: { name: `${prefix}-product`, category_id: category.id, price_cents: 1200, cost_price_cents: 800, stock: 100, unit: '份', is_group_enabled: true, status: 'active', commission_type: 'fixed', commission_value: 100 } });
-  const pickupTime = new Date(Date.now() + 7200_000);\n  const groupBuy = await post('/api/group-buys', { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: pickupTime.toISOString() });
+  const pickupTime = new Date(Date.now() + 7200_000);
+  const groupBuy = await post('/api/group-buys', { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: pickupTime.toISOString() });
   const order = await post('/api/orders', { user_id: user.id, group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '张三', receiver_phone: '13812345678' });
   await post('/api/payments/mock', { order_id: order.id });
   const paidOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
@@ -58,7 +59,8 @@ async function main() {
     idempotency_key: `${prefix}-ready`,
   }, adminCookie);
 
-  const overviewDate = pickupTime.toISOString().slice(0, 10);\n  const overview = await json(await adminGet(`/api/admin/fulfillment/overview?date=${overviewDate}`, adminCookie));
+  const overviewDate = pickupTime.toISOString().slice(0, 10);
+  const overview = await json(await adminGet(`/api/admin/fulfillment/overview?date=${overviewDate}`, adminCookie));
   assert(overview.by_community.some((item: any) => item.community_id === community.id && item.quantity >= 2), 'overview should include community quantity');
   assert(overview.by_product.some((item: any) => item.product_id === product.id && item.quantity >= 2), 'overview should include product quantity');
 
