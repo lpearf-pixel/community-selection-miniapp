@@ -355,14 +355,14 @@ describe.sequential('Admin order status executor on PostgreSQL', () => {
     );
     await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS ${failure}()`);
     await prisma.$executeRawUnsafe(
-      `CREATE FUNCTION ${failure}() RETURNS trigger AS $
+      `CREATE FUNCTION ${failure}() RETURNS trigger AS $c2$
        BEGIN
          IF NEW.event_type = 'commission_pending' THEN
            RAISE EXCEPTION 'forced commission pending event failure';
          END IF;
          RETURN NEW;
        END;
-       $ LANGUAGE plpgsql`,
+       $c2$ LANGUAGE plpgsql`,
     );
     await prisma.$executeRawUnsafe(
       `CREATE TRIGGER ${trigger}
