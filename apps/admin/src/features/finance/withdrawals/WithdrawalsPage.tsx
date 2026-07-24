@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Space, Spin, Typography } from 'antd';
+import { Alert, Button, Space, Spin, Typography } from 'antd';
 import { featureErrorMessage } from '../../../shared/state/feature-resource';
 import { useFeatureResourceLoader } from '../../../shared/state/use-feature-resource-loader';
 import {
@@ -11,11 +11,7 @@ import {
 } from './api';
 import type { Withdrawal, WithdrawalDetail } from './types';
 import { WithdrawalDetailDrawer } from './WithdrawalDetailDrawer';
-import {
-  WithdrawalFeedback,
-  WithdrawalLoadError,
-  WithdrawalsWorkbench,
-} from './WithdrawalsWorkbench';
+import { WithdrawalFeedback, WithdrawalsWorkbench } from './WithdrawalsWorkbench';
 
 export type WithdrawalsPageProps = {
   refreshVersion: number;
@@ -52,10 +48,7 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
       ),
     [appliedKeyword, page, queryVersion, range, status],
   );
-  const { state, retry } = useFeatureResourceLoader(
-    load,
-    props.refreshVersion,
-  );
+  const { state, retry } = useFeatureResourceLoader(load, props.refreshVersion);
 
   useEffect(
     () => () => {
@@ -112,10 +105,20 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
     }
   };
 
+  const errorAlert = state.error ? (
+    <Alert
+      type="error"
+      showIcon
+      message="提现管理加载失败"
+      description={state.error}
+      action={<Button size="small" onClick={retry}>重试</Button>}
+    />
+  ) : null;
+
   if (state.data === null) {
     return (
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <WithdrawalLoadError error={state.error} onRetry={retry} />
+        {errorAlert}
         {state.status !== 'error' ? <Spin tip="正在加载提现管理" /> : null}
       </Space>
     );
@@ -135,21 +138,15 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
     setPage(1);
     setQueryVersion((version) => version + 1);
   };
-  const markPaid = (item: Withdrawal) =>
-    void promptForAction(
-      '人工标记已处理',
-      '人工转账记录号或内部处理编号',
-      (value) =>
-        markWithdrawalPaid(
-          item.withdrawal_id,
-          value,
-          '人工处理完成',
-        ),
-    );
+  const markPaid = (item: Withdrawal) => void promptForAction(
+    '人工标记已处理',
+    '人工转账记录号或内部处理编号',
+    (value) => markWithdrawalPaid(item.withdrawal_id, value, '人工处理完成'),
+  );
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <WithdrawalLoadError error={state.error} onRetry={retry} />
+      {errorAlert}
       <WithdrawalFeedback
         actionError={actionError}
         detailError={detailError}
