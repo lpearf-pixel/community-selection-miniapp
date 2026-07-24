@@ -7,9 +7,7 @@ const ignoredDirs = new Set(['node_modules', 'dist', 'build', '.vite', 'reports'
 const checkedExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.prisma', '.sql', '.wxml', '.wxss']);
 const docWhitelist = [/^docs\//, /^AGENTS\.md$/, /^README\.md$/, /^CODEX_/];
 const excludedPaths = [
-  /^scripts(?:\/|$)/,
-  /^prisma\/migrations(?:\/|$)/,
-  /\.(?:test|spec)\.[cm]?[jt]sx?$/,
+  /^scripts\/generate-stage-report\.ts$/,
   /^reports(?:\/|$)/,
   /^stage-reports(?:\/|$)/,
   /^\.tmp\/stage-reports-worktree(?:\/|$)/
@@ -62,6 +60,8 @@ function walk(dir: string, matches: string[]) {
       for (const term of forbidden) {
         if (line.includes(term) && !isAllowedLine(path, line, term)) matches.push(`${path}:${index + 1} contains ${term}`);
       }
+      const levelTerm = ['le', 'vel'].join('');
+      if (new RegExp(`\\b${levelTerm}\\b`).test(line) && !isAllowedLine(path, line, levelTerm)) matches.push(`${path}:${index + 1} contains ${levelTerm}`);
     });
   }
 }
