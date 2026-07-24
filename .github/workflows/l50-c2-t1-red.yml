@@ -45,3 +45,27 @@ jobs:
           test "$source_status" -ne 0
           grep -F "uses the versioned Admin order status command" admin-red.log
           grep -F "retires unauthenticated order read and write handlers" source-red.log
+      - name: Prove the PostgreSQL transaction executor RED
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:15432/community_selection?schema=public
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-c2-red-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+          set +e
+          pnpm --filter @community-selection/api test -- \
+            src/modules/order/admin-order-status-executor.integration.test.ts \
+            > executor-red.log 2>&1
+          executor_status=$?
+          set -e
+          cat executor-red.log
+          test "$executor_status" -ne 0
+          grep -F "admin-order-status-executor" executor-red.log
+      - name: Cleanup RED PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-c2-red-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
