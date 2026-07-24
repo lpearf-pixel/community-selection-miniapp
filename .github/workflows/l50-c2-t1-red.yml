@@ -58,6 +58,15 @@ jobs:
           pnpm --filter @community-selection/config build
           pnpm --filter @community-selection/api test -- \
             src/modules/order/admin-order-status-executor.integration.test.ts
+          set +e
+          pnpm --filter @community-selection/api test -- \
+            src/routes/admin/order-status-route.integration.test.ts \
+            > route-red.log 2>&1
+          route_status=$?
+          set -e
+          cat route-red.log
+          test "$route_status" -ne 0
+          grep -F "returns a traceable V1 401 without Admin identity" route-red.log
       - name: Cleanup RED PostgreSQL
         if: always()
         run: |
