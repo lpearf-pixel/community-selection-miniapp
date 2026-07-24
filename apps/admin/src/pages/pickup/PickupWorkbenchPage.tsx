@@ -2,9 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Input, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { getAdminScopeSummary } from "../../access/adminAccess";
-import { getPickupWorkbenchOrderByCode, getPickupWorkbenchOrders, getPickupWorkbenchSummary, verifyPickupWorkbenchOrder, type PickupWorkbenchOrder, type PickupWorkbenchSummary } from "../../api/pickupWorkbench";
+import {
+  getPickupWorkbenchOrderByCode,
+  getPickupWorkbenchOrders,
+  getPickupWorkbenchSummary,
+  PickupWorkbenchApiError,
+  verifyPickupWorkbenchOrder,
+  type PickupWorkbenchOrder,
+  type PickupWorkbenchSummary,
+} from "../../api/pickupWorkbench";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const PICKUP_CONFLICT_CODES: ReadonlySet<string> = new Set([
+  "ADMIN_PICKUP_TYPE_CONFLICT",
+  "ADMIN_PICKUP_STATE_CONFLICT",
+  "ADMIN_ORDER_VERSION_CONFLICT",
+]);
 
 function hasPickupPermission() {
   const raw = window.localStorage.getItem("admin_permissions") ?? window.localStorage.getItem("adminAccessPermissions") ?? "";
@@ -87,8 +100,16 @@ export function PickupWorkbenchPage() {
         });
       }
     } catch (error) {
+      if (
+        error instanceof PickupWorkbenchApiError &&
+        PICKUP_CONFLICT_CODES.has(error.code)
+      ) {
+        setSelectedOrder((current) =>
+          current?.order_id === order.order_id ? null : current,
+        );
+        await loadData();
+      }
       setErrorMessage(error instanceof Error ? error.message : "核销失败");
-      await loadData();
     } finally {
       pendingOrderIdsRef.current.delete(order.order_id);
       setLoading(false);
