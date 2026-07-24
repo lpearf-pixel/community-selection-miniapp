@@ -65,6 +65,7 @@ export type AdminOrderListItem = {
   refund_amount_cents: number;
   pay_status: AdminOrderPayStatus;
   order_status: AdminOrderStatus;
+  version: number;
   refund_status: AdminOrderRefundStatus;
   pickup_type: 'store' | 'delivery';
   pickup_store: {
@@ -85,6 +86,19 @@ export type AdminOrderListItem = {
 
 export type AdminOrderListResponse =
   PaginatedData<AdminOrderListItem>;
+
+export type AdminOrderStatusResult = {
+  order_id: string;
+  order_no: string;
+  order_status:
+    | 'preparing'
+    | 'ready'
+    | 'picked'
+    | 'delivered'
+    | 'completed';
+  version: number;
+  completed_at: string | null;
+};
 
 export type OpsAlert = {
   id: string;
