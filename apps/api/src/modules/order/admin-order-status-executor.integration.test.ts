@@ -10,9 +10,19 @@ const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const ids = {
   admin: `c2-admin-${suffix}`,
   userOpenid: `c2-user-${suffix}`,
+  leaderOpenid: `c2-leader-${suffix}`,
+  categoryName: `C2 category ${suffix}`,
+  productName: `C2 product ${suffix}`,
+  communityName: `C2 community ${suffix}`,
   orderNo: `C2-${suffix}`,
 };
 let userId = '';
+let leaderId = '';
+let categoryId = '';
+let productId = '';
+let communityId = '';
+let groupBuyId = '';
+let commissionId = '';
 let orderId = '';
 
 const fullContext = (): AdminAccessContext => ({
@@ -85,6 +95,10 @@ async function resetOrder() {
       where: { target_type: 'Order', target_id: orderId },
     }),
     prisma.orderTimelineLog.deleteMany({ where: { order_id: orderId } }),
+    prisma.commission.update({
+      where: { id: commissionId },
+      data: { status: 'estimated', available_at: null },
+    }),
     prisma.order.update({
       where: { id: orderId },
       data: {
@@ -115,10 +129,65 @@ beforeAll(async () => {
     },
   });
   userId = user.id;
+  const leader = await prisma.user.create({
+    data: {
+      openid: ids.leaderOpenid,
+      nickname: 'C2 reward leader',
+      role: 'leader',
+      status: 'active',
+    },
+  });
+  leaderId = leader.id;
+  const category = await prisma.category.create({
+    data: { name: ids.categoryName },
+  });
+  categoryId = category.id;
+  const product = await prisma.product.create({
+    data: {
+      name: ids.productName,
+      category_id: category.id,
+      price_cents: 100,
+      cost_price_cents: 50,
+      stock: 100,
+      unit: '份',
+      commission_type: 'fixed',
+      commission_value: 10,
+      status: 'active',
+    },
+  });
+  productId = product.id;
+  const community = await prisma.community.create({
+    data: {
+      name: ids.communityName,
+      address: 'C2 integration address',
+      status: 'active',
+    },
+  });
+  communityId = community.id;
+  const now = Date.now();
+  const groupBuy = await prisma.groupBuy.create({
+    data: {
+      product_id: product.id,
+      leader_user_id: leader.id,
+      community_id: community.id,
+      min_people: 1,
+      min_quantity: 1,
+      price_cents: 100,
+      start_time: new Date(now - 60_000),
+      end_time: new Date(now + 60_000),
+      pickup_time: new Date(now + 120_000),
+      status: 'success',
+    },
+  });
+  groupBuyId = groupBuy.id;
   const order = await prisma.order.create({
     data: {
       order_no: ids.orderNo,
       user_id: user.id,
+      group_buy_id: groupBuy.id,
+      product_id: product.id,
+      leader_user_id: leader.id,
+      community_id: community.id,
       total_amount_cents: 100,
       product_amount_cents: 100,
       pay_amount_cents: 100,
@@ -129,6 +198,20 @@ beforeAll(async () => {
     },
   });
   orderId = order.id;
+  const commission = await prisma.commission.create({
+    data: {
+      leader_user_id: leader.id,
+      order_id: order.id,
+      group_buy_id: groupBuy.id,
+      base_amount_cents: 100,
+      commission_type: 'fixed',
+      commission_value: 10,
+      estimated_amount_cents: 10,
+      final_amount_cents: 10,
+      status: 'estimated',
+    },
+  });
+  commissionId = commission.id;
 });
 
 beforeEach(resetOrder);
@@ -148,9 +231,15 @@ afterAll(async () => {
       where: { target_type: 'Order', target_id: orderId },
     });
     await prisma.orderTimelineLog.deleteMany({ where: { order_id: orderId } });
+    await prisma.commission.deleteMany({ where: { id: commissionId } });
     await prisma.order.deleteMany({ where: { id: orderId } });
   }
+  if (groupBuyId) await prisma.groupBuy.deleteMany({ where: { id: groupBuyId } });
+  if (productId) await prisma.product.deleteMany({ where: { id: productId } });
+  if (categoryId) await prisma.category.deleteMany({ where: { id: categoryId } });
+  if (communityId) await prisma.community.deleteMany({ where: { id: communityId } });
   if (userId) await prisma.user.deleteMany({ where: { id: userId } });
+  if (leaderId) await prisma.user.deleteMany({ where: { id: leaderId } });
   await prisma.adminUser.deleteMany({ where: { id: ids.admin } });
   await prisma.$disconnect();
 });
@@ -235,6 +324,83 @@ describe.sequential('Admin order status executor on PostgreSQL', () => {
       statusCode: 403,
       code: 'ADMIN_ORDER_SCOPE_FORBIDDEN',
     });
+  });
+
+  it('moves a real completion commission once and replays without duplicate effects', async () => {
+    const input = command('completion-reward-key', 'completed');
+    const first = await executeAdminOrderStatusCommand(input);
+    const replay = await executeAdminOrderStatusCommand(input);
+
+    expect(replay).toEqual(first);
+    await expect(
+      prisma.commission.findUniqueOrThrow({ where: { id: commissionId } }),
+    ).resolves.toMatchObject({ status: 'pending' });
+    await expect(sideEffectCounts()).resolves.toEqual({
+      events: 2,
+      audits: 1,
+      timeline: 2,
+    });
+    await expect(
+      prisma.adminCommandReceipt.count({
+        where: { admin_user_id: ids.admin },
+      }),
+    ).resolves.toBe(1);
+  });
+
+  it('rolls back completion when strict reward event logging fails', async () => {
+    const trigger = 'c2_fail_commission_pending_event';
+    const failure = 'c2_raise_commission_pending_failure';
+    await prisma.$executeRawUnsafe(
+      `DROP TRIGGER IF EXISTS ${trigger} ON "BusinessEventLog"`,
+    );
+    await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS ${failure}()`);
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION ${failure}() RETURNS trigger AS $
+       BEGIN
+         IF NEW.event_type = 'commission_pending' THEN
+           RAISE EXCEPTION 'forced commission pending event failure';
+         END IF;
+         RETURN NEW;
+       END;
+       $ LANGUAGE plpgsql`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER ${trigger}
+       BEFORE INSERT ON "BusinessEventLog"
+       FOR EACH ROW EXECUTE FUNCTION ${failure}()`,
+    );
+    try {
+      await expect(
+        executeAdminOrderStatusCommand(
+          command('reward-rollback-key', 'completed'),
+        ),
+      ).rejects.toBeTruthy();
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `DROP TRIGGER IF EXISTS ${trigger} ON "BusinessEventLog"`,
+      );
+      await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS ${failure}()`);
+    }
+
+    await expect(prisma.order.findUniqueOrThrow({ where: { id: orderId } }))
+      .resolves.toMatchObject({
+        order_status: 'paid',
+        version: 1,
+        completed_at: null,
+      });
+    await expect(
+      prisma.commission.findUniqueOrThrow({ where: { id: commissionId } }),
+    ).resolves.toMatchObject({ status: 'estimated', available_at: null });
+    await expect(sideEffectCounts()).resolves.toEqual({
+      events: 0,
+      audits: 0,
+      timeline: 0,
+    });
+    await expect(
+      prisma.adminCommandReceipt.count({
+        where: { admin_user_id: ids.admin },
+      }),
+    ).resolves.toBe(0);
   });
 
   it('rolls back the order, logs and receipt when an audit side effect fails', async () => {
