@@ -1,9 +1,6 @@
 name: L50 C1.5 T3 RED
 
 on:
-  push:
-    branches:
-      - codex/l50-c1-5-group-buy-page-governance
   pull_request:
     branches:
       - stable/l50-a3-4-business-base
@@ -12,12 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: l50-c1-5-t3-red-${{ github.ref }}
+  group: l50-c1-5-t3-red-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   admin-c1-5-t3-red:
-    runs-on: [self-hosted, Linux, X64, home, docker, community-selection-miniapp]
+    runs-on: self-hosted
     timeout-minutes: 10
     env:
       CI: "true"
