@@ -435,88 +435,167 @@ try {
   const fixtureRow = page
     .getByRole('row')
     .filter({ hasText: credentials.orderNo });
-  const statusResponsePromise = page.waitForResponse((response) =>
-    new URL(response.url()).pathname ===
-      `/api/admin/orders/${credentials.orderId}/status`,
-  );
-  const refreshedOrderPromise = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === '/api/admin/orders' &&
-      url.searchParams.get('keyword') === credentials.orderNo &&
-      response.ok()
-    );
+  const orderRequestsBeforeStatusRace = orderRequestCount;
+  const statusRaceResponses = [];
+  const captureStatusRaceResponse = (response) => {
+    const request = response.request();
+    if (
+      new URL(response.url()).pathname ===
+        `/api/admin/orders/${credentials.orderId}/status` &&
+      request.method() === 'POST'
+    ) {
+      statusRaceResponses.push(response);
+    }
+  };
+  page.on('response', captureStatusRaceResponse);
+
+  let releaseStatusRace;
+  const statusRaceReady = new Promise((resolve) => {
+    releaseStatusRace = resolve;
   });
-  await fixtureRow.getByRole('button', { name: '待自提' }).click();
-  const statusResponse = await statusResponsePromise;
-  const statusRequest = statusResponse.request();
-  assert.equal(statusRequest.method(), 'POST');
-  const statusCommand = statusRequest.postDataJSON();
-  assert.equal(statusCommand.next_status, 'ready');
-  assert.equal(statusCommand.expected_version, 1);
-  assert.match(
-    statusCommand.idempotency_key,
-    /^[\x21-\x7e]{16,128}$/,
+  let settleStatusRace;
+  const statusRaceFinished = new Promise((resolve, reject) => {
+    settleStatusRace = { resolve, reject };
+  });
+  const statusRaceEntries = [];
+  const statusRaceRoute = async (route) => {
+    try {
+      const request = route.request();
+      assert.equal(request.method(), 'POST');
+      assert.equal(
+        new URL(request.url()).pathname,
+        `/api/admin/orders/${credentials.orderId}/status`,
+      );
+      const entry = {
+        route,
+        command: request.postDataJSON(),
+        response: null,
+      };
+      statusRaceEntries.push(entry);
+      assert.ok(statusRaceEntries.length <= 2);
+      if (statusRaceEntries.length === 2) {
+        releaseStatusRace();
+      }
+      await statusRaceReady;
+      entry.response = await route.fetch();
+
+      if (statusRaceEntries.every((candidate) => candidate.response !== null)) {
+        const successfulEntries = statusRaceEntries.filter(
+          (candidate) => candidate.response.status() === 200,
+        );
+        const conflictingEntries = statusRaceEntries.filter(
+          (candidate) => candidate.response.status() === 409,
+        );
+        assert.equal(successfulEntries.length, 1);
+        assert.equal(conflictingEntries.length, 1);
+
+        const successRefreshPromise = page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === '/api/admin/orders' &&
+            url.searchParams.get('keyword') === credentials.orderNo &&
+            response.ok()
+          );
+        });
+        await successfulEntries[0].route.fulfill({
+          response: successfulEntries[0].response,
+        });
+        await successRefreshPromise;
+        await waitForCount(
+          page,
+          () => orderRequestCount,
+          orderRequestsBeforeStatusRace + 1,
+          'order success refresh',
+        );
+        assert.equal(orderRequestCount, orderRequestsBeforeStatusRace + 1);
+
+        const conflictRefreshPromise = page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === '/api/admin/orders' &&
+            url.searchParams.get('keyword') === credentials.orderNo &&
+            response.ok()
+          );
+        });
+        await conflictingEntries[0].route.fulfill({
+          response: conflictingEntries[0].response,
+        });
+        await conflictRefreshPromise;
+        await waitForCount(
+          page,
+          () => orderRequestCount,
+          orderRequestsBeforeStatusRace + 2,
+          'order conflict refresh',
+        );
+        assert.equal(orderRequestCount, orderRequestsBeforeStatusRace + 2);
+        settleStatusRace.resolve();
+      }
+      await statusRaceFinished;
+    } catch (error) {
+      settleStatusRace.reject(error);
+      throw error;
+    }
+  };
+  await page.route('**/api/admin/orders/*/status', statusRaceRoute);
+
+  const sameVersionStatusButton = fixtureRow.getByRole('button', {
+    name: '待自提',
+    exact: true,
+  });
+  await sameVersionStatusButton.scrollIntoViewIfNeeded();
+  await Promise.all([
+    sameVersionStatusButton.dispatchEvent('click'),
+    sameVersionStatusButton.dispatchEvent('click'),
+  ]);
+  await statusRaceFinished;
+  await page.unroute('**/api/admin/orders/*/status', statusRaceRoute);
+  page.off('response', captureStatusRaceResponse);
+
+  await waitForCount(
+    page,
+    () => statusRaceResponses.length,
+    2,
+    'same-version status responses',
   );
-  assert.equal(statusResponse.status(), 200);
+  assert.equal(statusRaceEntries.length, 2);
+  for (const entry of statusRaceEntries) {
+    assert.equal(entry.command.next_status, 'ready');
+    assert.equal(entry.command.expected_version, 1);
+    assert.match(entry.command.idempotency_key, /^[\x21-\x7e]{16,128}$/);
+  }
+  assert.notEqual(
+    statusRaceEntries[0].command.idempotency_key,
+    statusRaceEntries[1].command.idempotency_key,
+  );
+  const statusRaceCodes = statusRaceResponses
+    .map((response) => response.status())
+    .sort((left, right) => left - right);
+  assert.deepEqual(statusRaceCodes, [200, 409]);
+
+  const statusResponse = statusRaceResponses.find(
+    (response) => response.status() === 200,
+  );
+  assert.ok(statusResponse);
   const statusEnvelope = await statusResponse.json();
   assert.equal(statusEnvelope.success, true);
   assert.equal(statusEnvelope.code, 'ADMIN_ORDER_STATUS_UPDATED');
   assert.equal(statusEnvelope.data.order_id, credentials.orderId);
   assert.equal(statusEnvelope.data.order_status, 'ready');
   assert.equal(statusEnvelope.data.version, 2);
-  await refreshedOrderPromise;
-  await fixtureRow.getByText('ready', { exact: true }).waitFor();
-  await page.waitForLoadState('networkidle');
 
-  const externalAdvance = await context.request.post(
-    `${baseURL}/api/admin/orders/${credentials.orderId}/status`,
-    {
-      data: {
-        next_status: 'picked',
-        expected_version: 2,
-        idempotency_key: 'e2e-external-advance-01',
-      },
-    },
+  const conflictResponse = statusRaceResponses.find(
+    (response) => response.status() === 409,
   );
-  assert.equal(externalAdvance.status(), 200);
-  const externalEnvelope = await externalAdvance.json();
-  assert.equal(externalEnvelope.data.order_status, 'picked');
-  assert.equal(externalEnvelope.data.version, 3);
-
-  const orderRequestsBeforeConflict = orderRequestCount;
-  const completionButton = fixtureRow.getByRole('button', {
-    name: '完成',
-    exact: true,
-  });
-  await completionButton.scrollIntoViewIfNeeded();
-  await completionButton.waitFor();
-  const [conflictResponse] = await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname ===
-          `/api/admin/orders/${credentials.orderId}/status` &&
-        response.request().method() === 'POST',
-    ),
-    completionButton.click({ force: true }),
-  ]);
-  assert.equal(conflictResponse.status(), 409);
-  const conflictCommand = conflictResponse.request().postDataJSON();
-  assert.equal(conflictCommand.expected_version, 2);
+  assert.ok(conflictResponse);
   const conflictEnvelope = await conflictResponse.json();
   assert.equal(conflictEnvelope.code, 'ADMIN_ORDER_VERSION_CONFLICT');
   assert.equal(typeof conflictEnvelope.trace_id, 'string');
-  await waitForCount(
-    page,
-    () => orderRequestCount,
-    orderRequestsBeforeConflict + 1,
-    'order conflict refresh',
-  );
   await page
     .getByText('订单已被其他操作更新，已刷新列表，请重试', { exact: true })
     .waitFor();
-  await fixtureRow.getByText('picked', { exact: true }).waitFor();
+  await fixtureRow.getByText('ready', { exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
+
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
     inventory: a33RequestsAfterInitial.inventory + 1,
