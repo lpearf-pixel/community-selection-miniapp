@@ -383,7 +383,8 @@ try {
   const orderFilter = page.getByRole('form', {
     name: '全渠道订单筛选',
   });
-  const firstOrderNo = credentials.orderNo;
+  const firstOrderNo = initialOrdersEnvelope.data.items[0].order_no;
+  assert.equal(firstOrderNo, credentials.orderNo);
   await orderFilter.getByLabel('订单关键词').fill(firstOrderNo);
   const filteredOrdersResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
