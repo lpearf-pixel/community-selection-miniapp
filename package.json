@@ -11,7 +11,7 @@
     "build": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm --filter @community-selection/api build && pnpm --filter @community-selection/admin build",
     "lint": "node --test scripts/lint-placeholder.test.cjs && node scripts/lint-placeholder.js",
     "typecheck": "pnpm --filter @community-selection/shared build && pnpm --filter @community-selection/config build && pnpm -r typecheck",
-    "test": "node --test scripts/admin-e2e/contract.test.cjs && pnpm -r test",
+    "test": "node --test scripts/admin-e2e/contract.test.cjs && vitest run scripts/sql-migration-safety.test.ts && pnpm -r test",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "tsx prisma/seed.ts",
