@@ -270,5 +270,5 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
     } finally {
       lookup.mockRestore();
     }
-
+  });
 });
