@@ -1349,8 +1349,13 @@ function assertB3OmnichannelOrdersContract(smoke, fixture, orderPage) {
   );
   assert.match(
     orderPage,
-    /<Button\s+type="primary"\s+htmlType="button"\s+onClick=\{\(\) =>\s*applyFilters\(form\.getFieldsValue\(\)\)\s*\}/,
-    'B3 query click must explicitly apply the current retained Form values',
+    /<Form[\s\S]*?onFinish=\{applyFilters\}[\s\S]*?<Button\s+type="primary"\s+htmlType="submit"\s*>/,
+    'B3 query must use the standard Ant Design submit path',
+  );
+  assert.doesNotMatch(
+    orderPage,
+    /form\.getFieldsValue\(\)/,
+    'B3 query must not duplicate Form submission in an explicit click handler',
   );
   assertSourceOrder(
     smoke,
