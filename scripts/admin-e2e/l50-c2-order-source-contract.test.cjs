@@ -308,3 +308,21 @@ test('routes the pickup workbench through the reliable command', () => {
     /setSelectedOrder\(\(current\)[\s\S]*?current\?\.order_id === order\.order_id[\s\S]*?null/,
   );
 });
+
+
+test('keeps the legacy migration exception exact and comment-only', () => {
+  const checker = read('scripts/check-migrations.ts');
+  const migration = read(
+    'prisma/migrations/20260714000200_l44_withdrawal_commission_links/migration.sql',
+  );
+
+  assert.match(
+    checker,
+    /'20260714000200_l44_withdrawal_commission_links':[\s\S]{0,160}Rollback \(manual\): DROP TABLE "WithdrawalCommission"/,
+  );
+  assert.match(checker, /sql\.replace\(auditedComment, ''\)/);
+  assert.match(
+    migration,
+    /^-- Rollback \(manual\): DROP TABLE "WithdrawalCommission"; no historical Withdrawal\/Commission rows are modified\.$/m,
+  );
+});
