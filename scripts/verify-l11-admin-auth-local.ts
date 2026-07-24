@@ -115,7 +115,7 @@ async function main() {
 
   const leader = await prisma.user.create({ data: { openid: `l11_leader_${Date.now()}`, nickname: 'L11开团人', role: 'leader' } });
   const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: 100, taxable_amount_cents: 100, payable_amount_cents: 100 } });
-  const taxReview = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/tax-review`, headers: { cookie: totpCookie }, payload: { tax_mode: 'none', tax_amount_cents: 0, tax_rate_basis: 'manual' } });
+  const taxReview = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/tax-review`, headers: { cookie: totpCookie }, payload: { tax_mode: 'none', taxable_amount_cents: 100, tax_amount_cents: 0, tax_rate_basis: 'manual', client_request_id: `l11-tax-${withdrawal.id}`, expected_updated_at: withdrawal.updated_at.toISOString() } });
   assert(taxReview.statusCode === 200, `withdrawal tax-review should succeed, got ${taxReview.statusCode}`);
   const taxAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_tax_reviewed', target_id: withdrawal.id } });
   assert(taxAudit, 'withdrawal tax-review should write AdminAuditLog');
@@ -123,7 +123,7 @@ async function main() {
   assert(approve.statusCode === 200, `withdrawal approve should succeed, got ${approve.statusCode}`);
   const withdrawalAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_approved', target_id: withdrawal.id } });
   assert(withdrawalAudit, 'withdrawal approve should write AdminAuditLog');
-  const markPaid = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/mark-paid`, headers: { cookie: totpCookie }, payload: { reason: 'L11 verification paid' } });
+  const markPaid = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/mark-paid`, headers: { cookie: totpCookie }, payload: { reason: 'L11 verification paid', manual_reference: `L11-${withdrawal.id}` } });
   assert(markPaid.statusCode === 200, `withdrawal mark-paid should succeed, got ${markPaid.statusCode}`);
   const markPaidAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_mark_paid', target_id: withdrawal.id } });
   assert(markPaidAudit, 'withdrawal mark-paid should write AdminAuditLog');
