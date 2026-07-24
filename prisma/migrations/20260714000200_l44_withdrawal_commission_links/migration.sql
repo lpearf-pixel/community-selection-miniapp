@@ -1,6 +1,6 @@
 -- L44 follow-up: persist Withdrawal-Commission composition independently from Commission.withdrawal_id.
 -- Compatible and idempotent: creates a link table and backfills rows for commissions that still carry withdrawal_id.
--- Rollback (manual): DROP TABLE IF EXISTS "WithdrawalCommission"; no historical Withdrawal/Commission rows are modified.
+-- Rollback (manual): DROP TABLE "WithdrawalCommission"; no historical Withdrawal/Commission rows are modified.
 CREATE TABLE IF NOT EXISTS "WithdrawalCommission" (
   "id" TEXT NOT NULL,
   "withdrawal_id" TEXT NOT NULL,
