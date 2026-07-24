@@ -42,7 +42,9 @@ describe('admin refresh policy', () => {
     ['batches', 'batches'],
     ['expiryAlerts', 'expiry-alerts'],
     ['stockChecks', 'stock-checks'],
-    ['withdrawals', 'legacy'],
+    ['withdrawals', 'withdrawals'],
+    ['alerts', 'alerts'],
+    ['taxRecords', 'tax-review'],
   ] as const)('routes %s refresh to %s', (view, target) => {
     expect(adminRefreshTarget(view)).toBe(target);
   });
@@ -67,6 +69,9 @@ describe('admin refresh policy', () => {
       '"/api/admin/inventory/batches"',
       '"/api/admin/inventory/expiry-alerts?days=7"',
       '"/api/admin/stock-checks"',
+      '"/api/admin/withdrawals"',
+      '"/api/admin/logs/alerts"',
+      '"/api/admin/tax-records"',
     ];
     for (const endpoint of endpoints) {
       expect(source, endpoint).not.toContain(endpoint);
@@ -85,6 +90,9 @@ describe('admin refresh policy', () => {
       'ProductBatch',
       'ExpiryAlert',
       'StockCheck',
+      'Withdrawal',
+      'OpsAlert',
+      'TaxRecord',
     ]) {
       expect(source).not.toContain(`type ${typeName} =`);
     }
@@ -103,30 +111,29 @@ describe('admin refresh policy', () => {
       'InventoryBatchesPage',
       'ExpiryAlertsPage',
       'StockChecksPage',
+      'WithdrawalsPage',
+      'OperationsAlertsPage',
+      'TaxReviewPage',
     ]) {
       expect(source).toContain(page);
     }
   });
 
-  it('preloads only the remaining legacy views after session restore and login', () => {
+  it('does not preload business data after session restore or login', () => {
     const source = readFileSync(
       new URL('./AdminApp.tsx', import.meta.url),
       'utf8',
     );
-    expect(source).toMatch(
-      /setAdminSession\(admin\);[\s\S]{0,160}setView\(DEFAULT_ADMIN_VIEW\);[\s\S]{0,160}refreshLegacyFeatures\(\);/,
+    expect(source).not.toContain('refreshLegacyFeatures');
+    expect(source).not.toMatch(
+      /setAdminSession\(admin\);[\s\S]{0,160}setView\(DEFAULT_ADMIN_VIEW\);[\s\S]{0,160}\brefresh/,
     );
-    expect(source).toMatch(
-      /setAdminSession\(result\.admin_user\);[\s\S]{0,160}setView\(DEFAULT_ADMIN_VIEW\);[\s\S]{0,160}refreshLegacyFeatures\(\);/,
+    expect(source).not.toMatch(
+      /setAdminSession\(result\.admin_user\);[\s\S]{0,160}setView\(DEFAULT_ADMIN_VIEW\);[\s\S]{0,160}\brefresh/,
     );
-    const legacyRefresh = namedFunctionSource(source, 'refreshLegacyFeatures');
-    expect(legacyRefresh).toContain('"/api/admin/withdrawals"');
-    expect(legacyRefresh).toContain('"/api/admin/logs/alerts"');
-    expect(legacyRefresh).toContain('"/api/admin/tax-records"');
-    expect(legacyRefresh.match(/\bfetchJson</g)).toHaveLength(3);
   });
 
-  it('uses the full business invalidation after each remaining mutation', () => {
+  it('keeps all extracted mutation handlers outside AdminApp', () => {
     const source = readFileSync(
       new URL('./AdminApp.tsx', import.meta.url),
       'utf8',
@@ -136,16 +143,12 @@ describe('admin refresh policy', () => {
       'updateWithdrawal',
       'updateAlert',
     ]) {
-      const handlerSource = namedFunctionSource(source, handler);
-      expect(handlerSource, handler).toMatch(/\brefreshBusinessFeatures\(\);/);
-      expect(handlerSource, handler).not.toMatch(
-        /\brefreshLegacyFeatures\(\);/,
-      );
+      expect(source).not.toContain(`function ${handler}`);
     }
     expect(source).not.toContain('refreshSalesAndLegacyFeatures');
   });
 
-  it('keeps authentication and the Shell fallback on legacy-only refresh', () => {
+  it('routes Shell refresh without a legacy fallback', () => {
     const source = readFileSync(
       new URL('./AdminApp.tsx', import.meta.url),
       'utf8',
@@ -156,16 +159,23 @@ describe('admin refresh policy', () => {
       'refreshActiveFeature',
     );
 
-    expect(source).toMatch(
-      /useEffect\(\(\) => \{[\s\S]*?setAdminSession\(admin\);[\s\S]*?setView\(DEFAULT_ADMIN_VIEW\);[\s\S]*?refreshLegacyFeatures\(\);[\s\S]*?\}, \[\]\);/,
-    );
-    expect(loginSource).toMatch(/\brefreshLegacyFeatures\(\);/);
+    expect(source).not.toContain('refreshLegacyFeatures');
+    expect(loginSource).not.toMatch(/\brefresh\w*Features\(\);/);
     expect(loginSource).not.toMatch(/\brefreshBusinessFeatures\(\);/);
-    expect(shellRefreshSource).toMatch(/\brefreshLegacyFeatures\(\);/);
     expect(shellRefreshSource).not.toMatch(/\brefreshBusinessFeatures\(\);/);
+    expect(shellRefreshSource).not.toContain('legacy');
+    for (const setter of [
+      'setWithdrawalsRefreshVersion',
+      'setAlertsRefreshVersion',
+      'setTaxReviewRefreshVersion',
+    ]) {
+      expect(shellRefreshSource).toContain(
+        `${setter}((version) => version + 1);`,
+      );
+    }
   });
 
-  it('composes all ten extracted refreshes with remaining legacy refresh', () => {
+  it('composes all thirteen extracted mutation refreshes exactly once', () => {
     const source = readFileSync(
       new URL('./AdminApp.tsx', import.meta.url),
       'utf8',
@@ -186,15 +196,21 @@ describe('admin refresh policy', () => {
       'setBatchesRefreshVersion',
       'setExpiryAlertsRefreshVersion',
       'setStockChecksRefreshVersion',
+      'setWithdrawalsRefreshVersion',
+      'setAlertsRefreshVersion',
+      'setTaxReviewRefreshVersion',
     ]) {
       expect(composedRefresh).toContain(
         `${setter}((version) => version + 1);`,
       );
+      expect(
+        composedRefresh.match(new RegExp(`\\b${setter}\\(`, 'g')),
+      ).toHaveLength(1);
     }
-    expect(composedRefresh).toMatch(/\brefreshLegacyFeatures\(\);/);
+    expect(composedRefresh).not.toContain('refreshLegacyFeatures');
   });
 
-  it('isolates every hidden A3.2 and A3.3 slice behind its own boundary', () => {
+  it('isolates every hidden A3.2, A3.3, and A3.4 slice behind its own boundary', () => {
     const source = readFileSync(
       new URL('./AdminApp.tsx', import.meta.url),
       'utf8',
@@ -213,6 +229,9 @@ describe('admin refresh policy', () => {
       ['expiryAlerts', 'expiryAlertsRefreshVersion', 'ExpiryAlertsPage'],
       ['stockChecks', 'stockChecksRefreshVersion', 'StockChecksPage'],
       ['afterSales', 'afterSalesRefreshVersion', 'AfterSalesPage'],
+      ['withdrawals', 'withdrawalsRefreshVersion', 'WithdrawalsPage'],
+      ['alerts', 'alertsRefreshVersion', 'OperationsAlertsPage'],
+      ['taxRecords', 'taxReviewRefreshVersion', 'TaxReviewPage'],
     ] as const;
 
     expect(source).toMatch(
@@ -226,7 +245,7 @@ describe('admin refresh policy', () => {
       );
     }
 
-    expect(source.match(/<AdminErrorBoundary\b/g)).toHaveLength(11);
+    expect(source.match(/<AdminErrorBoundary\b/g)).toHaveLength(14);
     expect(source).toMatch(
       /<AdminErrorBoundary resetKey=\{view\}>\s*<AdminFeatureWorkspace render=\{renderFeatureContent\} \/>\s*<\/AdminErrorBoundary>/,
     );

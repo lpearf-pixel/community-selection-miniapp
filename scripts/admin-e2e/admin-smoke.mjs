@@ -39,10 +39,14 @@ let supplierRequestCount = 0;
 let batchRequestCount = 0;
 let expiryAlertRequestCount = 0;
 let stockCheckRequestCount = 0;
+let withdrawalRequestCount = 0;
+let alertRequestCount = 0;
+let taxReviewRequestCount = 0;
 let catalogFailureInjected = false;
 let operationsFailureInjected = false;
 let orderFailureInjected = false;
 let purchasePlanFailureInjected = false;
+let alertFailureInjected = false;
 
 page.on('request', (request) => {
   const requestUrl = new URL(request.url());
@@ -94,6 +98,15 @@ page.on('request', (request) => {
   if (pathname === '/api/admin/stock-checks') {
     stockCheckRequestCount += 1;
   }
+  if (pathname === '/api/admin/withdrawals') {
+    withdrawalRequestCount += 1;
+  }
+  if (pathname === '/api/admin/logs/alerts') {
+    alertRequestCount += 1;
+  }
+  if (pathname === '/api/admin/tax-records') {
+    taxReviewRequestCount += 1;
+  }
 });
 
 try {
@@ -114,6 +127,9 @@ try {
   await waitForCount(page, () => batchRequestCount, 1, 'batch initial load');
   await waitForCount(page, () => expiryAlertRequestCount, 1, 'expiry-alert initial load');
   await waitForCount(page, () => stockCheckRequestCount, 1, 'stock-check initial load');
+  await waitForCount(page, () => withdrawalRequestCount, 1, 'withdrawal initial load');
+  await waitForCount(page, () => alertRequestCount, 1, 'alert initial load');
+  await waitForCount(page, () => taxReviewRequestCount, 1, 'tax-review initial load');
   await page.waitForLoadState('networkidle');
   const readA32RequestCounts = () => ({
     groupBuys: groupBuyRequestCount,
@@ -131,12 +147,19 @@ try {
     stockChecks: stockCheckRequestCount,
   });
   const a33RequestsAfterInitial = readA33RequestCounts();
+  const readA34RequestCounts = () => ({
+    withdrawals: withdrawalRequestCount,
+    alerts: alertRequestCount,
+    taxReview: taxReviewRequestCount,
+  });
+  const a34RequestsAfterInitial = readA34RequestCounts();
   const readBusinessRequestCounts = () => ({
     catalog: catalogRequestCount,
     finance: financeRequestCount,
     operations: operationsRequestCount,
     ...readA32RequestCounts(),
     ...readA33RequestCounts(),
+    ...readA34RequestCounts(),
   });
 
   const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
@@ -615,6 +638,114 @@ try {
   assert.equal(catalogRequestCount, catalogRequestsAfterRetry);
   assert.equal(financeRequestCount, financeRequestsAfterRefresh);
 
+  assert.deepEqual(readA34RequestCounts(), a34RequestsAfterInitial);
+  const withdrawalsButton = shell.getByRole('button', {
+    name: '提现管理',
+    exact: true,
+  });
+  await withdrawalsButton.click();
+  await assertActive(withdrawalsButton, '提现管理');
+  await page.getByText('L44 提现人工审核工作台', { exact: true }).waitFor();
+
+  const businessRequestsBeforeWithdrawalRefresh = readBusinessRequestCounts();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await waitForCount(
+    page,
+    () => withdrawalRequestCount,
+    businessRequestsBeforeWithdrawalRefresh.withdrawals + 1,
+    'withdrawal active refresh',
+  );
+  assert.deepEqual(readBusinessRequestCounts(), {
+    ...businessRequestsBeforeWithdrawalRefresh,
+    withdrawals: businessRequestsBeforeWithdrawalRefresh.withdrawals + 1,
+  });
+
+  const alertsButton = shell.getByRole('button', {
+    name: '告警中心',
+    exact: true,
+  });
+  await alertsButton.click();
+  await assertActive(alertsButton, '告警中心');
+  const alertsCardTitle = page
+    .locator('.ant-card-head-title')
+    .filter({ hasText: /^告警中心$/ });
+  await alertsCardTitle.waitFor();
+
+  const alertFailureRoute = async (route) => {
+    assert.equal(route.request().method(), 'GET');
+    assert.equal(alertFailureInjected, false);
+    alertFailureInjected = true;
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        code: 'E2E_ALERT_FAILURE',
+        message: '模拟运营告警失败',
+      }),
+    });
+  };
+  await page.route('**/api/admin/logs/alerts', alertFailureRoute);
+  const businessRequestsBeforeAlertFailure = readBusinessRequestCounts();
+  await shell.getByRole('button', { name: /刷\s*新/ }).click();
+  await page.getByText('运营告警加载失败', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: '社区甄选管理后台' }).waitFor();
+  await page.getByRole('button', { name: /刷\s*新/ }).waitFor();
+  await page.getByRole('button', { name: '退出登录', exact: true }).waitFor();
+  assert.equal(alertFailureInjected, true);
+  await waitForCount(
+    page,
+    () => alertRequestCount,
+    businessRequestsBeforeAlertFailure.alerts + 1,
+    'alert failed refresh',
+  );
+  assert.deepEqual(readBusinessRequestCounts(), {
+    ...businessRequestsBeforeAlertFailure,
+    alerts: businessRequestsBeforeAlertFailure.alerts + 1,
+  });
+  await page.unroute('**/api/admin/logs/alerts', alertFailureRoute);
+
+  const taxReviewButton = shell.getByRole('button', {
+    name: '税务人工 Review',
+    exact: true,
+  });
+  const businessRequestsDuringAlertError = readBusinessRequestCounts();
+  await taxReviewButton.click();
+  await assertActive(taxReviewButton, '税务人工 Review');
+  await page
+    .getByText('税务人工 Review 工作台', { exact: true })
+    .waitFor();
+  assert.equal(await page.getByText('税务人工 Review 加载失败').count(), 0);
+  assert.deepEqual(readBusinessRequestCounts(), businessRequestsDuringAlertError);
+
+  await alertsButton.click();
+  await assertActive(alertsButton, '告警中心');
+  await page.getByText('运营告警加载失败', { exact: true }).waitFor();
+  assert.deepEqual(readBusinessRequestCounts(), businessRequestsDuringAlertError);
+
+  const businessRequestsBeforeAlertRetry = readBusinessRequestCounts();
+  const alertRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/admin/logs/alerts' &&
+    response.ok(),
+  );
+  await page.getByRole('button', { name: /重\s*试/ }).click();
+  const alertResponse = await alertRetryResponse;
+  const alertEnvelope = await alertResponse.json();
+  assert.equal(alertEnvelope.success, true);
+  assert.equal(Array.isArray(alertEnvelope.data), true);
+  await page.getByText('运营告警加载失败').waitFor({ state: 'detached' });
+  await alertsCardTitle.waitFor();
+  await waitForCount(
+    page,
+    () => alertRequestCount,
+    businessRequestsBeforeAlertRetry.alerts + 1,
+    'alert retry',
+  );
+  assert.deepEqual(readBusinessRequestCounts(), {
+    ...businessRequestsBeforeAlertRetry,
+    alerts: businessRequestsBeforeAlertRetry.alerts + 1,
+  });
+
   const remainingNavigation = navigation.filter(
     (label) =>
       label !== '商品管理' &&
@@ -625,7 +756,10 @@ try {
       label !== '采购计划' &&
       label !== '批次库存' &&
       label !== '财务对账' &&
-      label !== '运营看板',
+      label !== '运营看板' &&
+      label !== '提现管理' &&
+      label !== '告警中心' &&
+      label !== '税务人工 Review',
   );
   for (const label of remainingNavigation) {
     const button = shell.getByRole('button', { name: label, exact: true });
@@ -654,7 +788,7 @@ try {
   await page.getByText('后台登录', { exact: true }).waitFor();
 
   console.log(
-    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; catalog requests=${catalogRequestCount}; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}; inventory requests=${inventoryOverviewRequestCount}; purchase-plan requests=${purchasePlanRequestCount}; suppliers requests=${supplierRequestCount}; batches requests=${batchRequestCount}; expiry-alert requests=${expiryAlertRequestCount}; stock-check requests=${stockCheckRequestCount}.`,
+    `L50 Admin browser smoke passed: ${navigation.length}/${navigation.length} navigation items; catalog requests=${catalogRequestCount}; finance requests=${financeRequestCount}; operations requests=${operationsRequestCount}; inventory requests=${inventoryOverviewRequestCount}; purchase-plan requests=${purchasePlanRequestCount}; suppliers requests=${supplierRequestCount}; batches requests=${batchRequestCount}; expiry-alert requests=${expiryAlertRequestCount}; stock-check requests=${stockCheckRequestCount}; withdrawal requests=${withdrawalRequestCount}; alert requests=${alertRequestCount}; tax-review requests=${taxReviewRequestCount}.`,
   );
 } finally {
   await context.close();

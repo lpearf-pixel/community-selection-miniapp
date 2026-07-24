@@ -14,6 +14,9 @@ export type AdminRefreshTarget =
   | 'batches'
   | 'expiry-alerts'
   | 'stock-checks'
+  | 'withdrawals'
+  | 'alerts'
+  | 'tax-review'
   | 'legacy';
 
 export function adminRefreshTarget(view: AdminViewKey): AdminRefreshTarget {
@@ -29,6 +32,9 @@ export function adminRefreshTarget(view: AdminViewKey): AdminRefreshTarget {
   if (view === 'batches') return 'batches';
   if (view === 'expiryAlerts') return 'expiry-alerts';
   if (view === 'stockChecks') return 'stock-checks';
+  if (view === 'withdrawals') return 'withdrawals';
+  if (view === 'alerts') return 'alerts';
+  if (view === 'taxRecords') return 'tax-review';
   if (view === 'products') return 'catalog';
   if (view === 'finance' || view === 'operations') return view;
   return 'legacy';
