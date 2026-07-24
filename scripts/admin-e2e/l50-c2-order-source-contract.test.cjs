@@ -86,7 +86,18 @@ test('requires strict atomic effects and complete runtime evidence', () => {
   assert.match(runtime, /\/api\/me\/orders/);
   assert.match(transaction, /real completion commission once/);
   assert.match(transaction, /strict reward event logging fails/);
-  assert.match(smoke, /externalAdvance\.status\(\), 200/);
-  assert.match(smoke, /conflictResponse\.status\(\), 409/);
+  assert.doesNotMatch(smoke, /externalAdvance/);
+  assert.match(
+    smoke,
+    /await page\.route\('\*\*\/api\/admin\/orders\/\*\/status', statusRaceRoute\);/,
+  );
+  assert.match(smoke, /await route\.fetch\(\)/);
+  assert.match(
+    smoke,
+    /sameVersionStatusButton\.dispatchEvent\('click'\)[\s\S]*?sameVersionStatusButton\.dispatchEvent\('click'\)/,
+  );
+  assert.match(smoke, /assert\.deepEqual\(statusRaceCodes, \[200, 409\]\);/);
+  assert.match(smoke, /'order success refresh'/);
+  assert.match(smoke, /'order conflict refresh'/);
   assert.match(smoke, /ADMIN_ORDER_VERSION_CONFLICT/);
 });
