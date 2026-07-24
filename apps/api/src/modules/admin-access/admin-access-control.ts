@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { fail } from "@community-selection/shared";
+import { contractFail, fail } from "@community-selection/shared";
 import { prisma } from "../../db.js";
 
 export type AdminRole =
@@ -259,6 +259,52 @@ export function requireAdminPermission(
     if (!required.some((item) => hasAdminPermission(context, item))) {
       reply.code(403).send(fail("ADMIN_FORBIDDEN: Permission denied"));
       return;
+    }
+  };
+}
+
+export function requireAdminPermissionV1(
+  permission: AdminPermission | AdminPermission[],
+) {
+  return async function adminPermissionV1Guard(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) {
+    const traceId = String(request.id);
+    const context = resolveAdminAccessContext(request);
+    if (!context) {
+      reply.code(401).send(
+        contractFail({
+          code: "ADMIN_UNAUTHORIZED",
+          message: "管理员身份无效",
+          traceId,
+        }),
+      );
+      return;
+    }
+    const adminUser = await prisma.adminUser.findUnique({
+      where: { id: context.admin_user_id },
+      select: { status: true },
+    });
+    if (!adminUser || adminUser.status !== "active") {
+      reply.code(401).send(
+        contractFail({
+          code: "ADMIN_UNAUTHORIZED",
+          message: "管理员身份无效",
+          traceId,
+        }),
+      );
+      return;
+    }
+    const required = Array.isArray(permission) ? permission : [permission];
+    if (!required.some((item) => hasAdminPermission(context, item))) {
+      reply.code(403).send(
+        contractFail({
+          code: "ADMIN_FORBIDDEN",
+          message: "当前管理员无此操作权限",
+          traceId,
+        }),
+      );
     }
   };
 }
