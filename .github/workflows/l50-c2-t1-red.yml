@@ -24,27 +24,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20.19.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Verify parser GREEN and remaining C2 contracts RED
+      - name: Verify focused C2 contracts GREEN
         shell: bash
         run: |
           pnpm db:generate
           pnpm --filter @community-selection/api test -- \
             src/modules/order/admin-order-status-command.test.ts
-          set +e
           pnpm --filter @community-selection/admin test -- \
-            src/features/sales/orders/api.test.ts > admin-red.log 2>&1
-          admin_status=$?
+            src/features/sales/orders/api.test.ts
           node --test \
-            scripts/admin-e2e/l50-c2-order-source-contract.test.cjs \
-            > source-red.log 2>&1
-          source_status=$?
-          set -e
-          cat admin-red.log
-          cat source-red.log
-          test "$admin_status" -ne 0
-          test "$source_status" -ne 0
-          grep -F "uses the versioned Admin order status command" admin-red.log
-          grep -F "retires unauthenticated order read and write handlers" source-red.log
+            scripts/admin-e2e/l50-c2-order-source-contract.test.cjs
       - name: Verify the PostgreSQL transaction executor GREEN
         env:
           DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
@@ -58,15 +47,8 @@ jobs:
           pnpm --filter @community-selection/config build
           pnpm --filter @community-selection/api test -- \
             src/modules/order/admin-order-status-executor.integration.test.ts
-          set +e
           pnpm --filter @community-selection/api test -- \
-            src/routes/admin/order-status-route.integration.test.ts \
-            > route-red.log 2>&1
-          route_status=$?
-          set -e
-          cat route-red.log
-          test "$route_status" -ne 0
-          grep -F "returns a traceable V1 401 without Admin identity" route-red.log
+            src/routes/admin/order-status-route.integration.test.ts
       - name: Cleanup RED PostgreSQL
         if: always()
         run: |
