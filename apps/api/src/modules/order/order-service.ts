@@ -51,7 +51,6 @@ function makeOrderNo() {
 const allowedFulfillmentStatuses = new Set<OrderStatus>([
   OrderStatus.preparing,
   OrderStatus.ready,
-  OrderStatus.picked,
   OrderStatus.delivered,
   OrderStatus.completed
 ]);
