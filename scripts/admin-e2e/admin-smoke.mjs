@@ -162,7 +162,32 @@ try {
     ...readA34RequestCounts(),
   });
 
-  const shell = page.getByRole('heading', { name: '社区甄选管理后台' }).locator('..');
+  const expectedNavigationSections = [
+    '今日经营',
+    '销售与履约',
+    '商品与价格',
+    '库存与供应链',
+    '财务与结算',
+    '数据分析',
+    '运维与风控',
+  ];
+  const groupedNavigation = page.getByRole('navigation', {
+    name: '后台功能导航',
+  });
+  await groupedNavigation.waitFor();
+  const visibleNavigationSections = await groupedNavigation
+    .getByRole('heading')
+    .allTextContents();
+  assert.deepEqual(visibleNavigationSections, expectedNavigationSections);
+  const hiddenNavigationSections = ['会员与营销', '门店与渠道', '系统管理'];
+  for (const label of hiddenNavigationSections) {
+    assert.equal(
+      await groupedNavigation.getByText(label, { exact: true }).count(),
+      0,
+    );
+  }
+
+  const shell = page.getByRole('region', { name: '社区甄选管理后台' });
   const buttons = shell.getByRole('button');
   const assertActive = async (button, label) => {
     const className = await button.getAttribute('class');
