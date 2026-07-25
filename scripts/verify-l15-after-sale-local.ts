@@ -168,7 +168,7 @@ async function main() {
     method: 'POST',
     url: `/api/admin/after-sales/${afterSale.id}/review`,
     headers: adminHeaders,
-    payload: { status: 'approved', approved_refund_cents: 800, resolution_type: 'partial_refund', responsibility: 'supplier', admin_note: '按坏果比例部分退款' }
+    payload: { status: 'approved', approved_refund_cents: 800, approved_product_refund_cents: 800, resolution_type: 'partial_refund', responsibility: 'supplier', admin_note: '按坏果比例部分退款' }
   }));
   assert(
     reviewed.status === 'approved' &&
