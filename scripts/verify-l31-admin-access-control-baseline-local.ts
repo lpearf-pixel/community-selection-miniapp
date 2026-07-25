@@ -10,7 +10,7 @@ const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 
 function runComplianceScan() {
-  const output = execFileSync(process.execPath, ['scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: repoRoot, encoding: 'utf8' });
+  const output = execFileSync('pnpm', ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: repoRoot, encoding: 'utf8' });
   process.stdout.write(output);
   assert(output.includes('No raw compliance-sensitive terms found in verify/docs files.'), 'Compliance-sensitive wording scan did not report success');
 }

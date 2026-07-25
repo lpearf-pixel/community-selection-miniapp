@@ -9,7 +9,7 @@ const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 
 function runComplianceScan() {
-  const output = execFileSync(process.execPath, ['scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: repoRoot, encoding: 'utf8' });
+  const output = execFileSync('pnpm', ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: repoRoot, encoding: 'utf8' });
   process.stdout.write(output);
   assert(output.includes('No raw compliance-sensitive terms found in verify/docs files.'), 'Compliance wording scan did not report success');
 }
@@ -28,7 +28,8 @@ function main() {
     'apps/api/src/modules/admin-access/admin-access-control.ts',
     'apps/admin/src/api/pickupWorkbench.ts',
     'apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx',
-    'apps/admin/src/App.tsx',
+    'apps/admin/src/app/AdminApp.tsx',
+    'apps/admin/src/app/feature-registry.ts',
     'scripts/verify-l32-clerk-pickup-workbench-local.ts',
     'scripts/verify-all-local.sh',
     'scripts/stage-workflow.ts',
@@ -40,7 +41,8 @@ function main() {
   const pickup = read('apps/api/src/routes/admin/pickup.ts');
   const api = read('apps/admin/src/api/pickupWorkbench.ts');
   const page = read('apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx');
-  const app = read('apps/admin/src/App.tsx');
+  const app = read('apps/admin/src/app/AdminApp.tsx');
+  const featureRegistry = read('apps/admin/src/app/feature-registry.ts');
   const workflow = read('scripts/stage-workflow.ts');
   const verifyAll = read('scripts/verify-all-local.sh');
   const report = read('scripts/generate-stage-report.ts');
@@ -51,7 +53,7 @@ function main() {
 
   ['PickupWorkbenchPage','自提工作台','pickup.verify','自提码','订单号','receiver_phone_masked','核销','暂无待自提订单','无权限访问','loading'].forEach((needle) => assert(page.includes(needle), `Missing frontend page keyword: ${needle}`));
   ['/api/admin/pickup/orders','/api/admin/pickup/orders/by-code','/api/admin/pickup/orders/${orderId}/verify','/api/admin/pickup/summary'].forEach((needle) => assert(api.includes(needle), `Missing frontend API call: ${needle}`));
-  assert(app.includes('PickupWorkbenchPage') && app.includes('自提工作台'), 'App must register pickup workbench page/menu');
+  assert(app.includes('PickupWorkbenchPage') && app.includes('pickupWorkbench') && featureRegistry.includes("label: '自提工作台'"), 'App must register pickup workbench page/menu');
 
   ['apps/api/src/routes/admin/pickup.ts','apps/admin/src/api/pickupWorkbench.ts','apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx'].forEach((file) => assertNoSensitiveOutput(file, read(file)));
   assert(report.includes('l32Manifest') && report.includes('l32-clerk-pickup-workbench.md'), 'stage report manifest must include L32');

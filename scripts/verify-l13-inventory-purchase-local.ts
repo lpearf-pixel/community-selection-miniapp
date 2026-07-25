@@ -48,6 +48,7 @@ async function main() {
 
   const category = await prisma.category.create({ data: { name: `${prefix}-cat` } });
   const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'community address' } });
+  const store = await prisma.pickupStore.create({ data: { name: `${prefix}-store`, address: 'store address', phone: '13800000000' } });
   const leader = await prisma.user.create({ data: { openid: `${prefix}-leader`, nickname: 'L13开团人', role: 'leader' } });
   const appleUser = await prisma.user.create({ data: { openid: `${prefix}-apple-user`, nickname: 'L13苹果用户', role: 'customer' } });
   const eggUser = await prisma.user.create({ data: { openid: `${prefix}-egg-user`, nickname: 'L13鸡蛋用户', role: 'customer' } });
@@ -71,16 +72,18 @@ async function main() {
     }
   });
   const appleGroupBuy = await post('/api/group-buys', { product_id: apple.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
-  const appleOrder = await post('/api/orders', { user_id: appleUser.id, group_buy_id: appleGroupBuy.id, client_request_id: `${prefix}-apple-order`, quantity: 2, receiver_name: '苹果用户', receiver_phone: '13812345678' });
+  const appleOrder = await post('/api/orders', { user_id: appleUser.id, group_buy_id: appleGroupBuy.id, client_request_id: `${prefix}-apple-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '苹果用户', receiver_phone: '13812345678' });
   assert(appleOrder.quantity === 2, 'apple order should keep sale quantity');
+  const applePayment = await post('/api/payments/mock', { order_id: appleOrder.id });
+  assert(applePayment.pay_status === 'paid', 'apple order payment should succeed before inventory is deducted');
 
   const afterAppleOrder = await prisma.product.findUniqueOrThrow({ where: { id: apple.id } });
   assert(afterAppleOrder.stock === 45000, 'apple stock should decrease by sale quantity multiplied by stock_deduct_quantity');
-  const appleOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: apple.id, source_type: 'order_lock', source_id: appleOrder.id } });
-  assert(appleOrderLedger?.direction === 'out', 'apple order lock ledger should be out');
-  assert(appleOrderLedger.quantity === 5000 && appleOrderLedger.stock_before === 50000 && appleOrderLedger.stock_after === 45000, 'apple order lock ledger stock should be correct');
+  const appleOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: apple.id, source_type: 'order_payment', source_id: appleOrder.id, event_type: 'order_paid_deduct' } });
+  assert(appleOrderLedger?.direction === 'out', 'apple payment deduction ledger should be out');
+  assert(appleOrderLedger.quantity === 5000 && appleOrderLedger.quantity_delta === -5000 && appleOrderLedger.stock_before === 50000 && appleOrderLedger.stock_after === 45000, 'apple payment deduction ledger stock should be correct');
   const appleOrderPayload = payloadOf(appleOrderLedger.payload);
-  assert(appleOrderPayload.sale_quantity === 2 && appleOrderPayload.stock_deduct_quantity === 2500 && appleOrderPayload.stock_unit === 'g', 'apple order ledger payload should keep sale and stock unit context');
+  assert(appleOrderPayload.order_id === appleOrder.id && appleOrderPayload.order_quantity === 2 && appleOrderPayload.stock_deduct_quantity === 2500, 'apple payment deduction payload should keep order and stock conversion context');
 
   const egg = await prisma.product.create({
     data: {
@@ -101,11 +104,13 @@ async function main() {
     }
   });
   const eggGroupBuy = await post('/api/group-buys', { product_id: egg.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
-  const eggOrder = await post('/api/orders', { user_id: eggUser.id, group_buy_id: eggGroupBuy.id, client_request_id: `${prefix}-egg-order`, quantity: 3, receiver_name: '鸡蛋用户', receiver_phone: '13912345678' });
+  const eggOrder = await post('/api/orders', { user_id: eggUser.id, group_buy_id: eggGroupBuy.id, client_request_id: `${prefix}-egg-order`, quantity: 3, pickup_store_id: store.id, receiver_name: '鸡蛋用户', receiver_phone: '13912345678' });
+  const eggPayment = await post('/api/payments/mock', { order_id: eggOrder.id });
+  assert(eggPayment.pay_status === 'paid', 'egg order payment should succeed before inventory is deducted');
   const afterEggOrder = await prisma.product.findUniqueOrThrow({ where: { id: egg.id } });
   assert(afterEggOrder.stock === 810, 'egg stock should decrease by 90 eggs');
-  const eggOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: egg.id, source_type: 'order_lock', source_id: eggOrder.id } });
-  assert(eggOrderLedger?.quantity === 90, 'egg order lock ledger should record 90 base units');
+  const eggOrderLedger = await prisma.stockLedger.findFirst({ where: { product_id: egg.id, source_type: 'order_payment', source_id: eggOrder.id, event_type: 'order_paid_deduct' } });
+  assert(eggOrderLedger?.quantity === 90 && eggOrderLedger.quantity_delta === -90, 'egg payment deduction ledger should record 90 base units');
 
   const inventoryOverview = await json(await adminGet('/api/admin/inventory/overview', adminCookie));
   assert(inventoryOverview.items.some((item: any) => item.product_id === apple.id && item.stock === 45000 && item.stock_unit === 'g' && item.display_sale_spec === '5斤装 / 份'), 'inventory overview should include unit-aware apple stock');

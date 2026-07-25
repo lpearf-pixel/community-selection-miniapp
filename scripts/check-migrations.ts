@@ -1,5 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { hasUnsafeDropTable } = require('./lib/migration-sql-scan.cjs') as {
+  hasUnsafeDropTable: (sql: string) => boolean;
+};
 
 const migrationDir = join(process.cwd(), 'prisma', 'migrations');
 const entries = readdirSync(migrationDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
@@ -12,7 +18,7 @@ for (const entry of entries) {
   const sqlPath = join(migrationDir, entry, 'migration.sql');
   const sql = readFileSync(sqlPath, 'utf8').trim();
   if (!sql) problems.push(`Empty migration: ${entry}`);
-  if (/DROP\s+TABLE\s+(?!IF\s+EXISTS)/i.test(sql)) problems.push(`Unsafe DROP TABLE without IF EXISTS in ${entry}`);
+  if (hasUnsafeDropTable(sql)) problems.push(`Unsafe DROP TABLE without IF EXISTS in ${entry}`);
 }
 
 if (entries.length === 0) problems.push('No Prisma migrations found');

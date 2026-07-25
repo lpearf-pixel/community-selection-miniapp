@@ -1,0 +1,102 @@
+name: Verification Baseline Audit
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - .github/workflows/verification-baseline-audit.yml
+      - scripts/lib/verification-audit.cjs
+      - scripts/verification-audit/**
+      - scripts/verification-baseline-manifest.ts
+      - scripts/verify-baseline-audit-local.ts
+      - scripts/stage-registry.ts
+      - scripts/check-migrations.ts
+      - scripts/compliance-scan.ts
+      - scripts/lib/compliance-scan.ts
+      - scripts/verify-*-local.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-baseline-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify audit collector contract
+        run: node --test scripts/verification-audit/*.test.cjs
+
+      - name: Start audit PostgreSQL
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-baseline-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Collect complete baseline evidence
+        run: |
+          pnpm exec tsx scripts/verify-baseline-audit-local.ts \
+            --report-only \
+            --output-dir=artifacts/verification-baseline
+
+      - name: Publish audit summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f artifacts/verification-baseline/summary.md ]]; then
+            cat artifacts/verification-baseline/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-baseline-${{ github.sha }}
+          path: artifacts/verification-baseline
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Reset PostgreSQL for fail-closed release gate
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-baseline-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans
+          docker compose \
+            -p community-selection-baseline-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Run fail-closed release gate
+        run: pnpm verify:all
+
+      - name: Cleanup audit resources
+        if: always()
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-baseline-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true

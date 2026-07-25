@@ -28,14 +28,15 @@ async function main() {
   assert((routes.match(/requireGroupBuyDataScope\(request, reply/g) ?? []).length >= 5, 'All L42 group buy routes must call unified data scope helper before service calls');
   assert(routes.includes('requireGroupBuyOrderDataScope(request, reply, groupBuyId, orderId)'), 'confirm-refund must validate both order and group buy scope before service call');
   assert(routes.includes('failAdminRoute(reply, error'), 'L42 route catches must preserve 403 data scope errors');
-  const adminUi = read('apps/admin/src/App.tsx');
+  const adminUi = read('apps/admin/src/app/AdminApp.tsx');
+  const featureRegistry = read('apps/admin/src/app/feature-registry.ts');
   for (const keyword of ['getFailedGroupBuyClosureSummary', 'markGroupBuyFailed', 'closeFailedGroupBuyUnpaidOrders', 'listFailedGroupBuyPendingRefundOrders', 'confirmFailedGroupBuyRefundHandled', 'closeFailedGroupBuy']) assert(service.includes(keyword), `missing service keyword ${keyword}`);
   for (const keyword of ['toSafeClosureOrder', 'receiver_phone_masked', 'receiver_address_masked', 'toSafeClosureRefund']) assert(service.includes(keyword), `missing safe response mapper keyword ${keyword}`);
   const confirmFunction = service.slice(service.indexOf('export async function confirmFailedGroupBuyRefundHandled'), service.indexOf('export async function closeFailedGroupBuy'));
   assert(!/order\s*:\s*updatedOrder/.test(confirmFunction), 'confirm-refund must not directly return Prisma Order');
   assert(!/refund\s*(,|})/.test(confirmFunction.replace('toSafeClosureRefund(refund)', 'safeRefund')), 'confirm-refund must not directly return Prisma Refund');
   for (const path of ['/api/admin/group-buys/:id/closure-summary', '/api/admin/group-buys/:id/mark-failed', '/api/admin/group-buys/:id/close-unpaid-orders', '/api/admin/group-buys/:id/manual-refund-orders', '/api/admin/group-buys/:groupBuyId/orders/:orderId/confirm-refund', '/api/admin/group-buys/:id/close']) assert(routes.includes(path), `missing route ${path}`);
-  assert(adminUi.includes('失败团购人工关闭工作台'), 'Admin workbench copy missing');
+  assert(adminUi.includes('failedGroupBuyClosure') && featureRegistry.includes("label: '失败团购人工关闭'"), 'Admin failed-group-buy workbench registration missing');
   assert(!read('prisma/schema.prisma').includes(`parent_${'leader'}_id`) && !read('prisma/schema.prisma').includes(`up${'line'}_id`), 'must not add multilevel fields');
   assert(!service.includes('L43'), 'must not develop L43');
 

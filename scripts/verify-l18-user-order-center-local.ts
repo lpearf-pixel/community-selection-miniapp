@@ -33,7 +33,34 @@ async function main() {
   const leader = await prisma.user.create({ data: { openid: `${prefix}-leader-openid`, nickname: 'L18开团人', role: 'leader', status: 'active' } });
   const product = await prisma.product.create({ data: { name: `${prefix}-product`, category_id: category.id, price_cents: 1880, cost_price_cents: 900, stock: 50, unit: '份', stock_unit: 'piece', sale_unit: '份', sale_spec_name: '1份装', stock_deduct_quantity: 1, is_group_enabled: true, commission_type: 'percent', commission_value: 5, status: 'active' } });
 
-  const normalOrder = await json(await app.inject({ method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, user_id: user.id, client_request_id: `${prefix}-normal`, quantity: 2, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: '普通用户', receiver_phone: '13812340000' } }));
+  type NormalStoreOrderScenario = {
+    clientRequestId: string;
+    quantity: number;
+    receiverName: string;
+    receiverPhone: string;
+  };
+
+  const createNormalStoreOrder = async (scenario: NormalStoreOrderScenario) => json(await app.inject({
+    method: 'POST',
+    url: '/api/orders/normal',
+    payload: {
+      product_id: product.id,
+      user_id: user.id,
+      client_request_id: scenario.clientRequestId,
+      quantity: scenario.quantity,
+      pickup_store_id: pickupStore.id,
+      community_id: community.id,
+      receiver_name: scenario.receiverName,
+      receiver_phone: scenario.receiverPhone
+    }
+  }));
+
+  const normalOrder = await createNormalStoreOrder({
+    clientRequestId: `${prefix}-normal`,
+    quantity: 2,
+    receiverName: '普通用户',
+    receiverPhone: '13812340000'
+  });
   await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
   assert((await prisma.order.findUniqueOrThrow({ where: { id: normalOrder.id } })).user_id === user.id, 'normal order should belong to user');
 
@@ -72,10 +99,39 @@ async function main() {
   const pickup = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/pickup-code`, headers: { 'x-user-id': user.id } }));
   assert(pickup.pickup_code.startsWith('PICK-'), 'pickup code should start with PICK-');
   assert(pickup.receiver_phone_masked !== '13812340000' && !pickup.receiver_phone_masked.includes('1234'), 'pickup phone should be masked');
-  const unpaidOrder = await json(await app.inject({ method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, user_id: user.id, client_request_id: `${prefix}-unpaid`, quantity: 1, receiver_name: '未支付用户', receiver_phone: '13712340000' } }));
+  const unpaidOrder = await createNormalStoreOrder({
+    clientRequestId: `${prefix}-unpaid`,
+    quantity: 1,
+    receiverName: '未支付用户',
+    receiverPhone: '13712340000'
+  });
   const unpaidPickup = await app.inject({ method: 'GET', url: `/api/me/orders/${unpaidOrder.id}/pickup-code`, headers: { 'x-user-id': user.id } });
   assert(unpaidPickup.statusCode >= 400, 'unpaid order should not expose pickup code');
   assert(await prisma.commission.count({ where: { order_id: normalOrder.id } }) === 0, 'normal order should not create service reward');
+
+  const missingPickupRequestId = `${prefix}-missing-pickup`;
+  assert(
+    await prisma.order.count({ where: { client_request_id: missingPickupRequestId } }) === 0,
+    'missing-pickup scenario should start without an order'
+  );
+  const missingPickupOrder = await app.inject({
+    method: 'POST',
+    url: '/api/orders/normal',
+    payload: {
+      product_id: product.id,
+      user_id: user.id,
+      client_request_id: missingPickupRequestId,
+      quantity: 1,
+      community_id: community.id,
+      receiver_name: '缺少自提点用户',
+      receiver_phone: '13612340000'
+    }
+  });
+  assert(missingPickupOrder.statusCode === 400, 'normal store order without pickup store should return 400');
+  assert(
+    await prisma.order.count({ where: { client_request_id: missingPickupRequestId } }) === 0,
+    'normal store order without pickup store should not be created'
+  );
 
   const files = [
     'apps/api/src/modules/user-orders/user-order-service.ts',

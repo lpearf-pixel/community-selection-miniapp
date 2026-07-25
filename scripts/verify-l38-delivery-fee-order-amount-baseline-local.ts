@@ -1,6 +1,5 @@
 import { assertStageRegistered } from './stage-verifier-registration.ts';
-import { existsSync, readFileSync } from 'node:fs';
-import { globSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 assertStageRegistered('L38', 'scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts');
 function exists(file: string) { return existsSync(file); }
@@ -12,7 +11,7 @@ const files = [
   'prisma/schema.prisma','apps/api/src/modules/order/order-service.ts','apps/api/src/modules/payment/payment-service.ts','apps/api/src/modules/user-orders/user-order-service.ts','apps/api/src/modules/finance/finance-report-service.ts','apps/api/src/modules/delivery/delivery-service.ts','apps/admin/src/api/delivery.ts','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx','apps/miniapp/pages/orders/confirm/index.js','apps/miniapp/pages/orders/detail/index.js','scripts/verify-l38-delivery-fee-order-amount-baseline-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l38-delivery-fee-order-amount-baseline.md'
 ];
 for (const file of files) assert(exists(file), `Missing file: ${file}`);
-assert(globSync('prisma/migrations/*_l38_delivery_fee_order_amount/migration.sql').length > 0, 'Missing L38 migration');
+assert(readdirSync('prisma/migrations', { withFileTypes: true }).some((entry) => entry.isDirectory() && entry.name.endsWith('_l38_delivery_fee_order_amount')), 'Missing L38 migration');
 
 includesAll('prisma/schema.prisma', ['delivery_fee_cents','delivery_time_window_code','delivery_time_window_text','product_amount_cents']);
 includesAll('apps/api/src/modules/order/order-service.ts', ['product_amount_cents','delivery_fee_cents','pay_amount_cents','productAmountCents + deliveryFeeCents', "pickupType === 'delivery'", 'PickupType.delivery', 'delivery_time_window_code','delivery_time_window_text','receiver_phone_masked','receiver_address_masked']);

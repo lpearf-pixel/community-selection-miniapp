@@ -14,7 +14,7 @@ const files=['apps/api/src/modules/order/order-service.ts','apps/api/src/modules
 files.forEach(mustFile);
 mustInclude('apps/api/src/modules/order/order-service.ts',['pickup_type','delivery','store','receiver_address','receiver_phone_masked','pickup_store_id','pickupType === PickupType.delivery','配送地址必填校验','自提点必填校验','toPublicOrder']);
 mustInclude('apps/miniapp/pages/orders/confirm/index.wxml',['到店自提','门店配送','pickup_type','receiver_name','receiver_phone','receiver_address','当前为门店配送','暂不接第三方配送','自提点','提交校验']);
-mustInclude('apps/miniapp/pages/orders/detail/index.wxml',['到店自提','门店配送','配送地址','配送状态','自提码','自提点地址']);
+mustInclude('apps/miniapp/pages/orders/detail/index.wxml',['到店自提','门店配送','配送地址','配送状态','自提码','自提点：','地址：{{order.pickup.pickup_store_address}}']);
 mustInclude('apps/admin/src/pages/delivery/DeliveryReservationPage.tsx',['pickup_type','store_delivery','receiver_phone_masked','receiver_address_masked','门店配送','达达配送接口已预留','不会创建真实配送单']);
 const realGateway = ['newopen','dada'].join('.');
 const blocked = [

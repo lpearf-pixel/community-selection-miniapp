@@ -1,6 +1,5 @@
 import { assertStageRegistered } from './stage-verifier-registration.ts';
-import { existsSync, readFileSync } from 'node:fs';
-import { globSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 assertStageRegistered('L37', 'scripts/verify-l37-delivery-rule-config-baseline-local.ts');
 function read(path: string) { return readFileSync(path, 'utf8'); }
@@ -10,7 +9,7 @@ function exists(path: string) { assert(existsSync(path), `missing file: ${path}`
 
 const files = ['prisma/schema.prisma','apps/api/src/modules/delivery/delivery-rule-service.ts','apps/api/src/routes/admin/delivery.ts','apps/api/src/routes/public/delivery.ts','apps/admin/src/api/delivery.ts','apps/admin/src/pages/delivery/DeliveryRuleConfigPage.tsx','apps/admin/src/pages/delivery/DeliveryReservationPage.tsx','apps/miniapp/pages/orders/confirm/index.js','scripts/verify-l37-delivery-rule-config-baseline-local.ts','scripts/verify-all-local.sh','scripts/stage-workflow.ts','scripts/generate-stage-report.ts','docs/reviews/l37-delivery-rule-config-baseline.md'];
 files.forEach(exists);
-assert(globSync('prisma/migrations/*_l37_delivery_rule_config/migration.sql').length > 0, 'missing L37 migration');
+assert(readdirSync('prisma/migrations', { withFileTypes: true }).some((entry) => entry.isDirectory() && entry.name.endsWith('_l37_delivery_rule_config')), 'missing L37 migration');
 const schema = read('prisma/schema.prisma');
 includesAll(schema, ['model DeliveryRuleConfig','pickup_store_id','base_fee_cents','free_threshold_cents','service_radius_text','notice','time_windows_json','enabled','@@index([pickup_store_id])'], 'schema');
 const service = read('apps/api/src/modules/delivery/delivery-rule-service.ts');
