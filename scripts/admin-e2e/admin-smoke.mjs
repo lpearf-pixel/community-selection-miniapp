@@ -764,6 +764,7 @@ try {
   const pickupRaceFinished = new Promise((resolve, reject) => {
     settlePickupRace = { resolve, reject };
   });
+  let pickupSuccessOwnerPage;
   const pickupRaceEntries = [];
   const pickupRaceRoute = async (route) => {
     try {
@@ -796,6 +797,7 @@ try {
         );
         assert.equal(successfulEntries.length, 1);
         assert.equal(conflictingEntries.length, 1);
+        pickupSuccessOwnerPage = successfulEntries[0].ownerPage;
 
         const successRefreshPromise =
           successfulEntries[0].ownerPage.waitForResponse((response) => {
@@ -806,14 +808,29 @@ try {
             response.ok()
           );
         });
+        const successBusinessRefreshPromise =
+          successfulEntries[0].ownerPage.waitForResponse((response) => {
+            return (
+              new URL(response.url()).pathname ===
+                '/api/admin/inventory/overview' &&
+              response.ok()
+            );
+          });
         await successfulEntries[0].route.fulfill({
           response: successfulEntries[0].response,
         });
         const successRefreshResponse = await successRefreshPromise;
+        const successBusinessRefreshResponse =
+          await successBusinessRefreshPromise;
         assert.equal(
           successRefreshResponse.ok(),
           true,
           'pickup success refresh',
+        );
+        assert.equal(
+          successBusinessRefreshResponse.ok(),
+          true,
+          'pickup success business refresh',
         );
 
         const conflictRefreshPromise =
@@ -979,6 +996,7 @@ try {
   const refundRaceFinished = new Promise((resolve, reject) => {
     settleRefundRace = { resolve, reject };
   });
+  let refundSuccessOwnerPage;
   const refundRaceEntries = [];
   const refundRaceRoute = async (route) => {
     try {
@@ -1011,11 +1029,20 @@ try {
         );
         assert.equal(successfulEntries.length, 1);
         assert.equal(conflictingEntries.length, 1);
+        refundSuccessOwnerPage = successfulEntries[0].ownerPage;
 
         const successRefreshPromise =
           successfulEntries[0].ownerPage.waitForResponse((response) => {
             return (
               new URL(response.url()).pathname === '/api/admin/after-sales' &&
+              response.ok()
+            );
+          });
+        const successBusinessRefreshPromise =
+          successfulEntries[0].ownerPage.waitForResponse((response) => {
+            return (
+              new URL(response.url()).pathname ===
+                '/api/admin/inventory/overview' &&
               response.ok()
             );
           });
@@ -1026,6 +1053,11 @@ try {
           (await successRefreshPromise).ok(),
           true,
           'refund success refresh',
+        );
+        assert.equal(
+          (await successBusinessRefreshPromise).ok(),
+          true,
+          'refund success business refresh',
         );
 
         const conflictRefreshPromise =
@@ -1151,7 +1183,10 @@ try {
   await refundConflictPage.close();
 
   await page.waitForLoadState('networkidle');
-  const primaryBusinessRefreshes = 2;
+  const primaryBusinessRefreshes = [
+    pickupSuccessOwnerPage,
+    refundSuccessOwnerPage,
+  ].filter((ownerPage) => ownerPage === page).length;
   await waitForCount(
     page,
     () => inventoryOverviewRequestCount,
