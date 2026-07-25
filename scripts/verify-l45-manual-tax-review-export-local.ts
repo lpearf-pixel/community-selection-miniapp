@@ -5,7 +5,7 @@ assertStageRegistered('L45', 'scripts/verify-l45-manual-tax-review-export-local.
 function assert(c: unknown, m: string) { if (!c) throw new Error(m); }
 const route = readFileSync('apps/api/src/routes/withdrawals.ts', 'utf8');
 const taxRecordRepository = readFileSync('apps/api/src/modules/tax-record/tax-record-scope-repository.ts', 'utf8');
-const page = readFileSync('apps/admin/src/pages/tax-review/TaxReviewPage.tsx', 'utf8');
+const page = readFileSync('apps/admin/src/features/finance/tax-review/TaxReviewPage.tsx', 'utf8');
 const e2e = readFileSync('scripts/verify-docker-api-e2e-local.ts', 'utf8');
 const report = readFileSync('scripts/generate-stage-report.ts', 'utf8');
 const reportVerifier = readFileSync('scripts/verify-report-publish-local.ts', 'utf8');
