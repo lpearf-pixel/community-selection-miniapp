@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '../../db.js';
 import type { AdminAccessContext } from '../admin-access/admin-access-control.js';
+import { appendRewardLedgerEntry } from '../../services/commission-service.js';
 import { executeAdminWithdrawalCommand } from './admin-withdrawal-executor.js';
 
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -44,10 +45,11 @@ function input(
   overrides: {
     expectedVersion?: number;
     adminContext?: AdminAccessContext;
+    withdrawalId?: string;
   } = {},
 ) {
   return {
-    withdrawal_id: withdrawalId,
+    withdrawal_id: overrides.withdrawalId ?? withdrawalId,
     action,
     command: {
       expected_version: overrides.expectedVersion ?? 1,
@@ -311,6 +313,46 @@ describe.sequential('Admin withdrawal executor on PostgreSQL', () => {
       events: 2,
       timelines: 1,
     });
+    const events = await prisma.businessEventLog.findMany({
+      where: { withdrawal_id: withdrawalId },
+    });
+    const globalEvent = events.find((event) => event.order_id === null);
+    const orderEvent = events.find((event) => event.order_id === orderId);
+    expect(globalEvent?.before_snapshot).not.toHaveProperty('commission_links');
+    expect(orderEvent?.before_snapshot).not.toHaveProperty('commission_links');
+    expect(orderEvent?.payload).toMatchObject({
+      order_id: orderId,
+      commission_ids: [commissionId],
+    });
+    expect(orderEvent?.payload).not.toHaveProperty('order_ids');
+  });
+
+  it('serializes concurrent balance snapshots for one leader', async () => {
+    const keys = Array.from(
+      { length: 12 },
+      (_, index) => `concurrent-ledger-${suffix}-${index}`,
+    );
+    await Promise.all(
+      keys.map((idempotencyKey) =>
+        appendRewardLedgerEntry(prisma, {
+          leader_user_id: leaderId,
+          event_type: 'concurrent_restore_probe',
+          entry_type: 'concurrent_restore_probe',
+          direction: 'in',
+          amount_cents: 10,
+          affects_available_balance: true,
+          idempotency_key: idempotencyKey,
+        }),
+      ),
+    );
+    const entries = await prisma.rewardLedger.findMany({
+      where: { idempotency_key: { in: keys } },
+      select: { balance_after_cents: true },
+    });
+    expect(entries).toHaveLength(keys.length);
+    expect(
+      entries.map((entry) => entry.balance_after_cents).sort((a, b) => a - b),
+    ).toEqual(keys.map((_, index) => (index + 1) * 10));
   });
 
   it('allows exactly one concurrent approve or reject command', async () => {
