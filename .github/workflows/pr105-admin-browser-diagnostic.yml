@@ -1,0 +1,48 @@
+name: PR105 Admin Browser Diagnostic
+
+on:
+  push:
+    branches:
+      - codex/pr105-admin-browser-diagnostic-56a7d2ec
+    paths:
+      - .github/workflows/pr105-admin-browser-diagnostic.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr105-admin-browser-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  admin-browser:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set up Admin browser
+        run: pnpm setup:admin:e2e
+      - name: Capture Admin browser failure evidence
+        run: pnpm e2e:admin
+      - name: Cleanup diagnostic resources
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f community-selection-admin-e2e-browser-${GITHUB_RUN_ID} || true
+          docker compose \
+            -p community-selection-admin-e2e-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
