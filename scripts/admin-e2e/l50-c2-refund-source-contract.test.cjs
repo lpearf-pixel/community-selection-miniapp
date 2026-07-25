@@ -118,6 +118,10 @@ test('L15 verification executes approved refunds through the reliable command', 
     l15Verifier,
     /expected_version:\s*reviewed\.order\.version/,
   );
+  assert.match(
+    l15Verifier,
+    /approved_product_refund_cents:\s*800/,
+  );
   assert.doesNotMatch(
     l15Verifier,
     /expected_version:\s*reviewed\.version/,
