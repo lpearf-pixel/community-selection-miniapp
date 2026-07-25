@@ -20,6 +20,10 @@ const smoke = readFileSync(
   join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
   'utf8',
 );
+const l15Verifier = readFileSync(
+  join(root, 'scripts/verify-l15-after-sale-local.ts'),
+  'utf8',
+);
 const adminTypes = readFileSync(
   join(root, 'apps/admin/src/features/sales/after-sales/types.ts'),
   'utf8',
@@ -98,5 +102,16 @@ test('real Admin browser settles both primary mutation refreshes before counting
   assert.match(
     smoke,
     /await refundConflictPage\.close\(\);\s*await page\.waitForLoadState\('networkidle'\);\s*const primaryBusinessRefreshes = 2;/,
+  );
+});
+
+test('L15 verification executes approved refunds through the reliable command', () => {
+  assert.match(
+    l15Verifier,
+    /\/api\/admin\/after-sales\/\$\{afterSale\.id\}\/refund-execute/,
+  );
+  assert.doesNotMatch(
+    l15Verifier,
+    /\/api\/admin\/after-sales\/\$\{afterSale\.id\}\/resolve/,
   );
 });
