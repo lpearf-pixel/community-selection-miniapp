@@ -433,19 +433,64 @@ try {
   assert.equal(filteredOrder.version, 1);
 
   const fixtureRow = page
-    .locator(`tr[data-row-key="${credentials.orderId}"]`)
-    .filter({
-      has: page.getByRole('button', { name: '完成', exact: true }),
-    })
-    .first();
-  const deliveryRow = fixtureRow;
+    .getByRole('row')
+    .filter({ hasText: credentials.orderNo });
+  await fixtureRow.waitFor();
   assert.equal(
-    await deliveryRow
+    await fixtureRow
       .getByRole('button', { name: '核销自提', exact: true })
       .count(),
     0,
   );
-  const orderRequestsBeforeStatusRace = orderRequestCount;
+
+  const openStatusRacePage = async () => {
+    const statusPage = await context.newPage();
+    await statusPage.goto(baseURL, { waitUntil: 'networkidle' });
+    await statusPage
+      .getByText(`当前管理员：${credentials.username}`)
+      .waitFor();
+    const statusNavigation = statusPage.getByRole('navigation', {
+      name: '后台功能导航',
+    });
+    await statusNavigation
+      .getByRole('button', { name: '订单管理', exact: true })
+      .click();
+    await statusPage.getByText('全渠道订单', { exact: true }).waitFor();
+    const statusFilter = statusPage.getByRole('form', {
+      name: '全渠道订单筛选',
+    });
+    await statusFilter.getByLabel('订单关键词').fill(credentials.orderNo);
+    const filteredResponse = statusPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/admin/orders' &&
+        url.searchParams.get('keyword') === credentials.orderNo &&
+        url.searchParams.get('page') === '1' &&
+        response.ok()
+      );
+    });
+    await statusFilter
+      .getByRole('button', { name: /查\s*询/ })
+      .click();
+    const envelope = await (await filteredResponse).json();
+    assert.equal(envelope.success, true);
+    assert.equal(envelope.data.items.length, 1);
+    assert.equal(envelope.data.items[0].id, credentials.orderId);
+    assert.equal(envelope.data.items[0].version, 1);
+    const row = statusPage
+      .getByRole('row')
+      .filter({ hasText: credentials.orderNo });
+    await row.waitFor();
+    const button = row.getByRole('button', {
+      name: '完成',
+      exact: true,
+    });
+    await button.waitFor();
+    return { statusPage, row, button };
+  };
+
+  const statusPrimary = await openStatusRacePage();
+  const statusConflict = await openStatusRacePage();
   const statusRaceResponses = [];
   const captureStatusRaceResponse = (response) => {
     const request = response.request();
@@ -457,7 +502,8 @@ try {
       statusRaceResponses.push(response);
     }
   };
-  page.on('response', captureStatusRaceResponse);
+  statusPrimary.statusPage.on('response', captureStatusRaceResponse);
+  statusConflict.statusPage.on('response', captureStatusRaceResponse);
 
   let releaseStatusRace;
   const statusRaceReady = new Promise((resolve) => {
@@ -468,6 +514,8 @@ try {
     settleStatusRace = { resolve, reject };
   });
   const statusRaceEntries = [];
+  let statusSuccessOwnerPage;
+  let statusConflictOwnerPage;
   const statusRaceRoute = async (route) => {
     try {
       const request = route.request();
@@ -479,6 +527,7 @@ try {
       const entry = {
         route,
         command: request.postDataJSON(),
+        ownerPage: request.frame().page(),
         response: null,
       };
       statusRaceEntries.push(entry);
@@ -498,46 +547,36 @@ try {
         );
         assert.equal(successfulEntries.length, 1);
         assert.equal(conflictingEntries.length, 1);
+        statusSuccessOwnerPage = successfulEntries[0].ownerPage;
+        statusConflictOwnerPage = conflictingEntries[0].ownerPage;
 
-        const successRefreshPromise = page.waitForResponse((response) => {
-          const url = new URL(response.url());
-          return (
-            url.pathname === '/api/admin/orders' &&
-            url.searchParams.get('keyword') === credentials.orderNo &&
-            response.ok()
-          );
-        });
+        const successRefreshPromise =
+          statusSuccessOwnerPage.waitForResponse((response) => {
+            const url = new URL(response.url());
+            return (
+              url.pathname === '/api/admin/orders' &&
+              url.searchParams.get('keyword') === credentials.orderNo &&
+              response.ok()
+            );
+          });
         await successfulEntries[0].route.fulfill({
           response: successfulEntries[0].response,
         });
-        await successRefreshPromise;
-        await waitForCount(
-          page,
-          () => orderRequestCount,
-          orderRequestsBeforeStatusRace + 1,
-          'order success refresh',
-        );
-        assert.equal(orderRequestCount, orderRequestsBeforeStatusRace + 1);
+        assert.equal((await successRefreshPromise).ok(), true);
 
-        const conflictRefreshPromise = page.waitForResponse((response) => {
-          const url = new URL(response.url());
-          return (
-            url.pathname === '/api/admin/orders' &&
-            url.searchParams.get('keyword') === credentials.orderNo &&
-            response.ok()
-          );
-        });
+        const conflictRefreshPromise =
+          statusConflictOwnerPage.waitForResponse((response) => {
+            const url = new URL(response.url());
+            return (
+              url.pathname === '/api/admin/orders' &&
+              url.searchParams.get('keyword') === credentials.orderNo &&
+              response.ok()
+            );
+          });
         await conflictingEntries[0].route.fulfill({
           response: conflictingEntries[0].response,
         });
-        await conflictRefreshPromise;
-        await waitForCount(
-          page,
-          () => orderRequestCount,
-          orderRequestsBeforeStatusRace + 2,
-          'order conflict refresh',
-        );
-        assert.equal(orderRequestCount, orderRequestsBeforeStatusRace + 2);
+        assert.equal((await conflictRefreshPromise).ok(), true);
         settleStatusRace.resolve();
       }
       await statusRaceFinished;
@@ -546,20 +585,30 @@ try {
       throw error;
     }
   };
-  await page.route('**/api/admin/orders/*/status', statusRaceRoute);
+  await statusPrimary.statusPage.route(
+    '**/api/admin/orders/*/status',
+    statusRaceRoute,
+  );
+  await statusConflict.statusPage.route(
+    '**/api/admin/orders/*/status',
+    statusRaceRoute,
+  );
 
-  const sameVersionStatusButton = fixtureRow.getByRole('button', {
-    name: '完成',
-    exact: true,
-  });
-  await sameVersionStatusButton.scrollIntoViewIfNeeded();
   await Promise.all([
-    sameVersionStatusButton.dispatchEvent('click'),
-    sameVersionStatusButton.dispatchEvent('click'),
+    statusPrimary.button.dispatchEvent('click'),
+    statusConflict.button.dispatchEvent('click'),
   ]);
   await statusRaceFinished;
-  await page.unroute('**/api/admin/orders/*/status', statusRaceRoute);
-  page.off('response', captureStatusRaceResponse);
+  await statusPrimary.statusPage.unroute(
+    '**/api/admin/orders/*/status',
+    statusRaceRoute,
+  );
+  await statusConflict.statusPage.unroute(
+    '**/api/admin/orders/*/status',
+    statusRaceRoute,
+  );
+  statusPrimary.statusPage.off('response', captureStatusRaceResponse);
+  statusConflict.statusPage.off('response', captureStatusRaceResponse);
 
   await waitForCount(
     page,
@@ -600,11 +649,19 @@ try {
   const conflictEnvelope = await conflictResponse.json();
   assert.equal(conflictEnvelope.code, 'ADMIN_ORDER_VERSION_CONFLICT');
   assert.equal(typeof conflictEnvelope.trace_id, 'string');
-  await page
+  assert.ok(statusSuccessOwnerPage);
+  assert.ok(statusConflictOwnerPage);
+  await statusConflictOwnerPage
     .getByText('订单已被其他操作更新，已刷新列表，请重试', { exact: true })
     .waitFor();
-  await fixtureRow.getByText('completed', { exact: true }).waitFor();
-  await page.waitForLoadState('networkidle');
+  await Promise.all([
+    statusPrimary.row.getByText('completed', { exact: true }).waitFor(),
+    statusConflict.row.getByText('completed', { exact: true }).waitFor(),
+  ]);
+  await Promise.all([
+    statusPrimary.statusPage.close(),
+    statusConflict.statusPage.close(),
+  ]);
 
   await orderFilter.getByLabel('订单关键词').fill(credentials.pickupOrderNo);
   const pickupFilteredResponse = page.waitForResponse((response) => {
