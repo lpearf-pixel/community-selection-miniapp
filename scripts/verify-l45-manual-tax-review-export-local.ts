@@ -47,7 +47,7 @@ assert(route.includes('ensureTaxExportWithinLimit') && route.includes('taxExport
 assert(route.includes('expected_updated_at') && route.includes('updated_at: w?.updated_at') && route.includes('where: { id, updated_at: expectedUpdatedAt }'), 'tax review must enforce client-side optimistic concurrency');
 assert(route.includes('const TAX_MODES') && route.includes('const TAX_STATUSES') && route.includes('const INVOICE_STATUSES') && route.includes('validateTaxCombination'), 'tax status allow-lists and combination validation must exist');
 assert(page.includes('系统不会自动报税') && page.includes('系统不会连接外部税务平台') && page.includes('系统不会自动发起打款') && page.includes('仅供内部人工核对'), 'manual review disclaimers exist');
-assert(existsSync('apps/admin/src/api/adminTaxReview.ts'), 'Admin API client exists');
+assert(existsSync('apps/admin/src/features/finance/tax-review/api.ts'), 'Admin API client exists');
 for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenario();', 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeAHeaders', 'financeBHeaders', 'negative taxable', 'none nonzero tax', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true', 'rejected tax review must not mutate Withdrawal', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2']) {
   assert(e2e.includes(required), `L45 Docker E2E must include ${required}`);
 }
