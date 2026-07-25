@@ -1,0 +1,60 @@
+name: L22 Semantic Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - .github/workflows/l22-semantic-gate.yml
+      - scripts/verify-l22-miniapp-order-center-local.ts
+      - apps/miniapp/pages/orders/detail/**
+      - apps/miniapp/pages/after-sales/apply/**
+      - apps/miniapp/utils/order.js
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l22-semantic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  l22-semantic:
+    runs-on: self-hosted
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Verify L22 semantic contract
+        run: pnpm exec tsx scripts/verify-l22-miniapp-order-center-local.ts --static-only
+      - name: Verify complete repository
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-l22-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm verify:all
+      - name: Cleanup L22 resources
+        if: always()
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-l22-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
