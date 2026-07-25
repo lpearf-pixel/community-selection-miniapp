@@ -37,7 +37,7 @@ describe('after-sales API boundary', () => {
       request,
     );
 
-    expect(request).toHaveBeenCalledWith('/api/admin/after-sales/a1/refund/execute', {
+    expect(request).toHaveBeenCalledWith('/api/admin/after-sales/a1/refund-execute', {
       method: 'POST',
       body: JSON.stringify({
         expected_version: 7,

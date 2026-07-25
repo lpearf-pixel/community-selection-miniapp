@@ -16,7 +16,7 @@ export function executeAfterSaleRefund(
   request: JsonRequester = adminJsonRequest,
 ): Promise<AfterSaleRefundExecutionResult> {
   return request<AfterSaleRefundExecutionResult>(
-    `/api/admin/after-sales/${afterSaleId}/refund/execute`,
+    `/api/admin/after-sales/${afterSaleId}/refund-execute`,
     {
       method: 'POST',
       body: JSON.stringify({
