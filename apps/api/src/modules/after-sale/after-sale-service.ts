@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
-import { createMockRefund } from '../../services/refund-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../../services/logging-service.js';
 import { recordBatchLoss } from '../inventory/inventory-service.js';
 
@@ -283,8 +282,17 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
   });
 }
 
+export function assertLegacyAfterSaleResolutionAllowed(
+  resolutionType: string,
+) {
+  if (resolutionType === 'refund' || resolutionType === 'partial_refund') {
+    throw new Error('退款类售后请使用可靠退款执行命令');
+  }
+}
+
 export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleInput) {
   const resolutionType = ensureIn(input.resolution_type, resolutionTypes, '售后处理结果不合法') as ResolutionType;
+  assertLegacyAfterSaleResolutionAllowed(resolutionType);
   const approvedRefundCents = input.approved_refund_cents == null ? null : ensurePositiveInteger(input.approved_refund_cents, '处理退款金额必须大于 0');
   const approvedProductRefundCents = input.approved_product_refund_cents == null ? null : ensurePositiveInteger(input.approved_product_refund_cents, '处理商品退款金额必须大于 0');
   const approvedDeliveryRefundCents = input.approved_delivery_refund_cents == null ? null : ensurePositiveInteger(input.approved_delivery_refund_cents, '处理配送费退款金额必须大于 0');
@@ -306,26 +314,11 @@ export async function resolveAfterSaleCase(id: string, input: ResolveAfterSaleIn
     await recordAfterSaleLog(tx, updated, 'after_sale_resolved', { actor_type: 'admin', actor_id: resolvedByAdminId }, input.admin_note, { resolution_type: resolutionType });
     return updated;
   });
-  let refundId: string | null = null;
-  if ((resolutionType === 'refund' || resolutionType === 'partial_refund') && refundAmount) {
-    const refund = await createMockRefund({
-      order_id: current.order_id,
-      refund_amount_cents: refundAmount,
-      product_refund_amount_cents: productRefundAmount,
-      delivery_refund_amount_cents: deliveryRefundAmount,
-      reason: `售后处理：${current.reason}`,
-      client_refund_id: `after-sale-${id}`
-    });
-    refundId = refund.id;
-  }
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const updated = await tx.afterSaleCase.update({
       where: { id },
-      data: { status: 'resolved', resolution_type: resolutionType, refund_id: refundId, resolved_at: new Date() }
+      data: { status: 'resolved', resolution_type: resolutionType, refund_id: null, resolved_at: new Date() }
     });
-    if (refundId) {
-      await recordAfterSaleLog(tx, updated, 'after_sale_refund_created', { actor_type: 'admin', actor_id: resolvedByAdminId }, input.admin_note, { refund_id: refundId, processing_case_id: processing.id });
-    }
     return updated;
   });
 }
