@@ -25,8 +25,14 @@ describe('after-sales API boundary', () => {
       after_sale_case_id: 'a1',
       order_id: 'o1',
       refund_id: 'r1',
-      order_version: 8,
-      replayed: false,
+      refund_status: 'success',
+      refund_amount_cents: 500,
+      product_refund_amount_cents: 500,
+      delivery_refund_amount_cents: 0,
+      remaining_refundable_amount_cents: 500,
+      order_status: 'partially_refunded',
+      version: 8,
+      execution_mode: 'mock',
     }) as T) as JsonRequester;
 
     await executeAfterSaleRefund(
