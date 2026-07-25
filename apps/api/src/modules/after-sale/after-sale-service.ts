@@ -110,7 +110,7 @@ function afterSalePayload(afterSaleCase: AfterSaleCasePayload, extra: Record<str
   };
 }
 
-async function recordAfterSaleLog(tx: Prisma.TransactionClient, afterSaleCase: AfterSaleCasePayload, action: string, actor: Actor, note?: string | null, extra: Record<string, unknown> = {}) {
+export async function recordAfterSaleLog(tx: Prisma.TransactionClient, afterSaleCase: AfterSaleCasePayload, action: string, actor: Actor, note?: string | null, extra: Record<string, unknown> = {}) {
   const payload = afterSalePayload(afterSaleCase, extra);
   await tx.afterSaleLog.create({
     data: {
