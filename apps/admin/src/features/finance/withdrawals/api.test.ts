@@ -35,14 +35,21 @@ describe('withdrawal API boundary', () => {
     );
   });
 
-  it('keeps detail and manual action contracts unchanged', async () => {
+  it('sends versioned idempotent manual action commands', async () => {
     const signal = new AbortController().signal;
     const request = vi.fn(async <T>(): Promise<T> => undefined as T) as JsonRequester;
 
     await getWithdrawalDetail('w1', request, signal);
-    await approveWithdrawal('w1', '审核通过', request);
-    await rejectWithdrawal('w1', '资料不足', request);
-    await markWithdrawalPaid('w1', 'manual-1', '人工处理完成', request);
+    await approveWithdrawal('w1', 3, 'admin-withdrawal-approve-1', '审核通过', request);
+    await rejectWithdrawal('w1', 3, 'admin-withdrawal-reject-1', '资料不足', request);
+    await markWithdrawalPaid(
+      'w1',
+      4,
+      'admin-withdrawal-paid-1',
+      'manual-1',
+      '人工处理完成',
+      request,
+    );
 
     expect(request).toHaveBeenNthCalledWith(
       1,
@@ -54,7 +61,11 @@ describe('withdrawal API boundary', () => {
       '/api/admin/withdrawals/w1/approve',
       {
         method: 'POST',
-        body: JSON.stringify({ remark: '审核通过' }),
+        body: JSON.stringify({
+          expected_version: 3,
+          idempotency_key: 'admin-withdrawal-approve-1',
+          admin_remark: '审核通过',
+        }),
       },
     );
     expect(request).toHaveBeenNthCalledWith(
@@ -62,7 +73,11 @@ describe('withdrawal API boundary', () => {
       '/api/admin/withdrawals/w1/reject',
       {
         method: 'POST',
-        body: JSON.stringify({ reason: '资料不足' }),
+        body: JSON.stringify({
+          expected_version: 3,
+          idempotency_key: 'admin-withdrawal-reject-1',
+          admin_remark: '资料不足',
+        }),
       },
     );
     expect(request).toHaveBeenNthCalledWith(
@@ -71,8 +86,10 @@ describe('withdrawal API boundary', () => {
       {
         method: 'POST',
         body: JSON.stringify({
+          expected_version: 4,
+          idempotency_key: 'admin-withdrawal-paid-1',
           manual_reference: 'manual-1',
-          remark: '人工处理完成',
+          admin_remark: '人工处理完成',
         }),
       },
     );
