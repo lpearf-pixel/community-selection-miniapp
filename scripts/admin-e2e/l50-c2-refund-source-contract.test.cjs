@@ -114,4 +114,12 @@ test('L15 verification executes approved refunds through the reliable command', 
     l15Verifier,
     /\/api\/admin\/after-sales\/\$\{afterSale\.id\}\/resolve/,
   );
+  assert.match(
+    l15Verifier,
+    /expected_version:\\s*reviewed\\.order\\.version/,
+  );
+  assert.doesNotMatch(
+    l15Verifier,
+    /expected_version:\\s*reviewed\\.version/,
+  );
 });
