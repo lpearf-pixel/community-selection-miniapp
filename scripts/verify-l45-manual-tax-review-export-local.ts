@@ -40,7 +40,7 @@ assert(!e2e.includes("taxRecordsA.some(") && !e2e.includes("taxRecordsB.some("),
 assert(e2e.includes("new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0))"), 'L45 CSV body must be decoded after raw BOM verification');
 assert(!e2e.includes("csv.charCodeAt(0) === 0xfeff"), 'L45 CSV verifier must not expect Response.text() to preserve BOM');
 assert(route.includes('taxAmount > taxableAmount') && route.includes('payableAmount < 0'), 'amount relation validation exists');
-const adminClient = readFileSync('apps/admin/src/api/adminTaxReview.ts', 'utf8');
+const adminClient = readFileSync('apps/admin/src/features/finance/tax-review/api.ts', 'utf8');
 assert(adminClient.includes('downloadTaxReviewCsv') && adminClient.includes('adminFetch') && adminClient.includes('URL.createObjectURL') && adminClient.includes('content-disposition'), 'Admin CSV export must use authenticated blob fetch');
 assert(!page.includes('href={taxReviewExportUrl('), 'TaxReviewPage must not use href CSV downloads');
 assert(route.includes('ensureTaxExportWithinLimit') && route.includes('taxExportLimit') && route.includes('x-export-total') && route.includes('x-export-truncated') && route.includes('422'), 'CSV export must reject over-limit rather than truncate silently');
