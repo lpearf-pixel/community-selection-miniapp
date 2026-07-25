@@ -25,6 +25,8 @@ function main() {
   runComplianceScan();
   const files = [
     'apps/api/src/routes/admin/pickup.ts',
+    'apps/api/src/routes/admin/orders.ts',
+    'apps/api/src/modules/order/admin-pickup-verification-executor.ts',
     'apps/api/src/modules/admin-access/admin-access-control.ts',
     'apps/admin/src/api/pickupWorkbench.ts',
     'apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx',
@@ -39,6 +41,8 @@ function main() {
   for (const file of files) assert(existsSync(join(repoRoot, file)), `Missing required file: ${file}`);
 
   const pickup = read('apps/api/src/routes/admin/pickup.ts');
+  const pickupVerification = read('apps/api/src/routes/admin/orders.ts')
+    + read('apps/api/src/modules/order/admin-pickup-verification-executor.ts');
   const api = read('apps/admin/src/api/pickupWorkbench.ts');
   const page = read('apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx');
   const app = read('apps/admin/src/app/AdminApp.tsx');
@@ -47,12 +51,13 @@ function main() {
   const verifyAll = read('scripts/verify-all-local.sh');
   const report = read('scripts/generate-stage-report.ts');
 
-  ['/api/admin/pickup/orders','/api/admin/pickup/orders/by-code/:code','/api/admin/pickup/orders/:id/verify','/api/admin/pickup/summary','requireAdminPermission','pickup.verify','receiver_phone_masked','pickup_code'].forEach((needle) => assert(pickup.includes(needle), `Missing backend route keyword: ${needle}`));
-  ['订单未支付，不能核销','verifyDoneStatuses','body.pickup_code','safePickupOrder'].forEach((needle) => assert(pickup.includes(needle), `Missing backend business semantic: ${needle}`));
-  assert(pickup.includes("PayStatus.paid") && pickup.includes('OrderStatus.picked'), 'verify route must check payment and set picked status');
+  ['/api/admin/pickup/orders','/api/admin/pickup/orders/by-code/:code','/api/admin/pickup/summary','requireAdminPermission','pickup.verify','receiver_phone_masked','pickup_code'].forEach((needle) => assert(pickup.includes(needle), `Missing backend read route keyword: ${needle}`));
+  ['订单未支付，不能核销','verifyDoneStatuses','safePickupOrder'].forEach((needle) => assert(pickup.includes(needle), `Missing backend read semantic: ${needle}`));
+  assert(!pickup.includes("app.post('/api/admin/pickup/orders/:id/verify'"), 'legacy pickup workbench must not retain a write route');
+  ['/api/admin/orders/:id/pickup-verify',"requireAdminPermissionV1('pickup.verify')",'executeAdminPickupVerificationCommand','canAccessOrderDataScope','assertOrderScope','ADMIN_FORBIDDEN','OrderStatus.picked'].forEach((needle) => assert(pickupVerification.includes(needle), `Missing reliable pickup verification semantic: ${needle}`));
 
   ['PickupWorkbenchPage','自提工作台','pickup.verify','自提码','订单号','receiver_phone_masked','核销','暂无待自提订单','无权限访问','loading'].forEach((needle) => assert(page.includes(needle), `Missing frontend page keyword: ${needle}`));
-  ['/api/admin/pickup/orders','/api/admin/pickup/orders/by-code','/api/admin/pickup/orders/${orderId}/verify','/api/admin/pickup/summary'].forEach((needle) => assert(api.includes(needle), `Missing frontend API call: ${needle}`));
+  ['/api/admin/pickup/orders','/api/admin/pickup/orders/by-code','/api/admin/orders/${orderId}/pickup-verify','/api/admin/pickup/summary'].forEach((needle) => assert(api.includes(needle), `Missing frontend API call: ${needle}`));
   assert(app.includes('PickupWorkbenchPage') && app.includes('pickupWorkbench') && featureRegistry.includes("label: '自提工作台'"), 'App must register pickup workbench page/menu');
 
   ['apps/api/src/routes/admin/pickup.ts','apps/admin/src/api/pickupWorkbench.ts','apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx'].forEach((file) => assertNoSensitiveOutput(file, read(file)));
