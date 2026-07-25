@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok } from '@community-selection/shared';
+import { contractFail, contractOk, fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedOrderWhere, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedOrderWhere, hasAdminPermission, requireAdminPermission, requireAdminPermissionV1, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { parseAdminRefundCommand } from '../modules/refund/admin-refund-command.js';
+import { AdminRefundCommandError, executeAdminRefundCommand } from '../modules/refund/admin-refund-executor.js';
 import {
   addAfterSaleNote,
   cancelAfterSaleCase,
@@ -141,6 +143,93 @@ export function registerPublicAfterSaleRoutes(app: FastifyInstance) {
 }
 
 export function registerAdminAfterSaleRoutes(app: FastifyInstance) {
+  app.post(
+    '/api/admin/after-sales/:id/refund-execute',
+    {
+      config: { adminContractV1: true },
+      preHandler: requireAdminPermissionV1([
+        'after_sale.manage',
+        'refund.manage',
+      ]),
+    },
+    async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: '管理员身份无效',
+          traceId,
+        });
+      }
+      if (
+        !['after_sale.manage', 'refund.manage'].every((permission) =>
+          hasAdminPermission(context, permission as 'after_sale.manage' | 'refund.manage'),
+        )
+      ) {
+        reply.code(403);
+        return contractFail({
+          code: 'ADMIN_FORBIDDEN',
+          message: '当前管理员无此操作权限',
+          traceId,
+        });
+      }
+      const parsed = parseAdminRefundCommand(request.body);
+      if (!parsed.ok) {
+        reply.code(400);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
+      }
+      const { id } = request.params as { id: string };
+      try {
+        const result = await executeAdminRefundCommand({
+          after_sale_case_id: id,
+          command: parsed.value,
+          context,
+          admin_meta: {
+            ip_address: request.ip,
+            user_agent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+        });
+        return contractOk(result, {
+          code: 'ADMIN_REFUND_EXECUTED',
+          message: '退款执行成功',
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AdminRefundCommandError) {
+          reply.code(error.statusCode);
+          return contractFail({
+            code: error.code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name: error instanceof Error ? error.name : 'UnknownError',
+            after_sale_case_id: id,
+            trace_id: traceId,
+          },
+          'Admin refund execution failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_REFUND_EXECUTION_FAILED',
+          message: '退款执行失败',
+          traceId,
+        });
+      }
+    },
+  );
+
   app.get('/api/admin/after-sales', { preHandler: requireAdminPermission('after_sale.manage') }, async (request, reply) => {
     const query = request.query as AdminListQuery;
     const context = resolveAdminAccessContext(request);
