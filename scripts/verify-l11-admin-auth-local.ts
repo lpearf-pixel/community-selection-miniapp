@@ -114,16 +114,25 @@ async function main() {
   assert(ignoreAudit, 'alert ignore should write AdminAuditLog');
 
   const leader = await prisma.user.create({ data: { openid: `l11_leader_${Date.now()}`, nickname: 'L11开团人', role: 'leader' } });
+  const customer = await prisma.user.create({ data: { openid: `l11_customer_${Date.now()}`, nickname: 'L11用户', role: 'customer' } });
+  const product = await prisma.product.findFirstOrThrow();
+  const community = await prisma.community.findFirstOrThrow();
+  const groupBuy = await prisma.groupBuy.create({ data: { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, current_people: 1, current_quantity: 1, price_cents: product.price_cents, start_time: new Date(Date.now() - 3600_000), end_time: new Date(Date.now() + 3600_000), pickup_time: new Date(Date.now() + 86400_000), status: 'success' } });
+  const order = await prisma.order.create({ data: { order_no: `L11-${Date.now()}`, user_id: customer.id, group_buy_id: groupBuy.id, product_id: product.id, leader_user_id: leader.id, community_id: community.id, total_amount_cents: 100, product_amount_cents: 100, pay_amount_cents: 100, quantity: 1, pay_status: 'paid', order_status: 'completed', refund_status: 'none', paid_at: new Date(), completed_at: new Date(), receiver_name: 'L11用户', receiver_phone: '13800000000' } });
   const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: 100, taxable_amount_cents: 100, payable_amount_cents: 100 } });
+  const commission = await prisma.commission.create({ data: { leader_user_id: leader.id, order_id: order.id, group_buy_id: groupBuy.id, base_amount_cents: 100, commission_type: 'fixed', commission_value: 100, estimated_amount_cents: 100, final_amount_cents: 100, status: 'withdrawing', withdrawal_id: withdrawal.id, available_at: new Date() } });
+  await prisma.withdrawalCommission.create({ data: { withdrawal_id: withdrawal.id, commission_id: commission.id, amount_cents: 100 } });
   const taxReview = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/tax-review`, headers: { cookie: totpCookie }, payload: { tax_mode: 'none', taxable_amount_cents: 100, tax_amount_cents: 0, tax_rate_basis: 'manual', client_request_id: `l11-tax-${withdrawal.id}`, expected_updated_at: withdrawal.updated_at.toISOString() } });
   assert(taxReview.statusCode === 200, `withdrawal tax-review should succeed, got ${taxReview.statusCode}`);
   const taxAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_tax_reviewed', target_id: withdrawal.id } });
   assert(taxAudit, 'withdrawal tax-review should write AdminAuditLog');
-  const approve = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/approve`, headers: { cookie: totpCookie }, payload: { reason: 'L11 verification' } });
+  const afterTaxReview = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawal.id } });
+  const approve = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/approve`, headers: { cookie: totpCookie }, payload: { expected_version: afterTaxReview.version, idempotency_key: `l11-withdrawal-approve-${withdrawal.id}`, admin_remark: 'L11 verification' } });
   assert(approve.statusCode === 200, `withdrawal approve should succeed, got ${approve.statusCode}`);
   const withdrawalAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_approved', target_id: withdrawal.id } });
   assert(withdrawalAudit, 'withdrawal approve should write AdminAuditLog');
-  const markPaid = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/mark-paid`, headers: { cookie: totpCookie }, payload: { reason: 'L11 verification paid', manual_reference: `L11-${withdrawal.id}` } });
+  const afterApprove = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawal.id } });
+  const markPaid = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/mark-paid`, headers: { cookie: totpCookie }, payload: { expected_version: afterApprove.version, idempotency_key: `l11-withdrawal-paid-${withdrawal.id}`, admin_remark: 'L11 verification paid', manual_reference: `L11-${withdrawal.id}` } });
   assert(markPaid.statusCode === 200, `withdrawal mark-paid should succeed, got ${markPaid.statusCode}`);
   const markPaidAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_mark_paid', target_id: withdrawal.id } });
   assert(markPaidAudit, 'withdrawal mark-paid should write AdminAuditLog');
