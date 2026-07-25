@@ -104,10 +104,10 @@ test('real Admin browser restores orders before injecting the order refresh fail
   );
 });
 
-test('real Admin browser settles both primary mutation refreshes before counting', () => {
+test('real Admin browser waits for both primary mutation refreshes before counting', () => {
   assert.match(
     smoke,
-    /await refundConflictPage\.close\(\);\s*await page\.waitForLoadState\('networkidle'\);\s*const primaryBusinessRefreshes = 2;/,
+    /const primaryBusinessRefreshes = 2;[\s\S]*?await waitForCount\(\s*page,\s*\(\) => inventoryOverviewRequestCount,\s*a33RequestsAfterInitial\.inventory \+ primaryBusinessRefreshes,/,
   );
 });
 
