@@ -63,7 +63,7 @@ async function adminPost(url: string, payload: unknown, cookie: string) {
 async function main() {
   assertStaticBoundaries();
   const adminPassword = `${prefix}-AdminPass123!`;
-  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'operator', status: 'active' } });
+  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'admin', status: 'active' } });
   const login = await app.inject({ method: 'POST', url: '/api/admin/auth/login', payload: { username: adminUser.username, password: adminPassword } });
   assert(login.statusCode === 200, 'admin login should succeed');
   const setCookie = login.headers['set-cookie'];
@@ -72,6 +72,7 @@ async function main() {
 
   const category = await prisma.category.create({ data: { name: `${prefix}-cat`, status: 'active' } });
   const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'L14.5 模块边界社区', status: 'active' } });
+  const store = await prisma.pickupStore.create({ data: { name: `${prefix}-store`, address: 'L14.5 自提点', phone: '13800000000' } });
   const leader = await prisma.user.create({ data: { openid: `${prefix}-leader`, nickname: 'L14.5开团人', role: 'leader', status: 'active' } });
   const customer = await prisma.user.create({ data: { openid: `${prefix}-customer`, nickname: 'L14.5用户', role: 'customer', status: 'active' } });
   const product = await prisma.product.create({
@@ -94,25 +95,30 @@ async function main() {
   });
 
   const groupBuy = await post('/api/group-buys', { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
-  const order = await post('/api/orders', { user_id: customer.id, group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, receiver_name: '模块用户', receiver_phone: '13812345678' });
+  const order = await post('/api/orders', { user_id: customer.id, group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '模块用户', receiver_phone: '13812345678' });
   assert(order.quantity === 2, 'order should keep sale quantity');
-  const afterOrderProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
-  assert(afterOrderProduct.stock === 45000, 'product stock should deduct base stock quantity');
-  const orderLockLedger = await prisma.stockLedger.findFirst({ where: { product_id: product.id, source_type: 'order_lock', source_id: order.id } });
-  assert(orderLockLedger?.quantity === 5000, 'order lock ledger should record 5000 base units');
+  const unpaidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+  assert(unpaidProduct.stock === 50000, 'unpaid order should not deduct inventory');
 
   await post('/api/payments/mock', { order_id: order.id });
+  const afterPaymentProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
+  assert(afterPaymentProduct.stock === 45000, 'paid order should deduct base stock quantity');
+  const paymentLedger = await prisma.stockLedger.findFirst({ where: { product_id: product.id, source_type: 'order_payment', source_id: order.id, event_type: 'order_paid_deduct' } });
+  assert(paymentLedger?.quantity === 5000 && paymentLedger.quantity_delta === -5000, 'payment deduction ledger should record 5000 base units');
+
+  let currentOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   for (const nextStatus of ['preparing', 'ready']) {
-    const updated = await post(`/api/orders/${order.id}/status`, { next_status: nextStatus });
+    const updated = await adminPost(`/api/admin/orders/${order.id}/status`, { next_status: nextStatus, expected_version: currentOrder.version, idempotency_key: `${prefix}-${nextStatus}` }, adminCookie);
     assert(updated.order_status === nextStatus, `order should move to ${nextStatus}`);
+    currentOrder = updated;
   }
-  const picked = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { pickup_code: 'L145' }, adminCookie);
+  const picked = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { admin_remark: 'L14.5 模块边界核销' }, adminCookie);
   assert(picked.order_status === 'picked', 'pickup verify should mark order picked');
   assert(await prisma.orderTimelineLog.count({ where: { order_id: order.id, event_type: 'pickup_verified' } }) > 0, 'pickup should write timeline');
   assert(await prisma.businessEventLog.count({ where: { order_id: order.id, event_type: 'pickup_verified' } }) > 0, 'pickup should write business event');
   assert(await prisma.adminAuditLog.count({ where: { action: 'order_pickup_verified', target_id: order.id, admin_user_id: adminUser.id } }) > 0, 'pickup should write admin audit');
 
-  const completed = await post(`/api/orders/${order.id}/status`, { next_status: 'completed' });
+  const completed = await adminPost(`/api/admin/orders/${order.id}/status`, { next_status: 'completed', expected_version: picked.version, idempotency_key: `${prefix}-completed` }, adminCookie);
   assert(completed.completed_at, 'completed order should have completed_at');
   const commission = await prisma.commission.findFirst({ where: { order_id: order.id, leader_user_id: leader.id } });
   assert(!commission || ['pending', 'estimated', 'available'].includes(commission.status), `commission status should follow existing rules, got ${commission?.status}`);
