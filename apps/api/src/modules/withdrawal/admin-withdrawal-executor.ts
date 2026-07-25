@@ -166,6 +166,32 @@ function isUniqueConflict(error: unknown) {
   );
 }
 
+function withdrawalEventSnapshot(target: {
+  id: string;
+  leader_user_id: string;
+  status: string;
+  version: number;
+  amount_cents: number;
+  payable_amount_cents: number;
+  admin_remark: string | null;
+  manual_reference: string | null;
+  reviewed_at: Date | null;
+  processed_at: Date | null;
+}) {
+  return {
+    id: target.id,
+    leader_user_id: target.leader_user_id,
+    status: target.status,
+    version: target.version,
+    amount_cents: target.amount_cents,
+    payable_amount_cents: target.payable_amount_cents,
+    admin_remark: target.admin_remark,
+    manual_reference: target.manual_reference,
+    reviewed_at: target.reviewed_at?.toISOString() ?? null,
+    processed_at: target.processed_at?.toISOString() ?? null,
+  };
+}
+
 export async function executeAdminWithdrawalCommand(input: {
   withdrawal_id: string;
   action: AdminWithdrawalAction;
@@ -408,13 +434,17 @@ export async function executeAdminWithdrawalCommand(input: {
       const commissionIds = before.commission_links.map(
         (link) => link.commission.id,
       );
-      const orderIds = Array.from(
-        new Set(
-          before.commission_links.map(
-            (link) => link.commission.order_id,
-          ),
-        ),
-      );
+      const commissionIdsByOrder = new Map<string, string[]>();
+      for (const link of before.commission_links) {
+        const orderCommissionIds =
+          commissionIdsByOrder.get(link.commission.order_id) ?? [];
+        orderCommissionIds.push(link.commission.id);
+        commissionIdsByOrder.set(
+          link.commission.order_id,
+          orderCommissionIds,
+        );
+      }
+      const orderIds = Array.from(commissionIdsByOrder.keys());
       if (input.action !== 'approve') {
         const commissions = await tx.commission.updateMany({
           where: {
@@ -478,13 +508,15 @@ export async function executeAdminWithdrawalCommand(input: {
           order_ids: orderIds,
         },
       });
+      const beforeSnapshot = withdrawalEventSnapshot(before);
+      const afterSnapshot = withdrawalEventSnapshot(updated);
       await recordBusinessEvent(tx, {
         event_type: eventType,
         event_source: 'admin-withdrawal-command',
         withdrawal_id: before.id,
         leader_user_id: before.leader_user_id,
-        before_snapshot: before,
-        after_snapshot: updated,
+        before_snapshot: beforeSnapshot,
+        after_snapshot: afterSnapshot,
         payload: {
           idempotency_key: input.command.idempotency_key,
           commission_ids: commissionIds,
@@ -493,18 +525,19 @@ export async function executeAdminWithdrawalCommand(input: {
         message: input.command.admin_remark,
       });
       for (const orderId of orderIds) {
+        const orderCommissionIds = commissionIdsByOrder.get(orderId) ?? [];
         await recordBusinessEvent(tx, {
           event_type: eventType,
           event_source: 'admin-withdrawal-command',
           order_id: orderId,
           withdrawal_id: before.id,
           leader_user_id: before.leader_user_id,
-          before_snapshot: before,
-          after_snapshot: updated,
+          before_snapshot: beforeSnapshot,
+          after_snapshot: afterSnapshot,
           payload: {
             idempotency_key: input.command.idempotency_key,
-            commission_ids: commissionIds,
-            order_ids: orderIds,
+            order_id: orderId,
+            commission_ids: orderCommissionIds,
           },
           message: input.command.admin_remark,
         });
