@@ -184,6 +184,7 @@ function adminWithdrawalDto(w: any, links: WithdrawalLinkWithOrder[]) {
     leader_nickname: w.leader_user?.nickname ?? "",
     leader_phone_masked: maskPhone(w.leader_user?.phone),
     amount_cents: w.amount_cents,
+    version: w.version,
     status: w.status,
     commission_count: links.length,
     community_names: communities,
