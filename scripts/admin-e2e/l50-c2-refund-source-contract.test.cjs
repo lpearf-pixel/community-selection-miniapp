@@ -104,10 +104,22 @@ test('real Admin browser restores orders before injecting the order refresh fail
   );
 });
 
-test('real Admin browser waits for both primary mutation refreshes before counting', () => {
+test('real Admin browser counts only mutations that succeeded on the primary page', () => {
   assert.match(
     smoke,
-    /const primaryBusinessRefreshes = 2;[\s\S]*?await waitForCount\(\s*page,\s*\(\) => inventoryOverviewRequestCount,\s*a33RequestsAfterInitial\.inventory \+ primaryBusinessRefreshes,/,
+    /let pickupSuccessOwnerPage;[\s\S]*?pickupSuccessOwnerPage = successfulEntries\[0\]\.ownerPage;/,
+  );
+  assert.match(
+    smoke,
+    /let refundSuccessOwnerPage;[\s\S]*?refundSuccessOwnerPage = successfulEntries\[0\]\.ownerPage;/,
+  );
+  assert.match(
+    smoke,
+    /const primaryBusinessRefreshes = \[\s*pickupSuccessOwnerPage,\s*refundSuccessOwnerPage,\s*\]\.filter\(\(ownerPage\) => ownerPage === page\)\.length;/,
+  );
+  assert.match(
+    smoke,
+    /await waitForCount\(\s*page,\s*\(\) => inventoryOverviewRequestCount,\s*a33RequestsAfterInitial\.inventory \+ primaryBusinessRefreshes,/,
   );
 });
 
