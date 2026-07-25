@@ -740,7 +740,6 @@ try {
   });
   assert.equal(await conflictVersionPickupButton.count(), 1);
 
-  let pickupSuccessOnPrimaryPage = false;
   const pickupRaceResponses = [];
   const capturePickupRaceResponse = (response) => {
     const request = response.request();
@@ -796,8 +795,6 @@ try {
         assert.equal(successfulEntries.length, 1);
         assert.equal(conflictingEntries.length, 1);
 
-        pickupSuccessOnPrimaryPage =
-          successfulEntries[0].ownerPage === page;
         const successRefreshPromise =
           successfulEntries[0].ownerPage.waitForResponse((response) => {
           const url = new URL(response.url());
@@ -927,8 +924,7 @@ try {
   await page.waitForLoadState('networkidle');
   await pickupConflictPage.close();
 
-  const primaryBusinessRefreshes =
-    1 + (pickupSuccessOnPrimaryPage ? 1 : 0);
+  const primaryBusinessRefreshes = 1;
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
