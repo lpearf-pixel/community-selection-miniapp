@@ -1177,6 +1177,10 @@ try {
       a34RequestsAfterInitial.taxReview + primaryBusinessRefreshes,
   });
 
+  await ordersButton.click();
+  await assertActive(ordersButton, '订单管理');
+  await page.getByText('全渠道订单', { exact: true }).waitFor();
+
   const orderFailureRoute = async (route) => {
     assert.equal(route.request().method(), 'GET');
     assert.equal(orderFailureInjected, false);
