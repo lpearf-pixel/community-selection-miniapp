@@ -1,8 +1,12 @@
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
+import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
 
+process.env.ADMIN_AUTH_ENABLED = 'true';
+process.env.ADMIN_AUTH_MODE = 'session';
+process.env.ADMIN_TOTP_ENCRYPTION_KEY = process.env.ADMIN_TOTP_ENCRYPTION_KEY ?? 'l17-5-local-verify-encryption-key';
 process.env.WECHAT_PAY_MODE = 'mock';
 process.env.MOCK_WECHAT_PAY = 'true';
 process.env.AUTO_PAYOUT_ENABLED = 'false';
@@ -11,6 +15,7 @@ process.env.AUTO_TAX_FILING_ENABLED = 'false';
 const prisma = new PrismaClient();
 const app = buildApp();
 const prefix = `l17-5-${Date.now()}`;
+let adminHeaders: { cookie: string };
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -24,6 +29,15 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
 
 async function main() {
   const verifyStartedAt = new Date(Date.now() - 1000);
+  const adminPassword = `${prefix}-AdminPass123!`;
+  const adminUser = await prisma.adminUser.create({ data: { username: `${prefix}-admin`, password_hash: await hashPassword(adminPassword), role: 'admin', status: 'active' } });
+  const login = await app.inject({ method: 'POST', url: '/api/admin/auth/login', payload: { username: adminUser.username, password: adminPassword } });
+  assert(login.statusCode === 200, 'admin login should succeed');
+  const setCookie = login.headers['set-cookie'];
+  const adminCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+  assert(typeof adminCookie === 'string' && adminCookie.includes('admin_session='), 'admin login should set session cookie');
+  adminHeaders = { cookie: adminCookie };
+
   const category = await prisma.category.create({ data: { name: `${prefix}-category`, sort_order: 1750, status: 'active' } });
   const community = await prisma.community.create({ data: { name: `${prefix}-community`, address: 'L17.5 验收社区', status: 'active' } });
   const pickupStore = await prisma.pickupStore.create({ data: { name: `${prefix}-pickup-store`, address: 'L17.5 自提点', phone: '13800017500', status: 'active' } });
@@ -53,20 +67,22 @@ async function main() {
   assert(listed.product?.name === product.name, 'normal order list should include product name');
 
   const afterSale = await json(await app.inject({ method: 'POST', url: '/api/after-sales', payload: { order_id: order.id, type: 'bad_quality', reason: '普通订单测试售后', description: 'L17.5 normal purchase after-sale verification', requested_refund_cents: 500 } }));
-  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, payload: { status: 'approved', resolution_type: 'partial_refund', approved_refund_cents: 500, responsibility: 'platform', admin_note: 'L17.5 normal purchase after-sale approved' } }));
-  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/resolve`, payload: { resolution_type: 'partial_refund', approved_refund_cents: 500, admin_note: 'L17.5 normal purchase after-sale resolved' } }));
+  const unauthenticatedReview = await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, payload: { status: 'approved', resolution_type: 'partial_refund', approved_refund_cents: 500, responsibility: 'platform', admin_note: 'L17.5 unauthenticated review must fail' } });
+  assert(unauthenticatedReview.statusCode === 401, 'after-sale review should require admin login');
+  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, headers: adminHeaders, payload: { status: 'approved', resolution_type: 'partial_refund', approved_refund_cents: 500, responsibility: 'platform', admin_note: 'L17.5 normal purchase after-sale approved' } }));
+  await json(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/resolve`, headers: adminHeaders, payload: { resolution_type: 'partial_refund', approved_refund_cents: 500, admin_note: 'L17.5 normal purchase after-sale resolved' } }));
   const refundedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   assert(refundedOrder.refund_amount_cents > 0, 'normal order refund amount should update');
   assert(await prisma.commission.count({ where: { order_id: order.id } }) === 0, 'refunded normal order should not create service reward');
 
-  const financeOrders = await json(await app.inject({ method: 'GET', url: '/api/admin/finance/reconciliation/orders?page_size=100' }));
+  const financeOrders = await json(await app.inject({ method: 'GET', url: '/api/admin/finance/reconciliation/orders?page_size=100', headers: adminHeaders }));
   assert(financeOrders.items.some((item: any) => item.order_id === order.id), 'finance orders should include normal order');
-  const financeRewards = await json(await app.inject({ method: 'GET', url: '/api/admin/finance/reconciliation/rewards' }));
+  const financeRewards = await json(await app.inject({ method: 'GET', url: '/api/admin/finance/reconciliation/rewards', headers: adminHeaders }));
   assert(!financeRewards.some((item: any) => item.order_id === order.id), 'finance rewards should not include normal order');
-  const overview = await json(await app.inject({ method: 'GET', url: '/api/admin/operations/dashboard/overview' }));
+  const overview = await json(await app.inject({ method: 'GET', url: '/api/admin/operations/dashboard/overview', headers: adminHeaders }));
   assert(overview.paid_amount >= order.pay_amount_cents, 'operations overview should include normal order paid amount');
   const productsQuery = new URLSearchParams({ from: verifyStartedAt.toISOString(), to: new Date(Date.now() + 1000).toISOString(), limit: '100' });
-  const products = await json(await app.inject({ method: 'GET', url: `/api/admin/operations/dashboard/products?${productsQuery.toString()}` }));
+  const products = await json(await app.inject({ method: 'GET', url: `/api/admin/operations/dashboard/products?${productsQuery.toString()}`, headers: adminHeaders }));
   assert(products.some((item: any) => item.product_id === product.id), 'operations products should include normal order product');
 
   const complianceFiles = ['apps', 'packages', 'prisma', 'scripts'].flatMap((root) => {
