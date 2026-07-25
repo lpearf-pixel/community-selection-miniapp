@@ -322,6 +322,47 @@ export async function executeAdminWithdrawalCommand(input: {
         before,
         input.command.expected_version,
       );
+      const linkedAmount = before.commission_links.reduce(
+        (total, link) => total + link.amount_cents,
+        0,
+      );
+      if (linkedAmount !== before.amount_cents) {
+        throw conflict(
+          'ADMIN_WITHDRAWAL_REWARD_CONFLICT',
+          '提现关联奖励金额不一致，请人工复核',
+        );
+      }
+      if (input.action === 'reject') {
+        const [reserved, restored] = await Promise.all([
+          tx.rewardLedger.aggregate({
+            where: {
+              withdrawal_id: before.id,
+              event_type: 'withdrawal_reserved',
+              direction: 'out',
+              affects_available_balance: true,
+            },
+            _sum: { amount_cents: true },
+          }),
+          tx.rewardLedger.aggregate({
+            where: {
+              withdrawal_id: before.id,
+              event_type: 'withdrawal_rejected_restore',
+              direction: 'in',
+              affects_available_balance: true,
+            },
+            _sum: { amount_cents: true },
+          }),
+        ]);
+        if (
+          reserved._sum.amount_cents !== before.amount_cents ||
+          (restored._sum.amount_cents ?? 0) !== 0
+        ) {
+          throw conflict(
+            'ADMIN_WITHDRAWAL_REWARD_CONFLICT',
+            '提现预留奖励账本不一致，请人工复核',
+          );
+        }
+      }
       const now = new Date();
       const stateData: Prisma.WithdrawalUpdateManyMutationInput =
         input.action === 'approve'
