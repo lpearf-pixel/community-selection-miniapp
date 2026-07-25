@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 20.19.0
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --store-dir .pnpm-store-${GITHUB_RUN_ID}
       - name: Set up Admin browser
         run: pnpm setup:admin:e2e
       - name: Capture Admin browser evidence
