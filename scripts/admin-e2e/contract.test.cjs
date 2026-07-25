@@ -1473,12 +1473,12 @@ function assertB3OmnichannelOrdersContract(
         /const orderFilter = page\.getByRole\('form', \{\s*name: '全渠道订单筛选',\s*\}\);/,
       ],
       [
-        'keyword from real order',
-        /const firstOrderNo = initialOrdersEnvelope\.data\.items\[0\]\.order_no;/,
+        'delivery order selected by deterministic identity',
+        /const deliveryOrder = initialOrdersEnvelope\.data\.items\.find\(\s*\(item\) => item\.order_no === credentials\.orderNo,\s*\);\s*assert\.ok\(deliveryOrder\);/,
       ],
       [
         'keyword input',
-        /await orderFilter\.getByLabel\('订单关键词'\)\.fill\(firstOrderNo\);/,
+        /await orderFilter\.getByLabel\('订单关键词'\)\.fill\(deliveryOrder\.order_no\);/,
       ],
       [
         'real filtered request',
