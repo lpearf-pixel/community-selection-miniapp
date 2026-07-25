@@ -66,12 +66,12 @@ const globalStatic = GLOBAL_STATIC_VERIFIERS.map((file, index) =>
 const registeredStages = STAGE_REGISTRY
   .filter((stage) => stage.number >= 24 && stage.number <= 48)
   .flatMap((stage) => [
-    command(
+    ...(stage.number <= 47 ? [command(
       stage.id.toLowerCase(),
       `${stage.id}: ${stage.title}`,
       'historical-stage',
       `pnpm exec tsx ${stage.verifier}`,
-    ),
+    )] : []),
     ...(stage.additionalVerifiers ?? []).map((file, index) =>
       command(
         `${stage.id.toLowerCase()}-additional-${index + 1}`,
