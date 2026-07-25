@@ -1,4 +1,9 @@
-import type { Commission, CommissionStatus, Prisma } from '@prisma/client';
+import type {
+  Commission,
+  CommissionStatus,
+  Prisma,
+  RewardLedger,
+} from '@prisma/client';
 import { prisma } from '../db.js';
 type DbClient = Prisma.TransactionClient | typeof prisma;
 import {
@@ -33,15 +38,81 @@ export async function getAvailableRewardBalance(tx: DbClient, leaderUserId: stri
   return balance;
 }
 
-export async function appendRewardLedgerEntry(tx: DbClient, input: { leader_user_id: string; commission_id?: string | null; order_id?: string | null; event_type: string; entry_type: string; direction: 'in' | 'out'; amount_cents: number; affects_available_balance: boolean; idempotency_key?: string | null; effective_at?: Date | null; refund_id?: string | null; amount_before_cents?: number | null; amount_after_cents?: number | null; payload?: Prisma.InputJsonValue; conversion_id?: string | null; withdrawal_id?: string | null; remark?: string | null }) {
+type RewardLedgerEntryInput = {
+  leader_user_id: string;
+  commission_id?: string | null;
+  order_id?: string | null;
+  event_type: string;
+  entry_type: string;
+  direction: 'in' | 'out';
+  amount_cents: number;
+  affects_available_balance: boolean;
+  idempotency_key?: string | null;
+  effective_at?: Date | null;
+  refund_id?: string | null;
+  amount_before_cents?: number | null;
+  amount_after_cents?: number | null;
+  payload?: Prisma.InputJsonValue;
+  conversion_id?: string | null;
+  withdrawal_id?: string | null;
+  remark?: string | null;
+};
+
+type RewardLedgerAppendResult = {
+  ledger: RewardLedger;
+  created: boolean;
+};
+
+export async function appendRewardLedgerEntry(
+  tx: DbClient,
+  input: RewardLedgerEntryInput,
+): Promise<RewardLedgerAppendResult> {
+  if (tx === prisma) {
+    return prisma.$transaction((transaction) =>
+      appendRewardLedgerEntry(transaction, input),
+    );
+  }
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "User"
+    WHERE "id" = ${input.leader_user_id}
+    FOR UPDATE
+  `;
   if (input.idempotency_key) {
-    const existing = await tx.rewardLedger.findUnique({ where: { idempotency_key: input.idempotency_key } });
+    const existing = await tx.rewardLedger.findUnique({
+      where: { idempotency_key: input.idempotency_key },
+    });
     if (existing) return { ledger: existing, created: false };
   }
   const before = await getAvailableRewardBalance(tx, input.leader_user_id);
-  const delta = input.affects_available_balance ? (input.direction === 'in' ? input.amount_cents : -input.amount_cents) : 0;
+  const delta = input.affects_available_balance
+    ? input.direction === 'in'
+      ? input.amount_cents
+      : -input.amount_cents
+    : 0;
   const after = before + delta;
-  const ledger = await tx.rewardLedger.create({ data: { leader_user_id: input.leader_user_id, commission_id: input.commission_id ?? null, order_id: input.order_id ?? null, event_type: input.event_type, entry_type: input.entry_type, direction: input.direction, amount_cents: input.amount_cents, affects_available_balance: input.affects_available_balance, balance_after_cents: after, idempotency_key: input.idempotency_key ?? null, effective_at: input.effective_at ?? new Date(), refund_id: input.refund_id ?? null, amount_before_cents: input.amount_before_cents ?? null, amount_after_cents: input.amount_after_cents ?? null, conversion_id: input.conversion_id ?? null, withdrawal_id: input.withdrawal_id ?? null, remark: input.remark ?? null, payload: input.payload ?? {} } });
+  const ledger = await tx.rewardLedger.create({
+    data: {
+      leader_user_id: input.leader_user_id,
+      commission_id: input.commission_id ?? null,
+      order_id: input.order_id ?? null,
+      event_type: input.event_type,
+      entry_type: input.entry_type,
+      direction: input.direction,
+      amount_cents: input.amount_cents,
+      affects_available_balance: input.affects_available_balance,
+      balance_after_cents: after,
+      idempotency_key: input.idempotency_key ?? null,
+      effective_at: input.effective_at ?? new Date(),
+      refund_id: input.refund_id ?? null,
+      amount_before_cents: input.amount_before_cents ?? null,
+      amount_after_cents: input.amount_after_cents ?? null,
+      conversion_id: input.conversion_id ?? null,
+      withdrawal_id: input.withdrawal_id ?? null,
+      remark: input.remark ?? null,
+      payload: input.payload ?? {},
+    },
+  });
   return { ledger, created: true };
 }
 
