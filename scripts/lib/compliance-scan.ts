@@ -10,7 +10,6 @@ export const COMPLIANCE_FORBIDDEN_TERMS = [
   `团队${'收益'}`,
   `代理${'收益'}`,
   `优${'惠'}券`,
-  `会${'员'}`,
   `裂${'变'}`,
   `AUTO_PAYOUT_ENABLED = ${'true'}`,
   `AUTO_TAX_FILING_ENABLED = ${'true'}`
