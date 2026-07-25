@@ -11,6 +11,7 @@ const password = 'L50-E2E-StrongPassword-123';
 const fixturePath = resolve('scripts/admin-e2e/.fixture.json');
 const orderNo = `L50-C2-T2-${runSuffix}-DELIVERY`;
 const pickupOrderNo = `L50-C2-T2-${runSuffix}-PICKUP`;
+const refundOrderNo = `L50-C2-T3A-${runSuffix}-REFUND`;
 const customerOpenid = `l50-c2-t2-${runSuffix}-customer`;
 const categoryName = `L50-C2-T2 ${runSuffix} 分类`;
 const productName = `L50-C2-T2 ${runSuffix} 商品`;
@@ -19,11 +20,25 @@ const pickupStoreId = `l50-c2-t2-${runSuffix}-pickup-store`;
 
 async function cleanup() {
   const orders = await prisma.order.findMany({
-    where: { order_no: { in: [orderNo, pickupOrderNo] } },
+    where: { order_no: { in: [orderNo, pickupOrderNo, refundOrderNo] } },
     select: { id: true },
   });
   const orderIds = orders.map((order) => order.id);
   if (orderIds.length) {
+    const cases = await prisma.afterSaleCase.findMany({
+      where: { order_id: { in: orderIds } },
+      select: { id: true },
+    });
+    const caseIds = cases.map((item) => item.id);
+    if (caseIds.length) {
+      await prisma.afterSaleLog.deleteMany({
+        where: { after_sale_case_id: { in: caseIds } },
+      });
+    }
+    await prisma.afterSaleCase.deleteMany({
+      where: { order_id: { in: orderIds } },
+    });
+    await prisma.refund.deleteMany({ where: { order_id: { in: orderIds } } });
     await prisma.adminCommandReceipt.deleteMany({
       where: { target_id: { in: orderIds } },
     });
@@ -37,7 +52,7 @@ async function cleanup() {
       where: { order_id: { in: orderIds } },
     });
     await prisma.order.deleteMany({
-      where: { order_no: { in: [orderNo, pickupOrderNo] } },
+      where: { order_no: { in: [orderNo, pickupOrderNo, refundOrderNo] } },
     });
   }
   await prisma.product.deleteMany({ where: { name: productName } });
@@ -165,6 +180,46 @@ async function setup() {
       paid_at: new Date(fixtureTime - 2_000),
     },
   });
+  const refundOrder = await prisma.order.create({
+    data: {
+      order_no: refundOrderNo,
+      user_id: customer.id,
+      product_id: product.id,
+      community_id: community.id,
+      total_amount_cents: 2590,
+      product_amount_cents: 2590,
+      pay_amount_cents: 2590,
+      quantity: 1,
+      pay_status: 'paid',
+      order_status: 'ready',
+      version: 1,
+      refund_status: 'none',
+      pickup_type: 'delivery',
+      receiver_name: '退款浏览器测试用户',
+      receiver_phone: '13812348000',
+      receiver_address: '测试市测试区退款路 100 号',
+      created_at: new Date(fixtureTime + 1_000),
+      paid_at: new Date(fixtureTime - 2_000),
+    },
+  });
+  const refundCase = await prisma.afterSaleCase.create({
+    data: {
+      order_id: refundOrder.id,
+      user_id: customer.id,
+      product_id: product.id,
+      type: 'refund',
+      status: 'approved',
+      resolution_type: 'partial_refund',
+      reason: 'L50-C2-T3A 浏览器并发退款',
+      requested_refund_cents: 990,
+      requested_product_refund_cents: 990,
+      requested_delivery_refund_cents: 0,
+      approved_refund_cents: 990,
+      approved_product_refund_cents: 990,
+      approved_delivery_refund_cents: 0,
+      reviewed_at: new Date(fixtureTime + 2_000),
+    },
+  });
   await prisma.adminUser.create({
     data: {
       username,
@@ -182,6 +237,9 @@ async function setup() {
       orderNo: order.order_no,
       pickupOrderId: pickupOrder.id,
       pickupOrderNo: pickupOrder.order_no,
+      refundOrderId: refundOrder.id,
+      refundOrderNo: refundOrder.order_no,
+      refundCaseId: refundCase.id,
     }),
     { mode: 0o600 },
   );
