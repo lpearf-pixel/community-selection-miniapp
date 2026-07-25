@@ -86,12 +86,12 @@ test('requires strict atomic effects and complete runtime evidence', () => {
   assert.doesNotMatch(smoke, /externalAdvance/);
   assert.match(
     smoke,
-    /await page\.route\('\*\*\/api\/admin\/orders\/\*\/status', statusRaceRoute\);/,
+    /await context\.route\([\s\S]*?'\*\*\/api\/admin\/orders\/\*\/status'[\s\S]*?statusRaceRoute,[\s\S]*?\);/,
   );
   assert.match(smoke, /await route\.fetch\(\)/);
   assert.match(
     smoke,
-    /sameVersionStatusButton\.dispatchEvent\('click'\)[\s\S]*?sameVersionStatusButton\.dispatchEvent\('click'\)/,
+    /statusPrimary\.button\.dispatchEvent\('click'\)[\s\S]*?statusConflict\.button\.dispatchEvent\('click'\)/,
   );
   assert.match(smoke, /assert\.deepEqual\(statusRaceCodes, \[200, 409\]\);/);
   assert.match(smoke, /'order success refresh'/);
