@@ -71,6 +71,7 @@ function buildSuccessTx() {
     .fn()
     .mockResolvedValue([{ direction: 'in', amount_cents: 5000 }]);
   return {
+    $queryRaw: vi.fn().mockResolvedValue([{ id: leaderA.id }]),
     rewardConversion: {
       findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue(conversion),
