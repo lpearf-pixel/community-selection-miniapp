@@ -27,7 +27,7 @@ concurrency:
 jobs:
   focused:
     runs-on: self-hosted
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       NODE_OPTIONS: --max-old-space-size=3072
       VITEST_MAX_THREADS: "2"
@@ -55,10 +55,15 @@ jobs:
           pnpm --filter @community-selection/config build
       - name: Verify refund command contract
         run: |
+          node --test \
+            scripts/admin-e2e/contract.test.cjs \
+            scripts/admin-e2e/l50-c2-refund-source-contract.test.cjs
           pnpm --filter @community-selection/api test -- \
             src/modules/refund/admin-refund-command.test.ts \
             src/modules/refund/admin-refund-executor.test.ts \
             src/modules/after-sale/after-sale-service.test.ts
+          pnpm --filter @community-selection/admin test -- \
+            src/features/sales/after-sales
       - name: Start isolated PostgreSQL
         run: |
           docker compose \
@@ -75,7 +80,60 @@ jobs:
             src/routes/admin-refund-route.test.ts \
             src/modules/order/admin-pickup-verification-executor.integration.test.ts
       - name: Verify API types
-        run: pnpm --filter @community-selection/api typecheck
+        run: |
+          pnpm --filter @community-selection/api typecheck
+          pnpm --filter @community-selection/admin typecheck
+
+      - name: Reset focused PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans
+
+      - name: Verify real Admin browser
+        run: |
+          pnpm setup:admin:e2e
+          pnpm e2e:admin
+
+      - name: Start baseline audit PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Collect baseline audit
+        run: |
+          pnpm exec tsx scripts/verify-baseline-audit-local.ts \
+            --report-only \
+            --output-dir=artifacts/verification-baseline
+
+      - name: Reset PostgreSQL for full release gate
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Verify all
+        run: pnpm verify:all
+
+      - name: Publish audit summary
+        if: always()
+        run: |
+          if [[ -f artifacts/verification-baseline/summary.md ]]; then
+            cat artifacts/verification-baseline/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l50-c2-t3a-baseline-${{ github.sha }}
+          path: artifacts/verification-baseline
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Package source snapshot for continuation
         if: always()
@@ -102,3 +160,7 @@ jobs:
           docker compose \
             -p community-selection-c2t3a-${GITHUB_RUN_ID} \
             -f docker-compose.yml down --volumes --remove-orphans || true
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
+          node scripts/admin-e2e/cleanup-resources.cjs "${GITHUB_RUN_ID}" || true
