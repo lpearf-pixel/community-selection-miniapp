@@ -1,11 +1,9 @@
 name: PR105 Admin Browser Diagnostic
 
 on:
-  push:
+  pull_request:
     branches:
-      - codex/pr105-admin-browser-diagnostic-56a7d2ec
-    paths:
-      - .github/workflows/pr105-admin-browser-diagnostic.yml
+      - codex/l50-c2-t2-pickup-verification
 
 permissions:
   contents: write
