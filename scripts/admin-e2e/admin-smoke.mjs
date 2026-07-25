@@ -924,6 +924,224 @@ try {
   await page.waitForLoadState('networkidle');
   await pickupConflictPage.close();
 
+  const openRefundCase = async (refundPage) => {
+    await refundPage.evaluate(() => {
+      window.confirm = () => true;
+      window.prompt = () => '执行已审批售后退款';
+    });
+    const refundNavigation = refundPage.getByRole('navigation', {
+      name: '后台功能导航',
+    });
+    await refundNavigation
+      .getByRole('button', { name: '售后客服', exact: true })
+      .click();
+    const refundRow = refundPage
+      .locator(`tr[data-row-key="${credentials.refundCaseId}"]`)
+      .first();
+    await refundRow.waitFor();
+    const refundButton = refundRow.getByRole('button', {
+      name: '执行退款',
+      exact: true,
+    });
+    assert.equal(await refundButton.count(), 1);
+    return { refundPage, refundRow, refundButton };
+  };
+
+  const refundPrimary = await openRefundCase(page);
+  const refundConflictPage = await context.newPage();
+  await refundConflictPage.goto(baseURL, { waitUntil: 'networkidle' });
+  await refundConflictPage
+    .getByText(`当前管理员：${credentials.username}`)
+    .waitFor();
+  const refundConflict = await openRefundCase(refundConflictPage);
+
+  const refundRaceResponses = [];
+  const captureRefundRaceResponse = (response) => {
+    const request = response.request();
+    if (
+      new URL(response.url()).pathname ===
+        `/api/admin/after-sales/${credentials.refundCaseId}/refund-execute` &&
+      request.method() === 'POST'
+    ) {
+      refundRaceResponses.push(response);
+    }
+  };
+  page.on('response', captureRefundRaceResponse);
+  refundConflictPage.on('response', captureRefundRaceResponse);
+
+  let releaseRefundRace;
+  const refundRaceReady = new Promise((resolve) => {
+    releaseRefundRace = resolve;
+  });
+  let settleRefundRace;
+  const refundRaceFinished = new Promise((resolve, reject) => {
+    settleRefundRace = { resolve, reject };
+  });
+  const refundRaceEntries = [];
+  const refundRaceRoute = async (route) => {
+    try {
+      const request = route.request();
+      assert.equal(request.method(), 'POST');
+      assert.equal(
+        new URL(request.url()).pathname,
+        `/api/admin/after-sales/${credentials.refundCaseId}/refund-execute`,
+      );
+      const entry = {
+        route,
+        command: request.postDataJSON(),
+        ownerPage: request.frame().page(),
+        response: null,
+      };
+      refundRaceEntries.push(entry);
+      assert.ok(refundRaceEntries.length <= 2);
+      if (refundRaceEntries.length === 2) {
+        releaseRefundRace();
+      }
+      await refundRaceReady;
+      entry.response = await route.fetch();
+
+      if (refundRaceEntries.every((candidate) => candidate.response !== null)) {
+        const successfulEntries = refundRaceEntries.filter(
+          (candidate) => candidate.response.status() === 200,
+        );
+        const conflictingEntries = refundRaceEntries.filter(
+          (candidate) => candidate.response.status() === 409,
+        );
+        assert.equal(successfulEntries.length, 1);
+        assert.equal(conflictingEntries.length, 1);
+
+        const successRefreshPromise =
+          successfulEntries[0].ownerPage.waitForResponse((response) => {
+            return (
+              new URL(response.url()).pathname === '/api/admin/after-sales' &&
+              response.ok()
+            );
+          });
+        await successfulEntries[0].route.fulfill({
+          response: successfulEntries[0].response,
+        });
+        assert.equal(
+          (await successRefreshPromise).ok(),
+          true,
+          'refund success refresh',
+        );
+
+        const conflictRefreshPromise =
+          conflictingEntries[0].ownerPage.waitForResponse((response) => {
+            return (
+              new URL(response.url()).pathname === '/api/admin/after-sales' &&
+              response.ok()
+            );
+          });
+        await conflictingEntries[0].route.fulfill({
+          response: conflictingEntries[0].response,
+        });
+        assert.equal(
+          (await conflictRefreshPromise).ok(),
+          true,
+          'refund conflict refresh',
+        );
+        settleRefundRace.resolve();
+      }
+      await refundRaceFinished;
+    } catch (error) {
+      settleRefundRace.reject(error);
+      throw error;
+    }
+  };
+  await context.route(
+    '**/api/admin/after-sales/*/refund-execute',
+    refundRaceRoute,
+  );
+
+  await Promise.all([
+    refundPrimary.refundButton.dispatchEvent('click'),
+    refundConflict.refundButton.dispatchEvent('click'),
+  ]);
+  await refundRaceFinished;
+  await context.unroute(
+    '**/api/admin/after-sales/*/refund-execute',
+    refundRaceRoute,
+  );
+  page.off('response', captureRefundRaceResponse);
+  refundConflictPage.off('response', captureRefundRaceResponse);
+
+  await waitForCount(
+    page,
+    () => refundRaceResponses.length,
+    2,
+    'same-version refund responses',
+  );
+  assert.equal(refundRaceEntries.length, 2);
+  for (const entry of refundRaceEntries) {
+    assert.equal(entry.command.expected_version, 1);
+    assert.match(entry.command.idempotency_key, /^admin-refund-/);
+    assert.equal(entry.command.admin_remark, '执行已审批售后退款');
+    assert.equal('refund_amount_cents' in entry.command, false);
+  }
+  assert.notEqual(
+    refundRaceEntries[0].command.idempotency_key,
+    refundRaceEntries[1].command.idempotency_key,
+  );
+  const refundRaceCodes = refundRaceResponses
+    .map((response) => response.status())
+    .sort((left, right) => left - right);
+  assert.deepEqual(refundRaceCodes, [200, 409]);
+
+  const refundSuccessResponse = refundRaceResponses.find(
+    (response) => response.status() === 200,
+  );
+  assert.ok(refundSuccessResponse);
+  const refundSuccessEnvelope = await refundSuccessResponse.json();
+  assert.equal(refundSuccessEnvelope.success, true);
+  assert.equal(refundSuccessEnvelope.code, 'ADMIN_REFUND_EXECUTED');
+  assert.equal(
+    refundSuccessEnvelope.data.after_sale_case_id,
+    credentials.refundCaseId,
+  );
+  assert.equal(refundSuccessEnvelope.data.order_id, credentials.refundOrderId);
+  assert.equal(refundSuccessEnvelope.data.order_version, 2);
+
+  const refundConflictResponse = refundRaceResponses.find(
+    (response) => response.status() === 409,
+  );
+  assert.ok(refundConflictResponse);
+  const refundConflictEnvelope = await refundConflictResponse.json();
+  assert.equal(refundConflictEnvelope.code, 'ADMIN_REFUND_VERSION_CONFLICT');
+  assert.equal(typeof refundConflictEnvelope.trace_id, 'string');
+  const refundConflictEntry = refundRaceEntries.find(
+    (entry) => entry.response?.status() === 409,
+  );
+  assert.ok(refundConflictEntry);
+  await refundConflictEntry.ownerPage
+    .getByText('订单状态已变化，已刷新最新状态', { exact: true })
+    .waitFor();
+
+  const refundOrderResponse = await context.request.get(
+    `${baseURL}/api/admin/orders?keyword=${encodeURIComponent(credentials.refundOrderNo)}&page=1&page_size=20`,
+  );
+  assert.equal(refundOrderResponse.status(), 200);
+  const refundOrderEnvelope = await refundOrderResponse.json();
+  assert.equal(refundOrderEnvelope.success, true);
+  assert.equal(refundOrderEnvelope.data.items.length, 1);
+  assert.equal(refundOrderEnvelope.data.items[0].id, credentials.refundOrderId);
+  assert.equal(refundOrderEnvelope.data.items[0].version, 2);
+  assert.equal(refundOrderEnvelope.data.items[0].refund_amount_cents, 990);
+
+  const refundLedgerResponse = await context.request.get(
+    `${baseURL}/api/admin/finance/refund-ledger?order_no=${encodeURIComponent(credentials.refundOrderNo)}&page=1&page_size=20`,
+  );
+  assert.equal(refundLedgerResponse.status(), 200);
+  const refundLedgerEnvelope = await refundLedgerResponse.json();
+  assert.equal(refundLedgerEnvelope.success, true);
+  assert.equal(refundLedgerEnvelope.data.total, 1);
+  assert.equal(refundLedgerEnvelope.data.items.length, 1);
+  assert.equal(
+    refundLedgerEnvelope.data.items[0].refund_amount_cents,
+    990,
+  );
+  await refundConflictPage.close();
+
   const primaryBusinessRefreshes = 1;
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
