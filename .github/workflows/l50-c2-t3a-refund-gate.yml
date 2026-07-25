@@ -47,3 +47,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Verify refund command contract
         run: pnpm --filter @community-selection/api test -- src/modules/refund/admin-refund-command.test.ts
+
+      - name: Package source snapshot for continuation
+        if: always()
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude='**/node_modules' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='reports' \
+            -czf /tmp/l50-c2-t3a-source.tgz .
+      - name: Upload source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l50-c2-t3a-source-${{ github.sha }}
+          path: /tmp/l50-c2-t3a-source.tgz
+          retention-days: 1
+          if-no-files-found: error
