@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
-import { fail, ok } from "@community-selection/shared";
+import { contractFail, contractOk, fail, ok } from "@community-selection/shared";
 import { publicCurrentUserError } from "../modules/current-user/current-user-security.js";
 import { withCurrentLeader } from "./current-user-route.js";
 import { prisma } from "../db.js";
@@ -19,6 +19,14 @@ import {
   requireAdminPermission,
   resolveAdminAccessContext,
 } from "../modules/admin-access/admin-access-control.js";
+import {
+  parseAdminWithdrawalCommand,
+  type AdminWithdrawalAction,
+} from "../modules/withdrawal/admin-withdrawal-command.js";
+import {
+  AdminWithdrawalCommandError,
+  executeAdminWithdrawalCommand,
+} from "../modules/withdrawal/admin-withdrawal-executor.js";
 
 type WithdrawBody = {
   amount_cents?: number;
@@ -32,12 +40,6 @@ class WithdrawalLedgerMismatchError extends Error {
     this.name = "WithdrawalLedgerMismatchError";
   }
 }
-type ReviewBody = {
-  admin_user_id?: string;
-  reason?: string;
-  remark?: string;
-  manual_reference?: string;
-};
 type TaxReviewBody = {
   tax_mode?: "none" | "withheld" | "invoice";
   tax_status?: string;
@@ -212,31 +214,6 @@ async function idempotentWithdrawalByClientRequest(clientRequestId: string, lead
   return { ...toLeaderWithdrawalDto(existing, count), applied: false, idempotent: true };
 }
 
-async function loadWithdrawalOrThrow(tx: Prisma.TransactionClient, id: string) {
-  const withdrawal = await tx.withdrawal.findUnique({ where: { id } });
-  if (!withdrawal) throw httpError("提现申请不存在", 404);
-  return withdrawal;
-}
-
-
-function restoreMarkPaidTransactionError(error: unknown) {
-  if (error && typeof error === "object" && "statusCode" in error) return error as Error & { statusCode?: number };
-  const message = error instanceof Error ? error.message : String(error);
-  const conflictMessages = new Set([
-    "仅审核通过的提现申请可标记已处理",
-    "提现税务状态未完成或未计算，不能标记已处理",
-    "可处理金额不能小于 0",
-    "发票状态未确认，不能标记已处理",
-    "提现状态已变化，请刷新后重试",
-    "提现关联奖励状态已变化，请人工复核",
-  ]);
-  if (message === "提现申请不存在") return httpError(message, 404);
-  if (message.startsWith("ADMIN_UNAUTHORIZED")) return httpError(message, 401);
-  if (message === ADMIN_SCOPE_FORBIDDEN || message.includes("Permission denied")) return httpError(message, 403);
-  if (conflictMessages.has(message)) return httpError(message, 409);
-  return httpError(message || "人工标记已处理失败", 400);
-}
-
 function parseAmount(value: unknown) {
   const amount = Number(value);
   if (!Number.isInteger(amount) || amount <= 0)
@@ -402,6 +379,87 @@ function uniqueOrderIds(orderIds: Array<string | null | undefined> = []) {
   return Array.from(
     new Set(orderIds.filter((orderId): orderId is string => Boolean(orderId))),
   );
+}
+
+async function executeReliableWithdrawal(
+  request: any,
+  reply: any,
+  action: AdminWithdrawalAction,
+) {
+  const traceId = String(request.id);
+  const context = resolveAdminAccessContext(request);
+  if (!context) {
+    reply.code(401);
+    return contractFail({
+      code: "ADMIN_UNAUTHORIZED",
+      message: "管理员身份无效",
+      traceId,
+    });
+  }
+  const parsed = parseAdminWithdrawalCommand(action, request.body);
+  if (!parsed.ok) {
+    reply.code(400);
+    return contractFail({
+      code: parsed.code,
+      message: parsed.message,
+      traceId,
+    });
+  }
+  const { id } = request.params as { id: string };
+  try {
+    const result = await executeAdminWithdrawalCommand({
+      withdrawal_id: id,
+      action,
+      command: parsed.value,
+      context,
+      admin_meta: {
+        ip_address: request.ip,
+        user_agent:
+          typeof request.headers["user-agent"] === "string"
+            ? request.headers["user-agent"]
+            : null,
+      },
+    });
+    const response = {
+      approve: {
+        code: "ADMIN_WITHDRAWAL_APPROVED",
+        message: "提现审核通过",
+      },
+      reject: {
+        code: "ADMIN_WITHDRAWAL_REJECTED",
+        message: "提现申请已拒绝",
+      },
+      "mark-paid": {
+        code: "ADMIN_WITHDRAWAL_MARKED_PAID",
+        message: "提现已标记为人工处理完成",
+      },
+    }[action];
+    return contractOk(result, { ...response, traceId });
+  } catch (error) {
+    if (error instanceof AdminWithdrawalCommandError) {
+      reply.code(error.statusCode);
+      return contractFail({
+        code: error.code,
+        message: error.message,
+        traceId,
+      });
+    }
+    request.log.error(
+      {
+        error_name: error instanceof Error ? error.name : "UnknownError",
+        withdrawal_id: id,
+        action,
+        trace_id: traceId,
+      },
+      "Admin withdrawal command failed",
+    );
+    reply.code(500);
+    return contractFail({
+      code: "ADMIN_WITHDRAWAL_EXECUTION_FAILED",
+      message: "提现操作执行失败",
+      traceId,
+    });
+  }
 }
 
 async function logWithdrawalEvent(
@@ -977,35 +1035,8 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
   app.post(
     "/api/admin/withdrawals/:id/reject",
     { preHandler: requireAdminPermission("withdrawal.manage") },
-    async (request, reply) => {
-      try {
-        const { id } = request.params as { id: string };
-        const body = request.body as ReviewBody;
-        const reason = String(body.reason ?? body.remark ?? "").trim();
-        if (!reason) throw new Error("拒绝原因必填");
-        const rejected = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-          await requireWithdrawalDataScope(id, request);
-          const before = await loadWithdrawalOrThrow(tx, id);
-          if (before.status === "rejected") return { withdrawal: before, idempotent: true };
-          if (before.status !== "pending") throw httpError("当前提现申请不可拒绝", 409);
-          const context = resolveAdminAccessContext(request)!;
-          const claimed = await tx.withdrawal.updateMany({ where: { id, status: "pending" }, data: { status: "rejected", admin_remark: reason.slice(0, 200), rejected_at: new Date(), reviewed_by_admin_id: context.admin_user_id, reviewed_at: new Date() } });
-          if (claimed.count !== 1) throw httpError("提现状态已变化，请刷新后重试", 409);
-          const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
-          const links = await getWithdrawalLinks(id, tx);
-          const restored = await tx.commission.updateMany({ where: { id: { in: links.map((link) => link.commission_id) }, withdrawal_id: id, status: "withdrawing" }, data: { status: "available", withdrawal_id: null } });
-          if (restored.count !== links.length) throw httpError("提现关联奖励状态已变化，请人工复核", 409);
-          await appendRewardLedgerEntry(tx, { leader_user_id: before.leader_user_id, withdrawal_id: id, event_type: "withdrawal_rejected_restore", entry_type: "withdrawal_rejected_restore", direction: "in", amount_cents: before.amount_cents, affects_available_balance: true, idempotency_key: `withdrawal-rejected-restore:${id}` });
-          await writeAdminAuditLog(tx, request, { action: "withdrawal_rejected", target_id: id, payload: { reason } });
-          await logWithdrawalEvent(tx, { event_type: "withdrawal_rejected", withdrawal: updated, commissionIds: links.map((link) => link.commission_id), orderIds: links.map((link) => link.commission.order_id), before, after: updated, admin_user_id: context.admin_user_id });
-          return { withdrawal: updated, idempotent: false };
-        });
-        return ok(rejected);
-      } catch (error) {
-        reply.code((error as { statusCode?: number }).statusCode ?? 400);
-        return fail(error instanceof Error ? error.message : "拒绝提现申请失败");
-      }
-    },
+    (request, reply) =>
+      executeReliableWithdrawal(request, reply, "reject"),
   );
 
   app.post(
@@ -1065,7 +1096,7 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
             if (Object.keys(reviewRequests).length >= TAX_REVIEW_IDEMPOTENCY_LIMIT) throw httpError(`税务复核幂等历史已达上限 ${TAX_REVIEW_IDEMPOTENCY_LIMIT}，请联系管理员处理`, 409);
             const claimed = await tx.withdrawal.updateMany({
               where: { id, updated_at: expectedUpdatedAt },
-              data: { tax_mode: taxMode, tax_status: taxStatus, taxable_amount_cents: taxableAmount, tax_amount_cents: taxAmount, payable_amount_cents: payableAmount, tax_rate_basis: body.tax_rate_basis ?? null, invoice_required: invoiceRequired, invoice_status: invoiceStatus, tax_remark: body.tax_remark ?? null, reviewed_by_admin_id: context.admin_user_id, reviewed_at: new Date() },
+              data: { tax_mode: taxMode, tax_status: taxStatus, taxable_amount_cents: taxableAmount, tax_amount_cents: taxAmount, payable_amount_cents: payableAmount, tax_rate_basis: body.tax_rate_basis ?? null, invoice_required: invoiceRequired, invoice_status: invoiceStatus, tax_remark: body.tax_remark ?? null, reviewed_by_admin_id: context.admin_user_id, reviewed_at: new Date(), version: { increment: 1 } },
             });
             if (claimed.count !== 1) throw httpError("提现税务状态已变化，请刷新后重试", 409);
             const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
@@ -1103,67 +1134,14 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
   app.post(
     "/api/admin/withdrawals/:id/approve",
     { preHandler: requireAdminPermission("withdrawal.manage") },
-    async (request, reply) => {
-      try {
-        const { id } = request.params as { id: string };
-        const body = request.body as ReviewBody;
-        const approved = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-          await requireWithdrawalDataScope(id, request);
-          const before = await loadWithdrawalOrThrow(tx, id);
-          if (before.status === "approved") return { withdrawal: before, idempotent: true };
-          if (before.status !== "pending") throw httpError("当前提现申请不可审核通过", 409);
-          const context = resolveAdminAccessContext(request)!;
-          const claimed = await tx.withdrawal.updateMany({ where: { id, status: "pending" }, data: { status: "approved", admin_remark: body.reason ?? body.remark ?? "人工审核通过", reviewed_by_admin_id: context.admin_user_id, reviewed_at: new Date() } });
-          if (claimed.count !== 1) throw httpError("提现状态已变化，请刷新后重试", 409);
-          const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
-          const links = await getWithdrawalLinks(id, tx);
-          await writeAdminAuditLog(tx, request, { action: "withdrawal_approved", target_id: id, payload: { reason: body.reason ?? body.remark ?? null } });
-          await logWithdrawalEvent(tx, { event_type: "withdrawal_approved", withdrawal: updated, commissionIds: links.map((link) => link.commission_id), orderIds: links.map((link) => link.commission.order_id), before, after: updated, admin_user_id: context.admin_user_id });
-          return { withdrawal: updated, idempotent: false };
-        });
-        return ok(approved);
-      } catch (error) {
-        reply.code((error as { statusCode?: number }).statusCode ?? 400);
-        return fail(error instanceof Error ? error.message : "审核提现申请失败");
-      }
-    },
+    (request, reply) =>
+      executeReliableWithdrawal(request, reply, "approve"),
   );
 
   app.post(
     "/api/admin/withdrawals/:id/mark-paid",
     { preHandler: requireAdminPermission("withdrawal.manage") },
-    async (request, reply) => {
-      try {
-        const { id } = request.params as { id: string };
-        const body = request.body as ReviewBody;
-        const manualReference = String(body.manual_reference ?? "").trim();
-        if (!manualReference) throw new Error("人工处理参考号必填");
-        const paid = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-          await requireWithdrawalDataScope(id, request);
-          const before = await loadWithdrawalOrThrow(tx, id);
-          if (before.status === "paid") return { withdrawal: before, idempotent: true };
-          if (before.status !== "approved") throw httpError("仅审核通过的提现申请可标记已处理", 409);
-          if (before.tax_status !== "completed" && before.tax_status !== "calculated") throw httpError("提现税务状态未完成或未计算，不能标记已处理", 409);
-          if (before.payable_amount_cents < 0) throw httpError("可处理金额不能小于 0", 409);
-          if (before.invoice_required && before.invoice_status !== "verified") throw httpError("发票状态未确认，不能标记已处理", 409);
-          const context = resolveAdminAccessContext(request)!;
-          const claimed = await tx.withdrawal.updateMany({ where: { id, status: "approved" }, data: { status: "paid", admin_remark: body.reason ?? body.remark ?? before.admin_remark, manual_reference: manualReference, processed_by_admin_id: context.admin_user_id, processed_at: new Date() } });
-          if (claimed.count !== 1) throw httpError("提现状态已变化，请刷新后重试", 409);
-          const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
-          const links = await getWithdrawalLinks(id, tx);
-          const marked = await tx.commission.updateMany({ where: { id: { in: links.map((link) => link.commission_id) }, withdrawal_id: id, status: "withdrawing" }, data: { status: "withdrawn" } });
-          if (marked.count !== links.length) throw httpError("提现关联奖励状态已变化，请人工复核", 409);
-          await appendRewardLedgerEntry(tx, { leader_user_id: before.leader_user_id, withdrawal_id: id, event_type: "withdrawal_paid", entry_type: "withdrawal_paid", direction: "out", amount_cents: before.amount_cents, affects_available_balance: false, idempotency_key: `withdrawal-paid:${id}` });
-          await writeAdminAuditLog(tx, request, { action: "withdrawal_mark_paid", target_id: id, payload: { manual_reference: manualReference, tax_status: updated.tax_status, payable_amount_cents: updated.payable_amount_cents } });
-          await logWithdrawalEvent(tx, { event_type: "withdrawal_mark_paid", withdrawal: updated, commissionIds: links.map((link) => link.commission_id), orderIds: links.map((link) => link.commission.order_id), before, after: updated, admin_user_id: context.admin_user_id });
-          return { withdrawal: updated, idempotent: false };
-        });
-        return ok(paid);
-      } catch (error) {
-        const restored = restoreMarkPaidTransactionError(error);
-        reply.code(restored.statusCode ?? 400);
-        return fail(restored.message || "标记提现处理失败");
-      }
-    },
+    (request, reply) =>
+      executeReliableWithdrawal(request, reply, "mark-paid"),
   );
 }
