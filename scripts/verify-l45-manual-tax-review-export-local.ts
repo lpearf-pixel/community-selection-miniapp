@@ -4,6 +4,7 @@ import { L45_API_CONTRACT_LIST } from './l45-api-contract.ts';
 assertStageRegistered('L45', 'scripts/verify-l45-manual-tax-review-export-local.ts');
 function assert(c: unknown, m: string) { if (!c) throw new Error(m); }
 const route = readFileSync('apps/api/src/routes/withdrawals.ts', 'utf8');
+const withdrawalExecutor = readFileSync('apps/api/src/modules/withdrawal/admin-withdrawal-executor.ts', 'utf8');
 const taxRecordRepository = readFileSync('apps/api/src/modules/tax-record/tax-record-scope-repository.ts', 'utf8');
 const page = readFileSync('apps/admin/src/features/finance/tax-review/TaxReviewPage.tsx', 'utf8');
 const e2e = readFileSync('scripts/verify-docker-api-e2e-local.ts', 'utf8');
@@ -85,7 +86,7 @@ for (const marker of requiredBooleanMarkers) {
 }
 assert(reportGenerator.includes('L45_API_CONTRACT_LIST') && reportGenerator.includes('runtime_markers_required') && reportGenerator.includes('function l45ApiVerified'), 'L45 report API verification must consume all per-interface required markers from machine contract');
 assert(contract.includes('function l45TaxReviewConcurrentScenario()') && contract.includes('L45_API_CONTRACT.tax_review.scenarios.filter') && contract.includes('scenarios.length !== 1') && contract.includes('fulfilled_count === applied_count + idempotent_count') && reportGenerator.includes('l45ConcurrentRuntimeMarkers') && !reportGenerator.includes('l45_concurrent_fulfilled_count=2'), 'L45 report concurrent markers must fail closed from the tax_review machine contract helper');
-assert(route.includes('提现税务状态未完成或未计算，不能标记已处理", 409') && route.includes('发票状态未确认，不能标记已处理", 409'), 'mark-paid state conflicts must use 409');
+assert(withdrawalExecutor.includes("'提现税务状态未完成或未计算，不能标记已处理'") && withdrawalExecutor.includes("'发票状态未确认，不能标记已处理'") && withdrawalExecutor.includes("'ADMIN_WITHDRAWAL_TAX_CONFLICT'"), 'mark-paid state conflicts must use reliable 409 command errors');
 
 const l44Body = e2e.split('async function runL44WithdrawalScenario()')[1]?.split('async function runL45TaxReviewScenario()')[0] ?? '';
 assert(!/detailContract|taxReviewContract|exportContract|markPaidContract/.test(l44Body), 'L44 scenario must not reference L45 local contract variables');
@@ -121,6 +122,6 @@ assert(reportGenerator.includes('commandCompleted') && reportGenerator.includes(
 assert(reportVerifier.includes('l45ConcurrentRuntimeMarkers') && !reportVerifier.includes("'l45TaxReviewConcurrentScenario'"), 'publish verifier must bind to wrapper helper rather than requiring generator to name the low-level helper');
 assert(reportVerifier.includes('L45_API_CONTRACT_LIST.flatMap') && reportVerifier.includes('requiredRuntimeMarkers') && reportVerifier.includes('dockerE2eSource.includes(marker)') && reportVerifier.includes('l45ContractSource.includes(marker)'), 'publish verifier must derive runtime marker ownership from the machine contract and Docker E2E');
 assert(!/l45GeneratorRequired[\s\S]*l45_tax_detail_success=true/.test(reportVerifier) && !/l45GeneratorRequired[\s\S]*l45_mark_paid_not_found_404=true/.test(reportVerifier), 'publish verifier must not require report generator to contain individual L45 runtime marker literals');
-assert(route.includes('restoreMarkPaidTransactionError') && route.includes('提现关联奖励状态已变化，请人工复核') && route.includes('提现申请不存在'), 'mark-paid must restore transaction error statuses');
+assert(withdrawalExecutor.includes('AdminWithdrawalCommandError') && withdrawalExecutor.includes("'ADMIN_WITHDRAWAL_REWARD_CONFLICT'") && withdrawalExecutor.includes("'ADMIN_WITHDRAWAL_NOT_FOUND'"), 'mark-paid must preserve reliable transaction error statuses');
 assert(!existsSync('.github/workflows/trigger-l45.yml') && !existsSync('scripts/one-time-l45-fix.ts'), 'No temporary workflow trigger files allowed');
 console.log('L45 manual tax review export verifier passed.');

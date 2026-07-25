@@ -2,14 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Space, Spin, Typography } from 'antd';
 import { featureErrorMessage } from '../../../shared/state/feature-resource';
 import { useFeatureResourceLoader } from '../../../shared/state/use-feature-resource-loader';
-import {
-  approveWithdrawal,
-  getWithdrawalDetail,
-  listWithdrawals,
-  markWithdrawalPaid,
-  rejectWithdrawal,
-} from './api';
+import { getWithdrawalDetail, listWithdrawals } from './api';
 import type { Withdrawal, WithdrawalDetail } from './types';
+import {
+  executeWithdrawalCommand,
+  type WithdrawalCommandAction,
+} from './withdrawal-command-actions';
 import { WithdrawalDetailDrawer } from './WithdrawalDetailDrawer';
 import {
   WithdrawalActionError,
@@ -132,21 +130,17 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
     item: Withdrawal,
     title: string,
     label: string,
-    action: (id: string, value: string) => Promise<void>,
-  ) =>
-    void promptForAction(title, label, (value) =>
-      action(item.withdrawal_id, value),
-    );
+    action: WithdrawalCommandAction,
+  ) => void promptForAction(
+    title,
+    label,
+    (value) => executeWithdrawalCommand(item, action, value),
+  );
   const search = () => {
     setAppliedKeyword(keyword);
     setPage(1);
     setQueryVersion((version) => version + 1);
   };
-  const markPaid = (item: Withdrawal) => void promptForAction(
-    '人工标记已处理',
-    '人工转账记录号或内部处理编号',
-    (value) => markWithdrawalPaid(item.withdrawal_id, value, '人工处理完成'),
-  );
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -183,12 +177,15 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
         onPageChange={setPage}
         onOpenDetail={(item) => void openDetail(item.withdrawal_id)}
         onApprove={(item) =>
-          run(item, '审核通过', '审核备注', approveWithdrawal)
+          run(item, '审核通过', '审核备注', 'approve')
         }
-        onReject={(item) =>
-          run(item, '驳回', '驳回原因', rejectWithdrawal)
-        }
-        onMarkPaid={markPaid}
+        onReject={(item) => run(item, '驳回', '驳回原因', 'reject')}
+        onMarkPaid={(item) => run(
+          item,
+          '人工标记已处理',
+          '人工转账记录号或内部处理编号',
+          'mark-paid',
+        )}
       />
       <WithdrawalDetailDrawer
         detail={detail}

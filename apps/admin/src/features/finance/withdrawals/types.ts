@@ -8,6 +8,7 @@ export type Withdrawal = {
   leader_phone_masked?: string | null;
   amount_cents: number;
   status: WithdrawalStatus;
+  version: number;
   commission_count: number;
   community_names: string[];
   created_at: string;
