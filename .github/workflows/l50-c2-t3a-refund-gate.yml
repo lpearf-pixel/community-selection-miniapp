@@ -72,6 +72,7 @@ jobs:
         run: |
           pnpm --filter @community-selection/api test -- \
             src/modules/refund/admin-refund-executor.integration.test.ts \
+            src/routes/admin-refund-route.test.ts \
             src/modules/order/admin-pickup-verification-executor.integration.test.ts
       - name: Verify API types
         run: pnpm --filter @community-selection/api typecheck
