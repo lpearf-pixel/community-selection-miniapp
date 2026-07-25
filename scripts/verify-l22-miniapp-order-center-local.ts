@@ -129,8 +129,8 @@ function controlAttributes(raw: string, semantic: string[]) {
   if (!attributes) return undefined;
   const className = attributes.get('class');
   const testId = attributes.get('data-testid');
-  if ((className !== undefined && !/^[\\w -]+$/.test(className))
-    || (testId !== undefined && !/^[\\w-]+$/.test(testId))) return undefined;
+  if ((className !== undefined && !/^[\w -]+$/.test(className))
+    || (testId !== undefined && !/^[\w-]+$/.test(testId))) return undefined;
   return attributes;
 }
 
