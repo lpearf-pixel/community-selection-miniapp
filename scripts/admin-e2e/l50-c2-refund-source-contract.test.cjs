@@ -20,6 +20,10 @@ const smoke = readFileSync(
   join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
   'utf8',
 );
+const adminTypes = readFileSync(
+  join(root, 'apps/admin/src/features/sales/after-sales/types.ts'),
+  'utf8',
+);
 
 test('refund execution has one protected Admin write boundary', () => {
   assert.match(
@@ -36,6 +40,11 @@ test('refund execution has one protected Admin write boundary', () => {
 test('Admin after-sale list exposes reliable refund execution inputs', () => {
   assert.match(afterSales, /resolution_type:\s*item\.resolution_type/);
   assert.match(afterSales, /version:\s*order\.version/);
+  assert.match(
+    adminTypes,
+    /export type AfterSaleRefundExecutionResult = \{[\s\S]*?version: number;/,
+  );
+  assert.doesNotMatch(adminTypes, /order_version:/);
 });
 
 test('public refund mutations are retired while notify fails closed', () => {
@@ -59,6 +68,7 @@ test('real Admin browser proves same-version refund execution is atomic', () => 
     /\/api\/admin\/after-sales\/\$\{credentials\.refundCaseId\}\/refund-execute/,
   );
   assert.match(smoke, /assert\.deepEqual\(refundRaceCodes,\s*\[200,\s*409\]\)/);
+  assert.match(smoke, /refundSuccessEnvelope\.data\.version,\s*2/);
   assert.match(smoke, /assert\.equal\(refundOrderEnvelope\.data\.items\[0\]\.version,\s*2\)/);
   assert.match(smoke, /assert\.equal\(refundLedgerEnvelope\.data\.total,\s*1\)/);
 });
