@@ -72,3 +72,24 @@ test('real Admin browser proves same-version refund execution is atomic', () => 
   assert.match(smoke, /assert\.equal\(refundOrderEnvelope\.data\.items\[0\]\.version,\s*2\)/);
   assert.match(smoke, /assert\.equal\(refundLedgerEnvelope\.data\.total,\s*1\)/);
 });
+
+test('real Admin browser restores orders before injecting the order refresh failure', () => {
+  const refundRaceFinished = smoke.indexOf(
+    'await refundConflictPage.close();',
+  );
+  const orderFailureRoute = smoke.indexOf(
+    'const orderFailureRoute = async (route) => {',
+    refundRaceFinished,
+  );
+  const restoreOrders = smoke.indexOf(
+    'await ordersButton.click();',
+    refundRaceFinished,
+  );
+
+  assert.ok(refundRaceFinished >= 0);
+  assert.ok(orderFailureRoute > refundRaceFinished);
+  assert.ok(
+    restoreOrders > refundRaceFinished && restoreOrders < orderFailureRoute,
+    'the primary Admin page must restore Order Management before refreshing the injected order failure',
+  );
+});
