@@ -23,6 +23,12 @@ export type WithdrawalsPageProps = {
   onMutationCommitted: () => void;
 };
 
+function commandKey(action: 'approve' | 'reject' | 'mark-paid'): string {
+  const nonce = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `admin-withdrawal-${action}-${nonce}`;
+}
+
 export function WithdrawalsPage(props: WithdrawalsPageProps) {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<string>();
@@ -132,10 +138,21 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
     item: Withdrawal,
     title: string,
     label: string,
-    action: (id: string, value: string) => Promise<void>,
+    actionName: 'approve' | 'reject',
+    action: (
+      id: string,
+      expectedVersion: number,
+      idempotencyKey: string,
+      value: string,
+    ) => Promise<void>,
   ) =>
     void promptForAction(title, label, (value) =>
-      action(item.withdrawal_id, value),
+      action(
+        item.withdrawal_id,
+        item.version,
+        commandKey(actionName),
+        value,
+      ),
     );
   const search = () => {
     setAppliedKeyword(keyword);
@@ -145,7 +162,13 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
   const markPaid = (item: Withdrawal) => void promptForAction(
     '人工标记已处理',
     '人工转账记录号或内部处理编号',
-    (value) => markWithdrawalPaid(item.withdrawal_id, value, '人工处理完成'),
+    (value) => markWithdrawalPaid(
+      item.withdrawal_id,
+      item.version,
+      commandKey('mark-paid'),
+      value,
+      '人工处理完成',
+    ),
   );
 
   return (
@@ -183,10 +206,10 @@ export function WithdrawalsPage(props: WithdrawalsPageProps) {
         onPageChange={setPage}
         onOpenDetail={(item) => void openDetail(item.withdrawal_id)}
         onApprove={(item) =>
-          run(item, '审核通过', '审核备注', approveWithdrawal)
+          run(item, '审核通过', '审核备注', 'approve', approveWithdrawal)
         }
         onReject={(item) =>
-          run(item, '驳回', '驳回原因', rejectWithdrawal)
+          run(item, '驳回', '驳回原因', 'reject', rejectWithdrawal)
         }
         onMarkPaid={markPaid}
       />
