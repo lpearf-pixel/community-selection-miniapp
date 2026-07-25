@@ -11,6 +11,10 @@ on:
       - scripts/verification-baseline-manifest.ts
       - scripts/verify-baseline-audit-local.ts
       - scripts/stage-registry.ts
+      - scripts/check-migrations.ts
+      - scripts/compliance-scan.ts
+      - scripts/lib/compliance-scan.ts
+      - scripts/verify-*-local.ts
   workflow_dispatch:
 
 permissions:
@@ -31,6 +35,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.4
