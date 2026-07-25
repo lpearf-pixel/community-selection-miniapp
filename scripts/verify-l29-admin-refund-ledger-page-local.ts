@@ -9,7 +9,7 @@ const read = (file: string) => readFileSync(join(repoRoot, file), 'utf8');
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 
 function runComplianceScan() {
-  const output = execFileSync(process.execPath, ['scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: repoRoot, encoding: 'utf8' });
+  const output = execFileSync('pnpm', ['exec', 'tsx', 'scripts/verify-no-raw-compliance-terms-local.ts'], { cwd: repoRoot, encoding: 'utf8' });
   process.stdout.write(output);
   assert(output.includes('No raw compliance-sensitive terms found in verify/docs files.'), 'Compliance-sensitive wording scan did not report success');
 }
@@ -36,11 +36,13 @@ async function main() {
 
   const pageFile = 'apps/admin/src/pages/finance/FinanceRefundLedgerPage.tsx';
   const apiFile = 'apps/admin/src/api/financeRefundLedger.ts';
-  const appFile = 'apps/admin/src/App.tsx';
+  const appFile = 'apps/admin/src/app/AdminApp.tsx';
+  const featureRegistryFile = 'apps/admin/src/app/feature-registry.ts';
   const requiredFiles = [
     pageFile,
     apiFile,
     appFile,
+    featureRegistryFile,
     'scripts/verify-l29-admin-refund-ledger-page-local.ts',
     'docs/reviews/l29-admin-refund-ledger-page.md',
     'scripts/stage-workflow.ts',
@@ -52,6 +54,7 @@ async function main() {
   const page = read(pageFile);
   const api = read(apiFile);
   const app = read(appFile);
+  const featureRegistry = read(featureRegistryFile);
   const workflow = read('scripts/stage-workflow.ts');
   const verifyAll = read('scripts/verify-all-local.sh');
   const report = read('scripts/generate-stage-report.ts');
@@ -70,7 +73,7 @@ async function main() {
     assert(api.includes(param), `API client must support param ${param}`);
   });
 
-  assert(app.includes('FinanceRefundLedgerPage') && app.includes('退款台账') && app.includes('refundLedger'), 'Admin route/menu must expose refund ledger page');
+  assert(app.includes('FinanceRefundLedgerPage') && app.includes('refundLedger') && featureRegistry.includes("label: '退款台账'"), 'Admin route/menu must expose refund ledger page');
   assert(page.includes('暂无退款记录'), 'Empty state must show no refund records copy');
   assert(page.includes('loading') && page.includes('exporting'), 'Page must expose loading and exporting states');
   assert(page.includes('errorMessage') && page.includes('console.error'), 'Page must show request errors');

@@ -1,6 +1,5 @@
 import { assertStageRegistered } from './stage-verifier-registration.ts';
-import { existsSync, readFileSync } from 'node:fs';
-import { globSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 assertStageRegistered('L39', 'scripts/verify-l39-delivery-refund-finance-baseline-local.ts');
 function read(file: string) { return readFileSync(file, 'utf8'); }
@@ -31,7 +30,7 @@ const files = [
   'docs/reviews/l39-delivery-refund-finance-baseline.md'
 ];
 for (const file of files) assert(existsSync(file), `Missing file: ${file}`);
-assert(globSync('prisma/migrations/*_l39_delivery_refund_finance_baseline/migration.sql').length > 0, 'Missing L39 migration');
+assert(readdirSync('prisma/migrations', { withFileTypes: true }).some((entry) => entry.isDirectory() && entry.name.endsWith('_l39_delivery_refund_finance_baseline')), 'Missing L39 migration');
 
 includesAll('prisma/schema.prisma', [
   'product_refund_amount_cents',

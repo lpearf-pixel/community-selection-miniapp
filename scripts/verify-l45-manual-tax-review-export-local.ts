@@ -5,7 +5,7 @@ assertStageRegistered('L45', 'scripts/verify-l45-manual-tax-review-export-local.
 function assert(c: unknown, m: string) { if (!c) throw new Error(m); }
 const route = readFileSync('apps/api/src/routes/withdrawals.ts', 'utf8');
 const taxRecordRepository = readFileSync('apps/api/src/modules/tax-record/tax-record-scope-repository.ts', 'utf8');
-const page = readFileSync('apps/admin/src/pages/tax-review/TaxReviewPage.tsx', 'utf8');
+const page = readFileSync('apps/admin/src/features/finance/tax-review/TaxReviewPage.tsx', 'utf8');
 const e2e = readFileSync('scripts/verify-docker-api-e2e-local.ts', 'utf8');
 const report = readFileSync('scripts/generate-stage-report.ts', 'utf8');
 const reportVerifier = readFileSync('scripts/verify-report-publish-local.ts', 'utf8');
@@ -40,14 +40,14 @@ assert(!e2e.includes("taxRecordsA.some(") && !e2e.includes("taxRecordsB.some("),
 assert(e2e.includes("new TextDecoder('utf-8').decode(csvBytes.subarray(hasUtf8Bom ? 3 : 0))"), 'L45 CSV body must be decoded after raw BOM verification');
 assert(!e2e.includes("csv.charCodeAt(0) === 0xfeff"), 'L45 CSV verifier must not expect Response.text() to preserve BOM');
 assert(route.includes('taxAmount > taxableAmount') && route.includes('payableAmount < 0'), 'amount relation validation exists');
-const adminClient = readFileSync('apps/admin/src/api/adminTaxReview.ts', 'utf8');
+const adminClient = readFileSync('apps/admin/src/features/finance/tax-review/api.ts', 'utf8');
 assert(adminClient.includes('downloadTaxReviewCsv') && adminClient.includes('adminFetch') && adminClient.includes('URL.createObjectURL') && adminClient.includes('content-disposition'), 'Admin CSV export must use authenticated blob fetch');
 assert(!page.includes('href={taxReviewExportUrl('), 'TaxReviewPage must not use href CSV downloads');
 assert(route.includes('ensureTaxExportWithinLimit') && route.includes('taxExportLimit') && route.includes('x-export-total') && route.includes('x-export-truncated') && route.includes('422'), 'CSV export must reject over-limit rather than truncate silently');
 assert(route.includes('expected_updated_at') && route.includes('updated_at: w?.updated_at') && route.includes('where: { id, updated_at: expectedUpdatedAt }'), 'tax review must enforce client-side optimistic concurrency');
 assert(route.includes('const TAX_MODES') && route.includes('const TAX_STATUSES') && route.includes('const INVOICE_STATUSES') && route.includes('validateTaxCombination'), 'tax status allow-lists and combination validation must exist');
 assert(page.includes('系统不会自动报税') && page.includes('系统不会连接外部税务平台') && page.includes('系统不会自动发起打款') && page.includes('仅供内部人工核对'), 'manual review disclaimers exist');
-assert(existsSync('apps/admin/src/api/adminTaxReview.ts'), 'Admin API client exists');
+assert(existsSync('apps/admin/src/features/finance/tax-review/api.ts'), 'Admin API client exists');
 for (const required of ['runL45TaxReviewScenario', 'await runL45TaxReviewScenario();', 'Promise.allSettled', 'prisma.withdrawal', 'prisma.taxRecord', 'prisma.adminAuditLog', 'prisma.businessEventLog', 'financeAHeaders', 'financeBHeaders', 'negative taxable', 'none nonzero tax', 'l45_tax_detail_success=true', 'l45_tax_export_over_limit_http_422=true', 'rejected tax review must not mutate Withdrawal', '=HYPERLINK', '+SUM(1,1)', '@cmd', '-1+2']) {
   assert(e2e.includes(required), `L45 Docker E2E must include ${required}`);
 }
