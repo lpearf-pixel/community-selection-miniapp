@@ -919,7 +919,11 @@ try {
       exact: true,
     })
     .waitFor();
-  await pickupRow.getByText('picked', { exact: true }).waitFor();
+  await page
+    .locator(`tr[data-row-key=\"${credentials.pickupOrderId}\"]`)
+    .first()
+    .getByText('picked', { exact: true })
+    .waitFor();
   await page.waitForLoadState('networkidle');
   await pickupConflictPage.close();
 
