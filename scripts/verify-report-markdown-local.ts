@@ -59,7 +59,7 @@ assert(reportEntry.includes("from './report-artifact-normalizer.ts'"), 'Canonica
 assert(reportEntry.includes('applyStageReportArtifactNormalization(stage)'), 'Canonical report entry must normalize the final Stage report');
 
 const verifyAll = readFileSync('scripts/verify-all-local.sh', 'utf8');
-const l46Case = verifyAll.match(/L46(?:\\|L47)?\\)([\\s\\S]*?);;/)?.[1] ?? '';
+const l46Case = verifyAll.match(/L46(?:\|L47)?\)([\s\S]*?);;/)?.[1] ?? '';
 assert(l46Case.includes('scripts/stage-workflow.ts') && l46Case.includes('--stage=L46') && l46Case.includes('--publish') && l46Case.includes('--scope=chain'), 'verify:all must fail closed and direct L46 report verification to stage-workflow');
 assert(!l46Case.includes('scripts/verify-report-publish-local.ts'), 'verify:all must not route L46 through the historical report verifier');
 assert(verifyAll.includes('scripts/verify-report-publish-local.ts'), 'verify:all must preserve historical report publish verification');
