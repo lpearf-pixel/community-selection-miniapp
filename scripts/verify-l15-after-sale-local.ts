@@ -177,16 +177,26 @@ async function main() {
     'admin should be able to approve less than the requested full amount',
   );
 
-  const resolved = await adminJson(await app.inject({
+  const refundExecution = await adminJson(await app.inject({
     method: 'POST',
-    url: `/api/admin/after-sales/${afterSale.id}/resolve`,
+    url: `/api/admin/after-sales/${afterSale.id}/refund-execute`,
     headers: adminHeaders,
-    payload: { resolution_type: 'partial_refund', approved_refund_cents: 800, admin_note: '售后退款已处理' }
+    payload: {
+      expected_version: reviewed.version,
+      idempotency_key: `${prefix}-refund-execute`,
+      admin_remark: '售后退款已处理',
+    },
   }));
-  assert(resolved.status === 'resolved' && resolved.refund_id, 'after-sale resolve should create refund and mark resolved');
+  assert(
+    refundExecution.refund_status === 'success' &&
+      refundExecution.refund_amount_cents === 800 &&
+      refundExecution.version === reviewed.version + 1 &&
+      refundExecution.refund_id,
+    'reliable refund command should create the approved refund and advance the order version',
+  );
 
-  const refund = await prisma.refund.findUniqueOrThrow({ where: { id: resolved.refund_id } });
-  assert(refund.status === 'success' && refund.refund_amount_cents === 800, 'after-sale refund should reuse mock refund flow');
+  const refund = await prisma.refund.findUniqueOrThrow({ where: { id: refundExecution.refund_id } });
+  assert(refund.status === 'success' && refund.refund_amount_cents === 800, 'after-sale refund should use the reliable mock execution flow');
   const refundedOrder = await prisma.order.findUniqueOrThrow({ where: { id: primary.order.id } });
   assert(refundedOrder.refund_status === 'success' && refundedOrder.refund_amount_cents === 800, 'order refund status should reflect after-sale refund');
   const adjustedCommission = await prisma.commission.findUniqueOrThrow({ where: { id: primary.commission.id } });
@@ -195,7 +205,7 @@ async function main() {
   const aiContext = await adminJson(await app.inject({ method: 'GET', url: `/api/admin/logs/orders/${primary.order.id}/ai-context`, headers: adminHeaders }));
   const aiEventTypes = aiContext.business_events.map((item: any) => item.event_type);
   assert(aiEventTypes.includes('after_sale_submitted'), 'AI context should include after_sale_submitted');
-  assert(aiEventTypes.includes('after_sale_refund_created') || aiEventTypes.includes('after_sale_resolved'), 'AI context should include after-sale resolution event');
+  assert(aiEventTypes.includes('admin_refund_executed'), 'AI context should include reliable Admin refund execution');
 
   const beforeStock = (await prisma.product.findUniqueOrThrow({ where: { id: primary.product.id } })).stock;
   const linkedLoss = await adminJson(await app.inject({
