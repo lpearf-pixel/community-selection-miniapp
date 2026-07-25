@@ -12,6 +12,14 @@ const refunds = readFileSync(
   join(root, 'apps/api/src/routes/refunds.ts'),
   'utf8',
 );
+const fixture = readFileSync(
+  join(root, 'scripts/admin-e2e/fixture.ts'),
+  'utf8',
+);
+const smoke = readFileSync(
+  join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
+  'utf8',
+);
 
 test('refund execution has one protected Admin write boundary', () => {
   assert.match(
@@ -35,4 +43,22 @@ test('public refund mutations are retired while notify fails closed', () => {
   assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/wechat\/apply'/);
   assert.match(refunds, /app\.post\('\/api\/refunds\/wechat\/notify'/);
   assert.match(refunds, /reply\.code\(501\)/);
+});
+
+test('real Admin browser proves same-version refund execution is atomic', () => {
+  assert.match(fixture, /const refundOrderNo = /);
+  assert.match(fixture, /const refundOrder = await prisma\.order\.create\(/);
+  assert.match(fixture, /const refundCase = await prisma\.afterSaleCase\.create\(/);
+  assert.match(fixture, /resolution_type:\s*'partial_refund'/);
+  assert.match(fixture, /refundOrderId:\s*refundOrder\.id/);
+  assert.match(fixture, /refundCaseId:\s*refundCase\.id/);
+
+  assert.match(smoke, /const refundConflictPage = await context\.newPage\(\)/);
+  assert.match(
+    smoke,
+    /\/api\/admin\/after-sales\/\$\{credentials\.refundCaseId\}\/refund-execute/,
+  );
+  assert.match(smoke, /assert\.deepEqual\(refundRaceCodes,\s*\[200,\s*409\]\)/);
+  assert.match(smoke, /assert\.equal\(refundOrderEnvelope\.data\.items\[0\]\.version,\s*2\)/);
+  assert.match(smoke, /assert\.equal\(refundLedgerEnvelope\.data\.total,\s*1\)/);
 });
