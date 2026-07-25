@@ -24,6 +24,12 @@ const l15Verifier = readFileSync(
   join(root, 'scripts/verify-l15-after-sale-local.ts'),
   'utf8',
 );
+const legacyRefundVerifiers = [
+  'verify-l16-finance-reconciliation-local.ts',
+  'verify-l17-operations-dashboard-local.ts',
+  'verify-l17-5-normal-purchase-local.ts',
+  'verify-docker-api-e2e-local.ts',
+].map((name) => readFileSync(join(root, 'scripts', name), 'utf8'));
 const adminTypes = readFileSync(
   join(root, 'apps/admin/src/features/sales/after-sales/types.ts'),
   'utf8',
@@ -126,4 +132,17 @@ test('L15 verification executes approved refunds through the reliable command', 
     l15Verifier,
     /expected_version:\s*reviewed\.version/,
   );
+});
+
+test('release verifiers do not execute refunds through the retired resolve route', () => {
+  for (const verifier of legacyRefundVerifiers) {
+    assert.doesNotMatch(
+      verifier,
+      /\/api\/admin\/after-sales\/\$\{[^}]+\}\/resolve/,
+    );
+    assert.match(
+      verifier,
+      /\/api\/admin\/after-sales\/\$\{[^}]+\}\/refund-execute/,
+    );
+  }
 });
