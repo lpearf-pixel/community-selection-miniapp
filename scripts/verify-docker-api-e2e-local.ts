@@ -597,6 +597,20 @@ async function runL44WithdrawalScenario() {
   async function createWithdrawalFromCommissions(leader: { id: string; openid: string }, client_request_id: string, commissions: Array<{ id: string }>) {
     return request<{ withdrawal_id: string; amount_cents: number; status: string; idempotent?: boolean; applied?: boolean }>('POST', '/api/leaders/me/withdrawals', { label: `POST /api/leaders/me/withdrawals ${client_request_id}`, headers: { 'x-openid': leader.openid }, body: { client_request_id, commission_ids: commissions.map((item) => item.id), leader_user_id: leaderB.id } });
   }
+  async function withdrawalCommandBody(
+    withdrawalId: string,
+    action: 'approve' | 'reject' | 'mark-paid',
+    remark: string,
+    manualReference?: string,
+  ) {
+    const withdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawalId } });
+    return {
+      expected_version: withdrawal.version,
+      idempotency_key: `${runId}-${action}-${withdrawalId}`,
+      admin_remark: remark,
+      ...(manualReference ? { manual_reference: manualReference } : {}),
+    };
+  }
 
   const main111 = await createCommissionFixture('main-111', leaderMain.id, communityA.id, 111);
   const main222 = await createCommissionFixture('main-222', leaderMain.id, communityA.id, 222);
@@ -668,7 +682,8 @@ async function runL44WithdrawalScenario() {
 
   console.log('=== L44 rejection restore scenario ===');
   const balanceBeforeReject = await getAvailableRewardBalance(prisma, leaderMain.id);
-  await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${withdrawalId}/reject`, withAdminJson({ label: 'L44 reject main withdrawal', body: { reason: `${runId}-reject` } }));
+  const rejectBody = await withdrawalCommandBody(withdrawalId, 'reject', `${runId}-reject`);
+  await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${withdrawalId}/reject`, withAdminJson({ label: 'L44 reject main withdrawal', body: rejectBody }));
   const rejectedWithdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawalId } });
   const rejectedLinks = await prisma.withdrawalCommission.count({ where: { withdrawal_id: withdrawalId } });
   const restoredCommissions = await prisma.commission.findMany({ where: { id: { in: [main111.commission.id, main222.commission.id] } } });
@@ -685,7 +700,7 @@ async function runL44WithdrawalScenario() {
   const restoreLedgerAfterFirstReject = restoreLedgerCount;
   const rejectAuditAfterFirstReject = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: withdrawalId, action: 'withdrawal_rejected' } });
   const rejectEventAfterFirstReject = await prisma.businessEventLog.count({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_rejected' } });
-  const repeatReject = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${withdrawalId}/reject`, withAdminJson({ label: 'L44 repeat reject idempotent', body: { reason: `${runId}-reject-repeat` } }));
+  const repeatReject = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${withdrawalId}/reject`, withAdminJson({ label: 'L44 repeat reject idempotent', body: rejectBody }));
   assert(repeatReject.idempotent === true, 'repeat reject must return idempotent=true');
   assert(await getAvailableRewardBalance(prisma, leaderMain.id) === balanceAfterFirstReject, 'repeat reject must not change balance');
   assert(await prisma.rewardLedger.count({ where: { withdrawal_id: withdrawalId, event_type: 'withdrawal_rejected_restore' } }) === restoreLedgerAfterFirstReject, 'repeat reject must not duplicate restore ledger');
@@ -696,9 +711,10 @@ async function runL44WithdrawalScenario() {
   console.log('=== L44 approve reject race scenario ===');
   const raceA = await createCommissionFixture('race-111', leaderRace.id, communityA.id, 111);
   const raceW = await createWithdrawalFromCommissions(leaderRace, `${runId}-race-request`, [raceA.commission]);
+  const raceVersion = (await prisma.withdrawal.findUniqueOrThrow({ where: { id: raceW.withdrawal_id } })).version;
   const raceResults = await Promise.allSettled([
-    request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 race approve', body: { remark: `${runId}-approve` } })),
-    request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/reject`, withAdminJson({ label: 'L44 race reject', body: { reason: `${runId}-reject-race` } }))
+    request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 race approve', body: { expected_version: raceVersion, idempotency_key: `${runId}-race-approve`, admin_remark: `${runId}-approve` } })),
+    request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${raceW.withdrawal_id}/reject`, withAdminJson({ label: 'L44 race reject', body: { expected_version: raceVersion, idempotency_key: `${runId}-race-reject`, admin_remark: `${runId}-reject-race` } }))
   ]);
   const fulfilledResults = raceResults.filter((item) => item.status === 'fulfilled');
   const rejectedResults = raceResults.filter((item) => item.status === 'rejected');
@@ -760,10 +776,11 @@ async function runL44WithdrawalScenario() {
   const paidA = await createCommissionFixture('paid-111', leaderPaid.id, communityA.id, 111);
   const paidB = await createCommissionFixture('paid-222', leaderPaid.id, communityA.id, 222);
   const paidW = await createWithdrawalFromCommissions(leaderPaid, `${runId}-paid-request`, [paidA.commission, paidB.commission]);
-  await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 approve paid withdrawal', body: { remark: `${runId}-approve-paid` } }));
+  await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/approve`, withAdminJson({ label: 'L44 approve paid withdrawal', body: await withdrawalCommandBody(paidW.withdrawal_id, 'approve', `${runId}-approve-paid`) }));
   const paidWBeforeTax = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
   await request('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/tax-review`, withAdminJson({ label: 'L44 tax compatibility none', body: { tax_mode: 'none', taxable_amount_cents: paidWBeforeTax.amount_cents, tax_amount_cents: 0, client_request_id: `${runId}-paid-tax-none`, expected_updated_at: paidWBeforeTax.updated_at.toISOString() } }));
-  const markPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 mark paid', body: { manual_reference: `${runId}-manual-reference`, remark: `${runId}-paid` } }));
+  const markPaidBody = await withdrawalCommandBody(paidW.withdrawal_id, 'mark-paid', `${runId}-paid`, `${runId}-manual-reference`);
+  const markPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 mark paid', body: markPaidBody }));
   const paidFinal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: paidW.withdrawal_id } });
   const paidCommissions = await prisma.commission.findMany({ where: { withdrawal_id: paidW.withdrawal_id } });
   const paidLedgers = await prisma.rewardLedger.findMany({ where: { withdrawal_id: paidW.withdrawal_id, event_type: 'withdrawal_paid' } });
@@ -771,7 +788,7 @@ async function runL44WithdrawalScenario() {
   assert(markPaid.withdrawal.status === 'paid' && paidFinal.status === 'paid' && paidFinal.manual_reference === `${runId}-manual-reference` && paidFinal.processed_at && paidFinal.processed_by_admin_id === DOCKER_E2E_ADMIN_ID, 'L44 mark-paid must persist manual processing metadata');
   assert(paidCommissions.every((item) => item.status === 'withdrawn') && paidLedgers.length === 1 && paidLedgers[0].affects_available_balance === false && balanceAfterPaid >= 0, 'L44 paid must withdraw commissions and not affect available balance again');
   const paidAuditBefore = await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: paidW.withdrawal_id, action: 'withdrawal_mark_paid' } });
-  const repeatPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 repeat mark paid', body: { manual_reference: `${runId}-manual-reference`, remark: `${runId}-paid-repeat` } }));
+  const repeatPaid = await request<{ withdrawal: { status: string }; idempotent: boolean }>('POST', `/api/admin/withdrawals/${paidW.withdrawal_id}/mark-paid`, withAdminJson({ label: 'L44 repeat mark paid', body: markPaidBody }));
   assert(repeatPaid.idempotent === true && await prisma.rewardLedger.count({ where: { withdrawal_id: paidW.withdrawal_id, event_type: 'withdrawal_paid' } }) === 1 && await prisma.adminAuditLog.count({ where: { target_type: 'Withdrawal', target_id: paidW.withdrawal_id, action: 'withdrawal_mark_paid' } }) === paidAuditBefore, 'L44 repeat mark-paid must not duplicate ledger/audit');
   console.log('l44_paid_scenario_passed');
 
@@ -786,7 +803,7 @@ async function runL44WithdrawalScenario() {
   assert(financeAList.total >= 1 && financeAList.items.every((item) => item.withdrawal_id !== scopeBW.withdrawal_id) && financeAListPage2.items.every((item) => item.withdrawal_id !== scopeBW.withdrawal_id), 'L44 scoped finance A list must filter B withdrawals with correct total/pages');
   const negativeBefore = { withdrawal: await prisma.withdrawal.findUnique({ where: { id: scopeBW.withdrawal_id } }), links: await prisma.withdrawalCommission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), commissions: await prisma.commission.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), ledger: await prisma.rewardLedger.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }), audit: await prisma.adminAuditLog.count({ where: { target_id: scopeBW.withdrawal_id } }), events: await prisma.businessEventLog.count({ where: { withdrawal_id: scopeBW.withdrawal_id } }) };
   await request<ErrorApiResponse>('GET', `/api/admin/withdrawals/${scopeBW.withdrawal_id}`, { label: 'L44 scoped finance A detail B denied', expectedStatus: 403, headers: financeAHeaders });
-  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${scopeBW.withdrawal_id}/approve`, { label: 'L44 scoped finance A approve B denied', expectedStatus: 403, headers: financeAHeaders, body: { remark: `${runId}-denied` } });
+  await request<ErrorApiResponse>('POST', `/api/admin/withdrawals/${scopeBW.withdrawal_id}/approve`, { label: 'L44 scoped finance A approve B denied', expectedStatus: 403, headers: financeAHeaders, body: await withdrawalCommandBody(scopeBW.withdrawal_id, 'approve', `${runId}-denied`) });
   await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 store manager withdrawal forbidden', expectedStatus: 403, headers: storeManagerHeaders });
   await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 operator withdrawal forbidden', expectedStatus: 403, headers: operatorHeaders });
   await request<ErrorApiResponse>('GET', '/api/admin/withdrawals', { label: 'L44 inactive admin withdrawal unauthorized', expectedStatus: 401, headers: inactiveHeaders });
@@ -902,6 +919,15 @@ async function runL45TaxReviewScenario() {
   const exportContract = L45_API_CONTRACT.tax_record_export;
   const taxReviewContract = L45_API_CONTRACT.tax_review;
   const markPaidContract = L45_API_CONTRACT.mark_paid;
+  async function l45MarkPaidBody(withdrawalId: string, suffix: string) {
+    const withdrawal = await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawalId } });
+    return {
+      expected_version: withdrawal.version,
+      idempotency_key: `${runId}-mark-paid-${suffix}`,
+      admin_remark: `${runId}-${suffix}`,
+      manual_reference: `${runId}-${suffix}`,
+    };
+  }
 
   const taxReviewStatus = (marker: string) => {
     const scenario = taxReviewContract.scenarios.find((item) => item.marker === marker);
@@ -1017,7 +1043,7 @@ async function runL45TaxReviewScenario() {
   const missingPaidLedgerBefore = await prisma.rewardLedger.count({ where: { withdrawal_id: missingWithdrawalId, event_type: 'withdrawal_paid' } });
   const missingPaidAuditBefore = await prisma.adminAuditLog.count({ where: { target_id: missingWithdrawalId, action: 'withdrawal_mark_paid' } });
   const missingPaidEventBefore = await prisma.businessEventLog.count({ where: { withdrawal_id: missingWithdrawalId, event_type: 'withdrawal_mark_paid' } });
-  const markPaidMissing = await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', missingWithdrawalId)}`, { label: 'POST mark-paid L45 missing withdrawal', headers: { ...adminHeaders, 'content-type': 'application/json' }, expectedStatus: markPaidStatus('l45_mark_paid_not_found_404=true'), body: { manual_reference: `${runId}-missing-paid` } });
+  const markPaidMissing = await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', missingWithdrawalId)}`, { label: 'POST mark-paid L45 missing withdrawal', headers: { ...adminHeaders, 'content-type': 'application/json' }, expectedStatus: markPaidStatus('l45_mark_paid_not_found_404=true'), body: { expected_version: 1, idempotency_key: `${runId}-mark-paid-missing`, admin_remark: `${runId}-missing-paid`, manual_reference: `${runId}-missing-paid` } });
   assert(markPaidMissing.success === false && markPaidMissing.message === '提现申请不存在', 'L45 mark-paid missing withdrawal must return exact 404 failure envelope');
   assert(await prisma.rewardLedger.count({ where: { withdrawal_id: missingWithdrawalId, event_type: 'withdrawal_paid' } }) === missingPaidLedgerBefore && await prisma.adminAuditLog.count({ where: { target_id: missingWithdrawalId, action: 'withdrawal_mark_paid' } }) === missingPaidAuditBefore && await prisma.businessEventLog.count({ where: { withdrawal_id: missingWithdrawalId, event_type: 'withdrawal_mark_paid' } }) === missingPaidEventBefore, 'L45 mark-paid missing withdrawal must not create ledger/audit/event');
   console.log('l45_mark_paid_not_found_404=true');
@@ -1027,25 +1053,25 @@ async function runL45TaxReviewScenario() {
   assert(noneReviewed.tax_status === 'completed' && noneReviewed.tax_amount_cents === 0 && noneReviewed.payable_amount_cents === noneReviewed.amount_cents, 'L45 none mode zero tax must complete and keep payable equal amount');
   const noneCommissionBeforePaid = await prisma.commission.findUniqueOrThrow({ where: { id: fixtureE.commission.id } });
   assert(noneCommissionBeforePaid.status === 'withdrawing' && noneCommissionBeforePaid.withdrawal_id === fixtureE.withdrawal.id && await prisma.withdrawalCommission.count({ where: { withdrawal_id: fixtureE.withdrawal.id, commission_id: fixtureE.commission.id } }) === 1, 'L45 none mark-paid fixture must maintain Commission.withdrawal_id and WithdrawalCommission');
-  const nonePaid = await request<{ withdrawal: { status: string } }>(markPaidContract.method, `${markPaidContract.path.replace(':id', fixtureE.withdrawal.id)}`, { label: 'POST mark-paid L45 none reviewed', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { manual_reference: `${runId}-none-paid` } });
+  const nonePaid = await request<{ withdrawal: { status: string } }>(markPaidContract.method, `${markPaidContract.path.replace(':id', fixtureE.withdrawal.id)}`, { label: 'POST mark-paid L45 none reviewed', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: await l45MarkPaidBody(fixtureE.withdrawal.id, 'none-paid') });
   assert(nonePaid.withdrawal.status === 'paid', 'L45 mark-paid must pass after valid none tax review');
   console.log('l45_mark_paid_success=true');
 
   const markPending = await createWithdrawalFixture('a', 'mark-pending-tax', 1500);
   const markPendingBefore = await markPaidRollbackSnapshot(markPending);
-  const markPendingError = await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', markPending.withdrawal.id)}`, { label: 'POST mark-paid L45 tax pending conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-pending-tax` } });
+  const markPendingError = await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', markPending.withdrawal.id)}`, { label: 'POST mark-paid L45 tax pending conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: await l45MarkPaidBody(markPending.withdrawal.id, 'pending-tax') });
   assert(markPendingError.message === '提现税务状态未完成或未计算，不能标记已处理', 'L45 mark-paid tax pending conflict must return exact 409 message');
   await assertMarkPaidRollback('tax pending', markPending, markPendingBefore);
   const invoiceConflict = await createWithdrawalFixture('a', 'mark-invoice-pending', 1510);
   await prisma.withdrawal.update({ where: { id: invoiceConflict.withdrawal.id }, data: { tax_mode: 'invoice', tax_status: 'completed', invoice_required: true, invoice_status: 'pending' } });
   const invoiceConflictBefore = await markPaidRollbackSnapshot(invoiceConflict);
-  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', invoiceConflict.withdrawal.id)}`, { label: 'POST mark-paid L45 invoice unverified conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-invoice-conflict` } });
+  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', invoiceConflict.withdrawal.id)}`, { label: 'POST mark-paid L45 invoice unverified conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: await l45MarkPaidBody(invoiceConflict.withdrawal.id, 'invoice-conflict') });
   await assertMarkPaidRollback('invoice unverified', invoiceConflict, invoiceConflictBefore);
   const commissionConflict = await createWithdrawalFixture('a', 'mark-commission-conflict', 1520);
   await prisma.withdrawal.update({ where: { id: commissionConflict.withdrawal.id }, data: { tax_mode: 'none', tax_status: 'completed', tax_amount_cents: 0, payable_amount_cents: 1520 } });
   await prisma.commission.updateMany({ where: { withdrawal_id: commissionConflict.withdrawal.id }, data: { status: 'available' } });
   const commissionConflictBefore = await markPaidRollbackSnapshot(commissionConflict);
-  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', commissionConflict.withdrawal.id)}`, { label: 'POST mark-paid L45 commission conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: { manual_reference: `${runId}-commission-conflict` } });
+  await request<ErrorApiResponse>(markPaidContract.method, `${markPaidContract.path.replace(':id', commissionConflict.withdrawal.id)}`, { label: 'POST mark-paid L45 commission conflict', headers: { ...financeAHeaders, 'content-type': 'application/json' }, expectedStatus: 409, body: await l45MarkPaidBody(commissionConflict.withdrawal.id, 'commission-conflict') });
   await assertMarkPaidRollback('commission mismatch', commissionConflict, commissionConflictBefore);
   console.log('l45_mark_paid_conflict_409=true');
   console.log('l45_mark_paid_rollback_verified=true');
@@ -1062,7 +1088,7 @@ async function runL45TaxReviewScenario() {
   const paidReplayEventBefore = await prisma.businessEventLog.count({ where: { withdrawal_id: fixtureD.withdrawal.id, event_type: 'withdrawal_tax_reviewed' } });
   const terminalCommissionBeforePaid = await prisma.commission.findUniqueOrThrow({ where: { id: fixtureD.commission.id } });
   assert(terminalCommissionBeforePaid.status === 'withdrawing' && terminalCommissionBeforePaid.withdrawal_id === fixtureD.withdrawal.id && await prisma.withdrawalCommission.count({ where: { withdrawal_id: fixtureD.withdrawal.id, commission_id: fixtureD.commission.id } }) === 1, 'L45 terminal replay fixture must maintain Commission.withdrawal_id and WithdrawalCommission before mark-paid');
-  await request(markPaidContract.method, `${markPaidContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST mark-paid L45 terminal replay fixture', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: { manual_reference: `${runId}-terminal-paid` } });
+  await request(markPaidContract.method, `${markPaidContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST mark-paid L45 terminal replay fixture', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: await l45MarkPaidBody(fixtureD.withdrawal.id, 'terminal-paid') });
   const replayK1AfterPaid = await request<{ idempotent?: boolean }>(taxReviewContract.method, `${taxReviewContract.path.replace(':id', fixtureD.withdrawal.id)}`, { label: 'POST tax-review L45 replay K1 after paid', headers: { ...financeAHeaders, 'content-type': 'application/json' }, body: k1 });
   const afterPaidReplay = await prisma.withdrawal.findUniqueOrThrow({ where: { id: fixtureD.withdrawal.id } });
   assert(replayK1AfterPaid.idempotent === true && afterPaidReplay.status === 'paid' && afterPaidReplay.tax_amount_cents === 100 && afterPaidReplay.payable_amount_cents === 1200, 'L45 paid terminal same-key replay must be idempotent without state rollback');
