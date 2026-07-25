@@ -56,6 +56,7 @@ function assertTemplateMarker(fn: string, marker: string) {
 
 const schema = read('prisma/schema.prisma');
 const route = read('apps/api/src/routes/withdrawals.ts');
+const executor = read('apps/api/src/modules/withdrawal/admin-withdrawal-executor.ts');
 const e2e = read('scripts/verify-docker-api-e2e-local.ts');
 const mini = read('apps/miniapp/pages/leader/withdrawals/index.js');
 const admin = [
@@ -68,7 +69,7 @@ assert(schema.includes('model WithdrawalCommission'), 'WithdrawalCommission mode
 assert(schema.includes('commission_links') && schema.includes('withdrawal_links'), 'Withdrawal/Commission relation arrays exist');
 assert(existsSync('prisma/migrations/20260714000200_l44_withdrawal_commission_links/migration.sql'), 'WithdrawalCommission follow-up migration exists');
 
-for (const required of ['getCommissionAvailableNet', 'persistLedgerMismatch', 'withdrawal_ledger_mismatch', 'PrismaClientKnownRequestError', 'P2002', 'withdrawalCommission.createMany', 'skipDuplicates', 'updateMany({ where: { id, status: "pending"', 'updateMany({ where: { id, status: "approved"', 'requireWithdrawalDataScope']) {
+for (const required of ['getCommissionAvailableNet', 'persistLedgerMismatch', 'withdrawal_ledger_mismatch', 'PrismaClientKnownRequestError', 'P2002', 'withdrawalCommission.createMany', 'skipDuplicates', 'executeReliableWithdrawal', 'requireWithdrawalDataScope']) {
   assert(route.includes(required), `route includes ${required}`);
 }
 assert(route.includes('import { withCurrentLeader } from "./current-user-route.js"'), 'Leader withdrawal routes must import shared current-leader wrapper');
@@ -116,23 +117,18 @@ assert(adminWithdrawalDetailRoute.includes('adminAuditLog.findMany'), 'Admin wit
 
 const approveRoute = routeBlock(route, 'post', '/api/admin/withdrawals/:id/approve');
 assert(approveRoute.includes('requireAdminPermission("withdrawal.manage")'), 'Approve route must require withdrawal.manage');
-assert(approveRoute.includes('requireWithdrawalDataScope(id, request)'), 'Approve route must enforce data scope');
-assert(approveRoute.includes('updateMany({ where: { id, status: "pending"'), 'Approve route must conditionally claim pending status');
-assert(approveRoute.includes('idempotent: true'), 'Approve route must be idempotent for already-approved state');
+assert(approveRoute.includes('executeReliableWithdrawal(request, reply, "approve")'), 'Approve route must use reliable command executor');
 
 const rejectRoute = routeBlock(route, 'post', '/api/admin/withdrawals/:id/reject');
 assert(rejectRoute.includes('requireAdminPermission("withdrawal.manage")'), 'Reject route must require withdrawal.manage');
-assert(rejectRoute.includes('requireWithdrawalDataScope(id, request)'), 'Reject route must enforce data scope');
-assert(rejectRoute.includes('updateMany({ where: { id, status: "pending"'), 'Reject route must conditionally claim pending status');
-assert(rejectRoute.includes('withdrawal_rejected_restore'), 'Reject route must restore reserved ledger balance once');
-assert(rejectRoute.includes('withdrawalCommission') || rejectRoute.includes('getWithdrawalLinks'), 'Reject route must use persistent links');
+assert(rejectRoute.includes('executeReliableWithdrawal(request, reply, "reject")'), 'Reject route must use reliable command executor');
 
 const markPaidRoute = routeBlock(route, 'post', '/api/admin/withdrawals/:id/mark-paid');
 assert(markPaidRoute.includes('requireAdminPermission("withdrawal.manage")'), 'Mark-paid route must require withdrawal.manage');
-assert(markPaidRoute.includes('requireWithdrawalDataScope(id, request)'), 'Mark-paid route must enforce data scope');
-assert(markPaidRoute.includes('updateMany({ where: { id, status: "approved"'), 'Mark-paid route must conditionally claim approved status');
-assert(markPaidRoute.includes('withdrawal_paid'), 'Mark-paid route must write paid audit ledger');
-assert(markPaidRoute.includes('affects_available_balance: false'), 'Mark-paid ledger must not affect available balance');
+assert(markPaidRoute.includes('executeReliableWithdrawal(request, reply, "mark-paid")'), 'Mark-paid route must use reliable command executor');
+for (const required of ['assertScope(initial)', 'tx.adminCommandReceipt.create', 'version: input.command.expected_version', 'withdrawal_rejected_restore', 'withdrawal_paid', 'affects_available_balance: input.action === \'reject\'']) {
+  assert(executor.includes(required), `Reliable withdrawal executor includes ${required}`);
+}
 
 assert(route.includes('reply.code((error as { statusCode?: number }).statusCode ?? 400)'), 'Admin route catches preserve status codes');
 assert(route.includes('commission_links') && route.includes('linksInScope'), 'admin list/detail use persistent links for data scope');
