@@ -40,28 +40,42 @@ export function getWithdrawalDetail(
 
 export function approveWithdrawal(
   id: string,
+  expectedVersion: number,
+  idempotencyKey: string,
   remark: string,
   request: JsonRequester = adminJsonRequest,
 ): Promise<void> {
   return request<void>(`/api/admin/withdrawals/${id}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ remark }),
+    body: JSON.stringify({
+      expected_version: expectedVersion,
+      idempotency_key: idempotencyKey,
+      admin_remark: remark,
+    }),
   });
 }
 
 export function rejectWithdrawal(
   id: string,
-  reason: string,
+  expectedVersion: number,
+  idempotencyKey: string,
+  remark: string,
   request: JsonRequester = adminJsonRequest,
 ): Promise<void> {
   return request<void>(`/api/admin/withdrawals/${id}/reject`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({
+      expected_version: expectedVersion,
+      idempotency_key: idempotencyKey,
+      admin_remark: remark,
+    }),
   });
 }
 
 export function markWithdrawalPaid(
   id: string,
+  expectedVersion: number,
+  idempotencyKey: string,
   manualReference: string,
   remark: string,
   request: JsonRequester = adminJsonRequest,
@@ -69,8 +83,10 @@ export function markWithdrawalPaid(
   return request<void>(`/api/admin/withdrawals/${id}/mark-paid`, {
     method: 'POST',
     body: JSON.stringify({
+      expected_version: expectedVersion,
+      idempotency_key: idempotencyKey,
       manual_reference: manualReference,
-      remark,
+      admin_remark: remark,
     }),
   });
 }
