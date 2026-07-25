@@ -58,7 +58,7 @@ const schema = read('prisma/schema.prisma');
 const route = read('apps/api/src/routes/withdrawals.ts');
 const e2e = read('scripts/verify-docker-api-e2e-local.ts');
 const mini = read('apps/miniapp/pages/leader/withdrawals/index.js');
-const admin = read('apps/admin/src/pages/withdrawals/WithdrawalReviewPage.tsx');
+const admin = read('apps/admin/src/features/finance/withdrawals/WithdrawalsPage.tsx');
 
 assert(schema.includes('model WithdrawalCommission'), 'WithdrawalCommission model exists');
 assert(schema.includes('commission_links') && schema.includes('withdrawal_links'), 'Withdrawal/Commission relation arrays exist');
