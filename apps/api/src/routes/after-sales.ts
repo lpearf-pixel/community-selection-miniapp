@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok } from '@community-selection/shared';
+import { contractFail, contractOk, fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedOrderWhere, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedOrderWhere, hasAdminPermission, requireAdminPermission, requireAdminPermissionV1, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
+import { parseAdminRefundCommand } from '../modules/refund/admin-refund-command.js';
+import { AdminRefundCommandError, executeAdminRefundCommand } from '../modules/refund/admin-refund-executor.js';
 import {
   addAfterSaleNote,
   cancelAfterSaleCase,
@@ -60,12 +62,12 @@ function maskAddress(address?: string | null) { return address ? `${address.slic
 function toAdminAfterSale(item: any) {
   const order = item.order;
   return {
-    id: item.id, after_sale_case_id: item.id, order_id: item.order_id, order_no: order?.order_no ?? null, type: item.type, status: item.status, reason: item.reason, description: item.description,
+    id: item.id, after_sale_case_id: item.id, order_id: item.order_id, order_no: order?.order_no ?? null, type: item.type, status: item.status, resolution_type: item.resolution_type, reason: item.reason, description: item.description,
     requested_refund_cents: item.requested_refund_cents ?? 0, requested_product_refund_cents: item.requested_product_refund_cents ?? 0, requested_delivery_refund_cents: item.requested_delivery_refund_cents ?? 0,
     approved_refund_cents: item.approved_refund_cents ?? 0, approved_product_refund_cents: item.approved_product_refund_cents ?? 0, approved_delivery_refund_cents: item.approved_delivery_refund_cents ?? 0,
     responsibility: item.responsibility, admin_note: item.admin_note, reviewed_at: item.reviewed_at, resolved_at: item.resolved_at, created_at: item.created_at,
     handler: item.reviewed_by_admin ? { id: item.reviewed_by_admin.id, username: item.reviewed_by_admin.username } : null,
-    order: order ? { order_id: order.id, order_no: order.order_no, product_amount_cents: order.product_amount_cents ?? order.total_amount_cents, delivery_fee_cents: order.delivery_fee_cents ?? 0, pay_amount_cents: order.pay_amount_cents, refund_amount_cents: order.refund_amount_cents, product_refund_amount_cents: order.product_refund_amount_cents, delivery_refund_amount_cents: order.delivery_refund_amount_cents, remaining_refundable_amount_cents: Math.max(0, order.pay_amount_cents - order.refund_amount_cents), pickup_type: order.pickup_type, pickup_store_id: order.pickup_store_id, community_id: order.community_id, receiver_name: order.receiver_name, receiver_phone_masked: maskPhone(order.receiver_phone), receiver_address_masked: maskAddress(order.receiver_address), pay_status: order.pay_status, order_status: order.order_status } : null,
+    order: order ? { order_id: order.id, order_no: order.order_no, version: order.version, product_amount_cents: order.product_amount_cents ?? order.total_amount_cents, delivery_fee_cents: order.delivery_fee_cents ?? 0, pay_amount_cents: order.pay_amount_cents, refund_amount_cents: order.refund_amount_cents, product_refund_amount_cents: order.product_refund_amount_cents, delivery_refund_amount_cents: order.delivery_refund_amount_cents, remaining_refundable_amount_cents: Math.max(0, order.pay_amount_cents - order.refund_amount_cents), pickup_type: order.pickup_type, pickup_store_id: order.pickup_store_id, community_id: order.community_id, receiver_name: order.receiver_name, receiver_phone_masked: maskPhone(order.receiver_phone), receiver_address_masked: maskAddress(order.receiver_address), pay_status: order.pay_status, order_status: order.order_status } : null,
     product: item.product ? { product_id: item.product.id, name: item.product.name, price_cents: item.product.price_cents } : null,
     logs: (item.logs ?? []).map((log: any) => ({ id: log.id, action: log.action, actor_type: log.actor_type, actor_id: log.actor_id, note: log.note, created_at: log.created_at }))
   };
@@ -141,6 +143,93 @@ export function registerPublicAfterSaleRoutes(app: FastifyInstance) {
 }
 
 export function registerAdminAfterSaleRoutes(app: FastifyInstance) {
+  app.post(
+    '/api/admin/after-sales/:id/refund-execute',
+    {
+      config: { adminContractV1: true },
+      preHandler: requireAdminPermissionV1([
+        'after_sale.manage',
+        'refund.manage',
+      ]),
+    },
+    async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: '管理员身份无效',
+          traceId,
+        });
+      }
+      if (
+        !['after_sale.manage', 'refund.manage'].every((permission) =>
+          hasAdminPermission(context, permission as 'after_sale.manage' | 'refund.manage'),
+        )
+      ) {
+        reply.code(403);
+        return contractFail({
+          code: 'ADMIN_FORBIDDEN',
+          message: '当前管理员无此操作权限',
+          traceId,
+        });
+      }
+      const parsed = parseAdminRefundCommand(request.body);
+      if (!parsed.ok) {
+        reply.code(400);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
+      }
+      const { id } = request.params as { id: string };
+      try {
+        const result = await executeAdminRefundCommand({
+          after_sale_case_id: id,
+          command: parsed.value,
+          context,
+          admin_meta: {
+            ip_address: request.ip,
+            user_agent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+        });
+        return contractOk(result, {
+          code: 'ADMIN_REFUND_EXECUTED',
+          message: '退款执行成功',
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AdminRefundCommandError) {
+          reply.code(error.statusCode);
+          return contractFail({
+            code: error.code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name: error instanceof Error ? error.name : 'UnknownError',
+            after_sale_case_id: id,
+            trace_id: traceId,
+          },
+          'Admin refund execution failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_REFUND_EXECUTION_FAILED',
+          message: '退款执行失败',
+          traceId,
+        });
+      }
+    },
+  );
+
   app.get('/api/admin/after-sales', { preHandler: requireAdminPermission('after_sale.manage') }, async (request, reply) => {
     const query = request.query as AdminListQuery;
     const context = resolveAdminAccessContext(request);

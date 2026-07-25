@@ -1,0 +1,166 @@
+name: L50 C2 T3A Refund Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - .github/workflows/l50-c2-t3a-refund-gate.yml
+      - apps/api/src/modules/refund/**
+      - apps/api/src/services/refund-service.ts
+      - apps/api/src/modules/after-sale/after-sale-service.ts
+      - apps/api/src/routes/after-sales.ts
+      - apps/api/src/routes/refunds.ts
+      - apps/api/src/routes/admin-refund-route.integration.test.ts
+      - apps/api/test/l4-routes.test.ts
+      - apps/admin/src/features/sales/after-sales/**
+      - scripts/admin-e2e/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l50-c2-t3a-refund-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    runs-on: self-hosted
+    timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
+      MOCK_WECHAT_PAY: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Build API workspace dependencies
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+      - name: Verify refund command contract
+        run: |
+          node --test \
+            scripts/admin-e2e/contract.test.cjs \
+            scripts/admin-e2e/l50-c2-refund-source-contract.test.cjs
+          pnpm --filter @community-selection/api test -- \
+            src/modules/refund/admin-refund-command.test.ts \
+            src/modules/refund/admin-refund-executor.test.ts \
+            src/modules/after-sale/after-sale-service.test.ts
+          pnpm --filter @community-selection/admin test -- \
+            src/features/sales/after-sales
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+      - name: Prepare PostgreSQL
+        run: |
+          pnpm db:generate
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Verify refund executor on PostgreSQL
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/refund/admin-refund-executor.integration.test.ts \
+            src/routes/admin-refund-route.test.ts \
+            src/modules/order/admin-pickup-verification-executor.integration.test.ts
+      - name: Verify API types
+        run: |
+          pnpm --filter @community-selection/api typecheck
+          pnpm --filter @community-selection/admin typecheck
+
+      - name: Reset focused PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans
+
+      - name: Verify real Admin browser
+        run: |
+          pnpm setup:admin:e2e
+          pnpm e2e:admin
+
+      - name: Start baseline audit PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Collect baseline audit
+        run: |
+          pnpm exec tsx scripts/verify-baseline-audit-local.ts \
+            --report-only \
+            --output-dir=artifacts/verification-baseline
+
+      - name: Reset PostgreSQL for full release gate
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Verify all
+        run: pnpm verify:all
+
+      - name: Publish audit summary
+        if: always()
+        run: |
+          if [[ -f artifacts/verification-baseline/summary.md ]]; then
+            cat artifacts/verification-baseline/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l50-c2-t3a-baseline-${{ github.sha }}
+          path: artifacts/verification-baseline
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Package source snapshot for continuation
+        if: always()
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude='**/node_modules' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='reports' \
+            -czf /tmp/l50-c2-t3a-source.tgz .
+      - name: Upload source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l50-c2-t3a-source-${{ github.sha }}
+          path: /tmp/l50-c2-t3a-source.tgz
+          retention-days: 1
+          if-no-files-found: error
+      - name: Cleanup PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
+          docker compose \
+            -p community-selection-c2t3a-audit-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
+          node scripts/admin-e2e/cleanup-resources.cjs "${GITHUB_RUN_ID}" || true

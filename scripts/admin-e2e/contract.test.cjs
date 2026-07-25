@@ -283,6 +283,13 @@ function assertA32SmokeContract(smoke) {
         },
       },
       {
+        receiver: 'context',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/after-sales/*/refund-execute',
+        },
+      },
+      {
         receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
@@ -308,13 +315,14 @@ function assertA32SmokeContract(smoke) {
         },
       },
     ],
-    'route registration whitelist: five failure interceptors plus three real command proxies',
+    'route registration whitelist: five failure interceptors plus four real command proxies',
   );
   const [
     catalogRegistration,
     statusRaceRegistration,
     pickupRaceRegistration,
     pickupConflictRaceRegistration,
+    refundRaceRegistration,
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
@@ -334,6 +342,11 @@ function assertA32SmokeContract(smoke) {
     pickupConflictRaceRegistration.handler,
     'pickupRaceRoute',
     'route registration whitelist: conflict page uses the named real proxy',
+  );
+  assert.equal(
+    refundRaceRegistration.handler,
+    'refundRaceRoute',
+    'route registration whitelist: refund race uses the named real proxy',
   );
   assert.equal(
     purchasePlanRegistration.target.value,
@@ -896,6 +909,13 @@ function assertA33SmokeContract(smoke) {
         },
       },
       {
+        receiver: 'context',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/after-sales/*/refund-execute',
+        },
+      },
+      {
         receiver: 'page',
         target: { kind: 'string', value: '**/api/admin/orders*' },
       },
@@ -921,9 +941,9 @@ function assertA33SmokeContract(smoke) {
         },
       },
     ],
-    'A3.3 route registration whitelist: five failure interceptors plus three real command proxies',
+    'A3.3 route registration whitelist: five failure interceptors plus four real command proxies',
   );
-  const purchasePlanRegistration = routeRegistrations[5];
+  const purchasePlanRegistration = routeRegistrations[6];
   assert.ok(
     purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
       purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
@@ -1416,8 +1436,8 @@ function assertB3OmnichannelOrdersContract(
   );
   assert.match(
     fixture,
-    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: \{ in: \[orderNo, pickupOrderNo\] \} \},\s*\}\);/,
-    'B3 E2E must remove both run-isolated orders during cleanup',
+    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: \{ in: \[orderNo, pickupOrderNo, refundOrderNo\] \} \},\s*\}\);/,
+    'B3 E2E must remove all run-isolated orders during cleanup',
   );
   assert.match(
     orderFilters,
@@ -1453,12 +1473,12 @@ function assertB3OmnichannelOrdersContract(
         /const orderFilter = page\.getByRole\('form', \{\s*name: '全渠道订单筛选',\s*\}\);/,
       ],
       [
-        'keyword from real order',
-        /const firstOrderNo = initialOrdersEnvelope\.data\.items\[0\]\.order_no;/,
+        'delivery order selected by deterministic identity',
+        /const deliveryOrder = initialOrdersEnvelope\.data\.items\.find\(\s*\(item\) => item\.order_no === credentials\.orderNo,\s*\);\s*assert\.ok\(deliveryOrder\);/,
       ],
       [
         'keyword input',
-        /await orderFilter\.getByLabel\('订单关键词'\)\.fill\(firstOrderNo\);/,
+        /await orderFilter\.getByLabel\('订单关键词'\)\.fill\(deliveryOrder\.order_no\);/,
       ],
       [
         'real filtered request',

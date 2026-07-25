@@ -151,6 +151,7 @@ const runtimeFiles = [
 ];
 const runtimeSource = runtimeFiles.map(read).join('\n');
 excludesAllText('runtime source', runtimeSource, ['parent_'+'leader_id', 'up'+'line_id', 'team_'+'id', 'wx.request'+'Payment', 'autoPayout', 'autoTax', 'axios.post', 'fetch("https://api.mch.weixin.qq.com', "fetch('https://api.mch.weixin.qq.com"]);
-assert(read('apps/api/src/routes/refunds.ts').includes('implemented: false'), 'Historical wechat refund apply placeholder must remain non-implemented');
-assert(read('apps/api/src/routes/refunds.ts').includes('reply.code(501)'), 'Historical wechat refund notify placeholder must not process orders');
+const refundRoutes = read('apps/api/src/routes/refunds.ts');
+assert(!refundRoutes.includes('/api/refunds/wechat/apply'), 'Public wechat refund apply route must remain retired');
+assert(refundRoutes.includes('/api/refunds/wechat/notify') && refundRoutes.includes('reply.code(501)'), 'Wechat refund notify placeholder must remain fail-closed');
 console.log('L39 delivery refund finance baseline verification passed.');

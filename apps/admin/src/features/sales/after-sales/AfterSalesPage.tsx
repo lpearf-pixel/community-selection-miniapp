@@ -22,6 +22,10 @@ import {
   reviewAfterSale,
 } from "./api";
 import type { AfterSaleCase } from "./types";
+import {
+  canExecuteApprovedRefund,
+  useRefundExecution,
+} from "./useRefundExecution";
 
 export type AfterSalesPageProps = {
   refreshVersion: number;
@@ -36,6 +40,16 @@ export function AfterSalesPage(props: AfterSalesPageProps) {
     reduceFeatureResource<AfterSaleCase[]>,
     initialFeatureResourceState<AfterSaleCase[]>(),
   );
+  const refundExecution = useRefundExecution({
+    onSuccess: () => {
+      props.onMessage("退款执行成功");
+      props.onMutationCommitted();
+    },
+    onConflictRefresh: () => {
+      props.onMessage("订单状态已变化，已刷新最新状态");
+      setRetryVersion((value) => value + 1);
+    },
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,25 +109,18 @@ export function AfterSalesPage(props: AfterSalesPageProps) {
 
   const resolve = async (item: AfterSaleCase) => {
     const resolutionType = window.prompt(
-      "请输入处理结果：refund / partial_refund / resend / compensation_note / reject / manual_note",
-      item.resolution_type ?? "partial_refund",
+      "请输入非退款处理结果：resend / compensation_note / reject / manual_note",
+      item.resolution_type ?? "manual_note",
     );
     if (!resolutionType) return;
-    const refundText =
-      resolutionType === "refund" || resolutionType === "partial_refund"
-        ? window.prompt(
-            "请输入确认退款金额（分）",
-            String(
-              item.approved_refund_cents ?? item.requested_refund_cents ?? 0,
-            ),
-          )
-        : null;
+    if (resolutionType === "refund" || resolutionType === "partial_refund") {
+      props.onMessage("退款必须通过“执行退款”操作完成");
+      return;
+    }
     const adminNote =
       window.prompt("请输入售后解决备注", "售后客服人工处理") ?? "";
     await resolveAfterSale(item.id, {
       resolution_type: resolutionType,
-      approved_refund_cents:
-        refundText === null ? undefined : Number(refundText),
       admin_note: adminNote,
     });
     props.onMessage("售后处理已完成");
@@ -126,6 +133,24 @@ export function AfterSalesPage(props: AfterSalesPageProps) {
     await addAfterSaleNote(item.id, note);
     props.onMessage("售后备注已追加");
     props.onMutationCommitted();
+  };
+
+  const executeRefund = async (item: AfterSaleCase) => {
+    const approvedTotal = formatYuan(item.approved_refund_cents ?? 0);
+    const approvedProduct = formatYuan(
+      item.approved_product_refund_cents ?? 0,
+    );
+    const approvedDelivery = formatYuan(
+      item.approved_delivery_refund_cents ?? 0,
+    );
+    const confirmed = window.confirm(
+      `确认执行已审批退款？总额 ¥${approvedTotal}（商品 ¥${approvedProduct}，配送费 ¥${approvedDelivery}）。金额不可在执行时修改。`,
+    );
+    if (!confirmed) return;
+    const adminRemark =
+      window.prompt("请输入退款执行备注", "执行已审批售后退款") ?? "";
+    if (!adminRemark.trim()) return;
+    await refundExecution.execute(item, adminRemark);
   };
 
   const linkLoss = async (item: AfterSaleCase) => {
@@ -242,7 +267,20 @@ export function AfterSalesPage(props: AfterSalesPageProps) {
                   <Button onClick={() => review(item, "rejected")}>
                     审核拒绝
                   </Button>
-                  <Button onClick={() => resolve(item)}>解决</Button>
+                  {canExecuteApprovedRefund(item) ? (
+                    <Button
+                      type="primary"
+                      loading={refundExecution.isPending(item.id)}
+                      disabled={refundExecution.isPending(item.id)}
+                      onClick={() => executeRefund(item)}
+                    >
+                      执行退款
+                    </Button>
+                  ) : null}
+                  {item.resolution_type !== "refund" &&
+                  item.resolution_type !== "partial_refund" ? (
+                    <Button onClick={() => resolve(item)}>解决</Button>
+                  ) : null}
                   <Button onClick={() => addNote(item)}>追加备注</Button>
                   <Button onClick={() => linkLoss(item)}>关联损耗</Button>
                 </Space>

@@ -4,7 +4,7 @@ import { syncCommissionAfterRefund } from './commission-service.js';
 import { restoreInventoryForRefund } from '../modules/inventory/inventory-order-service.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
 
-type RefundInput = {
+export type RefundInput = {
   order_id: string;
   refund_amount_cents: number;
   product_refund_amount_cents?: number;
@@ -12,6 +12,13 @@ type RefundInput = {
   reason: string;
   client_refund_id?: string;
 };
+
+export class RefundOrderVersionConflictError extends Error {
+  constructor() {
+    super('订单已被其他操作更新，请刷新后重试');
+    this.name = 'RefundOrderVersionConflictError';
+  }
+}
 
 type NotifyInfo = {
   refund_id?: string;
@@ -113,7 +120,12 @@ async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
   return entries.reduce((sum, entry) => sum + (entry.direction === 'in' ? entry.amount_cents : -entry.amount_cents), 0);
 }
 
-async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string, notifyInfo: NotifyInfo = {}) {
+async function applyRefundSuccess(
+  tx: Prisma.TransactionClient,
+  refundId: string,
+  notifyInfo: NotifyInfo = {},
+  options: { expected_order_version?: number } = {},
+) {
   const refund = await tx.refund.findUnique({
     where: { id: refundId },
     include: { order: { include: { group_buy: true } } }
@@ -138,6 +150,12 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     return tx.refund.findUniqueOrThrow({ where: { id: refund.id } });
   }
   if (refund.status === 'rejected') throw new Error('已拒绝退款不可成功');
+  if (
+    options.expected_order_version !== undefined &&
+    refund.order.version !== options.expected_order_version
+  ) {
+    throw new RefundOrderVersionConflictError();
+  }
 
   const refundableAmount = getRefundableAmount(refund.order);
   if (refund.refund_amount_cents > refundableAmount) {
@@ -187,16 +205,36 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
     }
   });
 
-  await tx.order.update({
-    where: { id: refund.order_id },
-    data: {
-      refund_amount_cents: nextRefundAmount,
-      product_refund_amount_cents: nextProductRefundAmount,
-      delivery_refund_amount_cents: nextDeliveryRefundAmount,
-      refund_status: 'success',
-      order_status: isFullRefund ? 'refunded' : refund.order.order_status
-    }
-  });
+  const orderUpdate = {
+    refund_amount_cents: nextRefundAmount,
+    product_refund_amount_cents: nextProductRefundAmount,
+    delivery_refund_amount_cents: nextDeliveryRefundAmount,
+    refund_status: 'success' as const,
+    order_status: isFullRefund ? 'refunded' as const : refund.order.order_status,
+    ...(options.expected_order_version === undefined
+      ? {}
+      : { version: { increment: 1 } }),
+  };
+  if (options.expected_order_version === undefined) {
+    await tx.order.update({
+      where: { id: refund.order_id },
+      data: orderUpdate,
+    });
+  } else {
+    const changed = await tx.order.updateMany({
+      where: {
+        id: refund.order_id,
+        version: options.expected_order_version,
+        refund_amount_cents: refund.order.refund_amount_cents,
+        product_refund_amount_cents:
+          refund.order.product_refund_amount_cents,
+        delivery_refund_amount_cents:
+          refund.order.delivery_refund_amount_cents,
+      },
+      data: orderUpdate,
+    });
+    if (changed.count !== 1) throw new RefundOrderVersionConflictError();
+  }
 
   if (isFullRefund && !stockRestored) {
     const restoreResult = await restoreInventoryForRefund(tx, { refund_id: refund.id });
@@ -284,8 +322,11 @@ async function applyRefundSuccess(tx: Prisma.TransactionClient, refundId: string
   return updatedRefund;
 }
 
-export async function createMockRefund(input: RefundInput) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+export async function applyMockRefundInTransaction(
+  tx: Prisma.TransactionClient,
+  input: RefundInput,
+  options: { expected_order_version?: number } = {},
+) {
     if (input.client_refund_id) {
       const existing = await tx.refund.findUnique({ where: { client_refund_id: input.client_refund_id } });
       if (existing) {
@@ -303,11 +344,22 @@ export async function createMockRefund(input: RefundInput) {
           });
           throw error;
         }
-        return applyRefundSuccess(tx, existing.id, { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id } });
+        return applyRefundSuccess(
+          tx,
+          existing.id,
+          { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id } },
+          options,
+        );
       }
     }
 
     const order = await validateRefundRequest(tx, input);
+    if (
+      options.expected_order_version !== undefined &&
+      order.version !== options.expected_order_version
+    ) {
+      throw new RefundOrderVersionConflictError();
+    }
     const outRefundNo = buildOutRefundNo(order, input.client_refund_id);
     const existingOutRefund = await tx.refund.findUnique({ where: { out_refund_no: outRefundNo } });
     if (existingOutRefund) {
@@ -325,7 +377,12 @@ export async function createMockRefund(input: RefundInput) {
         });
         throw error;
       }
-      return applyRefundSuccess(tx, existingOutRefund.id, { raw_notify: { source: 'mock', out_refund_no: outRefundNo } });
+      return applyRefundSuccess(
+        tx,
+        existingOutRefund.id,
+        { raw_notify: { source: 'mock', out_refund_no: outRefundNo } },
+        options,
+      );
     }
 
     await safeRecordBusinessEvent(tx, {
@@ -354,7 +411,12 @@ export async function createMockRefund(input: RefundInput) {
       data: { refund_status: 'pending' }
     });
 
-    const success = await applyRefundSuccess(tx, refund.id, { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id ?? null } });
+    const success = await applyRefundSuccess(
+      tx,
+      refund.id,
+      { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id ?? null } },
+      options,
+    );
     await safeRecordBusinessEvent(tx, {
       event_type: 'refund_mock_success',
       event_source: 'refund-service',
@@ -364,7 +426,12 @@ export async function createMockRefund(input: RefundInput) {
       after_snapshot: success
     });
     return success;
-  });
+}
+
+export async function createMockRefund(input: RefundInput) {
+  return prisma.$transaction((tx: Prisma.TransactionClient) =>
+    applyMockRefundInTransaction(tx, input),
+  );
 }
 
 export async function markRefundSuccess(refundId: string, notifyInfo: NotifyInfo = {}) {

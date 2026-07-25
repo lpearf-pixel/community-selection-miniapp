@@ -124,8 +124,8 @@ async function main() {
 
   const primary = await seedPaidOrder('primary');
   const afterSale = await json(await app.inject({ method: 'POST', url: '/api/after-sales', payload: { order_id: primary.order.id, product_id: primary.product.id, type: 'bad_quality', reason: 'L16 partial_refund 售后', requested_refund_cents: 800 } }));
-  await adminJson(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, headers: adminHeaders, payload: { status: 'approved', approved_refund_cents: 800, resolution_type: 'partial_refund', responsibility: 'supplier', admin_note: 'L16 审核' } }));
-  const resolved = await adminJson(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/resolve`, headers: adminHeaders, payload: { resolution_type: 'partial_refund', approved_refund_cents: 800, admin_note: 'L16 退款' } }));
+  const reviewed = await adminJson(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/review`, headers: adminHeaders, payload: { status: 'approved', approved_refund_cents: 800, approved_product_refund_cents: 800, resolution_type: 'partial_refund', responsibility: 'supplier', admin_note: 'L16 审核' } }));
+  const resolved = await adminJson(await app.inject({ method: 'POST', url: `/api/admin/after-sales/${afterSale.id}/refund-execute`, headers: adminHeaders, payload: { expected_version: reviewed.order.version, idempotency_key: `${prefix}-refund-execute`, admin_remark: 'L16 退款' } }));
   assert(resolved.refund_id, 'partial_refund should create refund');
 
   const overview = await adminJson(await app.inject({ method: 'GET', url: '/api/admin/finance/reconciliation/overview', headers: adminHeaders }));
