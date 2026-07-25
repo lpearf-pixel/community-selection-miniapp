@@ -5,7 +5,11 @@ export type AfterSaleCase = {
   group_buy_id?: string | null;
   product_id?: string | null;
   product?: { name: string } | null;
-  order?: { order_no: string; user?: { nickname: string } | null } | null;
+  order?: {
+    order_no: string;
+    version: number;
+    user?: { nickname: string } | null;
+  } | null;
   type: string;
   status: string;
   resolution_type?: string | null;
@@ -13,10 +17,20 @@ export type AfterSaleCase = {
   description?: string | null;
   requested_refund_cents?: number | null;
   approved_refund_cents?: number | null;
+  approved_product_refund_cents?: number | null;
+  approved_delivery_refund_cents?: number | null;
   evidence_image_urls?: string[] | null;
   responsibility?: string | null;
   admin_note?: string | null;
   created_at: string;
+};
+
+export type AfterSaleRefundExecutionResult = {
+  after_sale_case_id: string;
+  order_id: string;
+  refund_id: string;
+  order_version: number;
+  replayed: boolean;
 };
 
 export type AfterSaleReviewInput = {

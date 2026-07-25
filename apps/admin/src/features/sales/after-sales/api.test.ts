@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { JsonRequester } from '../../../shared/api/client';
 import {
   addAfterSaleNote,
+  executeAfterSaleRefund,
   linkAfterSaleLoss,
   loadAfterSales,
   resolveAfterSale,
@@ -16,6 +17,33 @@ describe('after-sales API boundary', () => {
 
     expect(request).toHaveBeenCalledWith('/api/admin/after-sales', {
       signal: undefined,
+    });
+  });
+
+  it('executes an approved refund without accepting client-supplied amounts', async () => {
+    const request = vi.fn(async <T>(): Promise<T> => ({
+      after_sale_case_id: 'a1',
+      order_id: 'o1',
+      refund_id: 'r1',
+      order_version: 8,
+      replayed: false,
+    }) as T) as JsonRequester;
+
+    await executeAfterSaleRefund(
+      'a1',
+      7,
+      'admin-refund-attempt-12345678',
+      '执行已审批退款',
+      request,
+    );
+
+    expect(request).toHaveBeenCalledWith('/api/admin/after-sales/a1/refund/execute', {
+      method: 'POST',
+      body: JSON.stringify({
+        expected_version: 7,
+        idempotency_key: 'admin-refund-attempt-12345678',
+        admin_remark: '执行已审批退款',
+      }),
     });
   });
 
