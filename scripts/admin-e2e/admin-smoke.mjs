@@ -1150,7 +1150,8 @@ try {
   );
   await refundConflictPage.close();
 
-  const primaryBusinessRefreshes = 1;
+  await page.waitForLoadState('networkidle');
+  const primaryBusinessRefreshes = 2;
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
