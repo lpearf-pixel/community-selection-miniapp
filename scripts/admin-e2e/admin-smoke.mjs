@@ -433,9 +433,64 @@ try {
   assert.equal(filteredOrder.version, 1);
 
   const fixtureRow = page
-    .getByRole('row')
-    .filter({ hasText: credentials.orderNo });
-  const orderRequestsBeforeStatusRace = orderRequestCount;
+    .locator(`tr[data-row-key="${credentials.orderId}"]`)
+    .first();
+  await fixtureRow.waitFor();
+  const deliveryRow = fixtureRow;
+  assert.equal(
+    await deliveryRow
+      .getByRole('button', { name: '核销自提', exact: true })
+      .count(),
+    0,
+  );
+
+  const openStatusRacePage = async () => {
+    const statusPage = await context.newPage();
+    await statusPage.goto(baseURL, { waitUntil: 'networkidle' });
+    await statusPage
+      .getByText(`当前管理员：${credentials.username}`)
+      .waitFor();
+    const statusNavigation = statusPage.getByRole('navigation', {
+      name: '后台功能导航',
+    });
+    await statusNavigation
+      .getByRole('button', { name: '订单管理', exact: true })
+      .click();
+    await statusPage.getByText('全渠道订单', { exact: true }).waitFor();
+    const statusFilter = statusPage.getByRole('form', {
+      name: '全渠道订单筛选',
+    });
+    await statusFilter.getByLabel('订单关键词').fill(credentials.orderNo);
+    const filteredResponse = statusPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/admin/orders' &&
+        url.searchParams.get('keyword') === credentials.orderNo &&
+        url.searchParams.get('page') === '1' &&
+        response.ok()
+      );
+    });
+    await statusFilter
+      .getByRole('button', { name: /查\s*询/ })
+      .click();
+    const envelope = await (await filteredResponse).json();
+    assert.equal(envelope.success, true);
+    assert.equal(envelope.data.items.length, 1);
+    assert.equal(envelope.data.items[0].id, credentials.orderId);
+    assert.equal(envelope.data.items[0].version, 1);
+    const row = statusPage
+      .locator(`tr[data-row-key="${credentials.orderId}"]`)
+      .first();
+    await row.waitFor();
+    const button = row.getByRole('button', {
+      name: /完\s*成/,
+    });
+    await button.waitFor();
+    return { statusPage, row, button };
+  };
+
+  const statusPrimary = await openStatusRacePage();
+  const statusConflict = await openStatusRacePage();
   const statusRaceResponses = [];
   const captureStatusRaceResponse = (response) => {
     const request = response.request();
@@ -447,7 +502,8 @@ try {
       statusRaceResponses.push(response);
     }
   };
-  page.on('response', captureStatusRaceResponse);
+  statusPrimary.statusPage.on('response', captureStatusRaceResponse);
+  statusConflict.statusPage.on('response', captureStatusRaceResponse);
 
   let releaseStatusRace;
   const statusRaceReady = new Promise((resolve) => {
@@ -458,6 +514,8 @@ try {
     settleStatusRace = { resolve, reject };
   });
   const statusRaceEntries = [];
+  let statusSuccessOwnerPage;
+  let statusConflictOwnerPage;
   const statusRaceRoute = async (route) => {
     try {
       const request = route.request();
@@ -469,6 +527,7 @@ try {
       const entry = {
         route,
         command: request.postDataJSON(),
+        ownerPage: request.frame().page(),
         response: null,
       };
       statusRaceEntries.push(entry);
@@ -488,46 +547,44 @@ try {
         );
         assert.equal(successfulEntries.length, 1);
         assert.equal(conflictingEntries.length, 1);
+        statusSuccessOwnerPage = successfulEntries[0].ownerPage;
+        statusConflictOwnerPage = conflictingEntries[0].ownerPage;
 
-        const successRefreshPromise = page.waitForResponse((response) => {
-          const url = new URL(response.url());
-          return (
-            url.pathname === '/api/admin/orders' &&
-            url.searchParams.get('keyword') === credentials.orderNo &&
-            response.ok()
-          );
-        });
+        const successRefreshPromise =
+          statusSuccessOwnerPage.waitForResponse((response) => {
+            const url = new URL(response.url());
+            return (
+              url.pathname === '/api/admin/orders' &&
+              url.searchParams.get('keyword') === credentials.orderNo &&
+              response.ok()
+            );
+          });
         await successfulEntries[0].route.fulfill({
           response: successfulEntries[0].response,
         });
-        await successRefreshPromise;
-        await waitForCount(
-          page,
-          () => orderRequestCount,
-          orderRequestsBeforeStatusRace + 1,
+        assert.equal(
+          (await successRefreshPromise).ok(),
+          true,
           'order success refresh',
         );
-        assert.equal(orderRequestCount, orderRequestsBeforeStatusRace + 1);
 
-        const conflictRefreshPromise = page.waitForResponse((response) => {
-          const url = new URL(response.url());
-          return (
-            url.pathname === '/api/admin/orders' &&
-            url.searchParams.get('keyword') === credentials.orderNo &&
-            response.ok()
-          );
-        });
+        const conflictRefreshPromise =
+          statusConflictOwnerPage.waitForResponse((response) => {
+            const url = new URL(response.url());
+            return (
+              url.pathname === '/api/admin/orders' &&
+              url.searchParams.get('keyword') === credentials.orderNo &&
+              response.ok()
+            );
+          });
         await conflictingEntries[0].route.fulfill({
           response: conflictingEntries[0].response,
         });
-        await conflictRefreshPromise;
-        await waitForCount(
-          page,
-          () => orderRequestCount,
-          orderRequestsBeforeStatusRace + 2,
+        assert.equal(
+          (await conflictRefreshPromise).ok(),
+          true,
           'order conflict refresh',
         );
-        assert.equal(orderRequestCount, orderRequestsBeforeStatusRace + 2);
         settleStatusRace.resolve();
       }
       await statusRaceFinished;
@@ -536,20 +593,22 @@ try {
       throw error;
     }
   };
-  await page.route('**/api/admin/orders/*/status', statusRaceRoute);
+  await context.route(
+    '**/api/admin/orders/*/status',
+    statusRaceRoute,
+  );
 
-  const sameVersionStatusButton = fixtureRow.getByRole('button', {
-    name: '待自提',
-    exact: true,
-  });
-  await sameVersionStatusButton.scrollIntoViewIfNeeded();
   await Promise.all([
-    sameVersionStatusButton.dispatchEvent('click'),
-    sameVersionStatusButton.dispatchEvent('click'),
+    statusPrimary.button.dispatchEvent('click'),
+    statusConflict.button.dispatchEvent('click'),
   ]);
   await statusRaceFinished;
-  await page.unroute('**/api/admin/orders/*/status', statusRaceRoute);
-  page.off('response', captureStatusRaceResponse);
+  await context.unroute(
+    '**/api/admin/orders/*/status',
+    statusRaceRoute,
+  );
+  statusPrimary.statusPage.off('response', captureStatusRaceResponse);
+  statusConflict.statusPage.off('response', captureStatusRaceResponse);
 
   await waitForCount(
     page,
@@ -559,7 +618,7 @@ try {
   );
   assert.equal(statusRaceEntries.length, 2);
   for (const entry of statusRaceEntries) {
-    assert.equal(entry.command.next_status, 'ready');
+    assert.equal(entry.command.next_status, 'completed');
     assert.equal(entry.command.expected_version, 1);
     assert.match(entry.command.idempotency_key, /^[\x21-\x7e]{16,128}$/);
   }
@@ -580,7 +639,7 @@ try {
   assert.equal(statusEnvelope.success, true);
   assert.equal(statusEnvelope.code, 'ADMIN_ORDER_STATUS_UPDATED');
   assert.equal(statusEnvelope.data.order_id, credentials.orderId);
-  assert.equal(statusEnvelope.data.order_status, 'ready');
+  assert.equal(statusEnvelope.data.order_status, 'completed');
   assert.equal(statusEnvelope.data.version, 2);
 
   const conflictResponse = statusRaceResponses.find(
@@ -590,26 +649,306 @@ try {
   const conflictEnvelope = await conflictResponse.json();
   assert.equal(conflictEnvelope.code, 'ADMIN_ORDER_VERSION_CONFLICT');
   assert.equal(typeof conflictEnvelope.trace_id, 'string');
-  await page
+  assert.ok(statusSuccessOwnerPage);
+  assert.ok(statusConflictOwnerPage);
+  await statusConflictOwnerPage
     .getByText('订单已被其他操作更新，已刷新列表，请重试', { exact: true })
     .waitFor();
-  await fixtureRow.getByText('ready', { exact: true }).waitFor();
+  await Promise.all([
+    statusPrimary.row.getByText('completed', { exact: true }).waitFor(),
+    statusConflict.row.getByText('completed', { exact: true }).waitFor(),
+  ]);
+  await Promise.all([
+    statusPrimary.statusPage.close(),
+    statusConflict.statusPage.close(),
+  ]);
+
+  await orderFilter.getByLabel('订单关键词').fill(credentials.pickupOrderNo);
+  const pickupFilteredResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/admin/orders' &&
+      url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+      url.searchParams.get('page') === '1' &&
+      response.ok()
+    );
+  });
+  await orderFilter
+    .getByRole('button', { name: /查\s*询/ })
+    .click();
+  const pickupFilteredEnvelope = await (
+    await pickupFilteredResponse
+  ).json();
+  assert.equal(pickupFilteredEnvelope.success, true);
+  assert.equal(pickupFilteredEnvelope.data.items.length, 1);
+  const pickupFilteredOrder = pickupFilteredEnvelope.data.items[0];
+  assert.equal(pickupFilteredOrder.id, credentials.pickupOrderId);
+  assert.equal(pickupFilteredOrder.version, 1);
+  assert.equal(pickupFilteredOrder.pickup_type, 'store');
+  assert.equal(pickupFilteredOrder.order_status, 'ready');
+
+  const pickupRow = page
+    .locator(`tr[data-row-key="${credentials.pickupOrderId}"]`)
+    .first();
+  const sameVersionPickupButton = pickupRow.getByRole('button', {
+    name: '核销自提',
+    exact: true,
+  });
+  assert.equal(await sameVersionPickupButton.count(), 1);
+
+  const pickupConflictPage = await context.newPage();
+  await pickupConflictPage.goto(baseURL, { waitUntil: 'networkidle' });
+  await pickupConflictPage
+    .getByText(`当前管理员：${credentials.username}`)
+    .waitFor();
+  const pickupConflictNavigation = pickupConflictPage.getByRole(
+    'navigation',
+    { name: '后台功能导航' },
+  );
+  await pickupConflictNavigation
+    .getByRole('button', { name: '订单管理', exact: true })
+    .click();
+  await pickupConflictPage
+    .getByText('全渠道订单', { exact: true })
+    .waitFor();
+  const pickupConflictFilter = pickupConflictPage.getByRole('form', {
+    name: '全渠道订单筛选',
+  });
+  await pickupConflictFilter
+    .getByLabel('订单关键词')
+    .fill(credentials.pickupOrderNo);
+  const pickupConflictFilteredResponse =
+    pickupConflictPage.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === '/api/admin/orders' &&
+        url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+        url.searchParams.get('page') === '1' &&
+        response.ok()
+      );
+    });
+  await pickupConflictFilter
+    .getByRole('button', { name: /查\s*询/ })
+    .click();
+  await pickupConflictFilteredResponse;
+  const pickupConflictRow = pickupConflictPage
+    .locator(`tr[data-row-key="${credentials.pickupOrderId}"]`)
+    .first();
+  const conflictVersionPickupButton = pickupConflictRow.getByRole('button', {
+    name: '核销自提',
+    exact: true,
+  });
+  assert.equal(await conflictVersionPickupButton.count(), 1);
+
+  const pickupRaceResponses = [];
+  const capturePickupRaceResponse = (response) => {
+    const request = response.request();
+    if (
+      new URL(response.url()).pathname ===
+        `/api/admin/orders/${credentials.pickupOrderId}/pickup-verify` &&
+      request.method() === 'POST'
+    ) {
+      pickupRaceResponses.push(response);
+    }
+  };
+  page.on('response', capturePickupRaceResponse);
+  pickupConflictPage.on('response', capturePickupRaceResponse);
+
+  let releasePickupRace;
+  const pickupRaceReady = new Promise((resolve) => {
+    releasePickupRace = resolve;
+  });
+  let settlePickupRace;
+  const pickupRaceFinished = new Promise((resolve, reject) => {
+    settlePickupRace = { resolve, reject };
+  });
+  const pickupRaceEntries = [];
+  const pickupRaceRoute = async (route) => {
+    try {
+      const request = route.request();
+      assert.equal(request.method(), 'POST');
+      assert.equal(
+        new URL(request.url()).pathname,
+        `/api/admin/orders/${credentials.pickupOrderId}/pickup-verify`,
+      );
+      const entry = {
+        route,
+        command: request.postDataJSON(),
+        ownerPage: request.frame().page(),
+        response: null,
+      };
+      pickupRaceEntries.push(entry);
+      assert.ok(pickupRaceEntries.length <= 2);
+      if (pickupRaceEntries.length === 2) {
+        releasePickupRace();
+      }
+      await pickupRaceReady;
+      entry.response = await route.fetch();
+
+      if (pickupRaceEntries.every((candidate) => candidate.response !== null)) {
+        const successfulEntries = pickupRaceEntries.filter(
+          (candidate) => candidate.response.status() === 200,
+        );
+        const conflictingEntries = pickupRaceEntries.filter(
+          (candidate) => candidate.response.status() === 409,
+        );
+        assert.equal(successfulEntries.length, 1);
+        assert.equal(conflictingEntries.length, 1);
+
+        const successRefreshPromise =
+          successfulEntries[0].ownerPage.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === '/api/admin/orders' &&
+            url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+            response.ok()
+          );
+        });
+        await successfulEntries[0].route.fulfill({
+          response: successfulEntries[0].response,
+        });
+        const successRefreshResponse = await successRefreshPromise;
+        assert.equal(
+          successRefreshResponse.ok(),
+          true,
+          'pickup success refresh',
+        );
+
+        const conflictRefreshPromise =
+          conflictingEntries[0].ownerPage.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === '/api/admin/orders' &&
+            url.searchParams.get('keyword') === credentials.pickupOrderNo &&
+            response.ok()
+          );
+        });
+        await conflictingEntries[0].route.fulfill({
+          response: conflictingEntries[0].response,
+        });
+        const conflictRefreshResponse = await conflictRefreshPromise;
+        assert.equal(
+          conflictRefreshResponse.ok(),
+          true,
+          'pickup conflict refresh',
+        );
+        settlePickupRace.resolve();
+      }
+      await pickupRaceFinished;
+    } catch (error) {
+      settlePickupRace.reject(error);
+      throw error;
+    }
+  };
+  await page.route('**/api/admin/orders/*/pickup-verify', pickupRaceRoute);
+  await pickupConflictPage.route(
+    '**/api/admin/orders/*/pickup-verify',
+    pickupRaceRoute,
+  );
+
+  await Promise.all([
+    sameVersionPickupButton.dispatchEvent('click'),
+    conflictVersionPickupButton.dispatchEvent('click'),
+  ]);
+  await pickupRaceFinished;
+  await page.unroute(
+    '**/api/admin/orders/*/pickup-verify',
+    pickupRaceRoute,
+  );
+  await pickupConflictPage.unroute(
+    '**/api/admin/orders/*/pickup-verify',
+    pickupRaceRoute,
+  );
+  page.off('response', capturePickupRaceResponse);
+  pickupConflictPage.off('response', capturePickupRaceResponse);
+
+  await waitForCount(
+    page,
+    () => pickupRaceResponses.length,
+    2,
+    'same-version pickup responses',
+  );
+  assert.equal(pickupRaceEntries.length, 2);
+  for (const entry of pickupRaceEntries) {
+    assert.equal(entry.command.expected_version, 1);
+    assert.match(
+      entry.command.idempotency_key,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    assert.equal(entry.command.admin_remark, '后台核销自提');
+  }
+  assert.notEqual(
+    pickupRaceEntries[0].command.idempotency_key,
+    pickupRaceEntries[1].command.idempotency_key,
+  );
+  const pickupRaceCodes = pickupRaceResponses
+    .map((response) => response.status())
+    .sort((left, right) => left - right);
+  assert.deepEqual(pickupRaceCodes, [200, 409]);
+
+  const pickupResponse = pickupRaceResponses.find(
+    (response) => response.status() === 200,
+  );
+  assert.ok(pickupResponse);
+  const pickupEnvelope = await pickupResponse.json();
+  assert.equal(pickupEnvelope.success, true);
+  assert.equal(pickupEnvelope.code, 'ADMIN_PICKUP_VERIFIED');
+  assert.equal(pickupEnvelope.data.order_id, credentials.pickupOrderId);
+  assert.equal(pickupEnvelope.data.order_status, 'picked');
+  assert.equal(pickupEnvelope.data.version, 2);
+
+  const pickupConflictResponse = pickupRaceResponses.find(
+    (response) => response.status() === 409,
+  );
+  assert.ok(pickupConflictResponse);
+  const pickupConflictEnvelope = await pickupConflictResponse.json();
+  assert.equal(
+    pickupConflictEnvelope.code,
+    'ADMIN_PICKUP_STATE_CONFLICT',
+  );
+  assert.equal(typeof pickupConflictEnvelope.trace_id, 'string');
+  const pickupConflictEntry = pickupRaceEntries.find(
+    (entry) => entry.response?.status() === 409,
+  );
+  assert.ok(pickupConflictEntry);
+  await pickupConflictEntry.ownerPage
+    .getByText('订单已被其他操作更新，已刷新列表，请重试', {
+      exact: true,
+    })
+    .waitFor();
+  await page
+    .locator(`tr[data-row-key=\"${credentials.pickupOrderId}\"]`)
+    .first()
+    .getByText('picked', { exact: true })
+    .waitFor();
   await page.waitForLoadState('networkidle');
+  await pickupConflictPage.close();
+
+  const primaryBusinessRefreshes = 1;
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
-    inventory: a33RequestsAfterInitial.inventory + 1,
-    purchasePlans: a33RequestsAfterInitial.purchasePlans + 1,
-    suppliers: a33RequestsAfterInitial.suppliers + 1,
-    batches: a33RequestsAfterInitial.batches + 1,
-    expiryAlerts: a33RequestsAfterInitial.expiryAlerts + 1,
-    stockChecks: a33RequestsAfterInitial.stockChecks + 1,
+    inventory:
+      a33RequestsAfterInitial.inventory + primaryBusinessRefreshes,
+    purchasePlans:
+      a33RequestsAfterInitial.purchasePlans + primaryBusinessRefreshes,
+    suppliers:
+      a33RequestsAfterInitial.suppliers + primaryBusinessRefreshes,
+    batches:
+      a33RequestsAfterInitial.batches + primaryBusinessRefreshes,
+    expiryAlerts:
+      a33RequestsAfterInitial.expiryAlerts + primaryBusinessRefreshes,
+    stockChecks:
+      a33RequestsAfterInitial.stockChecks + primaryBusinessRefreshes,
   });
   const a34RequestsAfterOrderMutation = readA34RequestCounts();
   assert.deepEqual(a34RequestsAfterOrderMutation, {
-    withdrawals: a34RequestsAfterInitial.withdrawals + 1,
-    alerts: a34RequestsAfterInitial.alerts + 1,
-    taxReview: a34RequestsAfterInitial.taxReview + 1,
+    withdrawals:
+      a34RequestsAfterInitial.withdrawals + primaryBusinessRefreshes,
+    alerts:
+      a34RequestsAfterInitial.alerts + primaryBusinessRefreshes,
+    taxReview:
+      a34RequestsAfterInitial.taxReview + primaryBusinessRefreshes,
   });
 
   const orderFailureRoute = async (route) => {

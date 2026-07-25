@@ -40,6 +40,7 @@ describe('Admin order status command contract', () => {
     [],
     {},
     { next_status: 'paid', expected_version: 1, idempotency_key: 'idem-123456789012' },
+    { next_status: 'picked', expected_version: 1, idempotency_key: 'idem-123456789012' },
     { next_status: 'ready', expected_version: 0, idempotency_key: 'idem-123456789012' },
     { next_status: 'ready', expected_version: 1.5, idempotency_key: 'idem-123456789012' },
     { next_status: 'ready', expected_version: 1, idempotency_key: 'short' },

@@ -112,7 +112,7 @@ async function main() {
     assert(updated.order_status === nextStatus, `order should move to ${nextStatus}`);
     currentOrder = updated;
   }
-  const picked = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { admin_remark: 'L14.5 模块边界核销' }, adminCookie);
+  const picked = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { expected_version: currentOrder.version, idempotency_key: `${prefix}-pickup`, admin_remark: 'L14.5 模块边界核销' }, adminCookie);
   assert(picked.order_status === 'picked', 'pickup verify should mark order picked');
   assert(await prisma.orderTimelineLog.count({ where: { order_id: order.id, event_type: 'pickup_verified' } }) > 0, 'pickup should write timeline');
   assert(await prisma.businessEventLog.count({ where: { order_id: order.id, event_type: 'pickup_verified' } }) > 0, 'pickup should write business event');

@@ -13,6 +13,7 @@ describe('orders page structure', () => {
     expect(page).toContain("from './OrdersFilters'");
     expect(page).toContain("from './OrdersTable'");
     expect(page).toContain("from './OrderDetailsCard'");
+    expect(page).toContain("from './usePickupVerification'");
     expect(page).not.toContain('<Form');
     expect(page).not.toContain('columns={[');
     expect(page).not.toContain('OrderTimelineLog 时间线');
@@ -27,6 +28,9 @@ describe('orders page structure', () => {
     );
     expect(source('./OrderDetailsCard.tsx')).toContain(
       'export function OrderDetailsCard',
+    );
+    expect(source('./usePickupVerification.ts')).toContain(
+      'export function usePickupVerification',
     );
   });
 });

@@ -74,19 +74,28 @@ async function main() {
   const summaryCsv = await adminGet('/api/admin/orders/export/picking.csv?format=summary', adminCookie);
   assert(summaryCsv.statusCode === 200 && summaryCsv.body.includes('total_quantity'), 'summary csv should export quantity summary');
 
-  const picked = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { admin_remark: '用户已自提' }, adminCookie);
+  const pickupCommand = {
+    expected_version: ready.version,
+    idempotency_key: `${prefix}-pickup`,
+    admin_remark: '用户已自提',
+  };
+  const picked = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, pickupCommand, adminCookie);
   assert(picked.order_status === 'picked', 'ready order should become picked');
-  const pickedAgain = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, { admin_remark: '重复核销' }, adminCookie);
-  assert(pickedAgain.order_status === 'picked', 'picked order should be idempotent');
+  const pickedAgain = await adminPost(`/api/admin/orders/${order.id}/pickup-verify`, pickupCommand, adminCookie);
+  assert(pickedAgain.order_status === 'picked', 'same pickup command should replay idempotently');
 
   const closedOrder = await prisma.order.create({ data: { order_no: `${prefix}-closed`, user_id: user.id, leader_user_id: leader.id, group_buy_id: groupBuy.id, total_amount_cents: 100, pay_amount_cents: 100, quantity: 1, receiver_name: '李四', receiver_phone: '13912345678', order_status: 'closed', pay_status: 'closed' } });
   const closedVerify = await app.inject({
     method: 'POST',
     url: `/api/admin/orders/${closedOrder.id}/pickup-verify`,
-    payload: { admin_remark: '不可核销' },
+    payload: {
+      expected_version: closedOrder.version,
+      idempotency_key: `${prefix}-closed-pickup`,
+      admin_remark: '不可核销',
+    },
     headers: { cookie: adminCookie },
   });
-  assert(closedVerify.statusCode === 400, 'closed order should not pickup-verify');
+  assert(closedVerify.statusCode === 409, 'closed order should not pickup-verify');
 
   const [timeline, businessEvent, auditLog] = await Promise.all([
     prisma.orderTimelineLog.findFirst({ where: { order_id: order.id, event_type: 'pickup_verified' } }),

@@ -72,6 +72,8 @@ verifyNoRawComplianceTerms();
 const files = [
   'apps/api/src/modules/admin-access/admin-access-control.ts',
   'apps/api/src/routes/admin/pickup.ts',
+  'apps/api/src/routes/admin/orders.ts',
+  'apps/api/src/modules/order/admin-pickup-verification-executor.ts',
   'apps/api/src/routes/admin/delivery.ts',
   'apps/api/src/modules/delivery/delivery-service.ts',
   'apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx',
@@ -97,7 +99,10 @@ assert(JSON.stringify(headerScope.pickup_store_ids) === JSON.stringify(['ps-1', 
 assert(!headerScope.can_access_all_pickup_stores && !headerScope.can_access_all_communities, 'header_mock scope must not become full access automatically');
 
 const pickup = read('apps/api/src/routes/admin/pickup.ts');
-includesAll(pickup, ["requireAdminPermission('pickup.verify')",'data_scope','pickup_store_id','by-code scope 检查','verify scope 检查','summary scope 过滤'], 'pickup route');
+includesAll(pickup, ["requireAdminPermission('pickup.verify')",'data_scope','pickup_store_id','by-code scope 检查','summary scope 过滤'], 'pickup read route');
+const pickupVerification = read('apps/api/src/routes/admin/orders.ts')
+  + read('apps/api/src/modules/order/admin-pickup-verification-executor.ts');
+includesAll(pickupVerification, ["requireAdminPermissionV1('pickup.verify')",'resolveAdminAccessContext','canAccessOrderDataScope','assertOrderScope','ADMIN_FORBIDDEN','replayReceipt'], 'pickup verification command');
 
 const delivery = read('apps/api/src/routes/admin/delivery.ts') + read('apps/api/src/modules/delivery/delivery-service.ts');
 includesAll(delivery, ['requireAdminPermission','scope 检查','pickup_store_id 过滤','community_id 过滤','detail scope 检查','reserve scope 检查','status scope 检查'], 'delivery route/service');

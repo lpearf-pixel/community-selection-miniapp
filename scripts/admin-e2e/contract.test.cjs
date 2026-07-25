@@ -60,7 +60,8 @@ function registeredRoutes(source) {
       ts.isPropertyAccessExpression(node.expression) &&
       ts.isIdentifier(node.expression.expression) &&
       (node.expression.expression.text === 'page' ||
-        node.expression.expression.text === 'context') &&
+        node.expression.expression.text === 'context' ||
+        node.expression.expression.text === 'pickupConflictPage') &&
       node.expression.name.text === 'route'
     ) {
       const [target, handler] = node.arguments;
@@ -261,10 +262,24 @@ function assertA32SmokeContract(smoke) {
         target: { kind: 'string', value: '**/api/categories' },
       },
       {
-        receiver: 'page',
+        receiver: 'context',
         target: {
           kind: 'string',
           value: '**/api/admin/orders/*/status',
+        },
+      },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
+        },
+      },
+      {
+        receiver: 'pickupConflictPage',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
         },
       },
       {
@@ -293,11 +308,13 @@ function assertA32SmokeContract(smoke) {
         },
       },
     ],
-    'route registration whitelist: five failure interceptors plus one real status proxy',
+    'route registration whitelist: five failure interceptors plus three real command proxies',
   );
   const [
     catalogRegistration,
     statusRaceRegistration,
+    pickupRaceRegistration,
+    pickupConflictRaceRegistration,
     orderRegistration,
     purchasePlanRegistration,
     operationsRegistration,
@@ -307,6 +324,16 @@ function assertA32SmokeContract(smoke) {
     statusRaceRegistration.handler,
     'statusRaceRoute',
     'route registration whitelist: status race uses the named real proxy',
+  );
+  assert.equal(
+    pickupRaceRegistration.handler,
+    'pickupRaceRoute',
+    'route registration whitelist: pickup race uses the named real proxy',
+  );
+  assert.equal(
+    pickupConflictRaceRegistration.handler,
+    'pickupRaceRoute',
+    'route registration whitelist: conflict page uses the named real proxy',
   );
   assert.equal(
     purchasePlanRegistration.target.value,
@@ -848,10 +875,24 @@ function assertA33SmokeContract(smoke) {
         target: { kind: 'string', value: '**/api/categories' },
       },
       {
-        receiver: 'page',
+        receiver: 'context',
         target: {
           kind: 'string',
           value: '**/api/admin/orders/*/status',
+        },
+      },
+      {
+        receiver: 'page',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
+        },
+      },
+      {
+        receiver: 'pickupConflictPage',
+        target: {
+          kind: 'string',
+          value: '**/api/admin/orders/*/pickup-verify',
         },
       },
       {
@@ -880,9 +921,9 @@ function assertA33SmokeContract(smoke) {
         },
       },
     ],
-    'A3.3 route registration whitelist: five failure interceptors plus one real status proxy',
+    'A3.3 route registration whitelist: five failure interceptors plus three real command proxies',
   );
-  const purchasePlanRegistration = routeRegistrations[3];
+  const purchasePlanRegistration = routeRegistrations[5];
   assert.ok(
     purchasePlanRegistration.start >= purchaseFailureSetupRange.start &&
       purchasePlanRegistration.end <= purchaseFailureSetupRange.end,
@@ -1360,13 +1401,23 @@ function assertB3OmnichannelOrdersContract(
 ) {
   assert.match(
     fixture,
-    /await prisma\.order\.upsert\(\{[\s\S]*order_no: 'L50-B3-E2E-ORDER'/,
-    'B3 E2E must create a deterministic real order in the fresh database',
+    /const runSuffix = String\(\s*process\.env\.ADMIN_E2E_RUN_ID \?\? process\.env\.GITHUB_RUN_ID/,
+    'B3 E2E fixture identity must be deterministic within one isolated run',
   );
   assert.match(
     fixture,
-    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: 'L50-B3-E2E-ORDER' \},\s*\}\);/,
-    'B3 E2E must remove its deterministic order during cleanup',
+    /const pickupOrder = await prisma\.order\.create\(\{[\s\S]*?order_no: pickupOrderNo/,
+    'B3 E2E must create the store pickup order in the fresh database',
+  );
+  assert.match(
+    fixture,
+    /const order = await prisma\.order\.create\(\{[\s\S]*?order_no: orderNo/,
+    'B3 E2E must create the delivery order in the fresh database',
+  );
+  assert.match(
+    fixture,
+    /await prisma\.order\.deleteMany\(\{\s*where: \{ order_no: \{ in: \[orderNo, pickupOrderNo\] \} \},\s*\}\);/,
+    'B3 E2E must remove both run-isolated orders during cleanup',
   );
   assert.match(
     orderFilters,

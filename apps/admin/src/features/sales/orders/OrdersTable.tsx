@@ -11,6 +11,7 @@ export type OrdersTableProps = {
   onLoadContext: (order: AdminOrderListItem) => void;
   onMarkOrder: (order: AdminOrderListItem, nextStatus: string) => void;
   onVerifyPickup: (order: AdminOrderListItem) => void;
+  pendingPickupOrderIds: ReadonlySet<string>;
 };
 
 export function OrdersTable(props: OrdersTableProps) {
@@ -92,12 +93,15 @@ export function OrdersTable(props: OrdersTableProps) {
               <Button onClick={() => props.onMarkOrder(order, 'ready')}>
                 待自提
               </Button>
-              <Button onClick={() => props.onVerifyPickup(order)}>
-                核销自提
-              </Button>
-              <Button onClick={() => props.onMarkOrder(order, 'picked')}>
-                已自提
-              </Button>
+              {order.pickup_type === 'store' &&
+              order.order_status === 'ready' ? (
+                <Button
+                  disabled={props.pendingPickupOrderIds.has(order.id)}
+                  onClick={() => props.onVerifyPickup(order)}
+                >
+                  核销自提
+                </Button>
+              ) : null}
               <Button
                 onClick={() => props.onMarkOrder(order, 'completed')}
               >

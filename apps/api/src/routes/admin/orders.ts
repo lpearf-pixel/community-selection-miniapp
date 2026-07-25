@@ -32,6 +32,13 @@ import {
   AdminOrderCommandError,
   executeAdminOrderStatusCommand,
 } from '../../modules/order/admin-order-status-executor.js';
+import {
+  parseAdminPickupVerificationCommand,
+} from '../../modules/order/admin-pickup-verification-command.js';
+import {
+  AdminPickupVerificationError,
+  executeAdminPickupVerificationCommand,
+} from '../../modules/order/admin-pickup-verification-executor.js';
 
 function maskPhone(phone?: string | null) {
   return phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : null;
@@ -118,7 +125,108 @@ function adminOrderStatusV1ErrorHandler(
   );
 }
 
+function adminPickupVerificationV1ErrorHandler(
+  error: FastifyError,
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const invalidCommand = error.statusCode === 400;
+  request.log.error(
+    {
+      error_name: error.name,
+      trace_id: String(request.id),
+    },
+    'Admin pickup verification request failed before handler',
+  );
+  reply.code(invalidCommand ? 400 : 500).send(
+    contractFail({
+      code: invalidCommand
+        ? 'INVALID_ADMIN_PICKUP_VERIFY_COMMAND'
+        : 'ADMIN_PICKUP_VERIFY_FAILED',
+      message: invalidCommand
+        ? '自提核销命令不合法'
+        : '自提核销失败',
+      traceId: String(request.id),
+    }),
+  );
+}
+
 export function registerAdminOrderRoutes(app: FastifyInstance) {
+  app.post(
+    '/api/admin/orders/:id/pickup-verify',
+    {
+      config: { adminContractV1: true },
+      preHandler: requireAdminPermissionV1('pickup.verify'),
+      errorHandler: adminPickupVerificationV1ErrorHandler,
+    },
+    async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: '管理员身份无效',
+          traceId,
+        });
+      }
+
+      const { id } = request.params as { id: string };
+      const parsed = parseAdminPickupVerificationCommand(request.body);
+      if (!parsed.ok) {
+        reply.code(400);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
+      }
+
+      try {
+        const result = await executeAdminPickupVerificationCommand({
+          order_id: id,
+          command: parsed.value,
+          context,
+          admin_meta: {
+            ip_address: request.ip,
+            user_agent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+        });
+        return contractOk(result, {
+          code: 'ADMIN_PICKUP_VERIFIED',
+          message: '自提核销成功',
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AdminPickupVerificationError) {
+          reply.code(error.statusCode);
+          return contractFail({
+            code: error.code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name: error instanceof Error ? error.name : 'UnknownError',
+            order_id: id,
+            trace_id: traceId,
+          },
+          'Admin pickup verification failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_PICKUP_VERIFY_FAILED',
+          message: '自提核销失败',
+          traceId,
+        });
+      }
+    },
+  );
+
   app.post(
     '/api/admin/orders/:id/status',
     {

@@ -7,7 +7,6 @@ const IDEMPOTENCY_KEY = /^[\x20-\x7e]{16,128}$/;
 const fulfillmentStatuses = new Set<OrderStatus>([
   OrderStatus.preparing,
   OrderStatus.ready,
-  OrderStatus.picked,
   OrderStatus.delivered,
   OrderStatus.completed,
 ]);
@@ -16,7 +15,6 @@ export type AdminOrderStatusCommand = {
   next_status:
     | 'preparing'
     | 'ready'
-    | 'picked'
     | 'delivered'
     | 'completed';
   expected_version: number;

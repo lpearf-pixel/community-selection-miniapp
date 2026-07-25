@@ -136,7 +136,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe.sequential('Admin order export and legacy pickup data scope', () => {
+describe.sequential('Admin order export and pickup data scope', () => {
   it('returns 403 when export scope is empty', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -170,7 +170,11 @@ describe.sequential('Admin order export and legacy pickup data scope', () => {
       method: 'POST',
       url: `/api/admin/orders/${inScopeOrderId}/pickup-verify`,
       headers: headers('operator', inScopeCommunityId),
-      payload: { admin_remark: 'must not commit' },
+      payload: {
+        expected_version: 1,
+        idempotency_key: 'aux-pickup-permission',
+        admin_remark: 'must not commit',
+      },
     });
 
     expect(response.statusCode).toBe(403);
@@ -183,13 +187,18 @@ describe.sequential('Admin order export and legacy pickup data scope', () => {
       method: 'POST',
       url: `/api/admin/orders/${inScopeOrderId}/pickup-verify`,
       headers: headers('store_manager', outOfScopeCommunityId),
-      payload: { admin_remark: 'must not commit' },
+      payload: {
+        expected_version: 1,
+        idempotency_key: 'aux-pickup-scope-01',
+        admin_remark: 'must not commit',
+      },
     });
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({
       success: false,
-      message: expect.stringContaining('ADMIN_SCOPE_FORBIDDEN'),
+      code: 'ADMIN_FORBIDDEN',
+      trace_id: expect.any(String),
     });
     expect(await mutationSnapshot(inScopeOrderId)).toEqual(before);
   });

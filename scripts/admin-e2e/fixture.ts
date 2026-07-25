@@ -3,19 +3,23 @@ import { resolve } from 'node:path';
 import { prisma } from '../../apps/api/src/db.js';
 import { hashPassword } from '../../apps/api/src/services/admin-auth-service.js';
 
-const username = 'l50_e2e_admin';
+const runSuffix = String(
+  process.env.ADMIN_E2E_RUN_ID ?? process.env.GITHUB_RUN_ID ?? 'local',
+).replace(/[^a-zA-Z0-9_-]/g, '-');
+const username = `l50_e2e_admin_${runSuffix}`;
 const password = 'L50-E2E-StrongPassword-123';
 const fixturePath = resolve('scripts/admin-e2e/.fixture.json');
-const orderNo = 'L50-B3-E2E-ORDER';
-const customerOpenid = 'l50-b3-e2e-customer';
-const categoryName = 'L50-B3 E2E 分类';
-const productName = 'L50-B3 E2E 商品';
-const communityName = 'L50-B3 E2E 社区';
-const pickupStoreId = 'l50-b3-e2e-pickup-store';
+const orderNo = `L50-C2-T2-${runSuffix}-DELIVERY`;
+const pickupOrderNo = `L50-C2-T2-${runSuffix}-PICKUP`;
+const customerOpenid = `l50-c2-t2-${runSuffix}-customer`;
+const categoryName = `L50-C2-T2 ${runSuffix} 分类`;
+const productName = `L50-C2-T2 ${runSuffix} 商品`;
+const communityName = `L50-C2-T2 ${runSuffix} 社区`;
+const pickupStoreId = `l50-c2-t2-${runSuffix}-pickup-store`;
 
 async function cleanup() {
   const orders = await prisma.order.findMany({
-    where: { order_no: orderNo },
+    where: { order_no: { in: [orderNo, pickupOrderNo] } },
     select: { id: true },
   });
   const orderIds = orders.map((order) => order.id);
@@ -33,7 +37,7 @@ async function cleanup() {
       where: { order_id: { in: orderIds } },
     });
     await prisma.order.deleteMany({
-      where: { order_no: 'L50-B3-E2E-ORDER' },
+      where: { order_no: { in: [orderNo, pickupOrderNo] } },
     });
   }
   await prisma.product.deleteMany({ where: { name: productName } });
@@ -66,7 +70,7 @@ async function setup() {
   const customer = await prisma.user.create({
     data: {
       openid: customerOpenid,
-      nickname: 'B3 浏览器测试用户',
+      nickname: 'C2-T2 浏览器测试用户',
       phone: '13812348000',
       role: 'customer',
       status: 'active',
@@ -85,7 +89,7 @@ async function setup() {
       category_id: category.id,
       cover_image: '/images/products/placeholder.png',
       images: [],
-      description: 'L50-B3 全渠道订单浏览器测试商品',
+      description: 'L50-C2-T2 自提核销浏览器测试商品',
       price_cents: 2590,
       cost_price_cents: 1800,
       stock: 20,
@@ -106,37 +110,42 @@ async function setup() {
       status: 'active',
     },
   });
-  await prisma.pickupStore.create({
+  const pickupStore = await prisma.pickupStore.create({
     data: {
       id: pickupStoreId,
-      name: 'L50-B3 E2E 自提点',
+      name: `L50-C2-T2 ${runSuffix} 自提点`,
       address: '测试路 101 号',
       phone: '021-88886666',
       status: 'active',
     },
   });
-  const order = await prisma.order.upsert({
-    where: { order_no: 'L50-B3-E2E-ORDER' },
-    update: {
+
+  const fixtureTime = Date.now();
+  const pickupOrder = await prisma.order.create({
+    data: {
+      order_no: pickupOrderNo,
       user_id: customer.id,
       product_id: product.id,
-      community_id: community.id,
+      pickup_store_id: pickupStore.id,
       total_amount_cents: 2590,
       product_amount_cents: 2590,
       pay_amount_cents: 2590,
       quantity: 1,
       pay_status: 'paid',
-      order_status: 'paid',
+      order_status: 'ready',
       version: 1,
       refund_status: 'none',
-      pickup_type: 'delivery',
+      pickup_type: 'store',
       receiver_name: '浏览器测试用户',
       receiver_phone: '13812348000',
-      receiver_address: '测试市测试区测试路 100 号',
-      paid_at: new Date(),
+      receiver_address: null,
+      created_at: new Date(fixtureTime - 1_000),
+      paid_at: new Date(fixtureTime - 2_000),
     },
-    create: {
-      order_no: 'L50-B3-E2E-ORDER',
+  });
+  const order = await prisma.order.create({
+    data: {
+      order_no: orderNo,
       user_id: customer.id,
       product_id: product.id,
       community_id: community.id,
@@ -145,14 +154,15 @@ async function setup() {
       pay_amount_cents: 2590,
       quantity: 1,
       pay_status: 'paid',
-      order_status: 'paid',
+      order_status: 'ready',
       version: 1,
       refund_status: 'none',
       pickup_type: 'delivery',
       receiver_name: '浏览器测试用户',
       receiver_phone: '13812348000',
       receiver_address: '测试市测试区测试路 100 号',
-      paid_at: new Date(),
+      created_at: new Date(fixtureTime),
+      paid_at: new Date(fixtureTime - 2_000),
     },
   });
   await prisma.adminUser.create({
@@ -170,6 +180,8 @@ async function setup() {
       password,
       orderId: order.id,
       orderNo: order.order_no,
+      pickupOrderId: pickupOrder.id,
+      pickupOrderNo: pickupOrder.order_no,
     }),
     { mode: 0o600 },
   );

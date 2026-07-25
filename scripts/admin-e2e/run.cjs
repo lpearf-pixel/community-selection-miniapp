@@ -8,6 +8,7 @@ const databaseHost = process.env.ADMIN_E2E_DB_HOST
   ?? (existsSync('/.dockerenv') ? 'host.docker.internal' : '127.0.0.1');
 const env = {
   ...process.env,
+  ADMIN_E2E_RUN_ID: projectSuffix,
   DATABASE_URL: process.env.ADMIN_E2E_DATABASE_URL
     ?? `postgresql://postgres:postgres@${databaseHost}:15432/community_selection?schema=public`,
   ADMIN_AUTH_ENABLED: 'true',

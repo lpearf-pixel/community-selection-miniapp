@@ -69,7 +69,13 @@ describe('orders API boundary', () => {
       'idem-123456789012',
       request,
     );
-    await verifyOrderPickup('o1', '后台核销自提', request);
+    await verifyOrderPickup(
+      'o1',
+      3,
+      'pickup-verify-key01',
+      '后台核销自提',
+      request,
+    );
 
     expect(request).toHaveBeenCalledWith('/api/admin/logs/orders/o1/ai-context', {
       signal: undefined,
@@ -84,7 +90,11 @@ describe('orders API boundary', () => {
     });
     expect(request).toHaveBeenCalledWith('/api/admin/orders/o1/pickup-verify', {
       method: 'POST',
-      body: JSON.stringify({ admin_remark: '后台核销自提' }),
+      body: JSON.stringify({
+        expected_version: 3,
+        idempotency_key: 'pickup-verify-key01',
+        admin_remark: '后台核销自提',
+      }),
     });
     expect(getPickingExportUrl('detail')).toMatch(
       /\/api\/admin\/orders\/export\/picking\.csv\?format=detail$/,

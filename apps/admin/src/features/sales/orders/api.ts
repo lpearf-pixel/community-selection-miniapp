@@ -4,6 +4,7 @@ import type {
   AdminOrderListQuery,
   AdminOrderListResponse,
   AdminOrderStatusResult,
+  AdminPickupVerificationResult,
   AiContext,
 } from './types';
 
@@ -63,13 +64,22 @@ export function updateOrderStatus(
 
 export function verifyOrderPickup(
   orderId: string,
+  expectedVersion: number,
+  idempotencyKey: string,
   adminRemark: string,
   request: JsonRequester = adminJsonRequest,
-): Promise<void> {
-  return request<void>(`/api/admin/orders/${orderId}/pickup-verify`, {
-    method: 'POST',
-    body: JSON.stringify({ admin_remark: adminRemark }),
-  });
+): Promise<AdminPickupVerificationResult> {
+  return request<AdminPickupVerificationResult>(
+    `/api/admin/orders/${orderId}/pickup-verify`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        expected_version: expectedVersion,
+        idempotency_key: idempotencyKey,
+        admin_remark: adminRemark,
+      }),
+    },
+  );
 }
 
 export function getPickingExportUrl(format: 'summary' | 'detail'): string {

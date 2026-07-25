@@ -93,11 +93,17 @@ export type AdminOrderStatusResult = {
   order_status:
     | 'preparing'
     | 'ready'
-    | 'picked'
     | 'delivered'
     | 'completed';
   version: number;
   completed_at: string | null;
+};
+
+export type AdminPickupVerificationResult = {
+  order_id: string;
+  order_no: string;
+  order_status: 'picked';
+  version: number;
 };
 
 export type OpsAlert = {

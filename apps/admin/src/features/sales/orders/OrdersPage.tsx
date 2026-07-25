@@ -19,11 +19,11 @@ import {
   loadOrderAiContext,
   loadOrders,
   updateOrderStatus,
-  verifyOrderPickup,
 } from './api';
 import { OrderDetailsCard } from './OrderDetailsCard';
 import { OrdersFilters } from './OrdersFilters';
 import { OrdersTable } from './OrdersTable';
+import { usePickupVerification } from './usePickupVerification';
 import {
   applyOrderFilters,
   changeOrderPage,
@@ -83,11 +83,11 @@ export function OrdersPage(props: OrdersPageProps) {
     props.onMessage(`已加载订单 ${order.order_no} 全链路详情`);
   };
 
-  const pickupVerify = async (order: AdminOrderListItem) => {
-    await verifyOrderPickup(order.id, '后台核销自提');
-    props.onMessage(`订单 ${order.order_no} 已核销自提`);
-    props.onMutationCommitted();
-  };
+  const { pendingPickupOrderIds, verifyPickup } = usePickupVerification({
+    onMessage: props.onMessage,
+    onMutationCommitted: props.onMutationCommitted,
+    onConflict: () => setRetryVersion((value) => value + 1),
+  });
 
   const markOrder = async (order: AdminOrderListItem, nextStatus: string) => {
     try {
@@ -186,7 +186,8 @@ export function OrdersPage(props: OrdersPageProps) {
             }
             onLoadContext={loadOrderContext}
             onMarkOrder={markOrder}
-            onVerifyPickup={pickupVerify}
+            onVerifyPickup={verifyPickup}
+            pendingPickupOrderIds={pendingPickupOrderIds}
           />
         </Space>
       </Card>

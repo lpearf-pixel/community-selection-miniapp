@@ -233,7 +233,7 @@ describe.sequential('POST /api/admin/orders/:id/status', () => {
       headers: headers('super_admin'),
       payload: {
         ...command,
-        next_status: 'picked',
+        next_status: 'delivered',
         idempotency_key: 'route-command-key02',
       },
     });
