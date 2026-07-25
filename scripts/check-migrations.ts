@@ -1,5 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { hasUnsafeDropTable } = require('./lib/migration-sql-scan.cjs') as {
+  hasUnsafeDropTable: (sql: string) => boolean;
+};
 
 const migrationDir = join(process.cwd(), 'prisma', 'migrations');
 const entries = readdirSync(migrationDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
