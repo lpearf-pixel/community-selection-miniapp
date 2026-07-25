@@ -124,6 +124,15 @@ function allowedAttributes(raw: string, allowed: string[]) {
   const attributes = quotedAttributes(raw);
   return attributes && [...attributes.keys()].every((name) => allowed.includes(name)) ? attributes : undefined;
 }
+function controlAttributes(raw: string, semantic: string[]) {
+  const attributes = allowedAttributes(raw, [...semantic, 'class', 'data-testid']);
+  if (!attributes) return undefined;
+  const className = attributes.get('class');
+  const testId = attributes.get('data-testid');
+  if ((className !== undefined && !/^[\\w -]+$/.test(className))
+    || (testId !== undefined && !/^[\\w-]+$/.test(testId))) return undefined;
+  return attributes;
+}
 
 function verifyReadOnlyRefundMiniapp() {
   const orderDetail = ast('apps/miniapp/pages/orders/detail/index.js');
@@ -253,7 +262,7 @@ function verifyReadOnlyRefundMiniapp() {
   const expectedTextarea = new Map([['reason', ['{{reason}}', '请描述遇到的问题']], ['description', ['{{description}}', '可选']]]);
   const textareaFields: string[] = [];
   for (const textarea of textareas) {
-    const attributes = allowedAttributes(textarea[1], ['data-field', 'value', 'bindinput', 'placeholder']);
+    const attributes = controlAttributes(textarea[1], ['data-field', 'value', 'bindinput', 'placeholder']);
     const field = attributes?.get('data-field');
     const expected = field && expectedTextarea.get(field);
     if (!attributes || !field || !expected || attributes.get('value') !== expected[0]
@@ -264,10 +273,10 @@ function verifyReadOnlyRefundMiniapp() {
   }
   if (textareas.length !== 2 || textareaFields.sort().join(',') !== 'description,reason') failures.push('after-sale page must contain only the reason and description textareas');
   const buttons = [...wxml.matchAll(/<button\b([^>]*)>/gi)];
-  const button = buttons.length === 1 ? allowedAttributes(buttons[0][1], ['type', 'loading', 'bindtap', 'disabled']) : undefined;
-  const disabled = button?.get('disabled');
-  if (!button || button.get('type') !== 'primary' || button.get('loading') !== '{{submitting}}'
-    || button.get('bindtap') !== 'submit' || (disabled !== undefined && disabled !== '{{!can_submit || submitting || loading}}')) {
+  const button = buttons.length === 1 ? controlAttributes(buttons[0][1], ['type', 'loading', 'bindtap', 'disabled']) : undefined;
+  const type = button?.get('type');
+  if (!button || (type !== undefined && type !== 'primary') || button.get('loading') !== '{{submitting}}'
+    || button.get('bindtap') !== 'submit' || button.get('disabled') !== '{{!can_submit || submitting || loading}}') {
     failures.push('after-sale page must contain exactly one approved submit button');
   }
   const events = [...wxml.matchAll(/\b((?:bind|catch|capture-bind:|capture-catch:)[\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)]
