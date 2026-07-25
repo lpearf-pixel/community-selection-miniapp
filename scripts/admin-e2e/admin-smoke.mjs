@@ -1152,6 +1152,42 @@ try {
 
   await page.waitForLoadState('networkidle');
   const primaryBusinessRefreshes = 2;
+  await waitForCount(
+    page,
+    () => inventoryOverviewRequestCount,
+    a33RequestsAfterInitial.inventory + primaryBusinessRefreshes,
+    'inventory post-mutation refresh',
+  );
+  await waitForCount(
+    page,
+    () => purchasePlanRequestCount,
+    a33RequestsAfterInitial.purchasePlans + primaryBusinessRefreshes,
+    'purchase-plan post-mutation refresh',
+  );
+  await waitForCount(
+    page,
+    () => supplierRequestCount,
+    a33RequestsAfterInitial.suppliers + primaryBusinessRefreshes,
+    'supplier post-mutation refresh',
+  );
+  await waitForCount(
+    page,
+    () => batchRequestCount,
+    a33RequestsAfterInitial.batches + primaryBusinessRefreshes,
+    'batch post-mutation refresh',
+  );
+  await waitForCount(
+    page,
+    () => expiryAlertRequestCount,
+    a33RequestsAfterInitial.expiryAlerts + primaryBusinessRefreshes,
+    'expiry-alert post-mutation refresh',
+  );
+  await waitForCount(
+    page,
+    () => stockCheckRequestCount,
+    a33RequestsAfterInitial.stockChecks + primaryBusinessRefreshes,
+    'stock-check post-mutation refresh',
+  );
 
   const a33RequestsAfterOrderMutation = readA33RequestCounts();
   assert.deepEqual(a33RequestsAfterOrderMutation, {
