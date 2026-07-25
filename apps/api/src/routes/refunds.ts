@@ -1,18 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { buildOutRefundNo, createMockRefund, validateRefundRequest } from '../services/refund-service.js';
-
-type MockRefundBody = {
-  order_id?: string;
-  refund_amount_cents?: number;
-  product_refund_amount_cents?: number;
-  delivery_refund_amount_cents?: number;
-  reason?: string;
-  client_refund_id?: string;
-};
-
-type WechatRefundApplyBody = MockRefundBody;
 
 function isMockRefundEnabled(): boolean {
   if (process.env.MOCK_WECHAT_PAY === 'true') return true;
@@ -31,21 +19,6 @@ function assertWechatRefundConfig() {
   ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) throw new Error(`缺少微信退款配置：${missing.join(',')}`);
-}
-
-function parseMockRefundBody(body: MockRefundBody) {
-  if (!body.order_id || !body.reason) throw new Error('缺少退款必填字段');
-  if (!body.client_refund_id) throw new Error('缺少退款幂等键');
-  const refundAmount = Number(body.refund_amount_cents);
-  if (!Number.isInteger(refundAmount) || refundAmount <= 0) throw new Error('退款金额必须大于 0');
-  return {
-    order_id: body.order_id,
-    refund_amount_cents: refundAmount,
-    product_refund_amount_cents: body.product_refund_amount_cents,
-    delivery_refund_amount_cents: body.delivery_refund_amount_cents,
-    reason: body.reason,
-    client_refund_id: body.client_refund_id
-  };
 }
 
 export function registerRefundRoutes(app: FastifyInstance) {
@@ -82,40 +55,6 @@ export function registerRefundRoutes(app: FastifyInstance) {
       return fail('退款单不存在');
     }
     return ok(refund);
-  });
-
-  app.post('/api/refunds/mock', async (request, reply) => {
-    try {
-      return ok(await createMockRefund(parseMockRefundBody(request.body as MockRefundBody)));
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : 'MOCK 退款失败');
-    }
-  });
-
-  app.post('/api/refunds/wechat/apply', async (request, reply) => {
-    const body = request.body as WechatRefundApplyBody;
-    if (isMockRefundEnabled()) {
-      reply.code(400);
-      return fail('当前为 MOCK 支付模式，请使用 /api/refunds/mock');
-    }
-
-    try {
-      const input = parseMockRefundBody(body);
-      const order = await prisma.$transaction((tx) => validateRefundRequest(tx, input));
-      assertWechatRefundConfig();
-      return ok({
-        implemented: false,
-        message: '真实微信退款请求结构已预留，待接入微信退款 API/签名工具',
-        order_id: order.id,
-        out_refund_no: buildOutRefundNo(order, input.client_refund_id),
-        refund_amount_cents: input.refund_amount_cents,
-        notify_url: process.env.WECHAT_REFUND_NOTIFY_URL
-      });
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '微信退款申请初始化失败');
-    }
   });
 
   app.post('/api/refunds/wechat/notify', async (_request, reply) => {
