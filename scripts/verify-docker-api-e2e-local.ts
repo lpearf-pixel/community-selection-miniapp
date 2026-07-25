@@ -1326,9 +1326,9 @@ async function main() {
   const crossScopeAfterSale = await request<ErrorApiResponse>('GET', `/api/admin/after-sales/${l39AfterSaleId}`, { ...withAdmin({ label: 'GET /api/admin/after-sales/:id L40 cross pickup scope', expectedStatus: 403 }), headers: { 'x-admin-role': 'store_manager', 'x-admin-user-id': DOCKER_E2E_STORE_MANAGER_ADMIN_ID, 'x-admin-pickup-store-id': 'docker-e2e-other-store' } });
   assert(crossScopeAfterSale.message.includes('ADMIN_SCOPE_FORBIDDEN: Data scope denied'), 'Active scoped AdminUser must receive HTTP 403 for after-sale scope mismatch');
   await ensureDockerE2eFixtures(prisma);
-  await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/resolve`, withAdminJson({
-    label: 'POST /api/admin/after-sales/:id/resolve L39 split refund',
-    body: { resolution_type: 'partial_refund', approved_refund_cents: 300, approved_product_refund_cents: 100, approved_delivery_refund_cents: 200, admin_note: 'Docker API E2E L39 split refund' }
+  await request<any>('POST', `/api/admin/after-sales/${l39AfterSaleId}/refund-execute`, withAdminJson({
+    label: 'POST /api/admin/after-sales/:id/refund-execute L39 split refund',
+    body: { expected_version: l40AfterSaleDetail.order.version, idempotency_key: 'docker-e2e-l39-refund-execute', admin_remark: 'Docker API E2E L39 split refund' }
   }));
   const l40ResolvedCase = await prisma.afterSaleCase.findUnique({ where: { id: l39AfterSaleId } });
   assert(l40ResolvedCase?.reviewed_by_admin_id === DOCKER_E2E_ADMIN_ID, 'reviewed_by_admin_id must equal docker-e2e-admin');
