@@ -1,0 +1,33 @@
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+
+const root = join(__dirname, '..', '..');
+const afterSales = readFileSync(
+  join(root, 'apps/api/src/routes/after-sales.ts'),
+  'utf8',
+);
+const refunds = readFileSync(
+  join(root, 'apps/api/src/routes/refunds.ts'),
+  'utf8',
+);
+
+test('refund execution has one protected Admin write boundary', () => {
+  assert.match(
+    afterSales,
+    /\/api\/admin\/after-sales\/:id\/refund-execute/,
+  );
+  assert.match(afterSales, /requireAdminPermissionV1\(\s*\[/);
+  assert.match(afterSales, /'after_sale\.manage'/);
+  assert.match(afterSales, /'refund\.manage'/);
+  assert.match(afterSales, /parseAdminRefundCommand\(request\.body\)/);
+  assert.match(afterSales, /executeAdminRefundCommand\(/);
+});
+
+test('public refund mutations are retired while notify fails closed', () => {
+  assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/mock'/);
+  assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/wechat\/apply'/);
+  assert.match(refunds, /app\.post\('\/api\/refunds\/wechat\/notify'/);
+  assert.match(refunds, /reply\.code\(501\)/);
+});
