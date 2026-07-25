@@ -93,3 +93,10 @@ test('real Admin browser restores orders before injecting the order refresh fail
     'the primary Admin page must restore Order Management before refreshing the injected order failure',
   );
 });
+
+test('real Admin browser settles both primary mutation refreshes before counting', () => {
+  assert.match(
+    smoke,
+    /await refundConflictPage\.close\(\);\s*await page\.waitForLoadState\('networkidle'\);\s*const primaryBusinessRefreshes = 2;/,
+  );
+});
