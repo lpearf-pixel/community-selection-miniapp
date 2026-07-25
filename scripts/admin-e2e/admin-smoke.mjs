@@ -433,8 +433,11 @@ try {
   assert.equal(filteredOrder.version, 1);
 
   const fixtureRow = page
-    .getByRole('row')
-    .filter({ hasText: credentials.orderNo });
+    .locator(`tr[data-row-key="${credentials.orderId}"]`)
+    .filter({
+      has: page.getByRole('button', { name: '完成', exact: true }),
+    })
+    .first();
   const deliveryRow = fixtureRow;
   assert.equal(
     await deliveryRow
@@ -628,8 +631,11 @@ try {
   assert.equal(pickupFilteredOrder.order_status, 'ready');
 
   const pickupRow = page
-    .getByRole('row')
-    .filter({ hasText: credentials.pickupOrderNo });
+    .locator(`tr[data-row-key="${credentials.pickupOrderId}"]`)
+    .filter({
+      has: page.getByRole('button', { name: '核销自提', exact: true }),
+    })
+    .first();
   const sameVersionPickupButton = pickupRow.getByRole('button', {
     name: '核销自提',
     exact: true,
@@ -672,8 +678,14 @@ try {
     .click();
   await pickupConflictFilteredResponse;
   const pickupConflictRow = pickupConflictPage
-    .getByRole('row')
-    .filter({ hasText: credentials.pickupOrderNo });
+    .locator(`tr[data-row-key="${credentials.pickupOrderId}"]`)
+    .filter({
+      has: pickupConflictPage.getByRole('button', {
+        name: '核销自提',
+        exact: true,
+      }),
+    })
+    .first();
   const conflictVersionPickupButton = pickupConflictRow.getByRole('button', {
     name: '核销自提',
     exact: true,
