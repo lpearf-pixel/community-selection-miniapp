@@ -1102,7 +1102,7 @@ try {
     credentials.refundCaseId,
   );
   assert.equal(refundSuccessEnvelope.data.order_id, credentials.refundOrderId);
-  assert.equal(refundSuccessEnvelope.data.order_version, 2);
+  assert.equal(refundSuccessEnvelope.data.version, 2);
 
   const refundConflictResponse = refundRaceResponses.find(
     (response) => response.status() === 409,
