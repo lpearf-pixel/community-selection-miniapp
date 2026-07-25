@@ -8,7 +8,7 @@ on:
       - .github/workflows/pr105-admin-browser-diagnostic.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: pr105-admin-browser-diagnostic
@@ -36,8 +36,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Set up Admin browser
         run: pnpm setup:admin:e2e
-      - name: Capture Admin browser failure evidence
-        run: pnpm e2e:admin
+      - name: Capture Admin browser evidence
+        id: browser
+        shell: bash
+        run: |
+          set +e
+          pnpm e2e:admin 2>&1 | tee admin-e2e-diagnostic.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > admin-e2e-diagnostic.status
+          exit 0
       - name: Cleanup diagnostic resources
         if: always()
         shell: bash
@@ -46,3 +53,21 @@ jobs:
           docker compose \
             -p community-selection-admin-e2e-${GITHUB_RUN_ID} \
             -f docker-compose.yml down --volumes --remove-orphans || true
+      - name: Publish diagnostic evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .github/diagnostics
+          {
+            echo "head=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "exit_code=$(cat admin-e2e-diagnostic.status 2>/dev/null || echo 99)"
+            grep 'ADMIN_E2E_STATUS_BUTTON_DIAGNOSTIC=' admin-e2e-diagnostic.log || true
+            tail -n 100 admin-e2e-diagnostic.log || true
+          } > .github/diagnostics/pr105-admin-browser.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/diagnostics/pr105-admin-browser.txt
+          git commit -m "test(admin): publish PR 105 browser diagnostic"
+          git push origin "HEAD:refs/heads/codex/pr105-admin-browser-diagnostic-56a7d2ec"
+          test "$(cat admin-e2e-diagnostic.status)" -eq 0
