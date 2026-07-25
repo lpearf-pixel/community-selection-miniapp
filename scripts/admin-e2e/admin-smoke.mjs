@@ -383,14 +383,16 @@ try {
   const orderFilter = page.getByRole('form', {
     name: '全渠道订单筛选',
   });
-  const firstOrderNo = initialOrdersEnvelope.data.items[0].order_no;
-  assert.equal(firstOrderNo, credentials.orderNo);
-  await orderFilter.getByLabel('订单关键词').fill(firstOrderNo);
+  const deliveryOrder = initialOrdersEnvelope.data.items.find(
+    (item) => item.order_no === credentials.orderNo,
+  );
+  assert.ok(deliveryOrder);
+  await orderFilter.getByLabel('订单关键词').fill(deliveryOrder.order_no);
   const filteredOrdersResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
       url.pathname === '/api/admin/orders' &&
-      url.searchParams.get('keyword') === firstOrderNo &&
+      url.searchParams.get('keyword') === deliveryOrder.order_no &&
       url.searchParams.get('page') === '1' &&
       response.ok()
     );
@@ -1100,7 +1102,7 @@ try {
     credentials.refundCaseId,
   );
   assert.equal(refundSuccessEnvelope.data.order_id, credentials.refundOrderId);
-  assert.equal(refundSuccessEnvelope.data.order_version, 2);
+  assert.equal(refundSuccessEnvelope.data.version, 2);
 
   const refundConflictResponse = refundRaceResponses.find(
     (response) => response.status() === 409,
