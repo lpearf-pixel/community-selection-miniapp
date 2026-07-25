@@ -549,7 +549,26 @@ try {
     name: '完成',
     exact: true,
   });
-  await sameVersionStatusButton.scrollIntoViewIfNeeded();
+  try {
+    await sameVersionStatusButton.scrollIntoViewIfNeeded();
+  } catch (error) {
+    console.error(
+      `ADMIN_E2E_STATUS_BUTTON_DIAGNOSTIC=${JSON.stringify({
+        filtered_order: {
+          id: filteredOrder.id,
+          order_no: filteredOrder.order_no,
+          version: filteredOrder.version,
+          order_status: filteredOrder.order_status,
+          pickup_type: filteredOrder.pickup_type,
+        },
+        fixture_row_count: await fixtureRow.count(),
+        fixture_buttons: await fixtureRow.getByRole('button').allTextContents(),
+        table_rows: await page.getByRole('row').allTextContents(),
+        error_alerts: await page.locator('.ant-alert-error').allTextContents(),
+      })}`,
+    );
+    throw error;
+  }
   await Promise.all([
     sameVersionStatusButton.dispatchEvent('click'),
     sameVersionStatusButton.dispatchEvent('click'),
