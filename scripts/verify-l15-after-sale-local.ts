@@ -182,7 +182,7 @@ async function main() {
     url: `/api/admin/after-sales/${afterSale.id}/refund-execute`,
     headers: adminHeaders,
     payload: {
-      expected_version: reviewed.version,
+      expected_version: reviewed.order.version,
       idempotency_key: `${prefix}-refund-execute`,
       admin_remark: '售后退款已处理',
     },
@@ -190,7 +190,7 @@ async function main() {
   assert(
     refundExecution.refund_status === 'success' &&
       refundExecution.refund_amount_cents === 800 &&
-      refundExecution.version === reviewed.version + 1 &&
+      refundExecution.version === reviewed.order.version + 1 &&
       refundExecution.refund_id,
     'reliable refund command should create the approved refund and advance the order version',
   );
