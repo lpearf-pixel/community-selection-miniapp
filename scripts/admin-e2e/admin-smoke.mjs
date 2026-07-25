@@ -689,9 +689,6 @@ try {
 
   const pickupRow = page
     .locator(`tr[data-row-key="${credentials.pickupOrderId}"]`)
-    .filter({
-      has: page.getByRole('button', { name: '核销自提', exact: true }),
-    })
     .first();
   const sameVersionPickupButton = pickupRow.getByRole('button', {
     name: '核销自提',
@@ -736,12 +733,6 @@ try {
   await pickupConflictFilteredResponse;
   const pickupConflictRow = pickupConflictPage
     .locator(`tr[data-row-key="${credentials.pickupOrderId}"]`)
-    .filter({
-      has: pickupConflictPage.getByRole('button', {
-        name: '核销自提',
-        exact: true,
-      }),
-    })
     .first();
   const conflictVersionPickupButton = pickupConflictRow.getByRole('button', {
     name: '核销自提',
