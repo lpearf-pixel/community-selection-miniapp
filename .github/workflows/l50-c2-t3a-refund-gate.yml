@@ -32,6 +32,8 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=3072
       VITEST_MAX_THREADS: "2"
       VITEST_MIN_THREADS: "1"
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
+      MOCK_WECHAT_PAY: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,7 +48,30 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verify refund command contract
-        run: pnpm --filter @community-selection/api test -- src/modules/refund/admin-refund-command.test.ts
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/refund/admin-refund-command.test.ts \
+            src/modules/refund/admin-refund-executor.test.ts \
+            src/modules/after-sale/after-sale-service.test.ts
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+      - name: Prepare PostgreSQL
+        run: |
+          pnpm db:generate
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Verify refund executor on PostgreSQL
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/refund/admin-refund-executor.integration.test.ts \
+            src/modules/order/admin-pickup-verification-executor.integration.test.ts
+      - name: Verify API types
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+          pnpm --filter @community-selection/api typecheck
 
       - name: Package source snapshot for continuation
         if: always()
@@ -67,3 +92,9 @@ jobs:
           path: /tmp/l50-c2-t3a-source.tgz
           retention-days: 1
           if-no-files-found: error
+      - name: Cleanup PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-c2t3a-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
