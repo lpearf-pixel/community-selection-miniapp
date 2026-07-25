@@ -29,8 +29,14 @@ export type AfterSaleRefundExecutionResult = {
   after_sale_case_id: string;
   order_id: string;
   refund_id: string;
-  order_version: number;
-  replayed: boolean;
+  refund_status: 'success';
+  refund_amount_cents: number;
+  product_refund_amount_cents: number;
+  delivery_refund_amount_cents: number;
+  remaining_refundable_amount_cents: number;
+  order_status: string;
+  version: number;
+  execution_mode: 'mock';
 };
 
 export type AfterSaleReviewInput = {
