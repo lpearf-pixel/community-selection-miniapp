@@ -39,8 +39,11 @@ jobs:
           node-version: 20.19.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Generate Prisma client
-        run: pnpm db:generate
+      - name: Prepare L22 runtime
+        run: |
+          pnpm db:generate
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
       - name: Verify L22 semantic contract
         run: pnpm exec tsx scripts/verify-l22-miniapp-order-center-local.ts --static-only
       - name: Verify complete repository
