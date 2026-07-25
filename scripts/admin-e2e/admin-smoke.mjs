@@ -436,8 +436,9 @@ try {
     .locator(`tr[data-row-key="${credentials.orderId}"]`)
     .first();
   await fixtureRow.waitFor();
+  const deliveryRow = fixtureRow;
   assert.equal(
-    await fixtureRow
+    await deliveryRow
       .getByRole('button', { name: '核销自提', exact: true })
       .count(),
     0,
@@ -561,7 +562,11 @@ try {
         await successfulEntries[0].route.fulfill({
           response: successfulEntries[0].response,
         });
-        assert.equal((await successRefreshPromise).ok(), true);
+        assert.equal(
+          (await successRefreshPromise).ok(),
+          true,
+          'order success refresh',
+        );
 
         const conflictRefreshPromise =
           statusConflictOwnerPage.waitForResponse((response) => {
@@ -575,7 +580,11 @@ try {
         await conflictingEntries[0].route.fulfill({
           response: conflictingEntries[0].response,
         });
-        assert.equal((await conflictRefreshPromise).ok(), true);
+        assert.equal(
+          (await conflictRefreshPromise).ok(),
+          true,
+          'order conflict refresh',
+        );
         settleStatusRace.resolve();
       }
       await statusRaceFinished;
@@ -584,11 +593,7 @@ try {
       throw error;
     }
   };
-  await statusPrimary.statusPage.route(
-    '**/api/admin/orders/*/status',
-    statusRaceRoute,
-  );
-  await statusConflict.statusPage.route(
+  await context.route(
     '**/api/admin/orders/*/status',
     statusRaceRoute,
   );
@@ -598,11 +603,7 @@ try {
     statusConflict.button.dispatchEvent('click'),
   ]);
   await statusRaceFinished;
-  await statusPrimary.statusPage.unroute(
-    '**/api/admin/orders/*/status',
-    statusRaceRoute,
-  );
-  await statusConflict.statusPage.unroute(
+  await context.unroute(
     '**/api/admin/orders/*/status',
     statusRaceRoute,
   );
