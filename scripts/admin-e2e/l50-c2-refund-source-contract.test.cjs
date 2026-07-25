@@ -25,6 +25,11 @@ test('refund execution has one protected Admin write boundary', () => {
   assert.match(afterSales, /executeAdminRefundCommand\(/);
 });
 
+test('Admin after-sale list exposes reliable refund execution inputs', () => {
+  assert.match(afterSales, /resolution_type:\s*item\.resolution_type/);
+  assert.match(afterSales, /version:\s*order\.version/);
+});
+
 test('public refund mutations are retired while notify fails closed', () => {
   assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/mock'/);
   assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/wechat\/apply'/);
