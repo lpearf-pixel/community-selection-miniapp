@@ -1,0 +1,49 @@
+name: L50 C2 T3A Refund Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - .github/workflows/l50-c2-t3a-refund-gate.yml
+      - apps/api/src/modules/refund/**
+      - apps/api/src/services/refund-service.ts
+      - apps/api/src/modules/after-sale/after-sale-service.ts
+      - apps/api/src/routes/after-sales.ts
+      - apps/api/src/routes/refunds.ts
+      - apps/api/src/routes/admin-refund-route.integration.test.ts
+      - apps/api/test/l4-routes.test.ts
+      - apps/admin/src/features/sales/after-sales/**
+      - scripts/admin-e2e/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l50-c2-t3a-refund-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify refund command contract
+        run: pnpm --filter @community-selection/api test -- src/modules/refund/admin-refund-command.test.ts
