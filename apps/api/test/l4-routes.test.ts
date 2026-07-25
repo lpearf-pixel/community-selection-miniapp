@@ -35,7 +35,7 @@ describe('L4 group-buy and order routes', () => {
   });
 
 
-  it('registers L6 refund API routes', () => {
+  it('keeps L6 refund reads while retiring public refund writes', () => {
     const appSource = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
     const publicRouteIndex = readFileSync(new URL('../src/routes/public/index.ts', import.meta.url), 'utf8');
     const refundSource = readFileSync(new URL('../src/routes/refunds.ts', import.meta.url), 'utf8');
@@ -43,10 +43,11 @@ describe('L4 group-buy and order routes', () => {
     expect(publicRouteIndex.includes('registerRefundRoutes')).toBe(true);
     expect(refundSource.includes("/api/refunds'")).toBe(true);
     expect(refundSource.includes("/api/refunds/:id'")).toBe(true);
-    expect(refundSource.includes("/api/refunds/mock'")).toBe(true);
-    expect(refundSource.includes("/api/refunds/wechat/apply'")).toBe(true);
+    expect(refundSource.includes("/api/refunds/mock'")).toBe(false);
+    expect(refundSource.includes("/api/refunds/wechat/apply'")).toBe(false);
     expect(refundSource.includes("/api/refunds/wechat/notify'")).toBe(true);
-    expect(refundSource.includes('createMockRefund')).toBe(true);
+    expect(refundSource.includes('createMockRefund')).toBe(false);
+    expect(refundSource.includes('reply.code(501)')).toBe(true);
   });
 
   it('registers L7 commission API routes and service hooks', () => {
