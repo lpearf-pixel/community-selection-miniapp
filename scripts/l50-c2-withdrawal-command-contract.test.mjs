@@ -119,6 +119,9 @@ test('executor composes receipt, versioned state, reward and audit writes in one
     /version:\s*input\.command\.expected_version[\s\S]*?version:\s*\{\s*increment:\s*1\s*\}/,
   );
   assert.match(source, /tx\.commission\.updateMany\(/);
+  assert.match(source, /linkedAmount !== before\.amount_cents/);
+  assert.match(source, /tx\.rewardLedger\.aggregate\(/);
+  assert.match(source, /withdrawal_reserved/);
   assert.match(source, /appendRewardLedgerEntry\(tx,/);
   assert.match(source, /recordAdminAudit\(tx,/);
   assert.match(source, /recordBusinessEvent\(tx,/);
