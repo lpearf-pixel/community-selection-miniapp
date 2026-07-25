@@ -262,7 +262,7 @@ function assertA32SmokeContract(smoke) {
         target: { kind: 'string', value: '**/api/categories' },
       },
       {
-        receiver: 'page',
+        receiver: 'context',
         target: {
           kind: 'string',
           value: '**/api/admin/orders/*/status',
@@ -875,7 +875,7 @@ function assertA33SmokeContract(smoke) {
         target: { kind: 'string', value: '**/api/categories' },
       },
       {
-        receiver: 'page',
+        receiver: 'context',
         target: {
           kind: 'string',
           value: '**/api/admin/orders/*/status',
