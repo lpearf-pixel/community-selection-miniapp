@@ -49,6 +49,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm db:generate
+      - name: Build API workspace dependencies
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
       - name: Verify refund command contract
         run: |
           pnpm --filter @community-selection/api test -- \
@@ -70,10 +74,7 @@ jobs:
             src/modules/refund/admin-refund-executor.integration.test.ts \
             src/modules/order/admin-pickup-verification-executor.integration.test.ts
       - name: Verify API types
-        run: |
-          pnpm --filter @community-selection/shared build
-          pnpm --filter @community-selection/config build
-          pnpm --filter @community-selection/api typecheck
+        run: pnpm --filter @community-selection/api typecheck
 
       - name: Package source snapshot for continuation
         if: always()
