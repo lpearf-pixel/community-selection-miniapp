@@ -433,8 +433,8 @@ try {
   assert.equal(filteredOrder.version, 1);
 
   const fixtureRow = page
-    .getByRole('row')
-    .filter({ hasText: credentials.orderNo });
+    .locator(`tr[data-row-key="${credentials.orderId}"]`)
+    .first();
   await fixtureRow.waitFor();
   assert.equal(
     await fixtureRow
@@ -478,12 +478,11 @@ try {
     assert.equal(envelope.data.items[0].id, credentials.orderId);
     assert.equal(envelope.data.items[0].version, 1);
     const row = statusPage
-      .getByRole('row')
-      .filter({ hasText: credentials.orderNo });
+      .locator(`tr[data-row-key="${credentials.orderId}"]`)
+      .first();
     await row.waitFor();
     const button = row.getByRole('button', {
-      name: '完成',
-      exact: true,
+      name: /完\s*成/,
     });
     await button.waitFor();
     return { statusPage, row, button };
