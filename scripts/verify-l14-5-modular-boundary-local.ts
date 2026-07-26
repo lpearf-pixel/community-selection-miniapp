@@ -50,7 +50,10 @@ function assertStaticBoundaries() {
   assert(supplierService.includes('export async function disableSupplier'), 'supplier service should export disableSupplier');
 
   const inventoryRoutes = readFileSync('apps/api/src/routes/inventory.ts', 'utf8');
-  assert(inventoryRoutes.includes('adjustStockByAdmin'), 'inventory adjust route should call inventory service');
+  assert(
+    inventoryRoutes.includes('executeAdminInventoryAdjustCommand'),
+    'inventory adjust route should call the reliable command executor',
+  );
   assert(inventoryRoutes.includes('recordBatchLoss'), 'batch loss route should call inventory service');
   assert(inventoryRoutes.includes('confirmStockCheck'), 'stock check confirm route should call inventory service');
   assert(!inventoryRoutes.includes("source_type: 'manual_adjust'"), 'manual_adjust ledger logic should live outside inventory route');

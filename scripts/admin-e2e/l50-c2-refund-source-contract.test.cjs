@@ -20,6 +20,10 @@ const smoke = readFileSync(
   join(root, 'scripts/admin-e2e/admin-smoke.mjs'),
   'utf8',
 );
+const adminE2eRunner = readFileSync(
+  join(root, 'scripts/admin-e2e/run.cjs'),
+  'utf8',
+);
 const l15Verifier = readFileSync(
   join(root, 'scripts/verify-l15-after-sale-local.ts'),
   'utf8',
@@ -81,6 +85,14 @@ test('real Admin browser proves same-version refund execution is atomic', () => 
   assert.match(smoke, /refundSuccessEnvelope\.data\.version,\s*2/);
   assert.match(smoke, /assert\.equal\(refundOrderEnvelope\.data\.items\[0\]\.version,\s*2\)/);
   assert.match(smoke, /assert\.equal\(refundLedgerEnvelope\.data\.total,\s*1\)/);
+});
+
+test('real Admin browser runs the reliable refund command in explicit MOCK mode', () => {
+  assert.match(
+    adminE2eRunner,
+    /MOCK_WECHAT_PAY:\s*'true'/,
+    'the host-started API must opt into the only implemented refund provider',
+  );
 });
 
 test('real Admin browser restores orders before injecting the order refresh failure', () => {

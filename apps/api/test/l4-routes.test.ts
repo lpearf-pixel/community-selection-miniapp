@@ -172,6 +172,13 @@ describe('L4 group-buy and order routes', () => {
     const adminRouteIndex = readFileSync(new URL('../src/routes/admin/index.ts', import.meta.url), 'utf8');
     const publicRouteIndex = readFileSync(new URL('../src/routes/public/index.ts', import.meta.url), 'utf8');
     const inventoryRoutes = readFileSync(new URL('../src/routes/inventory.ts', import.meta.url), 'utf8');
+    const inventoryAdjustExecutor = readFileSync(
+      new URL(
+        '../src/modules/inventory/admin-inventory-adjust-executor.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
     const purchaseService = readFileSync(new URL('../src/modules/purchase/purchase-service.ts', import.meta.url), 'utf8');
     const supplierRoutes = readFileSync(new URL('../src/routes/suppliers.ts', import.meta.url), 'utf8');
     const supplierService = readFileSync(new URL('../src/modules/supplier/supplier-service.ts', import.meta.url), 'utf8');
@@ -189,7 +196,7 @@ describe('L4 group-buy and order routes', () => {
     expect(inventoryRoutes.includes('/api/admin/purchase-plans')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/purchase-plans/:id/confirm')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/purchase-plans/:id/receive')).toBe(true);
-    expect(inventoryRoutes.includes('inventory_manual_adjusted')).toBe(true);
+    expect(inventoryAdjustExecutor.includes('inventory_manual_adjusted')).toBe(true);
     expect(purchaseService.includes('purchase_plan_received')).toBe(true);
     expect(schema.includes('model StockLedger')).toBe(true);
     expect(schema.includes('model PurchasePlan')).toBe(true);

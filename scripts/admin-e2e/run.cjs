@@ -6,15 +6,17 @@ const projectSuffix = String(process.env.GITHUB_RUN_ID ?? process.pid).replace(/
 const compose = ['compose', '-p', `community-selection-admin-e2e-${projectSuffix}`, '-f', 'docker-compose.yml'];
 const databaseHost = process.env.ADMIN_E2E_DB_HOST
   ?? (existsSync('/.dockerenv') ? 'host.docker.internal' : '127.0.0.1');
+const postgresHostPort = process.env.POSTGRES_HOST_PORT ?? '15432';
 const env = {
   ...process.env,
   ADMIN_E2E_RUN_ID: projectSuffix,
   DATABASE_URL: process.env.ADMIN_E2E_DATABASE_URL
-    ?? `postgresql://postgres:postgres@${databaseHost}:15432/community_selection?schema=public`,
+    ?? `postgresql://postgres:postgres@${databaseHost}:${postgresHostPort}/community_selection?schema=public`,
   ADMIN_AUTH_ENABLED: 'true',
   ADMIN_AUTH_MODE: 'session',
   ADMIN_TOKEN: 'l50-e2e-admin-token',
   ADMIN_TOTP_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef',
+  MOCK_WECHAT_PAY: 'true',
   PORT: '13080',
   VITE_API_BASE_URL: '',
 };
