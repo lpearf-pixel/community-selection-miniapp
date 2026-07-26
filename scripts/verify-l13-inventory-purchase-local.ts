@@ -155,7 +155,7 @@ async function main() {
 
   const unauthorizedReceive = await app.inject({ method: 'POST', url: `/api/admin/purchase-plans/${purchasePlan.id}/receive`, payload: { items: [{ item_id: purchasePlan.items[0].id, received_quantity: 30000 }] } });
   assert(unauthorizedReceive.statusCode === 401, 'purchase plan receive should require admin session');
-  const receivedPlan = await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/receive`, { remark: '验收入库', items: [{ item_id: purchasePlan.items[0].id, received_quantity: 30000 }] }, adminCookie);
+  const receivedPlan = await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/receive`, { idempotency_key: `${prefix}-purchase-receive`, remark: '验收入库', items: [{ item_id: purchasePlan.items[0].id, received_quantity: 30000 }] }, adminCookie);
   assert(receivedPlan.status === 'received' || receivedPlan.status === 'ordered', 'purchase plan should become received or ordered');
   const afterReceiveApple = await prisma.product.findUniqueOrThrow({ where: { id: apple.id } });
   assert(afterReceiveApple.stock === 80000, 'purchase receive should increase apple stock by base units');

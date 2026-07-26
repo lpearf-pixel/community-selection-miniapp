@@ -179,7 +179,13 @@ describe('L4 group-buy and order routes', () => {
       ),
       'utf8',
     );
-    const purchaseService = readFileSync(new URL('../src/modules/purchase/purchase-service.ts', import.meta.url), 'utf8');
+    const purchaseReceiveExecutor = readFileSync(
+      new URL(
+        '../src/modules/purchase/admin-purchase-receive-executor.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
     const supplierRoutes = readFileSync(new URL('../src/routes/suppliers.ts', import.meta.url), 'utf8');
     const supplierService = readFileSync(new URL('../src/modules/supplier/supplier-service.ts', import.meta.url), 'utf8');
     const schema = readFileSync(new URL('../../../prisma/schema.prisma', import.meta.url), 'utf8');
@@ -197,7 +203,7 @@ describe('L4 group-buy and order routes', () => {
     expect(inventoryRoutes.includes('/api/admin/purchase-plans/:id/confirm')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/purchase-plans/:id/receive')).toBe(true);
     expect(inventoryAdjustExecutor.includes('inventory_manual_adjusted')).toBe(true);
-    expect(purchaseService.includes('purchase_plan_received')).toBe(true);
+    expect(purchaseReceiveExecutor.includes('purchase_plan_received')).toBe(true);
     expect(schema.includes('model StockLedger')).toBe(true);
     expect(schema.includes('model PurchasePlan')).toBe(true);
     expect(schema.includes('model PurchasePlanItem')).toBe(true);
@@ -214,7 +220,7 @@ describe('L4 group-buy and order routes', () => {
     expect(inventoryRoutes.includes('/api/admin/inventory/expiry-alerts')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/inventory/batches/:id/loss')).toBe(true);
     expect(inventoryRoutes.includes('/api/admin/stock-checks/:id/confirm')).toBe(true);
-    expect(purchaseService.includes('purchase_batch_created')).toBe(true);
+    expect(purchaseReceiveExecutor.includes('purchase_batch_created')).toBe(true);
     expect(inventoryRoutes.includes('inventory_loss_recorded')).toBe(true);
     expect(inventoryRoutes.includes('stock_check_confirmed')).toBe(true);
   });

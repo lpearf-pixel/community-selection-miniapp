@@ -16,6 +16,7 @@ import type {
 import {
   cancelPurchasePlan,
   confirmPurchasePlan,
+  createPurchaseReceiveCommand,
   createPurchasePlan,
   loadPurchasePlans,
   receivePurchasePlan,
@@ -67,7 +68,7 @@ export function PurchasePlansPage(props: PurchasePlansPageProps) {
   };
 
   const receive = async (plan: PurchasePlan) => {
-    await receivePurchasePlan(plan.id, {
+    const command = createPurchaseReceiveCommand({
       remark: '后台采购入库',
       items: plan.items.map((item) => ({
         item_id: item.id,
@@ -77,6 +78,7 @@ export function PurchasePlansPage(props: PurchasePlansPageProps) {
         ),
       })),
     });
+    await receivePurchasePlan(plan.id, command);
     props.onMessage('采购入库已完成');
     props.onMutationCommitted();
   };

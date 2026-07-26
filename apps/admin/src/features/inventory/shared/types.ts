@@ -152,10 +152,16 @@ export type CreatePurchasePlanInput = {
 };
 
 export type ReceivePurchasePlanInput = {
+  idempotency_key: string;
   remark: string;
   items: Array<{
     item_id: string;
     received_quantity: number;
+    supplier_id?: string;
+    production_date?: string;
+    arrival_date?: string;
+    shelf_life_days?: number;
+    remark?: string;
   }>;
 };
 

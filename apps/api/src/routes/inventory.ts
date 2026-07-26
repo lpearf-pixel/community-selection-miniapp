@@ -14,6 +14,8 @@ import {
   AdminInventoryAdjustCommandError,
   executeAdminInventoryAdjustCommand,
 } from '../modules/inventory/admin-inventory-adjust-executor.js';
+import { parseAdminPurchaseReceiveCommand } from '../modules/purchase/admin-purchase-receive-command.js';
+import { AdminPurchaseReceiveCommandError } from '../modules/purchase/admin-purchase-receive-executor.js';
 
 type CreatePurchasePlanBody = {
   target_date?: string;
@@ -21,7 +23,6 @@ type CreatePurchasePlanBody = {
   items?: Array<{ product_id?: string; planned_quantity?: number; cost_price_cents?: number; purchase_quantity?: number; purchase_unit?: string; stock_in_quantity?: number; remark?: string }>;
   remark?: string;
 };
-type ReceivePurchasePlanBody = { items?: Array<{ item_id?: string; received_quantity?: number; supplier_id?: string; production_date?: string; arrival_date?: string; shelf_life_days?: number; remark?: string }>; remark?: string };
 
 const lowStockThreshold = 10;
 const targetStock = 30;
@@ -240,9 +241,19 @@ export function registerInventoryRoutes(app: FastifyInstance) {
 
   app.post('/api/admin/purchase-plans/:id/receive', async (request, reply) => {
     try {
+      const admin = adminMeta(request);
+      const parsed = parseAdminPurchaseReceiveCommand(request.body);
+      if (!parsed.ok) {
+        reply.code(400);
+        return fail(parsed.message);
+      }
       const { id } = request.params as { id: string };
-      return ok(await receivePurchasePlan({ id, body: request.body as ReceivePurchasePlanBody, admin: adminMeta(request) }));
+      return ok(await receivePurchasePlan({ id, body: parsed.value, admin }));
     } catch (error) {
+      if (error instanceof AdminPurchaseReceiveCommandError) {
+        reply.code(error.statusCode);
+        return fail(error.message);
+      }
       reply.code(error instanceof Error && error.message === '后台登录已失效' ? 401 : 400);
       return fail(error instanceof Error ? error.message : '采购入库失败');
     }

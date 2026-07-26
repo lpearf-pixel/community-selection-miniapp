@@ -138,7 +138,7 @@ async function main() {
     remark: 'L14.5模块边界采购计划'
   }, adminCookie);
   await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/confirm`, {}, adminCookie);
-  await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/receive`, { remark: 'L14.5入库', items: [{ item_id: purchasePlan.items[0].id, received_quantity: 30000, supplier_id: supplier.id, arrival_date: new Date().toISOString(), shelf_life_days: 3 }] }, adminCookie);
+  await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/receive`, { idempotency_key: `${prefix}-purchase-receive`, remark: 'L14.5入库', items: [{ item_id: purchasePlan.items[0].id, received_quantity: 30000, supplier_id: supplier.id, arrival_date: new Date().toISOString(), shelf_life_days: 3 }] }, adminCookie);
   const afterReceiveProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(afterReceiveProduct.stock === 75000, 'purchase receive should add 30000 base units');
   const purchaseStockLedger = await prisma.stockLedger.findFirst({ where: { product_id: product.id, source_type: 'purchase_in', source_id: purchasePlan.id } });

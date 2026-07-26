@@ -6,6 +6,33 @@ import type {
   ReceivePurchasePlanInput,
 } from '../../inventory/shared/types';
 
+type PurchaseReceiveDraft = Omit<
+  ReceivePurchasePlanInput,
+  'idempotency_key'
+>;
+
+function defaultPurchaseReceiveKey() {
+  if (
+    typeof globalThis.crypto !== 'undefined' &&
+    typeof globalThis.crypto.randomUUID === 'function'
+  ) {
+    return `purchase-receive-${globalThis.crypto.randomUUID()}`;
+  }
+  return `purchase-receive-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
+export function createPurchaseReceiveCommand(
+  input: PurchaseReceiveDraft,
+  keyFactory: () => string = defaultPurchaseReceiveKey,
+): ReceivePurchasePlanInput {
+  return {
+    ...input,
+    idempotency_key: keyFactory(),
+  };
+}
+
 export function loadPurchasePlans(
   request: JsonRequester = adminJsonRequest,
   signal?: AbortSignal,
