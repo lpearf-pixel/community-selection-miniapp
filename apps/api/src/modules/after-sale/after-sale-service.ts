@@ -140,7 +140,6 @@ export async function recordAfterSaleLog(tx: Prisma.TransactionClient, afterSale
   });
 }
 
-
 function ensureRefundSplitWithinOrder(order: { product_amount_cents: number | null; total_amount_cents: number; delivery_fee_cents: number; product_refund_amount_cents: number; delivery_refund_amount_cents: number; pay_amount_cents: number; refund_amount_cents: number }, productRefundCents: number | null, deliveryRefundCents: number | null, totalRefundCents: number | null) {
   const totalRemaining = Math.max(0, order.pay_amount_cents - order.refund_amount_cents);
   if (totalRefundCents != null && totalRefundCents > totalRemaining) {

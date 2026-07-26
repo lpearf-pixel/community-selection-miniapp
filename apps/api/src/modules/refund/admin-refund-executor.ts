@@ -4,7 +4,10 @@ import {
   type AdminAccessContext,
   canAccessOrderDataScope,
 } from '../admin-access/admin-access-control.js';
-import { recordAfterSaleLog } from '../after-sale/after-sale-service.js';
+import {
+  claimApprovedAfterSaleForRefund,
+  resolveAfterSaleWithRefund,
+} from '../after-sale/after-sale-refund-service.js';
 import {
   recordAdminAudit,
   recordBusinessEvent,
@@ -255,33 +258,17 @@ export async function executeAdminRefundCommand(input: {
           request_hash: requestHash,
         },
       });
-      const before = await tx.afterSaleCase.findUnique({
-        where: { id: target.id },
-        include: { order: true },
+      const claimed = await claimApprovedAfterSaleForRefund(tx, {
+        after_sale_case_id: target.id,
+        admin_user_id: input.context.admin_user_id,
+        admin_note: input.command.admin_remark,
       });
-      if (!before) {
-        throw commandError(404, 'ADMIN_AFTER_SALE_NOT_FOUND', '售后工单不存在');
-      }
+      const before = claimed.before;
       assertScope(input.context, before.order);
       const currentApproved = assertAdminRefundEligibility(
         before,
         input.command.expected_version,
       );
-      const changed = await tx.afterSaleCase.updateMany({
-        where: { id: before.id, status: 'approved' },
-        data: {
-          status: 'processing',
-          resolved_by_admin_id: input.context.admin_user_id,
-          admin_note: input.command.admin_remark,
-        },
-      });
-      if (changed.count !== 1) {
-        throw commandError(
-          409,
-          'ADMIN_REFUND_STATE_CONFLICT',
-          '当前售后状态不可执行退款',
-        );
-      }
       const refund = await applyMockRefundInTransaction(
         tx,
         {
@@ -296,25 +283,16 @@ export async function executeAdminRefundCommand(input: {
         },
         { expected_order_version: input.command.expected_version },
       );
-      const afterSale = await tx.afterSaleCase.update({
-        where: { id: before.id },
-        data: {
-          status: 'resolved',
-          refund_id: refund.id,
-          resolved_at: new Date(),
-        },
+      const afterSale = await resolveAfterSaleWithRefund(tx, {
+        after_sale_case_id: before.id,
+        refund_id: refund.id,
+        admin_user_id: input.context.admin_user_id,
+        admin_note: input.command.admin_remark,
+        idempotency_key: input.command.idempotency_key,
       });
       const afterOrder = await tx.order.findUniqueOrThrow({
         where: { id: before.order_id },
       });
-      await recordAfterSaleLog(
-        tx,
-        afterSale,
-        'after_sale_refund_executed',
-        { actor_type: 'admin', actor_id: input.context.admin_user_id },
-        input.command.admin_remark,
-        { refund_id: refund.id, idempotency_key: input.command.idempotency_key },
-      );
       await recordBusinessEvent(tx, {
         event_type: 'admin_refund_executed',
         event_source: 'admin-refund-command',
@@ -381,6 +359,16 @@ export async function executeAdminRefundCommand(input: {
         409,
         'ADMIN_ORDER_VERSION_CONFLICT',
         '订单已被其他操作更新，请刷新后重试',
+      );
+    }
+    if (
+      error instanceof Error
+      && error.message === '当前售后状态不可执行退款'
+    ) {
+      throw commandError(
+        409,
+        'ADMIN_REFUND_STATE_CONFLICT',
+        '当前售后状态不可执行退款',
       );
     }
     if (!isUniqueConflict(error)) throw error;

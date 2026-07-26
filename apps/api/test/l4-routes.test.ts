@@ -240,8 +240,11 @@ describe('L4 group-buy and order routes', () => {
     expect(groupBuyPaymentSource.includes('_sum: { quantity: true }')).toBe(true);
     expect(groupBuyPaymentSource.includes('current_quantity: paidQuantity')).toBe(true);
     const refundServiceSource = readFileSync(new URL('../src/services/refund-service.ts', import.meta.url), 'utf8');
-    expect(refundServiceSource.includes('where: { client_refund_id: input.client_refund_id }')).toBe(true);
-    expect(refundServiceSource.includes('tx.refund.create')).toBe(true);
+    const refundRecordSource = readFileSync(new URL('../src/modules/refund/refund-record-service.ts', import.meta.url), 'utf8');
+    expect(refundServiceSource.includes('findRefundByClientKey')).toBe(true);
+    expect(refundServiceSource.includes('createPendingRefund')).toBe(true);
+    expect(refundRecordSource.includes('where: { client_refund_id: input.client_refund_id }')).toBe(true);
+    expect(refundRecordSource.includes('tx.refund.create')).toBe(true);
     expect(source.includes('pay_amount_cents / groupBuy.price_cents')).toBe(false);
   });
 
