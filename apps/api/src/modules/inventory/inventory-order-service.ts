@@ -116,7 +116,6 @@ export async function restoreInventoryForRefund(tx: Prisma.TransactionClient, in
   await tx.product.update({ where: { id: product.id }, data: { stock: { increment: quantity } } });
   const after = await tx.product.findUniqueOrThrow({ where: { id: product.id } });
   const ledger = await tx.stockLedger.create({ data: { product_id: product.id, source_type: 'order_refund', source_id: refund.order_id, idempotency_key: idempotencyKey, event_type: eventType, quantity_delta: quantity, order_id: refund.order_id, refund_id: refund.id, direction: 'in', quantity, stock_before: product.stock, stock_after: after.stock, operator_type: 'system', remark: eventType === 'group_failed_refund_restore' ? '团购失败退款库存回补' : '退款成功库存回补', payload: { refund_id: refund.id, product_refund_amount_cents: refund.product_refund_amount_cents, delivery_refund_amount_cents: refund.delivery_refund_amount_cents } } });
-  await tx.refund.update({ where: { id: refund.id }, data: { stock_restored: true } });
   return { applied: true, idempotent: false, event_type: eventType, quantity, before_stock: product.stock, after_stock: after.stock, ledger_id: ledger.id };
 }
 

@@ -1,8 +1,28 @@
-import { Prisma } from '@prisma/client';
+import type { Order, Prisma, Refund } from '@prisma/client';
 import { prisma } from '../db.js';
-import { syncCommissionAfterRefund } from './commission-service.js';
+import {
+  confirmRefundSuccess,
+  createPendingRefund,
+  findRefundByClientKey,
+  getRefundRecord,
+  setRefundStockRestored,
+  type RefundNotifyInfo,
+} from '../modules/refund/refund-record-service.js';
+import {
+  lockRefundableOrder,
+  projectRefundSuccess,
+  recordRefundOrderEffects,
+  RefundOrderVersionConflictError,
+} from '../modules/order/order-refund-service.js';
 import { restoreInventoryForRefund } from '../modules/inventory/inventory-order-service.js';
-import { safeRecordBusinessEvent, safeRecordOrderTimeline } from './logging-service.js';
+import { returnOrderCreditAfterFullRefund } from '../modules/consumer-credit/order-refund-credit-service.js';
+import { syncCommissionAfterRefund } from './commission-service.js';
+import {
+  recordBusinessEvent,
+  safeRecordBusinessEvent,
+} from './logging-service.js';
+
+export { RefundOrderVersionConflictError };
 
 export type RefundInput = {
   order_id: string;
@@ -13,54 +33,33 @@ export type RefundInput = {
   client_refund_id?: string;
 };
 
-export class RefundOrderVersionConflictError extends Error {
-  constructor() {
-    super('订单已被其他操作更新，请刷新后重试');
-    this.name = 'RefundOrderVersionConflictError';
-  }
-}
+type NotifyInfo = RefundNotifyInfo;
 
-type NotifyInfo = {
-  refund_id?: string;
-  out_refund_no?: string;
-  raw_notify?: Prisma.InputJsonValue;
-};
-
-const refundableOrderStatuses = ['paid', 'grouped', 'preparing', 'ready', 'picked', 'delivered', 'completed', 'refunding'];
-const autoRestoreStockStatuses = ['paid', 'grouped', 'preparing', 'ready', 'refunding'];
+const autoRestoreStockStatuses = [
+  'paid',
+  'grouped',
+  'preparing',
+  'ready',
+  'refunding',
+];
 const stockRestorePolicy = 'full_refund_auto_restore_before_fulfillment';
 
-function jsonOrPrismaNull(value: Prisma.InputJsonValue | Prisma.JsonValue | null | undefined) {
-  if (value === undefined || value === null) return Prisma.JsonNull;
-  return value as Prisma.InputJsonValue;
-}
-
-export function getRefundableAmount(order: { pay_amount_cents: number; refund_amount_cents: number }) {
+export function getRefundableAmount(order: {
+  pay_amount_cents: number;
+  refund_amount_cents: number;
+}) {
   return order.pay_amount_cents - order.refund_amount_cents;
 }
 
-export function buildOutRefundNo(order: { order_no: string }, clientRefundId?: string) {
-  const suffix = clientRefundId ? clientRefundId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) : `${Date.now()}`;
+export function buildOutRefundNo(
+  order: { order_no: string },
+  clientRefundId?: string,
+) {
+  const suffix = clientRefundId
+    ? clientRefundId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32)
+    : `${Date.now()}`;
   return `RF${order.order_no}${suffix}`;
 }
-
-function assertRefundNotifyMatches(
-  refund: { refund_id: string | null; out_refund_no: string },
-  notifyInfo: NotifyInfo
-) {
-  if (notifyInfo.out_refund_no && notifyInfo.out_refund_no !== refund.out_refund_no) throw new Error('微信退款单号与系统退款单不一致');
-  if (notifyInfo.refund_id && refund.refund_id && notifyInfo.refund_id !== refund.refund_id) throw new Error('微信 refund_id 与已有退款记录不一致');
-}
-
-function assertIdempotencyInputMatches(
-  existing: { order_id: string; refund_amount_cents: number; product_refund_amount_cents?: number; delivery_refund_amount_cents?: number },
-  input: RefundInput
-) {
-  if (existing.order_id !== input.order_id || existing.refund_amount_cents !== input.refund_amount_cents || (input.product_refund_amount_cents != null && existing.product_refund_amount_cents !== input.product_refund_amount_cents) || (input.delivery_refund_amount_cents != null && existing.delivery_refund_amount_cents !== input.delivery_refund_amount_cents)) {
-    throw new Error('退款幂等键已被使用，且请求参数不一致');
-  }
-}
-
 
 function ensureNonNegativeInteger(value: unknown, message: string) {
   const parsed = Number(value);
@@ -68,56 +67,217 @@ function ensureNonNegativeInteger(value: unknown, message: string) {
   return parsed;
 }
 
-function allocateRefundSplit(order: { product_amount_cents: number | null; total_amount_cents: number; delivery_fee_cents: number; product_refund_amount_cents: number; delivery_refund_amount_cents: number }, input: RefundInput) {
+function allocateRefundSplit(
+  order: Pick<
+    Order,
+    | 'product_amount_cents'
+    | 'total_amount_cents'
+    | 'delivery_fee_cents'
+    | 'product_refund_amount_cents'
+    | 'delivery_refund_amount_cents'
+  >,
+  input: RefundInput,
+) {
   const productPaid = order.product_amount_cents ?? order.total_amount_cents;
   const deliveryPaid = order.delivery_fee_cents ?? 0;
-  const productRemaining = Math.max(0, productPaid - order.product_refund_amount_cents);
-  const deliveryRemaining = Math.max(0, deliveryPaid - order.delivery_refund_amount_cents);
-  const hasExplicitSplit = input.product_refund_amount_cents != null || input.delivery_refund_amount_cents != null;
-  if (hasExplicitSplit) {
-    const productRefund = ensureNonNegativeInteger(input.product_refund_amount_cents ?? 0, '商品退款金额不能小于 0');
-    const deliveryRefund = ensureNonNegativeInteger(input.delivery_refund_amount_cents ?? 0, '配送费退款金额不能小于 0');
-    if (productRefund + deliveryRefund !== input.refund_amount_cents) throw new Error('商品退款金额与配送费退款金额之和必须等于总退款金额');
-    if (productRefund > productRemaining) throw new Error('商品退款金额超过商品可退金额');
-    if (deliveryRefund > deliveryRemaining) throw new Error('配送费退款金额超过配送费可退金额');
-    return { productRefund, deliveryRefund, productRemaining, deliveryRemaining };
+  const productRemaining = Math.max(
+    0,
+    productPaid - order.product_refund_amount_cents,
+  );
+  const deliveryRemaining = Math.max(
+    0,
+    deliveryPaid - order.delivery_refund_amount_cents,
+  );
+  const explicit = input.product_refund_amount_cents != null
+    || input.delivery_refund_amount_cents != null;
+  if (explicit) {
+    const productRefund = ensureNonNegativeInteger(
+      input.product_refund_amount_cents ?? 0,
+      '商品退款金额不能小于 0',
+    );
+    const deliveryRefund = ensureNonNegativeInteger(
+      input.delivery_refund_amount_cents ?? 0,
+      '配送费退款金额不能小于 0',
+    );
+    if (productRefund + deliveryRefund !== input.refund_amount_cents) {
+      throw new Error('商品退款金额与配送费退款金额之和必须等于总退款金额');
+    }
+    if (productRefund > productRemaining) {
+      throw new Error('商品退款金额超过商品可退金额');
+    }
+    if (deliveryRefund > deliveryRemaining) {
+      throw new Error('配送费退款金额超过配送费可退金额');
+    }
+    return { productRefund, deliveryRefund };
   }
-  const productRefund = Math.min(input.refund_amount_cents, productRemaining);
+  const productRefund = Math.min(
+    input.refund_amount_cents,
+    productRemaining,
+  );
   const deliveryRefund = input.refund_amount_cents - productRefund;
-  if (deliveryRefund > deliveryRemaining) throw new Error('退款金额超过订单实付金额');
-  return { productRefund, deliveryRefund, productRemaining, deliveryRemaining };
-}
-
-export async function validateRefundRequest(tx: Prisma.TransactionClient, input: RefundInput) {
-  if (input.client_refund_id) {
-    const existing = await tx.refund.findUnique({ where: { client_refund_id: input.client_refund_id } });
-    if (existing) assertIdempotencyInputMatches(existing, input);
-  }
-
-  const order = await tx.order.findUnique({ where: { id: input.order_id } });
-  if (!order) throw new Error('订单不存在');
-  if (order.pay_status !== 'paid' || order.order_status === 'unpaid' || order.order_status === 'closed') throw new Error('未支付订单不能退款');
-  if (!refundableOrderStatuses.includes(order.order_status)) throw new Error('当前订单状态不可退款');
-  if (order.refund_amount_cents >= order.pay_amount_cents) throw new Error('订单已全额退款');
-  if (!Number.isInteger(input.refund_amount_cents) || input.refund_amount_cents <= 0) throw new Error('退款金额必须大于 0');
-  const split = allocateRefundSplit(order, input);
-  if (input.refund_amount_cents > getRefundableAmount(order)) {
-    await safeRecordBusinessEvent(tx, {
-      event_type: 'refund_amount_exceeded',
-      event_level: 'warning',
-      event_source: 'refund-service',
-      order_id: order.id,
-      idempotency_key: input.client_refund_id ?? null,
-      payload: { refund_amount_cents: input.refund_amount_cents, refundable_amount_cents: getRefundableAmount(order) }
-    });
+  if (deliveryRefund > deliveryRemaining) {
     throw new Error('退款金额超过订单实付金额');
   }
-  return { ...order, refundSplit: split };
+  return { productRefund, deliveryRefund };
 }
 
-async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
-  const entries = await tx.consumerCreditLedger.findMany({ where: { user_id: userId } });
-  return entries.reduce((sum, entry) => sum + (entry.direction === 'in' ? entry.amount_cents : -entry.amount_cents), 0);
+function validateRefundInput(order: Order, input: RefundInput) {
+  if (
+    order.pay_status !== 'paid'
+    || order.order_status === 'unpaid'
+    || order.order_status === 'closed'
+  ) {
+    throw new Error('未支付订单不能退款');
+  }
+  if (
+    ![
+      'paid',
+      'grouped',
+      'preparing',
+      'ready',
+      'picked',
+      'delivered',
+      'completed',
+      'refunding',
+    ].includes(order.order_status)
+  ) {
+    throw new Error('当前订单状态不可退款');
+  }
+  if (order.refund_amount_cents >= order.pay_amount_cents) {
+    throw new Error('订单已全额退款');
+  }
+  if (
+    !Number.isInteger(input.refund_amount_cents)
+    || input.refund_amount_cents <= 0
+  ) {
+    throw new Error('退款金额必须大于 0');
+  }
+  if (input.refund_amount_cents > getRefundableAmount(order)) {
+    throw new Error('退款金额超过订单实付金额');
+  }
+  return allocateRefundSplit(order, input);
+}
+
+export async function validateRefundRequest(
+  tx: Prisma.TransactionClient,
+  input: RefundInput,
+) {
+  const order = await lockRefundableOrder(tx, input.order_id);
+  const refundSplit = validateRefundInput(order, input);
+  return { ...order, refundSplit };
+}
+
+async function projectFirstRefundSuccess(
+  tx: Prisma.TransactionClient,
+  input: {
+    beforeOrder: Order;
+    refund: Refund;
+    expected_order_version?: number;
+  },
+): Promise<Refund> {
+  const projection = await projectRefundSuccess(tx, {
+    order: input.beforeOrder,
+    refund: input.refund,
+    expected_order_version: input.expected_order_version,
+  });
+  const remainingRefundableAmount =
+    projection.remaining_refundable_amount_cents;
+  let projectedRefund = input.refund;
+  let stockRestored = input.refund.stock_restored;
+  let stockRestoreSkippedReason: string | null = null;
+
+  if (!projection.is_full_refund) {
+    stockRestoreSkippedReason =
+      input.refund.delivery_refund_amount_cents > 0
+      && input.refund.product_refund_amount_cents === 0
+        ? 'delivery_fee_refund_no_stock_restore'
+        : 'partial_refund_amount_only';
+    if (input.beforeOrder.credit_amount_cents > 0) {
+      await safeRecordBusinessEvent(tx, {
+        event_type: 'reward_credit_partial_refund_skipped',
+        event_level: 'warning',
+        event_source: 'refund-service',
+        order_id: input.beforeOrder.id,
+        refund_id: input.refund.id,
+        user_id: input.beforeOrder.user_id,
+        payload: {
+          rule: 'full_refund_only',
+          credit_amount_cents: input.beforeOrder.credit_amount_cents,
+          refund_amount_cents: input.refund.refund_amount_cents,
+        },
+      });
+    }
+  } else if (
+    !stockRestored
+    && autoRestoreStockStatuses.includes(input.beforeOrder.order_status)
+  ) {
+    const restore = await restoreInventoryForRefund(tx, {
+      refund_id: input.refund.id,
+    });
+    stockRestored = restore.applied || restore.idempotent;
+    if (stockRestored) {
+      projectedRefund = await setRefundStockRestored(
+        tx,
+        input.refund.id,
+        true,
+      );
+    } else if (restore.quantity === 0) {
+      stockRestoreSkippedReason = 'no_remaining_inventory_to_restore';
+    }
+    if (restore.applied) {
+      await recordBusinessEvent(tx, {
+        event_type: 'refund_stock_restored',
+        event_source: 'refund-service',
+        order_id: input.beforeOrder.id,
+        refund_id: input.refund.id,
+        payload: {
+          stock_quantity: restore.quantity,
+          ledger_id: restore.ledger_id,
+        },
+      });
+    }
+  } else if (projection.is_full_refund && !stockRestored) {
+    stockRestoreSkippedReason = 'fulfillment_status_not_auto_restorable';
+  }
+
+  await returnOrderCreditAfterFullRefund(tx, {
+    order: input.beforeOrder,
+    refund_id: input.refund.id,
+    is_full_refund: projection.is_full_refund,
+  });
+  await syncCommissionAfterRefund({
+    order_id: input.beforeOrder.id,
+    refund_id: input.refund.id,
+  }, tx);
+  await recordRefundOrderEffects(tx, {
+    before_order: input.beforeOrder,
+    projected_order: projection.order,
+    refund: projectedRefund,
+    is_full_refund: projection.is_full_refund,
+  });
+  await tx.auditLog.create({
+    data: {
+      action: 'refund_success',
+      target_type: 'Refund',
+      target_id: input.refund.id,
+      payload: {
+        order_id: input.beforeOrder.id,
+        out_refund_no: input.refund.out_refund_no,
+        refund_amount_cents: input.refund.refund_amount_cents,
+        product_refund_amount_cents:
+          input.refund.product_refund_amount_cents,
+        delivery_refund_amount_cents:
+          input.refund.delivery_refund_amount_cents,
+        total_refund_amount_cents: projection.order.refund_amount_cents,
+        remaining_refundable_amount_cents: remainingRefundableAmount,
+        is_full_refund: projection.is_full_refund,
+        stock_restored: stockRestored,
+        stock_restore_policy: stockRestorePolicy,
+        stock_restore_skipped_reason: stockRestoreSkippedReason,
+      },
+    },
+  });
+  return projectedRefund;
 }
 
 async function applyRefundSuccess(
@@ -126,200 +286,16 @@ async function applyRefundSuccess(
   notifyInfo: NotifyInfo = {},
   options: { expected_order_version?: number } = {},
 ) {
-  const refund = await tx.refund.findUnique({
-    where: { id: refundId },
-    include: { order: { include: { group_buy: true } } }
+  const pending = await getRefundRecord(tx, refundId);
+  if (!pending) throw new Error('退款单不存在');
+  const order = await lockRefundableOrder(tx, pending.order_id);
+  const confirmation = await confirmRefundSuccess(tx, refundId, notifyInfo);
+  if (!confirmation.first_success) return confirmation.refund;
+  return projectFirstRefundSuccess(tx, {
+    beforeOrder: order,
+    refund: confirmation.refund,
+    expected_order_version: options.expected_order_version,
   });
-  if (!refund) throw new Error('退款单不存在');
-  assertRefundNotifyMatches(refund, notifyInfo);
-  if (notifyInfo.refund_id) {
-    const existingRefundId = await tx.refund.findUnique({ where: { refund_id: notifyInfo.refund_id } });
-    if (existingRefundId && existingRefundId.id !== refund.id) throw new Error('微信 refund_id 与已有退款记录不一致');
-  }
-
-  if (refund.status === 'success') {
-    if (notifyInfo.refund_id && !refund.refund_id) {
-      return tx.refund.update({
-        where: { id: refund.id },
-        data: {
-          refund_id: notifyInfo.refund_id,
-          raw_notify: jsonOrPrismaNull(notifyInfo.raw_notify ?? refund.raw_notify)
-        }
-      });
-    }
-    return tx.refund.findUniqueOrThrow({ where: { id: refund.id } });
-  }
-  if (refund.status === 'rejected') throw new Error('已拒绝退款不可成功');
-  if (
-    options.expected_order_version !== undefined &&
-    refund.order.version !== options.expected_order_version
-  ) {
-    throw new RefundOrderVersionConflictError();
-  }
-
-  const refundableAmount = getRefundableAmount(refund.order);
-  if (refund.refund_amount_cents > refundableAmount) {
-    await safeRecordBusinessEvent(tx, {
-      event_type: 'refund_amount_exceeded',
-      event_level: 'warning',
-      event_source: 'refund-service',
-      order_id: refund.order_id,
-      refund_id: refund.id,
-      payload: { refund_amount_cents: refund.refund_amount_cents, refundable_amount_cents: refundableAmount }
-    });
-    throw new Error('退款金额超过订单实付金额');
-  }
-
-  const nextRefundAmount = refund.order.refund_amount_cents + refund.refund_amount_cents;
-  const nextProductRefundAmount = refund.order.product_refund_amount_cents + refund.product_refund_amount_cents;
-  const nextDeliveryRefundAmount = refund.order.delivery_refund_amount_cents + refund.delivery_refund_amount_cents;
-  const remainingRefundableAmount = refund.order.pay_amount_cents - nextRefundAmount;
-  const isFullRefund = nextRefundAmount >= refund.order.pay_amount_cents;
-  let stockRestored = refund.stock_restored;
-  let stockRestoreSkippedReason: string | null = null;
-
-  if (!isFullRefund) {
-    stockRestoreSkippedReason = refund.delivery_refund_amount_cents > 0 && refund.product_refund_amount_cents === 0 ? 'delivery_fee_refund_no_stock_restore' : 'partial_refund_amount_only';
-    // 消费额度退款规则：L8 第一版仅在订单全额退款时退回全部平台消费额度；部分退款不自动退回消费额度。
-    if (refund.order.credit_amount_cents > 0) {
-      await safeRecordBusinessEvent(tx, {
-        event_type: 'reward_credit_partial_refund_skipped',
-        event_level: 'warning',
-        event_source: 'refund-service',
-        order_id: refund.order_id,
-        refund_id: refund.id,
-        user_id: refund.order.user_id,
-        payload: { rule: 'full_refund_only', credit_amount_cents: refund.order.credit_amount_cents, refund_amount_cents: refund.refund_amount_cents }
-      });
-    }
-  }
-
-  const updatedRefund = await tx.refund.update({
-    where: { id: refund.id },
-    data: {
-      status: 'success',
-      refund_id: notifyInfo.refund_id ?? refund.refund_id,
-      stock_restored: stockRestored,
-      processed_at: new Date(),
-      raw_notify: jsonOrPrismaNull(notifyInfo.raw_notify ?? refund.raw_notify)
-    }
-  });
-
-  const orderUpdate = {
-    refund_amount_cents: nextRefundAmount,
-    product_refund_amount_cents: nextProductRefundAmount,
-    delivery_refund_amount_cents: nextDeliveryRefundAmount,
-    refund_status: 'success' as const,
-    order_status: isFullRefund ? 'refunded' as const : refund.order.order_status,
-    ...(options.expected_order_version === undefined
-      ? {}
-      : { version: { increment: 1 } }),
-  };
-  if (options.expected_order_version === undefined) {
-    await tx.order.update({
-      where: { id: refund.order_id },
-      data: orderUpdate,
-    });
-  } else {
-    const changed = await tx.order.updateMany({
-      where: {
-        id: refund.order_id,
-        version: options.expected_order_version,
-        refund_amount_cents: refund.order.refund_amount_cents,
-        product_refund_amount_cents:
-          refund.order.product_refund_amount_cents,
-        delivery_refund_amount_cents:
-          refund.order.delivery_refund_amount_cents,
-      },
-      data: orderUpdate,
-    });
-    if (changed.count !== 1) throw new RefundOrderVersionConflictError();
-  }
-
-  if (isFullRefund && !stockRestored) {
-    const restoreResult = await restoreInventoryForRefund(tx, { refund_id: refund.id });
-    stockRestored = restoreResult.applied || restoreResult.idempotent;
-    if (!restoreResult.applied && !restoreResult.idempotent && restoreResult.quantity === 0) stockRestoreSkippedReason = 'no_remaining_inventory_to_restore';
-    if (restoreResult.applied) {
-      await safeRecordBusinessEvent(tx, { event_type: 'refund_stock_restored', event_source: 'refund-service', order_id: refund.order_id, refund_id: refund.id, payload: { stock_quantity: restoreResult.quantity, ledger_id: restoreResult.ledger_id } });
-    }
-  }
-
-  if (isFullRefund && refund.order.credit_amount_cents > 0 && refund.order.credit_source_type === 'reward_conversion') {
-    const existingCreditReturn = await tx.consumerCreditLedger.findFirst({
-      where: { user_id: refund.order.user_id, source_type: 'order_refund', source_id: refund.order.id }
-    });
-    if (!existingCreditReturn) {
-      const creditBalance = await getCreditBalance(tx, refund.order.user_id);
-      await tx.consumerCreditLedger.create({
-        data: {
-          user_id: refund.order.user_id,
-          source_type: 'order_refund',
-          source_id: refund.order.id,
-          direction: 'in',
-          amount_cents: refund.order.credit_amount_cents,
-          balance_after_cents: creditBalance + refund.order.credit_amount_cents,
-          usable_scope: 'platform_order',
-          remark: '订单退款退回消费额度',
-          payload: { original_credit_source_type: refund.order.credit_source_type, original_credit_source_id: refund.order.credit_source_id }
-        }
-      });
-      await safeRecordBusinessEvent(tx, {
-        event_type: 'reward_credit_refunded',
-        event_source: 'refund-service',
-        order_id: refund.order_id,
-        refund_id: refund.id,
-        user_id: refund.order.user_id,
-        payload: { amount_cents: refund.order.credit_amount_cents, credit_source_id: refund.order.credit_source_id }
-      });
-      await safeRecordOrderTimeline(tx, {
-        order_id: refund.order_id,
-        event_type: 'reward_credit_refunded',
-        title: '订单退款退回消费额度',
-        payload: { amount_cents: refund.order.credit_amount_cents, credit_source_id: refund.order.credit_source_id }
-      });
-    }
-  }
-
-  await safeRecordBusinessEvent(tx, {
-    event_type: 'refund_success',
-    event_source: 'refund-service',
-    order_id: refund.order_id,
-    refund_id: refund.id,
-    before_snapshot: refund,
-    after_snapshot: updatedRefund,
-    payload: { refund_amount_cents: refund.refund_amount_cents, product_refund_amount_cents: refund.product_refund_amount_cents, delivery_refund_amount_cents: refund.delivery_refund_amount_cents, is_full_refund: isFullRefund }
-  });
-  await safeRecordOrderTimeline(tx, {
-    order_id: refund.order_id,
-    event_type: 'refund_success',
-    title: isFullRefund ? '订单已全额退款' : '订单已部分退款',
-    payload: { refund_id: refund.id, refund_amount_cents: refund.refund_amount_cents }
-  });
-  await syncCommissionAfterRefund({ order_id: refund.order_id, refund_id: refund.id }, tx);
-
-  await tx.auditLog.create({
-    data: {
-      action: 'refund_success',
-      target_type: 'Refund',
-      target_id: refund.id,
-      payload: {
-        order_id: refund.order_id,
-        out_refund_no: refund.out_refund_no,
-        refund_amount_cents: refund.refund_amount_cents,
-        product_refund_amount_cents: refund.product_refund_amount_cents,
-        delivery_refund_amount_cents: refund.delivery_refund_amount_cents,
-        total_refund_amount_cents: nextRefundAmount,
-        remaining_refundable_amount_cents: remainingRefundableAmount,
-        is_full_refund: isFullRefund,
-        stock_restored: stockRestored,
-        stock_restore_policy: stockRestorePolicy,
-        stock_restore_skipped_reason: stockRestoreSkippedReason
-      }
-    }
-  });
-
-  return updatedRefund;
 }
 
 export async function applyMockRefundInTransaction(
@@ -327,105 +303,98 @@ export async function applyMockRefundInTransaction(
   input: RefundInput,
   options: { expected_order_version?: number } = {},
 ) {
-    if (input.client_refund_id) {
-      const existing = await tx.refund.findUnique({ where: { client_refund_id: input.client_refund_id } });
-      if (existing) {
-        try {
-          assertIdempotencyInputMatches(existing, input);
-        } catch (error) {
-          await safeRecordBusinessEvent(tx, {
-            event_type: 'refund_idempotency_conflict',
-            event_level: 'error',
-            event_source: 'refund-service',
-            order_id: input.order_id,
-            refund_id: existing.id,
-            idempotency_key: input.client_refund_id,
-            payload: { existing_order_id: existing.order_id, existing_refund_amount_cents: existing.refund_amount_cents, requested_refund_amount_cents: input.refund_amount_cents }
-          });
-          throw error;
-        }
-        return applyRefundSuccess(
-          tx,
-          existing.id,
-          { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id } },
-          options,
-        );
-      }
-    }
-
-    const order = await validateRefundRequest(tx, input);
+  const order = await lockRefundableOrder(tx, input.order_id);
+  if (
+    options.expected_order_version !== undefined
+    && order.version !== options.expected_order_version
+  ) {
+    throw new RefundOrderVersionConflictError();
+  }
+  const outRefundNo = buildOutRefundNo(order, input.client_refund_id);
+  const existing = await findRefundByClientKey(tx, {
+    order_id: order.id,
+    out_refund_no: outRefundNo,
+    client_refund_id: input.client_refund_id,
+    refund_amount_cents: input.refund_amount_cents,
+    product_refund_amount_cents: input.product_refund_amount_cents,
+    delivery_refund_amount_cents: input.delivery_refund_amount_cents,
+  });
+  if (existing) {
+    const repeated = await confirmRefundSuccess(tx, existing.id, {
+      raw_notify: {
+        source: 'mock',
+        client_refund_id: input.client_refund_id ?? null,
+      },
+    });
+    if (!repeated.first_success) return repeated.refund;
+    return projectFirstRefundSuccess(tx, {
+      beforeOrder: order,
+      refund: repeated.refund,
+      expected_order_version: options.expected_order_version,
+    });
+  }
+  let split;
+  try {
+    split = validateRefundInput(order, input);
+  } catch (error) {
     if (
-      options.expected_order_version !== undefined &&
-      order.version !== options.expected_order_version
+      error instanceof Error
+      && error.message === '退款金额超过订单实付金额'
     ) {
-      throw new RefundOrderVersionConflictError();
-    }
-    const outRefundNo = buildOutRefundNo(order, input.client_refund_id);
-    const existingOutRefund = await tx.refund.findUnique({ where: { out_refund_no: outRefundNo } });
-    if (existingOutRefund) {
-      try {
-        assertIdempotencyInputMatches(existingOutRefund, input);
-      } catch (error) {
-        await safeRecordBusinessEvent(tx, {
-          event_type: 'refund_idempotency_conflict',
-          event_level: 'error',
-          event_source: 'refund-service',
-          order_id: input.order_id,
-          refund_id: existingOutRefund.id,
-          idempotency_key: input.client_refund_id,
-          payload: { existing_order_id: existingOutRefund.order_id, existing_refund_amount_cents: existingOutRefund.refund_amount_cents, requested_refund_amount_cents: input.refund_amount_cents }
-        });
-        throw error;
-      }
-      return applyRefundSuccess(
-        tx,
-        existingOutRefund.id,
-        { raw_notify: { source: 'mock', out_refund_no: outRefundNo } },
-        options,
-      );
-    }
-
-    await safeRecordBusinessEvent(tx, {
-      event_type: 'refund_requested',
-      event_source: 'refund-service',
-      order_id: order.id,
-      idempotency_key: input.client_refund_id,
-      payload: { refund_amount_cents: input.refund_amount_cents, reason: input.reason }
-    });
-
-    const refund = await tx.refund.create({
-      data: {
+      await safeRecordBusinessEvent(tx, {
+        event_type: 'refund_amount_exceeded',
+        event_level: 'warning',
+        event_source: 'refund-service',
         order_id: order.id,
-        out_refund_no: outRefundNo,
-        client_refund_id: input.client_refund_id,
-        refund_amount_cents: input.refund_amount_cents,
-        product_refund_amount_cents: order.refundSplit.productRefund,
-        delivery_refund_amount_cents: order.refundSplit.deliveryRefund,
-        reason: input.reason,
-        status: 'pending'
-      }
-    });
-
-    await tx.order.update({
-      where: { id: order.id },
-      data: { refund_status: 'pending' }
-    });
-
-    const success = await applyRefundSuccess(
-      tx,
-      refund.id,
-      { raw_notify: { source: 'mock', client_refund_id: input.client_refund_id ?? null } },
-      options,
-    );
-    await safeRecordBusinessEvent(tx, {
-      event_type: 'refund_mock_success',
-      event_source: 'refund-service',
-      order_id: order.id,
-      refund_id: refund.id,
-      idempotency_key: input.client_refund_id,
-      after_snapshot: success
-    });
-    return success;
+        idempotency_key: input.client_refund_id ?? null,
+        payload: {
+          refund_amount_cents: input.refund_amount_cents,
+          refundable_amount_cents: getRefundableAmount(order),
+        },
+      });
+    }
+    throw error;
+  }
+  const key = {
+    order_id: order.id,
+    out_refund_no: outRefundNo,
+    client_refund_id: input.client_refund_id,
+    refund_amount_cents: input.refund_amount_cents,
+    product_refund_amount_cents: split.productRefund,
+    delivery_refund_amount_cents: split.deliveryRefund,
+  };
+  await safeRecordBusinessEvent(tx, {
+    event_type: 'refund_requested',
+    event_source: 'refund-service',
+    order_id: order.id,
+    idempotency_key: input.client_refund_id,
+    payload: {
+      refund_amount_cents: input.refund_amount_cents,
+      reason: input.reason,
+    },
+  });
+  const refund = await createPendingRefund(tx, { ...key, reason: input.reason });
+  const confirmation = await confirmRefundSuccess(tx, refund.id, {
+    raw_notify: {
+      source: 'mock',
+      client_refund_id: input.client_refund_id ?? null,
+    },
+  });
+  if (!confirmation.first_success) return confirmation.refund;
+  const success = await projectFirstRefundSuccess(tx, {
+    beforeOrder: order,
+    refund: confirmation.refund,
+    expected_order_version: options.expected_order_version,
+  });
+  await safeRecordBusinessEvent(tx, {
+    event_type: 'refund_mock_success',
+    event_source: 'refund-service',
+    order_id: order.id,
+    refund_id: refund.id,
+    idempotency_key: input.client_refund_id,
+    after_snapshot: success,
+  });
+  return success;
 }
 
 export async function createMockRefund(input: RefundInput) {
@@ -434,6 +403,11 @@ export async function createMockRefund(input: RefundInput) {
   );
 }
 
-export async function markRefundSuccess(refundId: string, notifyInfo: NotifyInfo = {}) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => applyRefundSuccess(tx, refundId, notifyInfo));
+export async function markRefundSuccess(
+  refundId: string,
+  notifyInfo: NotifyInfo = {},
+) {
+  return prisma.$transaction((tx: Prisma.TransactionClient) =>
+    applyRefundSuccess(tx, refundId, notifyInfo),
+  );
 }
