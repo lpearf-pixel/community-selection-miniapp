@@ -85,16 +85,6 @@ export function TaxReviewDrawer(props: TaxReviewDrawerProps) {
             <Form.Item name="tax_remark" label="备注">
               <Input.TextArea />
             </Form.Item>
-            <Form.Item
-              name="client_request_id"
-              label="幂等键"
-              rules={[{ required: true }, { max: 80 }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item name="expected_updated_at" hidden>
-              <Input />
-            </Form.Item>
           </Form>
           <Button
             type="primary"

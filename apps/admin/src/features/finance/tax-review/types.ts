@@ -22,6 +22,7 @@ export type TaxReviewRow = {
   created_at: string;
   processed_at?: string | null;
   updated_at: string;
+  version: number;
 };
 
 export type TaxReviewList = {
@@ -58,8 +59,6 @@ export type TaxReviewPayload = {
   tax_rate_basis?: string;
   invoice_status?: string;
   tax_remark?: string;
-  client_request_id: string;
-  expected_updated_at: string;
 };
 
 export type TaxReviewQuery = Record<

@@ -114,15 +114,14 @@ test('executor composes receipt, versioned state, reward and audit writes in one
   );
   assert.match(source, /prisma\.\$transaction\(async \(tx\) =>/);
   assert.match(source, /tx\.adminCommandReceipt\.create\(/);
-  assert.match(
-    source,
-    /version:\s*input\.command\.expected_version[\s\S]*?version:\s*\{\s*increment:\s*1\s*\}/,
-  );
-  assert.match(source, /tx\.commission\.updateMany\(/);
+  assert.match(source, /lockWithdrawal\(tx,/);
+  assert.match(source, /transitionWithdrawal\(tx,/);
+  assert.match(source, /releaseCommissionsFromWithdrawal\(tx,/);
+  assert.match(source, /markCommissionsWithdrawn\(tx,/);
   assert.match(source, /linkedAmount !== before\.amount_cents/);
-  assert.match(source, /tx\.rewardLedger\.aggregate\(/);
-  assert.match(source, /withdrawal_reserved/);
-  assert.match(source, /appendRewardLedgerEntry\(tx,/);
+  assert.match(source, /validateReservedWithdrawalReward\(tx,/);
+  assert.match(source, /restoreRejectedWithdrawalReward\(tx,/);
+  assert.match(source, /recordPaidWithdrawalReward\(tx,/);
   assert.match(source, /recordAdminAudit\(tx,/);
   assert.match(source, /recordBusinessEvent\(tx,/);
   assert.match(source, /recordOrderTimeline\(tx,/);
@@ -156,12 +155,29 @@ test('all three Admin routes parse and execute reliable withdrawal commands', as
 });
 
 test('manual tax review advances the withdrawal command version', async () => {
-  const source = await readFile(
+  const routeSource = await readFile(
     new URL('../apps/api/src/routes/withdrawals.ts', import.meta.url),
     'utf8',
   );
+  const executorSource = await readFile(
+    new URL(
+      '../apps/api/src/modules/withdrawal/admin-withdrawal-tax-review-executor.ts',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const ownerSource = await readFile(
+    new URL(
+      '../apps/api/src/modules/withdrawal/withdrawal-owner.ts',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  assert.match(routeSource, /parseAdminWithdrawalTaxReviewCommand\(request\.body\)/);
+  assert.match(routeSource, /executeAdminWithdrawalTaxReviewCommand\(/);
+  assert.match(executorSource, /expected_version:\s*input\.command\.expected_version/);
   assert.match(
-    source,
-    /where:\s*\{\s*id,\s*updated_at:\s*expectedUpdatedAt\s*\}[\s\S]*?version:\s*\{\s*increment:\s*1\s*\}/,
+    ownerSource,
+    /version:\s*input\.expected_version[\s\S]*?version:\s*\{\s*increment:\s*1\s*\}/,
   );
 });

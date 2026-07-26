@@ -57,6 +57,11 @@ function assertTemplateMarker(fn: string, marker: string) {
 const schema = read('prisma/schema.prisma');
 const route = read('apps/api/src/routes/withdrawals.ts');
 const executor = read('apps/api/src/modules/withdrawal/admin-withdrawal-executor.ts');
+const leaderCommand = read('apps/api/src/modules/withdrawal/leader-withdrawal-command.ts');
+const leaderExecutor = read('apps/api/src/modules/withdrawal/leader-withdrawal-executor.ts');
+const withdrawalOwner = read('apps/api/src/modules/withdrawal/withdrawal-owner.ts');
+const commissionOwner = read('apps/api/src/modules/withdrawal/withdrawal-commission-owner.ts');
+const rewardOwner = read('apps/api/src/modules/withdrawal/withdrawal-reward-ledger-owner.ts');
 const e2e = read('scripts/verify-docker-api-e2e-local.ts');
 const mini = read('apps/miniapp/pages/leader/withdrawals/index.js');
 const admin = [
@@ -64,13 +69,28 @@ const admin = [
   'apps/admin/src/features/finance/withdrawals/WithdrawalsWorkbench.tsx',
   'apps/admin/src/features/finance/withdrawals/WithdrawalDetailDrawer.tsx',
 ].map(read).join('\n');
+const reliableWithdrawalChain = [
+  executor,
+  withdrawalOwner,
+  commissionOwner,
+  rewardOwner,
+].join('\n');
 
 assert(schema.includes('model WithdrawalCommission'), 'WithdrawalCommission model exists');
 assert(schema.includes('commission_links') && schema.includes('withdrawal_links'), 'Withdrawal/Commission relation arrays exist');
 assert(existsSync('prisma/migrations/20260714000200_l44_withdrawal_commission_links/migration.sql'), 'WithdrawalCommission follow-up migration exists');
 
-for (const required of ['getCommissionAvailableNet', 'persistLedgerMismatch', 'withdrawal_ledger_mismatch', 'PrismaClientKnownRequestError', 'P2002', 'withdrawalCommission.createMany', 'skipDuplicates', 'executeReliableWithdrawal', 'requireWithdrawalDataScope']) {
-  assert(route.includes(required), `route includes ${required}`);
+for (const [source, required] of [
+  [rewardOwner, 'validateWithdrawalRewardBalance'],
+  [leaderExecutor, 'withdrawal_reward_ledger_mismatch'],
+  [leaderExecutor, 'PrismaClientKnownRequestError'],
+  [leaderExecutor, 'P2002'],
+  [withdrawalOwner, 'withdrawalCommission.createMany'],
+  [withdrawalOwner, 'result.count !== input.commissions.length'],
+  [route, 'executeReliableWithdrawal'],
+  [route, 'requireWithdrawalDataScope'],
+] as const) {
+  assert(source.includes(required), `withdrawal owner chain includes ${required}`);
 }
 assert(route.includes('import { withCurrentLeader } from "./current-user-route.js"'), 'Leader withdrawal routes must import shared current-leader wrapper');
 assert(!route.includes('resolveCurrentLeader(request)'), 'Legacy leader resolver must not return');
@@ -89,11 +109,12 @@ assert(leaderWithdrawalDetailRoute.includes('leader_user_id: leader.id'), 'Leade
 
 const createWithdrawalRoute = routeBlock(route, 'post', '/api/leaders/me/withdrawals');
 assert(createWithdrawalRoute.includes('withCurrentLeader('), 'Leader withdrawal creation must use shared current identity boundary');
-assert(createWithdrawalRoute.includes('client_request_id'), 'Leader withdrawal creation must require client_request_id');
-assert(createWithdrawalRoute.includes('getCommissionAvailableNet'), 'Leader withdrawal creation must validate each commission ledger net');
-assert(createWithdrawalRoute.includes('withdrawalCommission.createMany'), 'Leader withdrawal creation must persist commission links');
-assert(createWithdrawalRoute.includes('PrismaClientKnownRequestError') && createWithdrawalRoute.includes('P2002'), 'Leader withdrawal creation must handle client_request_id unique races');
-assert(createWithdrawalRoute.includes('withdrawal_reserved'), 'Leader withdrawal creation must reserve available ledger balance');
+assert(createWithdrawalRoute.includes('parseLeaderWithdrawalCommand') && leaderCommand.includes('client_request_id'), 'Leader withdrawal creation must require client_request_id');
+assert(createWithdrawalRoute.includes('executeLeaderWithdrawalCommand'), 'Leader withdrawal creation must invoke its reliable executor');
+assert(leaderExecutor.includes('validateWithdrawalRewardBalance'), 'Leader withdrawal creation must validate each commission ledger net');
+assert(leaderExecutor.includes('linkWithdrawalCommissions'), 'Leader withdrawal creation must persist commission links');
+assert(leaderExecutor.includes('PrismaClientKnownRequestError') && leaderExecutor.includes('P2002'), 'Leader withdrawal creation must handle client_request_id unique races');
+assert(leaderExecutor.includes('reserveWithdrawalReward') && rewardOwner.includes("'withdrawal_reserved'"), 'Leader withdrawal creation must reserve available ledger balance');
 
 const adminWithdrawalListRoute = routeBlock(route, 'get', '/api/admin/withdrawals');
 assert(adminWithdrawalListRoute.includes('requireAdminPermission("withdrawal.view")'), 'Admin withdrawal list must require withdrawal.view');
@@ -126,8 +147,8 @@ assert(rejectRoute.includes('executeReliableWithdrawal(request, reply, "reject")
 const markPaidRoute = routeBlock(route, 'post', '/api/admin/withdrawals/:id/mark-paid');
 assert(markPaidRoute.includes('requireAdminPermission("withdrawal.manage")'), 'Mark-paid route must require withdrawal.manage');
 assert(markPaidRoute.includes('executeReliableWithdrawal(request, reply, "mark-paid")'), 'Mark-paid route must use reliable command executor');
-for (const required of ['assertScope(initial)', 'tx.adminCommandReceipt.create', 'version: input.command.expected_version', 'withdrawal_rejected_restore', 'withdrawal_paid', 'affects_available_balance: input.action === \'reject\'']) {
-  assert(executor.includes(required), `Reliable withdrawal executor includes ${required}`);
+for (const required of ['assertScope(initial)', 'tx.adminCommandReceipt.create', 'version: input.command.expected_version', 'withdrawal_rejected_restore', 'withdrawal_paid', 'affects_available_balance: true', 'affects_available_balance: false']) {
+  assert(reliableWithdrawalChain.includes(required), `Reliable withdrawal owner chain includes ${required}`);
 }
 
 assert(route.includes('reply.code((error as { statusCode?: number }).statusCode ?? 400)'), 'Admin route catches preserve status codes');

@@ -68,8 +68,6 @@ export function TaxReviewPage(props: TaxReviewPageProps) {
         tax_rate_basis: fetched.tax_rate_basis ?? undefined,
         invoice_status: fetched.invoice_status,
         tax_remark: fetched.tax_remark ?? undefined,
-        client_request_id: `tax-review-${Date.now()}`,
-        expected_updated_at: fetched.updated_at,
       });
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -88,7 +86,7 @@ export function TaxReviewPage(props: TaxReviewPageProps) {
     setActionError('');
     try {
       const values = await form.validateFields();
-      await submitTaxReview(detail.withdrawal_id, values);
+      await submitTaxReview(detail.withdrawal_id, detail.version, values);
       props.onMessage(
         '人工税务 Review 已保存，系统不会自动报税、不会连接外部税务平台、不会自动发起打款。',
       );

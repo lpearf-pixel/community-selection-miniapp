@@ -4,6 +4,19 @@ import type {
   AdminWithdrawalAction,
   AdminWithdrawalCommand,
 } from './admin-withdrawal-command.js';
+import {
+  markCommissionsWithdrawn,
+  releaseCommissionsFromWithdrawal,
+} from './withdrawal-commission-owner.js';
+import {
+  lockWithdrawal,
+  transitionWithdrawal,
+} from './withdrawal-owner.js';
+import {
+  recordPaidWithdrawalReward,
+  restoreRejectedWithdrawalReward,
+  validateReservedWithdrawalReward,
+} from './withdrawal-reward-ledger-owner.js';
 
 export type AdminWithdrawalCommandErrorCode =
   | 'ADMIN_WITHDRAWAL_NOT_FOUND'
@@ -211,13 +224,11 @@ export async function executeAdminWithdrawalCommand(input: {
       recordBusinessEvent,
       recordOrderTimeline,
     },
-    { appendRewardLedgerEntry },
   ] = await Promise.all([
     import('../../db.js'),
     import('../admin-access/admin-access-control.js'),
     import('./admin-withdrawal-command.js'),
     import('../audit/audit-service.js'),
-    import('../../services/commission-service.js'),
   ]);
 
   const loadTarget = (client: Prisma.TransactionClient | typeof prisma) =>
@@ -334,7 +345,7 @@ export async function executeAdminWithdrawalCommand(input: {
           request_hash: requestHash,
         },
       });
-      const before = await loadTarget(tx);
+      const before = await lockWithdrawal(tx, input.withdrawal_id);
       if (!before) {
         throw commandError(
           404,
@@ -359,72 +370,29 @@ export async function executeAdminWithdrawalCommand(input: {
         );
       }
       if (input.action === 'reject') {
-        const [reserved, restored] = await Promise.all([
-          tx.rewardLedger.aggregate({
-            where: {
-              withdrawal_id: before.id,
-              event_type: 'withdrawal_reserved',
-              direction: 'out',
-              affects_available_balance: true,
-            },
-            _sum: { amount_cents: true },
-          }),
-          tx.rewardLedger.aggregate({
-            where: {
-              withdrawal_id: before.id,
-              event_type: 'withdrawal_rejected_restore',
-              direction: 'in',
-              affects_available_balance: true,
-            },
-            _sum: { amount_cents: true },
-          }),
-        ]);
-        if (
-          reserved._sum.amount_cents !== before.amount_cents ||
-          (restored._sum.amount_cents ?? 0) !== 0
-        ) {
+        try {
+          await validateReservedWithdrawalReward(tx, {
+            withdrawal_id: before.id,
+            amount_cents: before.amount_cents,
+          });
+        } catch {
           throw conflict(
             'ADMIN_WITHDRAWAL_REWARD_CONFLICT',
             '提现预留奖励账本不一致，请人工复核',
           );
         }
       }
-      const now = new Date();
-      const stateData: Prisma.WithdrawalUpdateManyMutationInput =
-        input.action === 'approve'
-          ? {
-              status: 'approved',
-              version: { increment: 1 },
-              admin_remark: input.command.admin_remark,
-              reviewed_by_admin_id: input.context.admin_user_id,
-              reviewed_at: now,
-            }
-          : input.action === 'reject'
-            ? {
-                status: 'rejected',
-                version: { increment: 1 },
-                admin_remark: input.command.admin_remark,
-                reviewed_by_admin_id: input.context.admin_user_id,
-                reviewed_at: now,
-                rejected_at: now,
-              }
-            : {
-                status: 'paid',
-                version: { increment: 1 },
-                admin_remark: input.command.admin_remark,
-                manual_reference: input.command.manual_reference,
-                processed_by_admin_id: input.context.admin_user_id,
-                processed_at: now,
-              };
-      const changed = await tx.withdrawal.updateMany({
-        where: {
-          id: before.id,
-          status: before.status,
-          version: input.command.expected_version,
-        },
-        data: stateData,
-      });
-      if (changed.count !== 1) {
+      let updated;
+      try {
+        updated = await transitionWithdrawal(tx, {
+          withdrawal_id: before.id,
+          expected_version: input.command.expected_version,
+          action: input.action,
+          admin_user_id: input.context.admin_user_id,
+          admin_remark: input.command.admin_remark,
+          manual_reference: input.command.manual_reference,
+        });
+      } catch {
         throw conflict(
           'ADMIN_WITHDRAWAL_VERSION_CONFLICT',
           '提现状态已变化，请刷新后重试',
@@ -446,47 +414,35 @@ export async function executeAdminWithdrawalCommand(input: {
       }
       const orderIds = Array.from(commissionIdsByOrder.keys());
       if (input.action !== 'approve') {
-        const commissions = await tx.commission.updateMany({
-          where: {
-            id: { in: commissionIds },
-            withdrawal_id: before.id,
-            status: 'withdrawing',
-          },
-          data:
-            input.action === 'reject'
-              ? { status: 'available', withdrawal_id: null }
-              : { status: 'withdrawn' },
-        });
-        if (commissions.count !== commissionIds.length) {
+        try {
+          if (input.action === 'reject') {
+            await releaseCommissionsFromWithdrawal(tx, {
+              withdrawal_id: before.id,
+              commission_ids: commissionIds,
+            });
+            await restoreRejectedWithdrawalReward(tx, {
+              leader_user_id: before.leader_user_id,
+              withdrawal_id: before.id,
+              amount_cents: before.amount_cents,
+            });
+          } else {
+            await markCommissionsWithdrawn(tx, {
+              withdrawal_id: before.id,
+              commission_ids: commissionIds,
+            });
+            await recordPaidWithdrawalReward(tx, {
+              leader_user_id: before.leader_user_id,
+              withdrawal_id: before.id,
+              amount_cents: before.amount_cents,
+            });
+          }
+        } catch {
           throw conflict(
             'ADMIN_WITHDRAWAL_REWARD_CONFLICT',
             '提现关联奖励状态已变化，请人工复核',
           );
         }
-        await appendRewardLedgerEntry(tx, {
-          leader_user_id: before.leader_user_id,
-          withdrawal_id: before.id,
-          event_type:
-            input.action === 'reject'
-              ? 'withdrawal_rejected_restore'
-              : 'withdrawal_paid',
-          entry_type:
-            input.action === 'reject'
-              ? 'withdrawal_rejected_restore'
-              : 'withdrawal_paid',
-          direction: input.action === 'reject' ? 'in' : 'out',
-          amount_cents: before.amount_cents,
-          affects_available_balance: input.action === 'reject',
-          idempotency_key:
-            input.action === 'reject'
-              ? `withdrawal-rejected-restore:${before.id}`
-              : `withdrawal-paid:${before.id}`,
-        });
       }
-
-      const updated = await tx.withdrawal.findUniqueOrThrow({
-        where: { id: before.id },
-      });
       const eventType =
         input.action === 'approve'
           ? 'withdrawal_approved'

@@ -151,16 +151,8 @@ describe('L48 leader withdrawal route security', () => {
     }
   });
 
-  it('ignores body identity and scopes commission selection to the header leader', async () => {
+  it('rejects body identity fields instead of trusting or ignoring them', async () => {
     mockIdentityUsers();
-    vi.spyOn(prisma.withdrawal, 'findUnique').mockResolvedValue(null);
-    const commissionFindMany = vi.fn().mockResolvedValue([]);
-    const fakeTx = {
-      commission: { findMany: commissionFindMany },
-    } as any;
-    vi.spyOn(prisma, '$transaction').mockImplementation(
-      (async (callback: (tx: any) => Promise<unknown>) => callback(fakeTx)) as any,
-    );
     const app = buildApp();
     openedApps.push(app);
     await app.ready();
@@ -177,20 +169,10 @@ describe('L48 leader withdrawal route security', () => {
       },
     });
 
-    expect(response.statusCode).toBe(409);
+    expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       success: false,
-      message: '存在不可提现或已占用的开团服务奖励',
-    });
-    expect(commissionFindMany).toHaveBeenCalledWith({
-      where: {
-        id: { in: ['l48-commission-a'] },
-        leader_user_id: leaderA.id,
-        status: 'available',
-        withdrawal_id: null,
-        final_amount_cents: { gt: 0 },
-      },
-      orderBy: { created_at: 'asc' },
+      message: '提现申请命令不合法',
     });
   });
 
@@ -243,17 +225,19 @@ describe('L48 leader withdrawal route security', () => {
   it('maps a typed ledger mismatch to the fixed public 409 response', async () => {
     mockIdentityUsers();
     vi.spyOn(prisma.withdrawal, 'findUnique').mockResolvedValue(null);
-    vi.spyOn(prisma.businessEventLog, 'create').mockResolvedValue({ id: 'l48-audit' } as any);
+    vi.spyOn(prisma.opsAlertLog, 'create').mockResolvedValue({ id: 'l48-alert' } as any);
     const fakeTx = {
-      commission: {
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 'l48-commission-a',
-            final_amount_cents: 300,
-            order_id: 'l48-order-a',
-          },
-        ]),
-      },
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          id: 'l48-commission-a',
+          leader_user_id: leaderA.id,
+          final_amount_cents: 300,
+          order_id: 'l48-order-a',
+          group_buy_id: 'l48-group-a',
+          status: 'available',
+          withdrawal_id: null,
+        },
+      ]),
       rewardLedger: {
         findMany: vi.fn().mockResolvedValue([]),
       },
@@ -280,7 +264,7 @@ describe('L48 leader withdrawal route security', () => {
       success: false,
       message: '奖励账本待人工复核',
     });
-    expect(prisma.businessEventLog.create).toHaveBeenCalled();
+    expect(prisma.opsAlertLog.create).toHaveBeenCalled();
   });
 
   it('maps a message-prefixed ledger mismatch from an unknown error to the fixed 500 boundary', async () => {
