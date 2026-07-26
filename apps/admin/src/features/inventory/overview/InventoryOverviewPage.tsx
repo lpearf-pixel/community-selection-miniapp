@@ -17,6 +17,7 @@ import {
   loadInventoryOverview,
   loadStockLedger,
 } from './api';
+import { commitInventoryAdjustment } from './inventory-adjust-mutation';
 import type {
   InventoryItem,
   InventoryOverview,
@@ -56,6 +57,10 @@ export function InventoryOverviewPage(
     props.refreshVersion,
   );
   const [stockLedgers, setStockLedgers] = useState<StockLedger[]>([]);
+  const [adjustingProductIds, setAdjustingProductIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const adjustingProductIdsRef = useRef(new Set<string>());
   const ledgerRequestGenerationRef = useRef(0);
   const activeLedgerRequestRef = useRef<AbortController | null>(null);
 
@@ -109,6 +114,7 @@ export function InventoryOverviewPage(
   };
 
   const adjust = async (item: InventoryItem) => {
+    if (adjustingProductIdsRef.current.has(item.product_id)) return;
     const adjustText = window.prompt(
       `请输入 ${item.product_name} 调整数量（基础库存单位：${item.stock_unit}，可为负数）`,
       '1',
@@ -117,9 +123,21 @@ export function InventoryOverviewPage(
     const reason = window.prompt('请输入库存调整原因', '后台人工调整');
     if (!reason) return;
 
-    await adjustInventory(item.product_id, Number(adjustText), reason);
-    props.onMessage('库存调整已保存');
-    props.onMutationCommitted();
+    adjustingProductIdsRef.current.add(item.product_id);
+    setAdjustingProductIds(new Set(adjustingProductIdsRef.current));
+    try {
+      await commitInventoryAdjustment({
+        item,
+        adjust_quantity: Number(adjustText),
+        reason,
+        adjust: adjustInventory,
+        onMessage: props.onMessage,
+        onMutationCommitted: props.onMutationCommitted,
+      });
+    } finally {
+      adjustingProductIdsRef.current.delete(item.product_id);
+      setAdjustingProductIds(new Set(adjustingProductIdsRef.current));
+    }
   };
 
   const createPlan = async (item?: InventoryItem) => {
@@ -221,7 +239,13 @@ export function InventoryOverviewPage(
                   <Button onClick={() => loadProductLedger(item)}>
                     查看流水
                   </Button>
-                  <Button onClick={() => adjust(item)}>库存调整</Button>
+                  <Button
+                    disabled={adjustingProductIds.has(item.product_id)}
+                    loading={adjustingProductIds.has(item.product_id)}
+                    onClick={() => adjust(item)}
+                  >
+                    库存调整
+                  </Button>
                   <Button onClick={() => createPlan(item)}>
                     创建采购计划
                   </Button>

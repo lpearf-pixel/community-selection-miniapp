@@ -1,12 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { fail, ok } from '@community-selection/shared';
+import { contractFail, contractOk, fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { adjustStockByAdmin, confirmStockCheck, recordBatchLoss } from '../modules/inventory/inventory-service.js';
+import { confirmStockCheck, recordBatchLoss } from '../modules/inventory/inventory-service.js';
 import { cancelPurchasePlan, confirmPurchasePlan, createPurchasePlan, receivePurchasePlan } from '../modules/purchase/purchase-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
+import {
+  requireAdminPermissionV1,
+  resolveAdminAccessContext,
+} from '../modules/admin-access/admin-access-control.js';
+import { parseAdminInventoryAdjustCommand } from '../modules/inventory/admin-inventory-adjust-command.js';
+import {
+  AdminInventoryAdjustCommandError,
+  executeAdminInventoryAdjustCommand,
+} from '../modules/inventory/admin-inventory-adjust-executor.js';
 
-type AdjustBody = { adjust_quantity?: number; reason?: string };
 type CreatePurchasePlanBody = {
   target_date?: string;
   supplier_name?: string;
@@ -105,33 +113,77 @@ export function registerInventoryRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/admin/inventory/products/:id/adjust', async (request, reply) => {
-    try {
-      const adminUserId = requireAdmin(request);
-      const { id } = request.params as { id: string };
-      const body = request.body as AdjustBody;
-      const adjustQuantity = Number(body.adjust_quantity);
-      if (!Number.isInteger(adjustQuantity) || adjustQuantity === 0) throw new Error('调整数量必须为非零整数');
-      if (!body.reason?.trim()) throw new Error('缺少库存调整原因');
-      const product = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const result = await adjustStockByAdmin(tx, { product_id: id, adjust_quantity: adjustQuantity, admin_user_id: adminUserId, reason: body.reason!.trim() });
-        await recordAdminAudit(tx, {
-          admin_user_id: adminUserId,
-          action: 'inventory_manual_adjusted',
-          target_type: 'Product',
-          target_id: id,
-          ip_address: request.ip ?? null,
-          user_agent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
-          payload: { adjust_quantity: adjustQuantity, stock_before: result.stock_before, stock_after: result.stock_after, reason: body.reason }
+  app.post(
+    '/api/admin/inventory/products/:id/adjust',
+    {
+      config: { adminContractV1: true },
+      preHandler: requireAdminPermissionV1('product.manage'),
+    },
+    async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: '管理员身份无效',
+          traceId,
         });
-        return result.product;
-      });
-      return ok(product);
-    } catch (error) {
-      reply.code(error instanceof Error && error.message === '后台登录已失效' ? 401 : 400);
-      return fail(error instanceof Error ? error.message : '库存调整失败');
-    }
-  });
+      }
+      const parsed = parseAdminInventoryAdjustCommand(request.body);
+      if (!parsed.ok) {
+        reply.code(400);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
+      }
+      const { id } = request.params as { id: string };
+      try {
+        const result = await executeAdminInventoryAdjustCommand({
+          product_id: id,
+          command: parsed.value,
+          context,
+          admin_meta: {
+            ip_address: request.ip,
+            user_agent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+        });
+        return contractOk(result, {
+          code: 'ADMIN_INVENTORY_ADJUSTED',
+          message: '库存调整成功',
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AdminInventoryAdjustCommandError) {
+          reply.code(error.statusCode);
+          return contractFail({
+            code: error.code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name: error instanceof Error ? error.name : 'UnknownError',
+            product_id: id,
+            trace_id: traceId,
+          },
+          'Admin inventory adjustment failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_INVENTORY_ADJUST_FAILED',
+          message: '库存调整失败',
+          traceId,
+        });
+      }
+    },
+  );
 
   app.post('/api/admin/purchase-plans', async (request, reply) => {
     try {

@@ -52,41 +52,6 @@ export async function lockStockForOrder(tx: Prisma.TransactionClient, input: {
   };
 }
 
-export async function adjustStockByAdmin(tx: Prisma.TransactionClient, input: {
-  product_id: string;
-  adjust_quantity: number;
-  admin_user_id: string;
-  reason: string;
-}) {
-  const product = await tx.product.findUnique({ where: { id: input.product_id } });
-  if (!product) throw new Error('商品不存在');
-  const stockAfter = product.stock + input.adjust_quantity;
-  if (stockAfter < 0) throw new Error('库存不能调整为负数');
-  const updated = await tx.product.update({ where: { id: input.product_id }, data: { stock: stockAfter } });
-  await tx.stockLedger.create({
-    data: {
-      product_id: input.product_id,
-      source_type: 'manual_adjust',
-      source_id: input.product_id,
-      direction: input.adjust_quantity > 0 ? 'in' : 'out',
-      quantity: Math.abs(input.adjust_quantity),
-      stock_before: product.stock,
-      stock_after: stockAfter,
-      operator_type: 'admin',
-      operator_id: input.admin_user_id,
-      remark: input.reason,
-      payload: {
-        adjust_quantity: input.adjust_quantity,
-        stock_unit: product.stock_unit,
-        sale_unit: product.sale_unit,
-        sale_spec_name: product.sale_spec_name,
-        stock_deduct_quantity: product.stock_deduct_quantity
-      }
-    }
-  });
-  return { product: updated, stock_before: product.stock, stock_after: stockAfter };
-}
-
 export async function receivePurchaseStock(tx: Prisma.TransactionClient, input: {
   product_id: string;
   purchase_plan_id: string;

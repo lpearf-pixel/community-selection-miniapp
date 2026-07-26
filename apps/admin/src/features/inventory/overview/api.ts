@@ -5,6 +5,14 @@ import type {
   StockLedger,
 } from '../shared/types';
 
+export type InventoryAdjustmentResult = {
+  product_id: string;
+  stock_before: number;
+  stock_after: number;
+  adjust_quantity: number;
+  stock_unit: string;
+};
+
 export function loadInventoryOverview(
   request: JsonRequester = adminJsonRequest,
   signal?: AbortSignal,
@@ -27,15 +35,22 @@ export function loadStockLedger(
 
 export function adjustInventory(
   productId: string,
+  expectedStock: number,
   adjustQuantity: number,
   reason: string,
   request: JsonRequester = adminJsonRequest,
-): Promise<void> {
-  return request<void>(`/api/admin/inventory/products/${productId}/adjust`, {
-    method: 'POST',
-    body: JSON.stringify({
-      adjust_quantity: adjustQuantity,
-      reason,
-    }),
-  });
+  createIdempotencyKey: () => string = () => crypto.randomUUID(),
+): Promise<InventoryAdjustmentResult> {
+  return request<InventoryAdjustmentResult>(
+    `/api/admin/inventory/products/${productId}/adjust`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        expected_stock: expectedStock,
+        adjust_quantity: adjustQuantity,
+        reason,
+        idempotency_key: createIdempotencyKey(),
+      }),
+    },
+  );
 }
