@@ -3,6 +3,7 @@ import type { JsonRequester } from '../../../shared/api/client';
 import {
   cancelPurchasePlan,
   confirmPurchasePlan,
+  createPurchaseReceiveCommand,
   createPurchasePlan,
   loadPurchasePlans,
   receivePurchasePlan,
@@ -37,16 +38,19 @@ describe('purchase-plan API boundary', () => {
         },
       ],
     };
-    const receiveInput = {
+    const keyFactory = vi.fn(() => 'purchase-receive-test-0001');
+    const receiveInput = createPurchaseReceiveCommand({
       remark: '后台采购入库',
       items: [{ item_id: 'i1', received_quantity: 4 }],
-    };
+    }, keyFactory);
 
     await createPurchasePlan(createInput, request);
     await confirmPurchasePlan('plan-1', request);
     await cancelPurchasePlan('plan-1', request);
     await receivePurchasePlan('plan-1', receiveInput, request);
 
+    expect(keyFactory).toHaveBeenCalledTimes(1);
+    expect(receiveInput.idempotency_key).toBe('purchase-receive-test-0001');
     expect(request).toHaveBeenCalledWith('/api/admin/purchase-plans', {
       method: 'POST',
       body: JSON.stringify(createInput),

@@ -72,6 +72,7 @@ async function main() {
   await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/confirm`, {}, adminCookie);
   const arrivalDate = new Date();
   await adminPost(`/api/admin/purchase-plans/${purchasePlan.id}/receive`, {
+    idempotency_key: `${prefix}-purchase-receive`,
     remark: 'L14批次入库',
     items: [{ item_id: purchasePlan.items[0].id, received_quantity: 30000, supplier_id: supplier.id, arrival_date: arrivalDate.toISOString(), shelf_life_days: 3, remark: '首批苹果入库' }]
   }, adminCookie);

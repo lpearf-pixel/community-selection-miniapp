@@ -1,7 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 import { recordAdminAudit } from '../audit/audit-service.js';
-import { receivePurchaseStock } from '../inventory/inventory-service.js';
+import type { AdminPurchaseReceiveCommand } from './admin-purchase-receive-command.js';
+import { executeAdminPurchaseReceiveCommand } from './admin-purchase-receive-executor.js';
+import { transitionPurchasePlan } from './purchase-plan-owner.js';
 
 type AdminMeta = { admin_user_id: string; ip_address?: string | null; user_agent?: string | null };
 type CreatePurchasePlanBody = {
@@ -10,14 +12,9 @@ type CreatePurchasePlanBody = {
   items?: Array<{ product_id?: string; planned_quantity?: number; cost_price_cents?: number; purchase_quantity?: number; purchase_unit?: string; stock_in_quantity?: number; remark?: string }>;
   remark?: string;
 };
-type ReceivePurchasePlanBody = { items?: Array<{ item_id?: string; received_quantity?: number; supplier_id?: string; production_date?: string; arrival_date?: string; shelf_life_days?: number; remark?: string }>; remark?: string };
 
 function makePlanNo() {
   return `PP${Date.now()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-}
-
-function makeBatchNo() {
-  return `PB${Date.now()}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
 }
 
 export async function createPurchasePlan(input: { body: CreatePurchasePlanBody; admin: AdminMeta }) {
@@ -71,10 +68,10 @@ export async function createPurchasePlan(input: { body: CreatePurchasePlanBody; 
 
 export async function confirmPurchasePlan(input: { id: string; admin: AdminMeta }) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const current = await tx.purchasePlan.findUnique({ where: { id: input.id } });
-    if (!current) throw new Error('采购计划不存在');
-    if (current.status !== 'draft') throw new Error('仅草稿采购计划可确认');
-    const updated = await tx.purchasePlan.update({ where: { id: input.id }, data: { status: 'confirmed' }, include: { items: true } });
+    const updated = await transitionPurchasePlan(tx, {
+      purchase_plan_id: input.id,
+      action: 'confirm',
+    });
     await recordAdminAudit(tx, { admin_user_id: input.admin.admin_user_id, action: 'purchase_plan_confirmed', target_type: 'PurchasePlan', target_id: input.id, ip_address: input.admin.ip_address ?? null, user_agent: input.admin.user_agent ?? null });
     return updated;
   });
@@ -82,69 +79,27 @@ export async function confirmPurchasePlan(input: { id: string; admin: AdminMeta 
 
 export async function cancelPurchasePlan(input: { id: string; admin: AdminMeta }) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const current = await tx.purchasePlan.findUnique({ where: { id: input.id } });
-    if (!current) throw new Error('采购计划不存在');
-    if (!['draft', 'confirmed'].includes(current.status)) throw new Error('当前采购计划不可取消');
-    const updated = await tx.purchasePlan.update({ where: { id: input.id }, data: { status: 'cancelled' }, include: { items: true } });
+    const updated = await transitionPurchasePlan(tx, {
+      purchase_plan_id: input.id,
+      action: 'cancel',
+    });
     await recordAdminAudit(tx, { admin_user_id: input.admin.admin_user_id, action: 'purchase_plan_cancelled', target_type: 'PurchasePlan', target_id: input.id, ip_address: input.admin.ip_address ?? null, user_agent: input.admin.user_agent ?? null });
     return updated;
   });
 }
 
-export async function receivePurchasePlan(input: { id: string; body: ReceivePurchasePlanBody; admin: AdminMeta }) {
-  if (!input.body.items?.length) throw new Error('入库明细不能为空');
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const current = await tx.purchasePlan.findUnique({ where: { id: input.id }, include: { items: true } });
-    if (!current) throw new Error('采购计划不存在');
-    if (!['confirmed', 'ordered'].includes(current.status)) throw new Error('仅已确认或已下单采购计划可入库');
-    const itemMap = new Map(current.items.map((item) => [item.id, item]));
-    for (const receivedItem of input.body.items ?? []) {
-      if (!receivedItem.item_id || !itemMap.has(receivedItem.item_id)) throw new Error('入库明细不存在');
-      const item = itemMap.get(receivedItem.item_id)!;
-      const receivedQuantity = Number(receivedItem.received_quantity);
-      if (!Number.isInteger(receivedQuantity) || receivedQuantity < 0) throw new Error('入库数量必须大于等于 0');
-      if (item.received_quantity + receivedQuantity > item.planned_quantity) throw new Error('累计入库数量不能超过计划数量');
-      if (receivedQuantity <= 0) continue;
-      const supplier = receivedItem.supplier_id ? await tx.supplier.findUnique({ where: { id: receivedItem.supplier_id } }) : null;
-      if (receivedItem.supplier_id && !supplier) throw new Error('供应商不存在');
-      const arrivalDate = receivedItem.arrival_date ? new Date(receivedItem.arrival_date) : new Date();
-      if (Number.isNaN(arrivalDate.getTime())) throw new Error('到货日期不合法');
-      const productionDate = receivedItem.production_date ? new Date(receivedItem.production_date) : null;
-      if (productionDate && Number.isNaN(productionDate.getTime())) throw new Error('生产日期不合法');
-      const shelfLifeDays = receivedItem.shelf_life_days === undefined ? null : Number(receivedItem.shelf_life_days);
-      if (shelfLifeDays !== null && (!Number.isInteger(shelfLifeDays) || shelfLifeDays <= 0)) throw new Error('保质期天数必须大于 0');
-      const expireAt = shelfLifeDays ? new Date(arrivalDate.getTime() + shelfLifeDays * 24 * 60 * 60 * 1000) : null;
-      const receivedStock = await receivePurchaseStock(tx, { product_id: item.product_id, purchase_plan_id: current.id, purchase_plan_item_id: item.id, received_quantity: receivedQuantity, admin_user_id: input.admin.admin_user_id, remark: input.body.remark ?? null, payload: { purchase_unit: item.purchase_unit, purchase_quantity: item.purchase_quantity, stock_in_quantity: item.stock_in_quantity ?? item.planned_quantity } });
-      await tx.purchasePlanItem.update({ where: { id: item.id }, data: { received_quantity: { increment: receivedQuantity } } });
-      item.received_quantity += receivedQuantity;
-      const batch = await tx.productBatch.create({
-        data: {
-          batch_no: makeBatchNo(),
-          product_id: item.product_id,
-          supplier_id: supplier?.id ?? null,
-          purchase_plan_id: current.id,
-          purchase_plan_item_id: item.id,
-          product_name_snapshot: item.product_name_snapshot,
-          supplier_name_snapshot: supplier?.name ?? null,
-          stock_unit: receivedStock.stock_unit,
-          initial_quantity: receivedQuantity,
-          remaining_quantity: receivedQuantity,
-          cost_price_cents: item.cost_price_cents,
-          production_date: productionDate,
-          arrival_date: arrivalDate,
-          shelf_life_days: shelfLifeDays,
-          expire_at: expireAt,
-          status: 'active',
-          remark: receivedItem.remark ?? input.body.remark ?? null,
-          payload: { purchase_unit: item.purchase_unit, purchase_quantity: item.purchase_quantity, stock_in_quantity: item.stock_in_quantity ?? item.planned_quantity }
-        }
-      });
-      await tx.batchStockLedger.create({ data: { batch_id: batch.id, product_id: item.product_id, source_type: 'purchase_batch_in', source_id: current.id, direction: 'in', quantity: receivedQuantity, batch_quantity_before: 0, batch_quantity_after: receivedQuantity, product_stock_before: receivedStock.stock_before, product_stock_after: receivedStock.stock_after, operator_type: 'admin', operator_id: input.admin.admin_user_id, remark: receivedItem.remark ?? input.body.remark ?? null, payload: { purchase_plan_item_id: item.id, supplier_id: supplier?.id ?? null, expire_at: expireAt?.toISOString() ?? null } } });
-      await recordAdminAudit(tx, { admin_user_id: input.admin.admin_user_id, action: 'purchase_batch_created', target_type: 'ProductBatch', target_id: batch.id, ip_address: input.admin.ip_address ?? null, user_agent: input.admin.user_agent ?? null, payload: { batch_no: batch.batch_no, purchase_plan_id: current.id } });
-    }
-    const allReceived = current.items.every((item) => item.received_quantity >= item.planned_quantity);
-    const updated = await tx.purchasePlan.update({ where: { id: input.id }, data: { status: allReceived ? 'received' : 'ordered' }, include: { items: true } });
-    await recordAdminAudit(tx, { admin_user_id: input.admin.admin_user_id, action: 'purchase_plan_received', target_type: 'PurchasePlan', target_id: input.id, ip_address: input.admin.ip_address ?? null, user_agent: input.admin.user_agent ?? null, payload: { remark: input.body.remark ?? null } });
-    return updated;
+export async function receivePurchasePlan(input: {
+  id: string;
+  body: AdminPurchaseReceiveCommand;
+  admin: AdminMeta;
+}) {
+  return executeAdminPurchaseReceiveCommand({
+    purchase_plan_id: input.id,
+    command: input.body,
+    context: { admin_user_id: input.admin.admin_user_id },
+    admin_meta: {
+      ip_address: input.admin.ip_address,
+      user_agent: input.admin.user_agent,
+    },
   });
 }
