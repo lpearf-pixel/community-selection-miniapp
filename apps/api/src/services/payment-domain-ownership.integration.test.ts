@@ -375,7 +375,7 @@ describe.sequential('payment domain ownership on PostgreSQL', () => {
     expect(orders.every((item) => item.order_status === 'grouped')).toBe(true);
   });
 
-  it('handles duplicate payment without duplicate inventory, timeline, reward, or audit', async () => {
+  it('serializes duplicate concurrent payment without duplicate side effects', async () => {
     await resetProductStock(10);
     const group = await createGroup('duplicate', 1);
     const fixture = await createGroupOrder(
@@ -385,8 +385,10 @@ describe.sequential('payment domain ownership on PostgreSQL', () => {
       1,
     );
 
-    await pay(fixture.order, fixture.payment);
-    await pay(fixture.order, fixture.payment);
+    await Promise.all([
+      pay(fixture.order, fixture.payment),
+      pay(fixture.order, fixture.payment),
+    ]);
 
     await expect(
       prisma.product.findUniqueOrThrow({ where: { id: ids.product } }),

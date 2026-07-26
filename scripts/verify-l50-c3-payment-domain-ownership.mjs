@@ -11,6 +11,7 @@ const steps = [
       'src/modules/payment/payment-record-service.test.ts',
       'src/modules/order/order-payment-service.test.ts',
       'src/modules/group-buy/group-buy-payment-service.test.ts',
+      'src/modules/inventory/inventory-order-service.test.ts',
       'src/services/payment-domain-ownership.contract.test.ts',
       'src/services/payment-domain-ownership.integration.test.ts',
     ],
