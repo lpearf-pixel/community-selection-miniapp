@@ -42,14 +42,25 @@ export function getTaxReviewDetail(
 
 export function submitTaxReview(
   withdrawalId: string,
+  expectedVersion: number,
   payload: TaxReviewPayload,
   request: JsonRequester = adminJsonRequest,
+  createIdempotencyKey: () => string = () =>
+    `tax-review-${globalThis.crypto.randomUUID()}`,
 ): Promise<void> {
+  const command = {
+    ...payload,
+    ...(payload.tax_mode === 'invoice'
+      ? {}
+      : { invoice_status: undefined }),
+    idempotency_key: createIdempotencyKey(),
+    expected_version: expectedVersion,
+  };
   return request<void>(
     `/api/admin/withdrawals/${withdrawalId}/tax-review`,
     {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(command),
     },
   );
 }

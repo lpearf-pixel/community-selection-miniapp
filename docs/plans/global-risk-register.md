@@ -42,12 +42,11 @@ L48 merge commit / `stable/l48-business-base`：`42b60954999fe46b3cfb0cd2365ca02
 ### GR-FIN-003：提现幂等键复用时未校验请求语义一致
 
 - 等级：Important
-- 状态：已接受延期
-- 证据位置：`apps/api/src/routes/withdrawals.ts`
+- 状态：已清零
+- 证据位置：`apps/api/src/modules/withdrawal/leader-withdrawal-command.ts`、`apps/api/src/modules/withdrawal/leader-withdrawal-executor.ts`、`apps/api/src/modules/withdrawal/withdrawal-domain-ownership.integration.test.ts`
 - 风险：同一 leader 重用 `client_request_id` 时，接口可直接返回旧提现记录，而不比较本次佣金集合或金额。不同 payload 可能收到误导性的幂等成功结果。该行为在 L48 稳定基线之前已存在，但仍属于财务正确性风险。
-- 当前保护：leader owner scope 和数据库唯一约束可阻止跨用户复用及重复创建记录。
-- 后续优化：规范化佣金 ID 集合并与 `WithdrawalCommission` 关联比较；对显式金额比较已存金额；语义不一致返回公开 `409`。
-- 清零标准：快速命中路径与 `P2002` 并发恢复路径均有 mismatch 测试；相同 payload 可幂等重放，不同佣金集合或金额必须返回 `409`，且不得产生额外财务记录。
+- 清零结论：命令层规范化佣金 ID 集合，执行器在快速命中与 `P2002` 并发恢复路径都比较 leader、佣金集合及已落账金额；原命令可精确重放，佣金集合或显式金额漂移返回公开 `409`。
+- 回归保护：单元测试覆盖快速命中和并发恢复的语义冲突，真实 PostgreSQL 验证同 key 重放、变更金额冲突及并发佣金争用，且冲突不产生额外 Withdrawal、关联、账本、审计或事件记录。
 
 ### GR-OBS-004：错误码日志策略是宽格式匹配而非严格 allow-list
 

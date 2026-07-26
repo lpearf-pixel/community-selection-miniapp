@@ -6,11 +6,6 @@ import { withCurrentLeader } from "./current-user-route.js";
 import { prisma } from "../db.js";
 import { countScopedTaxRecords, listScopedTaxRecordIds, restoreSelectedIdOrder } from "../modules/tax-record/tax-record-scope-repository.js";
 import {
-  safeRecordBusinessEvent,
-  safeRecordOrderTimeline,
-} from "../services/logging-service.js";
-import {
-  appendRewardLedgerEntry,
   getAvailableRewardBalance,
 } from "../services/commission-service.js";
 import {
@@ -27,31 +22,17 @@ import {
   AdminWithdrawalCommandError,
   executeAdminWithdrawalCommand,
 } from "../modules/withdrawal/admin-withdrawal-executor.js";
+import { parseLeaderWithdrawalCommand } from "../modules/withdrawal/leader-withdrawal-command.js";
+import {
+  executeLeaderWithdrawalCommand,
+  LeaderWithdrawalCommandError,
+} from "../modules/withdrawal/leader-withdrawal-executor.js";
+import { parseAdminWithdrawalTaxReviewCommand } from "../modules/withdrawal/admin-withdrawal-tax-review-command.js";
+import {
+  AdminWithdrawalTaxReviewError,
+  executeAdminWithdrawalTaxReviewCommand,
+} from "../modules/withdrawal/admin-withdrawal-tax-review-executor.js";
 
-type WithdrawBody = {
-  amount_cents?: number;
-  client_request_id?: string;
-  commission_ids?: string[];
-};
-
-class WithdrawalLedgerMismatchError extends Error {
-  constructor(readonly auditPayload: Record<string, unknown>) {
-    super("Withdrawal reward ledger mismatch");
-    this.name = "WithdrawalLedgerMismatchError";
-  }
-}
-type TaxReviewBody = {
-  tax_mode?: "none" | "withheld" | "invoice";
-  tax_status?: string;
-  taxable_amount_cents?: number;
-  tax_amount_cents?: number;
-  tax_rate_basis?: string;
-  invoice_required?: boolean;
-  invoice_status?: string;
-  tax_remark?: string;
-  client_request_id?: string;
-  expected_updated_at?: string;
-};
 type TaxRecordQuery = {
   page?: string; page_size?: string; keyword?: string;
   leader_user_id?: string; withdrawal_id?: string; source_type?: string; source_id?: string;
@@ -197,30 +178,6 @@ function adminWithdrawalDto(w: any, links: WithdrawalLinkWithOrder[]) {
   };
 }
 
-async function getCommissionAvailableNet(tx: Prisma.TransactionClient, commissionId: string) {
-  const entries = await tx.rewardLedger.findMany({ where: { commission_id: commissionId, affects_available_balance: true }, select: { direction: true, amount_cents: true } });
-  return entries.reduce((sum, entry) => sum + (entry.direction === "in" ? entry.amount_cents : -entry.amount_cents), 0);
-}
-
-async function persistLedgerMismatch(leaderUserId: string, payload: Record<string, unknown>) {
-  await safeRecordBusinessEvent(prisma, { event_type: "withdrawal_ledger_mismatch", event_level: "warning", event_source: "withdrawals-route", leader_user_id: leaderUserId, payload });
-}
-
-async function idempotentWithdrawalByClientRequest(clientRequestId: string, leaderUserId: string) {
-  const existing = await prisma.withdrawal.findUnique({ where: { client_request_id: clientRequestId } });
-  if (!existing) return null;
-  if (existing.leader_user_id !== leaderUserId) throw publicCurrentUserError("client_request_id 已被使用", 409);
-  const count = await prisma.withdrawalCommission.count({ where: { withdrawal_id: existing.id } });
-  return { ...toLeaderWithdrawalDto(existing, count), applied: false, idempotent: true };
-}
-
-function parseAmount(value: unknown) {
-  const amount = Number(value);
-  if (!Number.isInteger(amount) || amount <= 0)
-    throw publicCurrentUserError("提现金额必须大于 0", 400);
-  return amount;
-}
-
 function parseDateRange(query: { from?: string; to?: string }) {
   return {
     ...(query.from || query.to
@@ -234,60 +191,7 @@ function parseDateRange(query: { from?: string; to?: string }) {
   };
 }
 
-const TAX_MODES = new Set(["none", "withheld", "invoice"]);
-const TAX_STATUSES = new Set(["pending", "calculated", "pending_invoice", "completed"]);
-const INVOICE_STATUSES = new Set(["not_required", "pending", "verified", "rejected"]);
-const TAX_REVIEW_IDEMPOTENCY_LIMIT = 100;
 const DEFAULT_TAX_EXPORT_LIMIT = 10000;
-const MAX_PRISMA_INT = 2_147_483_647;
-
-function resolveTaxStatus(body: { tax_mode?: string; invoice_status?: string }) {
-  if (body.tax_mode === "withheld") return "calculated";
-  if (body.tax_mode === "none") return "completed";
-  if (body.tax_mode === "invoice") return body.invoice_status === "verified" ? "completed" : "pending_invoice";
-  throw httpError("税务处理方式不合法", 400);
-}
-
-function parseTaxReviewClientRequestId(value: unknown) {
-  const id = typeof value === "string" ? value.trim() : "";
-  if (!id || id.length > 80) throw httpError("client_request_id 必填且 trim 后长度必须为 1-80", 400);
-  return id;
-}
-
-function parseExpectedUpdatedAt(value: unknown) {
-  const text = typeof value === "string" ? value.trim() : "";
-  const date = new Date(text);
-  if (!text || Number.isNaN(date.getTime())) throw httpError("expected_updated_at 必填且必须来自详情接口", 400);
-  return date;
-}
-
-function parseRequiredMoneyCents(body: Record<string, unknown>, fieldName: "taxable_amount_cents" | "tax_amount_cents") {
-  if (!Object.hasOwn(body, fieldName)) throw httpError(`${fieldName} 必填`, 400);
-  const value = body[fieldName];
-  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw httpError(`${fieldName} 必须为安全整数分`, 400);
-  if (value < 0) throw httpError(`${fieldName} 不能小于 0`, 400);
-  if (value > MAX_PRISMA_INT) throw httpError(`${fieldName} 超出数据库整数范围`, 400);
-  return value;
-}
-
-type ReviewRequestHistory = Record<string, { snapshot: Prisma.InputJsonValue | null; reviewed_at: string; reviewed_by_admin_id: string }>;
-function reviewRequestsFromPayload(payload: Record<string, any>): ReviewRequestHistory {
-  const value = payload.review_requests;
-  return value && typeof value === "object" && !Array.isArray(value) ? value as ReviewRequestHistory : {};
-}
-
-function hasReviewRequest(requests: ReviewRequestHistory, key: string) {
-  return Object.hasOwn(requests, key);
-}
-
-function validateTaxCombination(taxMode: string, invoiceRequired: boolean, invoiceStatus: string, taxStatus: string) {
-  if (!TAX_MODES.has(taxMode)) throw httpError("税务处理方式不合法", 400);
-  if (!INVOICE_STATUSES.has(invoiceStatus)) throw httpError("发票状态不合法", 400);
-  if (!TAX_STATUSES.has(taxStatus)) throw httpError("税务状态不合法", 400);
-  if (taxMode !== "invoice" && (invoiceRequired || invoiceStatus !== "not_required")) throw httpError("非发票税务模式不允许要求发票", 400);
-  if (taxMode === "invoice" && !invoiceRequired) throw httpError("发票税务模式必须要求发票", 400);
-  if (taxStatus !== resolveTaxStatus({ tax_mode: taxMode, invoice_status: invoiceStatus })) throw httpError("税务状态与税务模式/发票状态不匹配", 400);
-}
 
 function parsePage(query: { page?: string; page_size?: string }) {
   const page = Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1);
@@ -297,30 +201,6 @@ function parsePage(query: { page?: string; page_size?: string }) {
 
 function taxPayload(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
-}
-
-function taxReviewSnapshot(input: { tax_mode: string; tax_status: string; taxable_amount_cents: number; tax_amount_cents: number; tax_rate_basis: string | null; invoice_required: boolean; invoice_status: string; tax_remark: string | null }): Prisma.InputJsonObject {
-  return input;
-}
-
-function jsonValuesEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (left === null || right === null) return false;
-  if (typeof left !== "object" || typeof right !== "object") return false;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
-    return left.every((item, index) => jsonValuesEqual(item, right[index]));
-  }
-  const leftRecord = left as Record<string, unknown>;
-  const rightRecord = right as Record<string, unknown>;
-  const leftKeys = Object.keys(leftRecord).sort();
-  const rightKeys = Object.keys(rightRecord).sort();
-  if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every(
-    (key, index) =>
-      key === rightKeys[index] &&
-      jsonValuesEqual(leftRecord[key], rightRecord[key]),
-  );
 }
 
 function csvSafe(value: unknown) {
@@ -365,6 +245,7 @@ function taxRecordDto(record: any, withdrawal?: any) {
     reviewed_by_admin_id: w?.reviewed_by_admin_id ?? null,
     reviewed_at: w?.reviewed_at ?? null,
     withdrawal_status: w?.status ?? null,
+    version: w?.version ?? 0,
     community_names: communities,
     created_at: record.created_at,
     processed_at: w?.processed_at ?? null,
@@ -374,12 +255,6 @@ function taxRecordDto(record: any, withdrawal?: any) {
 
 function taxScope(context: NonNullable<ReturnType<typeof resolveAdminAccessContext>>) { return { isSuperAdmin: context.is_super_admin, communityIds: context.data_scope.community_ids, pickupStoreIds: context.data_scope.pickup_store_ids }; }
 function taxFilters(query: TaxRecordQuery) { const dates=parseDateRange(query); return { sourceType: "withdrawal" as const, taxMode:query.tax_mode, taxStatus:query.tax_status, invoiceStatus:query.invoice_status, leaderUserId:query.leader_user_id, withdrawalId:query.withdrawal_id ?? query.source_id, keyword:query.keyword, createdAtFromInclusive:dates.created_at?.gte, createdAtToInclusive:dates.created_at?.lte }; }
-
-function uniqueOrderIds(orderIds: Array<string | null | undefined> = []) {
-  return Array.from(
-    new Set(orderIds.filter((orderId): orderId is string => Boolean(orderId))),
-  );
-}
 
 async function executeReliableWithdrawal(
   request: any,
@@ -462,118 +337,6 @@ async function executeReliableWithdrawal(
   }
 }
 
-async function logWithdrawalEvent(
-  tx: Prisma.TransactionClient,
-  input: {
-    event_type: string;
-    withdrawal: {
-      id: string;
-      leader_user_id: string;
-      amount_cents: number;
-      status: string;
-    };
-    commissionIds?: string[];
-    orderIds?: string[];
-    admin_user_id?: string | null;
-    extraPayload?: Record<string, unknown>;
-    before?: unknown;
-    after?: unknown;
-    message?: string;
-  },
-) {
-  const orderIds = uniqueOrderIds(input.orderIds);
-  const payload = {
-    withdrawal_id: input.withdrawal.id,
-    amount_cents: input.withdrawal.amount_cents,
-    commission_ids: input.commissionIds ?? [],
-    order_ids: orderIds,
-    action: input.event_type,
-    status: input.withdrawal.status,
-    admin_user_id: input.admin_user_id ?? null,
-    ...(input.extraPayload ?? {}),
-    ...(input.event_type === "withdrawal_mark_paid" &&
-    "tax_amount_cents" in input.withdrawal
-      ? {
-          gross_amount_cents: input.withdrawal.amount_cents,
-          tax_amount_cents:
-            (input.withdrawal as { tax_amount_cents?: number })
-              .tax_amount_cents ?? 0,
-          payable_amount_cents:
-            (input.withdrawal as { payable_amount_cents?: number })
-              .payable_amount_cents ?? input.withdrawal.amount_cents,
-          tax_mode: (input.withdrawal as { tax_mode?: string }).tax_mode,
-          tax_status: (input.withdrawal as { tax_status?: string }).tax_status,
-          invoice_status: (input.withdrawal as { invoice_status?: string })
-            .invoice_status,
-        }
-      : {}),
-  };
-  await safeRecordBusinessEvent(tx, {
-    event_type: input.event_type,
-    event_source: "withdrawals-route",
-    withdrawal_id: input.withdrawal.id,
-    leader_user_id: input.withdrawal.leader_user_id,
-    before_snapshot: input.before,
-    after_snapshot: input.after ?? input.withdrawal,
-    payload,
-    message: input.message ?? null,
-  });
-  for (const orderId of orderIds) {
-    await safeRecordBusinessEvent(tx, {
-      event_type: input.event_type,
-      event_source: "withdrawals-route",
-      order_id: orderId,
-      withdrawal_id: input.withdrawal.id,
-      leader_user_id: input.withdrawal.leader_user_id,
-      before_snapshot: input.before,
-      after_snapshot: input.after ?? input.withdrawal,
-      payload,
-      message: input.message ?? null,
-    });
-    await safeRecordOrderTimeline(tx, {
-      order_id: orderId,
-      event_type: input.event_type,
-      title:
-        input.event_type === "withdrawal_requested"
-          ? "开团服务奖励提现申请已提交"
-          : "开团服务奖励提现状态已更新",
-      payload: {
-        withdrawal_id: input.withdrawal.id,
-        amount_cents: input.withdrawal.amount_cents,
-        status: input.withdrawal.status,
-      },
-    });
-  }
-}
-
-async function writeAdminAuditLog(
-  tx: Prisma.TransactionClient,
-  request: {
-    adminUser?: { id: string };
-    ip?: string;
-    headers: Record<string, unknown>;
-  },
-  input: { action: string; target_id: string; payload?: unknown },
-) {
-  await tx.adminAuditLog.create({
-    data: {
-      admin_user_id: resolveAdminAccessContext(request as any)?.admin_user_id ?? request.adminUser?.id ?? null,
-      action: input.action,
-      target_type: "Withdrawal",
-      target_id: input.target_id,
-      ip_address: request.ip ?? null,
-      user_agent:
-        typeof request.headers["user-agent"] === "string"
-          ? request.headers["user-agent"]
-          : null,
-      payload:
-        input.payload === undefined
-          ? Prisma.JsonNull
-          : (input.payload as Prisma.InputJsonValue),
-    },
-  });
-}
-
 export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExportLimit?: number } = {}) {
   app.get("/api/leaders/me/withdrawals", (request, reply) =>
     withCurrentLeader(request, reply, "查询提现申请失败", async (leader) => {
@@ -646,169 +409,18 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
 
   app.post("/api/leaders/me/withdrawals", (request, reply) =>
     withCurrentLeader(request, reply, "提交提现申请失败", async (leader) => {
-      const body = request.body as WithdrawBody;
-      const clientRequestId = String(body.client_request_id ?? "").trim();
-      if (!clientRequestId || clientRequestId.length > 80) {
-        throw publicCurrentUserError(
-          "client_request_id 必填且长度不能超过 80",
-          400,
-        );
+      const parsed = parseLeaderWithdrawalCommand(request.body);
+      if (!parsed.ok) {
+        throw publicCurrentUserError(parsed.message, 400);
       }
-      const quick = await idempotentWithdrawalByClientRequest(
-        clientRequestId,
-        leader.id,
-      );
-      if (quick) return quick;
-
-      const ids = Array.from(
-        new Set((body.commission_ids ?? []).map(String).filter(Boolean)),
-      );
-      if (ids.length === 0) {
-        throw publicCurrentUserError("commission_ids 至少选择一条", 400);
-      }
-
       try {
-        const result = await prisma.$transaction(
-          async (tx: Prisma.TransactionClient) => {
-            const selected = await tx.commission.findMany({
-              where: {
-                id: { in: ids },
-                leader_user_id: leader.id,
-                status: "available",
-                withdrawal_id: null,
-                final_amount_cents: { gt: 0 },
-              },
-              orderBy: { created_at: "asc" },
-            });
-            if (selected.length !== ids.length) {
-              throw publicCurrentUserError(
-                "存在不可提现或已占用的开团服务奖励",
-                409,
-              );
-            }
-            const amount = selected.reduce(
-              (sum, item) => sum + item.final_amount_cents,
-              0,
-            );
-            if (
-              body.amount_cents !== undefined &&
-              parseAmount(body.amount_cents) !== amount
-            ) {
-              throw publicCurrentUserError(
-                "提现金额必须精确匹配整笔开团服务奖励合计",
-                400,
-              );
-            }
-
-            const mismatches: Array<{
-              commission_id: string;
-              expected_cents: number;
-              ledger_net_cents: number;
-            }> = [];
-            for (const item of selected) {
-              const net = await getCommissionAvailableNet(tx, item.id);
-              if (net !== item.final_amount_cents) {
-                mismatches.push({
-                  commission_id: item.id,
-                  expected_cents: item.final_amount_cents,
-                  ledger_net_cents: net,
-                });
-              }
-            }
-            if (mismatches.length > 0) {
-              throw new WithdrawalLedgerMismatchError({
-                mismatches,
-                requested_amount_cents: amount,
-              });
-            }
-
-            const availableBalance = await getAvailableRewardBalance(
-              tx,
-              leader.id,
-            );
-            if (availableBalance < amount) {
-              throw new WithdrawalLedgerMismatchError({
-                available_balance_cents: availableBalance,
-                requested_amount_cents: amount,
-              });
-            }
-
-            const created = await tx.withdrawal.create({
-              data: {
-                leader_user_id: leader.id,
-                client_request_id: clientRequestId,
-                amount_cents: amount,
-                status: "pending",
-                taxable_amount_cents: amount,
-                tax_amount_cents: 0,
-                payable_amount_cents: amount,
-                tax_mode: "pending_review",
-                tax_status: "pending",
-                invoice_required: false,
-                invoice_status: "not_required",
-              },
-            });
-            const claimed = await tx.commission.updateMany({
-              where: {
-                id: { in: ids },
-                status: "available",
-                withdrawal_id: null,
-              },
-              data: { status: "withdrawing", withdrawal_id: created.id },
-            });
-            if (claimed.count !== ids.length) {
-              throw publicCurrentUserError(
-                "开团服务奖励已被其他提现申请占用",
-                409,
-              );
-            }
-            await tx.withdrawalCommission.createMany({
-              data: selected.map((item) => ({
-                withdrawal_id: created.id,
-                commission_id: item.id,
-                amount_cents: item.final_amount_cents,
-              })),
-              skipDuplicates: true,
-            });
-            await appendRewardLedgerEntry(tx, {
-              leader_user_id: leader.id,
-              withdrawal_id: created.id,
-              event_type: "withdrawal_reserved",
-              entry_type: "withdrawal_reserved",
-              direction: "out",
-              amount_cents: amount,
-              affects_available_balance: true,
-              idempotency_key: `withdrawal-reserved:${created.id}`,
-            });
-            await logWithdrawalEvent(tx, {
-              event_type: "withdrawal_requested",
-              withdrawal: created,
-              commissionIds: ids,
-              orderIds: selected.map((item) => item.order_id),
-              after: created,
-            });
-            return created;
-          },
-        );
-        return {
-          ...toLeaderWithdrawalDto(result, ids.length),
-          applied: true,
-          idempotent: false,
-        };
+        return await executeLeaderWithdrawalCommand({
+          leader_user_id: leader.id,
+          command: parsed.value,
+        });
       } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2002"
-        ) {
-          const existing = await idempotentWithdrawalByClientRequest(
-            clientRequestId,
-            leader.id,
-          );
-          if (existing) return existing;
-        }
-        if (error instanceof WithdrawalLedgerMismatchError) {
-          await persistLedgerMismatch(leader.id, error.auditPayload);
-          throw publicCurrentUserError("奖励账本待人工复核", 409);
+        if (error instanceof LeaderWithdrawalCommandError) {
+          throw publicCurrentUserError(error.message, error.statusCode);
         }
         throw error;
       }
@@ -1043,90 +655,67 @@ export function registerWithdrawalRoutes(app: FastifyInstance, options: { taxExp
     "/api/admin/withdrawals/:id/tax-review",
     { preHandler: requireAdminPermission("withdrawal.manage") },
     async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: "ADMIN_UNAUTHORIZED",
+          message: "管理员身份无效",
+          traceId,
+        });
+      }
+      const parsed = parseAdminWithdrawalTaxReviewCommand(request.body);
+      if (!parsed.ok) {
+        reply.code(400);
+        return contractFail({
+          code: parsed.code,
+          message: parsed.message,
+          traceId,
+        });
+      }
+      const { id } = request.params as { id: string };
       try {
-        const { id } = request.params as { id: string };
-        const body = request.body as TaxReviewBody;
-        const context = resolveAdminAccessContext(request)!;
-        await requireWithdrawalDataScope(id, request);
-        const clientRequestId = parseTaxReviewClientRequestId(body.client_request_id);
-        const taxMode = String(body.tax_mode ?? "");
-        if (!TAX_MODES.has(taxMode)) throw httpError("税务处理方式不合法", 400);
-        const baseWithdrawal = await prisma.withdrawal.findUnique({ where: { id } });
-        if (!baseWithdrawal) throw httpError("提现申请不存在", 404);
-        const bodyRecord = body as Record<string, unknown>;
-        const taxableAmount = parseRequiredMoneyCents(bodyRecord, "taxable_amount_cents");
-        const taxAmount = parseRequiredMoneyCents(bodyRecord, "tax_amount_cents");
-        if (taxableAmount > baseWithdrawal.amount_cents) throw httpError("应税金额不能超过提现金额", 400);
-        if (taxAmount > taxableAmount) throw httpError("税务金额不能超过应税金额", 400);
-        if (taxMode === "none" && taxAmount !== 0) throw httpError("无税务扣减模式的税额必须为 0", 400);
-        const payableAmount = baseWithdrawal.amount_cents - taxAmount;
-        if (payableAmount < 0) throw httpError("实际应付金额不能小于 0", 400);
-        const invoiceRequired = taxMode === "invoice";
-        const invoiceStatus = taxMode === "invoice" ? (body.invoice_status && body.invoice_status !== "not_required" ? String(body.invoice_status) : "pending") : "not_required";
-        const taxStatus = resolveTaxStatus({ tax_mode: taxMode, invoice_status: invoiceStatus });
-        validateTaxCombination(taxMode, invoiceRequired, invoiceStatus, taxStatus);
-        const requested = taxReviewSnapshot({ tax_mode: taxMode, tax_status: taxStatus, taxable_amount_cents: taxableAmount, tax_amount_cents: taxAmount, tax_rate_basis: body.tax_rate_basis ?? null, invoice_required: invoiceRequired, invoice_status: invoiceStatus, tax_remark: body.tax_remark ?? null });
-
-        async function currentIdempotency() {
-          const existing = await prisma.taxRecord.findUnique({ where: { source_type_source_id: { source_type: "withdrawal", source_id: id } } });
-          const requests = reviewRequestsFromPayload(taxPayload(existing?.payload));
-          const previous = hasReviewRequest(requests, clientRequestId) ? requests[clientRequestId] : undefined;
-          return { existing, previous };
-        }
-        const quick = await currentIdempotency();
-        if (quick.previous) {
-          if (!jsonValuesEqual(quick.previous.snapshot, requested)) throw httpError("client_request_id 对应的税务复核内容不一致", 409);
-          return ok({ withdrawal: baseWithdrawal, tax_record: quick.existing, idempotent: true });
-        }
-        if (baseWithdrawal.status !== "pending" && baseWithdrawal.status !== "approved") throw httpError("当前提现申请不可做税务复核", 409);
-        const expectedUpdatedAt = parseExpectedUpdatedAt(body.expected_updated_at);
-
-        try {
-          const reviewed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-            const withdrawal = await tx.withdrawal.findUnique({ where: { id } });
-            if (!withdrawal) throw httpError("提现申请不存在", 404);
-            const existing = await tx.taxRecord.findUnique({ where: { source_type_source_id: { source_type: "withdrawal", source_id: withdrawal.id } } });
-            const existingPayload = taxPayload(existing?.payload);
-            const reviewRequests = reviewRequestsFromPayload(existingPayload);
-            const previous = hasReviewRequest(reviewRequests, clientRequestId) ? reviewRequests[clientRequestId] : undefined;
-            if (previous) {
-              if (!jsonValuesEqual(previous.snapshot, requested)) throw httpError("client_request_id 对应的税务复核内容不一致", 409);
-              return { withdrawal, tax_record: existing, idempotent: true };
-            }
-            if (Object.keys(reviewRequests).length >= TAX_REVIEW_IDEMPOTENCY_LIMIT) throw httpError(`税务复核幂等历史已达上限 ${TAX_REVIEW_IDEMPOTENCY_LIMIT}，请联系管理员处理`, 409);
-            const claimed = await tx.withdrawal.updateMany({
-              where: { id, updated_at: expectedUpdatedAt },
-              data: { tax_mode: taxMode, tax_status: taxStatus, taxable_amount_cents: taxableAmount, tax_amount_cents: taxAmount, payable_amount_cents: payableAmount, tax_rate_basis: body.tax_rate_basis ?? null, invoice_required: invoiceRequired, invoice_status: invoiceStatus, tax_remark: body.tax_remark ?? null, reviewed_by_admin_id: context.admin_user_id, reviewed_at: new Date(), version: { increment: 1 } },
-            });
-            if (claimed.count !== 1) throw httpError("提现税务状态已变化，请刷新后重试", 409);
-            const updated = await tx.withdrawal.findUniqueOrThrow({ where: { id } });
-            const nextRequests: ReviewRequestHistory = { ...reviewRequests, [clientRequestId]: { snapshot: requested, reviewed_at: new Date().toISOString(), reviewed_by_admin_id: context.admin_user_id } };
-            const recordPayload: Prisma.InputJsonObject = { ...existingPayload, ...requested, client_request_id: clientRequestId, review_snapshot: requested, review_requests: nextRequests, notice: "仅供内部人工核对，不构成税务申报结果。系统不会自动报税，不会连接外部税务平台，不会自动发起打款。" };
-            const taxRecord = await tx.taxRecord.upsert({
-              where: { source_type_source_id: { source_type: "withdrawal", source_id: withdrawal.id } },
-              update: { leader_user_id: withdrawal.leader_user_id, tax_mode: taxMode, tax_status: taxStatus, amount_cents: withdrawal.amount_cents, payload: recordPayload },
-              create: { leader_user_id: withdrawal.leader_user_id, source_type: "withdrawal", source_id: withdrawal.id, tax_mode: taxMode, tax_status: taxStatus, amount_cents: withdrawal.amount_cents, payload: recordPayload },
-            });
-            const links = await getWithdrawalLinks(id, tx);
-            await writeAdminAuditLog(tx, request, { action: "withdrawal_tax_reviewed", target_id: id, payload: { before: taxReviewSnapshot({ tax_mode: withdrawal.tax_mode, tax_status: withdrawal.tax_status, taxable_amount_cents: withdrawal.taxable_amount_cents, tax_amount_cents: withdrawal.tax_amount_cents, tax_rate_basis: withdrawal.tax_rate_basis, invoice_required: withdrawal.invoice_required, invoice_status: withdrawal.invoice_status, tax_remark: withdrawal.tax_remark }), after: requested, client_request_id: clientRequestId } });
-            await logWithdrawalEvent(tx, { event_type: "withdrawal_tax_reviewed", withdrawal: updated, commissionIds: links.map((link) => link.commission_id), orderIds: links.map((link) => link.commission.order_id), before: withdrawal, after: updated, admin_user_id: context.admin_user_id, extraPayload: { tax_record_id: taxRecord.id, client_request_id: clientRequestId, ...requested } });
-            return { withdrawal: updated, tax_record: taxRecord, idempotent: false };
-          });
-          return ok(reviewed);
-        } catch (error) {
-          if ((error as { statusCode?: number }).statusCode === 409) {
-            const after = await currentIdempotency();
-            if (after.previous) {
-              if (!jsonValuesEqual(after.previous.snapshot, requested)) throw httpError("client_request_id 对应的税务复核内容不一致", 409);
-              const currentWithdrawal = await prisma.withdrawal.findUnique({ where: { id } });
-              return ok({ withdrawal: currentWithdrawal, tax_record: after.existing, idempotent: true });
-            }
-          }
-          throw error;
-        }
+        const reviewed = await executeAdminWithdrawalTaxReviewCommand({
+          withdrawal_id: id,
+          command: parsed.value,
+          context,
+          admin_meta: {
+            ip_address: request.ip,
+            user_agent:
+              typeof request.headers["user-agent"] === "string"
+                ? request.headers["user-agent"]
+                : null,
+          },
+        });
+        return contractOk(reviewed, {
+          code: "ADMIN_WITHDRAWAL_TAX_REVIEWED",
+          message: "提现税务复核已保存",
+          traceId,
+        });
       } catch (error) {
-        reply.code((error as { statusCode?: number }).statusCode ?? 400);
-        return fail(error instanceof Error ? error.message : "提现税务复核失败");
+        if (error instanceof AdminWithdrawalTaxReviewError) {
+          reply.code(error.statusCode);
+          return contractFail({
+            code: error.code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name: error instanceof Error ? error.name : "UnknownError",
+            withdrawal_id: id,
+            trace_id: traceId,
+          },
+          "Admin withdrawal tax review failed",
+        );
+        reply.code(500);
+        return contractFail({
+          code: "ADMIN_WITHDRAWAL_TAX_REVIEW_FAILED",
+          message: "提现税务复核失败",
+          traceId,
+        });
       }
     },
   );

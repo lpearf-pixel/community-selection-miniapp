@@ -41,26 +41,35 @@ describe('tax review API boundary', () => {
     );
   });
 
-  it('keeps the optimistic tax review payload unchanged', async () => {
+  it('creates one reliable command per submit action', async () => {
     const request = vi.fn(async <T>(): Promise<T> => undefined as T) as JsonRequester;
+    const createIdempotencyKey = vi.fn(() => 'tax-review-request-0001');
     const payload = {
       tax_mode: 'withheld',
       taxable_amount_cents: 1000,
       tax_amount_cents: 30,
       tax_rate_basis: '人工依据',
-      invoice_status: 'not_required',
       tax_remark: '复核完成',
-      client_request_id: 'tax-review-1',
-      expected_updated_at: '2026-07-23T00:00:00.000Z',
     };
 
-    await submitTaxReview('w1', payload, request);
+    await submitTaxReview(
+      'w1',
+      7,
+      payload,
+      request,
+      createIdempotencyKey,
+    );
 
+    expect(createIdempotencyKey).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith(
       '/api/admin/withdrawals/w1/tax-review',
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          idempotency_key: 'tax-review-request-0001',
+          expected_version: 7,
+        }),
       },
     );
   });

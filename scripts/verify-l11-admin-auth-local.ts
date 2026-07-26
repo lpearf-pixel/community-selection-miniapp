@@ -122,7 +122,7 @@ async function main() {
   const withdrawal = await prisma.withdrawal.create({ data: { leader_user_id: leader.id, amount_cents: 100, taxable_amount_cents: 100, payable_amount_cents: 100 } });
   const commission = await prisma.commission.create({ data: { leader_user_id: leader.id, order_id: order.id, group_buy_id: groupBuy.id, base_amount_cents: 100, commission_type: 'fixed', commission_value: 100, estimated_amount_cents: 100, final_amount_cents: 100, status: 'withdrawing', withdrawal_id: withdrawal.id, available_at: new Date() } });
   await prisma.withdrawalCommission.create({ data: { withdrawal_id: withdrawal.id, commission_id: commission.id, amount_cents: 100 } });
-  const taxReview = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/tax-review`, headers: { cookie: totpCookie }, payload: { tax_mode: 'none', taxable_amount_cents: 100, tax_amount_cents: 0, tax_rate_basis: 'manual', client_request_id: `l11-tax-${withdrawal.id}`, expected_updated_at: withdrawal.updated_at.toISOString() } });
+  const taxReview = await app.inject({ method: 'POST', url: `/api/admin/withdrawals/${withdrawal.id}/tax-review`, headers: { cookie: totpCookie }, payload: { tax_mode: 'none', taxable_amount_cents: 100, tax_amount_cents: 0, tax_rate_basis: 'manual', idempotency_key: `l11-tax-review-${withdrawal.id}`, expected_version: withdrawal.version } });
   assert(taxReview.statusCode === 200, `withdrawal tax-review should succeed, got ${taxReview.statusCode}`);
   const taxAudit = await prisma.adminAuditLog.findFirst({ where: { action: 'withdrawal_tax_reviewed', target_id: withdrawal.id } });
   assert(taxAudit, 'withdrawal tax-review should write AdminAuditLog');

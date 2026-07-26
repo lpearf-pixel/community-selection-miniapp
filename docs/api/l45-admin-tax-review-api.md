@@ -22,15 +22,15 @@ L45 Admin APIs require an active Admin identity and data scope. The backend dist
 
 Required:
 
-- `client_request_id`: string, trim length 1-80.
-- `expected_updated_at`: required for new keys only; same-key exact replay does not require current mutable state.
+- `idempotency_key`: printable ASCII string, trim length 16-128.
+- `expected_version`: non-negative safe integer. It is part of the immutable command snapshot; exact same-key replay remains valid after later state changes.
 - `tax_mode`: one of `none`, `withheld`, `invoice`.
 - `taxable_amount_cents`: required JSON number, safe integer, 0..2147483647.
 - `tax_amount_cents`: required JSON number, safe integer, 0..2147483647.
 
 Optional:
 
-- `invoice_status`: one of `not_required`, `pending`, `verified`, `rejected`; server normalizes non-invoice modes to `not_required`.
+- `invoice_status`: one of `pending`, `verified`, `rejected`, and is accepted only for `tax_mode=invoice`; the server derives `not_required` for non-invoice modes.
 - `tax_rate_basis`, `tax_remark`.
 
 The client cannot set `tax_status` or `invoice_required`; both are server-derived.
@@ -51,12 +51,12 @@ The client cannot set `tax_status` or `invoice_required`; both are server-derive
 - Permission or data-scope failures return 403.
 - Missing resource returns 404 where applicable; mark-paid returns 404 with `提现申请不存在` when the Withdrawal ID does not exist.
 - Invalid payload shape, missing required money fields, string numbers, nulls, decimals, overflows, negative amounts, and invalid `none` tax amount return 400.
-- State conflicts, stale `expected_updated_at`, same-key semantic conflicts, terminal new-key reviews, and mark-paid precondition failures return 409.
+- State conflicts, stale `expected_version`, same-key semantic conflicts, terminal new-key reviews, and mark-paid precondition failures return 409.
 - CSV export over limit returns 422 with the standard JSON failure envelope.
 
 ## Idempotency matrix
 
-- New key + current `expected_updated_at`: apply review.
+- New key + current `expected_version`: apply review.
 - Same key + same semantic snapshot: return `idempotent=true`, including after paid/rejected terminal states, without new audit/event writes.
 - Same key + invalid payload: payload validation returns 400 before semantic conflict handling.
 - Same key + valid different snapshot: return 409.
@@ -91,13 +91,13 @@ A report may mark an API as `verified=yes` only when every marker in that API gr
 
 ## Stale version 409 semantics
 
-For a new `client_request_id`, the backend compares `expected_updated_at` with the current Withdrawal `updated_at` before writing any Review side effects. If the value is stale while the Withdrawal is still in an otherwise reviewable state, the API returns HTTP 409 with exactly:
+For a new `idempotency_key`, the backend locks the Withdrawal and compares `expected_version` with the current command version before writing any review side effects. If the version is stale while the Withdrawal is still in an otherwise reviewable state, the API returns HTTP 409 with exactly:
 
 ```text
 提现税务状态已变化，请刷新后重试
 ```
 
-The stale request must not mutate Withdrawal, append the failed key to `TaxRecord.payload.review_requests`, or write `AdminAuditLog` / `BusinessEventLog` rows.
+The stale request must not mutate Withdrawal or TaxRecord, persist an `AdminCommandReceipt`, or write `AdminAuditLog` / `BusinessEventLog` rows.
 
 ## Mark-paid transaction atomicity
 
