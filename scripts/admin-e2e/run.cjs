@@ -15,6 +15,7 @@ const env = {
   ADMIN_AUTH_MODE: 'session',
   ADMIN_TOKEN: 'l50-e2e-admin-token',
   ADMIN_TOTP_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef',
+  MOCK_WECHAT_PAY: 'true',
   PORT: '13080',
   VITE_API_BASE_URL: '',
 };

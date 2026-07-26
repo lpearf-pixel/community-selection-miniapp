@@ -117,7 +117,16 @@ async function main() {
 
   const unauthorizedAdjust = await app.inject({ method: 'POST', url: `/api/admin/inventory/products/${apple.id}/adjust`, payload: { adjust_quantity: 5000, reason: '未登录调整' } });
   assert(unauthorizedAdjust.statusCode === 401, 'inventory adjust should require admin session');
-  await adminPost(`/api/admin/inventory/products/${apple.id}/adjust`, { adjust_quantity: 5000, reason: '验收增加苹果库存' }, adminCookie);
+  await adminPost(
+    `/api/admin/inventory/products/${apple.id}/adjust`,
+    {
+      expected_stock: 45000,
+      adjust_quantity: 5000,
+      reason: '验收增加苹果库存',
+      idempotency_key: `${prefix}-inventory-adjust`,
+    },
+    adminCookie,
+  );
   const afterAdjustApple = await prisma.product.findUniqueOrThrow({ where: { id: apple.id } });
   assert(afterAdjustApple.stock === 50000, 'manual adjustment should increase apple stock by base units');
   const manualLedger = await prisma.stockLedger.findFirst({ where: { product_id: apple.id, source_type: 'manual_adjust' }, orderBy: { created_at: 'desc' } });
