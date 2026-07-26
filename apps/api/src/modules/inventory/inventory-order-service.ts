@@ -63,6 +63,7 @@ async function existingResult(tx: Prisma.TransactionClient, idempotencyKey: stri
 
 export async function deductInventoryForPaidOrder(tx: Prisma.TransactionClient, input: { order: OrderStockInput; operator_user_id?: string | null }): Promise<InventoryEventResult> {
   const idempotencyKey = buildInventoryIdempotencyKey(inventoryIdempotencyPrefixes.orderPaidDeduct, input.order.id);
+  await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${input.order.id} FOR UPDATE`;
   const existing = await existingResult(tx, idempotencyKey, deductEventType);
   if (existing) return existing;
   const productId = resolveOrderProductId(input.order);
