@@ -32,7 +32,6 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=3072
       VITEST_MAX_THREADS: "2"
       VITEST_MIN_THREADS: "1"
-      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:15432/community_selection?schema=public
       MOCK_WECHAT_PAY: "true"
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +45,11 @@ jobs:
         with:
           node-version: 20.19.0
           cache: pnpm
+      - name: Select isolated PostgreSQL port
+        run: |
+          port=$((40000 + GITHUB_RUN_NUMBER % 10000))
+          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
+          echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm db:generate

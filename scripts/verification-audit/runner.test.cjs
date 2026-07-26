@@ -3,11 +3,29 @@ const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
+const { resolve } = require('node:path');
 
 const {
   auditExitCode,
   runVerificationAudit,
 } = require('../lib/verification-audit.cjs');
+
+test('concurrent self-hosted gates select isolated PostgreSQL ports', () => {
+  const root = resolve(__dirname, '..', '..');
+  for (const workflow of [
+    '.github/workflows/verification-baseline-audit.yml',
+    '.github/workflows/l50-c2-t3a-refund-gate.yml',
+  ]) {
+    const source = readFileSync(resolve(root, workflow), 'utf8');
+    assert.match(source, /name: Select isolated PostgreSQL port/);
+    assert.match(source, /POSTGRES_HOST_PORT=\$\{port\}/);
+    assert.match(
+      source,
+      /DATABASE_URL=postgresql:\/\/postgres:postgres@host\.docker\.internal:\$\{port\}/,
+    );
+    assert.doesNotMatch(source, /host\.docker\.internal:15432/);
+  }
+});
 
 test('records every check after a middle failure and preserves isolated evidence', () => {
   const outputDir = mkdtempSync(join(tmpdir(), 'verification-audit-'));

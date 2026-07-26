@@ -1562,6 +1562,11 @@ test('Admin E2E starts API and Admin natively on the runner', () => {
   assert.match(runner, /@community-selection\/api/);
   assert.match(runner, /@community-selection\/admin/);
   assert.match(runner, /ADMIN_E2E_DATABASE_URL/);
+  assert.match(
+    runner,
+    /process\.env\.POSTGRES_HOST_PORT\s*\?\?\s*'15432'/,
+  );
+  assert.match(runner, /\$\{databaseHost\}:\$\{postgresHostPort\}/);
 });
 
 test('Admin E2E keeps a native browser path for a physical runner', () => {
