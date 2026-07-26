@@ -236,9 +236,9 @@ describe('L4 group-buy and order routes', () => {
     expect(inventoryServiceSource.includes('stockDeductQuantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_deduct_quantity')).toBe(true);
     expect(inventoryServiceSource.includes('stock_quantity') || orderServiceSource.includes('stock_quantity: stockLock.stock_quantity')).toBe(true);
-    const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
-    expect(serviceSource.includes('_sum: { quantity: true }')).toBe(true);
-    expect(serviceSource.includes('current_quantity: paidQuantity')).toBe(true);
+    const groupBuyPaymentSource = readFileSync(new URL('../src/modules/group-buy/group-buy-payment-service.ts', import.meta.url), 'utf8');
+    expect(groupBuyPaymentSource.includes('_sum: { quantity: true }')).toBe(true);
+    expect(groupBuyPaymentSource.includes('current_quantity: paidQuantity')).toBe(true);
     const refundServiceSource = readFileSync(new URL('../src/services/refund-service.ts', import.meta.url), 'utf8');
     expect(refundServiceSource.includes('where: { client_refund_id: input.client_refund_id }')).toBe(true);
     expect(refundServiceSource.includes('tx.refund.create')).toBe(true);
@@ -248,10 +248,12 @@ describe('L4 group-buy and order routes', () => {
   it('keeps L5 payment idempotency safeguards visible', () => {
     const paymentSource = readFileSync(new URL('../src/routes/payments.ts', import.meta.url), 'utf8');
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
+    const orderPaymentSource = readFileSync(new URL('../src/modules/order/order-payment-service.ts', import.meta.url), 'utf8');
     expect(paymentSource.includes('payment.upsert')).toBe(true);
     expect(paymentSource.includes('markOrderPaid')).toBe(true);
     expect(paymentSource.includes('MOCK_WECHAT_PAY')).toBe(true);
-    expect(serviceSource.includes("where: { id: order.id, pay_status: 'unpaid' }")).toBe(true);
-    expect(serviceSource.includes('payment_mark_order_paid')).toBe(true);
+    expect(orderPaymentSource.includes("where: { id: orderId, pay_status: 'unpaid' }")).toBe(true);
+    expect(serviceSource.includes('recordPaidOrderEffects')).toBe(true);
+    expect(orderPaymentSource.includes('payment_mark_order_paid')).toBe(true);
   });
 });
