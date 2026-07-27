@@ -65,12 +65,12 @@ async function main() {
     receiverName: '普通用户',
     receiverPhone: '13812340000'
   });
-  await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
+  await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
   assert((await prisma.order.findUniqueOrThrow({ where: { id: normalOrder.id } })).user_id === user.id, 'normal order should belong to user');
 
   const groupBuy = await json(await app.inject({ method: 'POST', url: '/api/group-buys', payload: { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 2, min_quantity: 2 } }));
   const groupOrder = await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/orders', payload: { group_buy_id: groupBuy.id, client_request_id: `${prefix}-group`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: '开团用户', receiver_phone: '13912340000' } }));
-  await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
+  await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
   assert((await prisma.order.findUniqueOrThrow({ where: { id: groupOrder.id } })).user_id === user.id, 'group order should belong to user');
 
   const list = await json(await app.inject({ method: 'GET', url: '/api/me/orders?type=all&page_size=100', headers: { 'x-user-id': user.id } }));
