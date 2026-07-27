@@ -62,7 +62,7 @@ async function main() {
   const pickupTime = new Date(Date.now() + 7200_000);
   const groupBuy = await post('/api/group-buys', { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: pickupTime.toISOString() });
   const order = await consumerPost('/api/orders', user.id, { group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '张三', receiver_phone: '13812345678' });
-  await post('/api/payments/mock', { order_id: order.id });
+  await consumerPost('/api/payments/mock', user.id, { order_id: order.id });
   const paidOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   const ready = await adminPost(`/api/admin/orders/${order.id}/status`, {
     next_status: 'ready',
