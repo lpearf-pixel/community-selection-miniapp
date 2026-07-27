@@ -1,21 +1,51 @@
 services:
   migrate:
-    volumes: !override
-      - l52-secrets:/run/secrets:ro
+    volumes:
+      - type: volume
+        source: l52-secrets
+        target: /run/secrets/wechat_private_key.pem
+        read_only: true
+        volume:
+          subpath: wechat_private_key.pem
+      - type: volume
+        source: l52-secrets
+        target: /run/secrets/wechat_platform_certificate.pem
+        read_only: true
+        volume:
+          subpath: wechat_platform_certificate.pem
 
   api:
-    volumes: !override
-      - l52-secrets:/run/secrets:ro
+    volumes:
+      - type: volume
+        source: l52-secrets
+        target: /run/secrets/wechat_private_key.pem
+        read_only: true
+        volume:
+          subpath: wechat_private_key.pem
+      - type: volume
+        source: l52-secrets
+        target: /run/secrets/wechat_platform_certificate.pem
+        read_only: true
+        volume:
+          subpath: wechat_platform_certificate.pem
 
   backup:
-    volumes: !override
-      - production-backups:/var/backups/community-selection
-      - l52-secrets:/run/secrets:ro
+    volumes:
+      - type: volume
+        source: l52-secrets
+        target: /run/secrets/backup_passphrase
+        read_only: true
+        volume:
+          subpath: backup_passphrase
 
   restore:
-    volumes: !override
-      - production-backups:/var/backups/community-selection
-      - l52-secrets:/run/secrets:ro
+    volumes:
+      - type: volume
+        source: l52-secrets
+        target: /run/secrets/backup_passphrase
+        read_only: true
+        volume:
+          subpath: backup_passphrase
 
 volumes:
   l52-secrets:
