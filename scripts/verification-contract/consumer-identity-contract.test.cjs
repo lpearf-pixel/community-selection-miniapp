@@ -17,6 +17,7 @@ function fixture() {
       'pnpm exec tsx scripts/verify-active-legacy-local.ts',
       'pnpm exec tsx scripts/verify-active-helper-local.ts',
       'pnpm exec tsx scripts/verify-active-header-local.ts',
+      'pnpm exec tsx scripts/verify-active-payment-local.ts',
     ].join('\n'),
   );
   writeFileSync(
@@ -44,6 +45,10 @@ function fixture() {
     join(root, 'scripts/verify-inactive-legacy-local.ts'),
     "await app.inject({ method: 'POST', url: '/api/orders', payload: { user_id: user.id } });",
   );
+  writeFileSync(
+    join(root, 'scripts/verify-active-payment-local.ts'),
+    "await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } });",
+  );
   return root;
 }
 
@@ -57,13 +62,18 @@ test('reports active body identity with the exact file and line', () => {
       'scripts/verify-active-header-local.ts',
       'scripts/verify-active-helper-local.ts',
       'scripts/verify-active-legacy-local.ts',
+      'scripts/verify-active-payment-local.ts',
     ]);
-    assert.equal(violations.length, 1);
+    assert.equal(violations.length, 2);
     assert.match(
       violations[0],
       /^scripts\/verify-active-legacy-local\.ts:1: .*user_id/,
     );
     assert.doesNotMatch(violations.join('\n'), /inactive/);
+    assert.match(
+      violations.join('\n'),
+      /verify-active-payment-local\.ts:1: \/api\/payments\/mock is missing/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -82,10 +92,9 @@ test('reports a protected request without helper or trusted header', () => {
       activeVerifierFiles(root, []),
     );
 
-    assert.equal(violations.length, 2);
+    assert.equal(violations.length, 3);
     assert.match(violations.join('\n'), /missing injectAsConsumer or x-user-id/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
-
