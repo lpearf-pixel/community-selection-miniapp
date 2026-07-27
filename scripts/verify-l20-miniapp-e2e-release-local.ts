@@ -3,7 +3,12 @@ import { join } from 'node:path';
 import { buildApp } from '../apps/api/src/app.js';
 import { prisma } from '../apps/api/src/db.js';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.WECHAT_PAY_MODE = 'mock';
 process.env.MOCK_WECHAT_PAY = 'true';
 process.env.AUTO_PAYOUT_ENABLED = 'false';
@@ -97,7 +102,7 @@ async function runBackendE2E() {
   const groupBuys = await data(await app.inject({ method: 'GET', url: `/api/products/${product.id}/group-buys?community_id=${community.id}` }));
   assert(groupBuys.items.some((item: any) => item.group_buy_id === groupBuy.id), 'GET /api/products/:id/group-buys should include seeded group buy');
 
-  const normalOrder = await data(await app.inject({ method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, user_id: customer.id, client_request_id: `${prefix}-normal`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L20普通购买用户', receiver_phone: '13812345678' } }));
+  const normalOrder = await data(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, client_request_id: `${prefix}-normal`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L20普通购买用户', receiver_phone: '13812345678' } }));
   await data(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
 
   const userHeaders = { 'x-user-id': customer.id };
@@ -113,7 +118,7 @@ async function runBackendE2E() {
   const afterSales = await data(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: userHeaders }));
   assert(afterSales.some((item: any) => item.after_sale_case_id === afterSale.id), 'GET /api/me/orders/:id/after-sales should list created case');
 
-  const groupOrder = await data(await app.inject({ method: 'POST', url: '/api/orders', payload: { group_buy_id: groupBuy.id, user_id: customer.id, client_request_id: `${prefix}-group`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L20团购用户', receiver_phone: '13912345678' } }));
+  const groupOrder = await data(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/orders', payload: { group_buy_id: groupBuy.id, client_request_id: `${prefix}-group`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L20团购用户', receiver_phone: '13912345678' } }));
   await data(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
   const groupDetail = await data(await app.inject({ method: 'GET', url: `/api/me/orders/${groupOrder.id}`, headers: userHeaders }));
   assert(groupDetail.order_type === 'group_buy', 'group order detail should have order_type = group_buy');
