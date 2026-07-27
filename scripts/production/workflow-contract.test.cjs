@@ -51,3 +51,13 @@ test('invokes the Caddy binary explicitly when validating the edge image', () =>
     /run --rm --no-deps edge\s+\\?\s*caddy validate --config \/etc\/caddy\/Caddyfile/,
   );
 });
+
+test('bounds migration waits and prints container diagnostics on failure', () => {
+  assert.match(workflow, /timeout 240s "\$\{compose\[@\]\}" up -d --wait postgres/);
+  assert.match(workflow, /timeout 180s "\$\{compose\[@\]\}" run --rm migrate/);
+  assert.match(workflow, /"\$\{compose\[@\]\}" ps --all/);
+  assert.match(
+    workflow,
+    /"\$\{compose\[@\]\}" logs --no-color --tail 200 postgres/,
+  );
+});
