@@ -1,0 +1,195 @@
+x-api-environment: &api-environment
+  NODE_ENV: production
+  PORT: "13080"
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+  API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+  ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+  ADMIN_AUTH_ENABLED: "true"
+  ADMIN_AUTH_MODE: session
+  ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
+  ADMIN_TOTP_ENCRYPTION_KEY: ${ADMIN_TOTP_ENCRYPTION_KEY:?ADMIN_TOTP_ENCRYPTION_KEY is required}
+  WECHAT_PAY_MODE: wechat
+  MOCK_WECHAT_PAY: "false"
+  CURRENT_USER_MOCK_HEADERS_ENABLED: "false"
+  WECHAT_APP_ID: ${WECHAT_APP_ID:?WECHAT_APP_ID is required}
+  WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:?WECHAT_APP_SECRET is required}
+  WECHAT_MCH_ID: ${WECHAT_MCH_ID:?WECHAT_MCH_ID is required}
+  WECHAT_MCH_SERIAL_NO: ${WECHAT_MCH_SERIAL_NO:?WECHAT_MCH_SERIAL_NO is required}
+  WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:?WECHAT_API_V3_KEY is required}
+  WECHAT_PRIVATE_KEY_PATH: /run/secrets/wechat_private_key.pem
+  WECHAT_PAY_PLATFORM_SERIAL_NO: ${WECHAT_PAY_PLATFORM_SERIAL_NO:?WECHAT_PAY_PLATFORM_SERIAL_NO is required}
+  WECHAT_PAY_PLATFORM_CERT_PATH: /run/secrets/wechat_platform_certificate.pem
+  WECHAT_PAY_NOTIFY_URL: ${WECHAT_PAY_NOTIFY_URL:?WECHAT_PAY_NOTIFY_URL is required}
+  WECHAT_REFUND_NOTIFY_URL: ${WECHAT_REFUND_NOTIFY_URL:?WECHAT_REFUND_NOTIFY_URL is required}
+  MINIAPP_API_BASE_URL: ${MINIAPP_API_BASE_URL:?MINIAPP_API_BASE_URL is required}
+  USER_SESSION_TOKEN_SECRET: ${USER_SESSION_TOKEN_SECRET:?USER_SESSION_TOKEN_SECRET is required}
+  AUTO_PAYOUT_ENABLED: "false"
+  AUTO_TAX_FILING_ENABLED: "false"
+  WECHAT_TRANSFER_ENABLED: "false"
+  WECHAT_MERCHANT_TRANSFER_ENABLED: "false"
+
+x-api-volumes: &api-volumes
+  - ./secrets/wechat_private_key.pem:/run/secrets/wechat_private_key.pem:ro
+  - ./secrets/wechat_platform_certificate.pem:/run/secrets/wechat_platform_certificate.pem:ro
+
+services:
+  postgres:
+    image: postgres:16.9-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - production-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend
+
+  migrate:
+    image: community-selection-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: api
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *api-environment
+    volumes: *api-volumes
+    command:
+      - sh
+      - -lc
+      - ./node_modules/.bin/tsx scripts/validate-env.ts && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma
+    networks:
+      - backend
+
+  api:
+    image: community-selection-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: api
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: *api-environment
+    volumes: *api-volumes
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:13080/api/health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    deploy:
+      replicas: 1
+    networks:
+      - backend
+      - egress
+
+  edge:
+    image: community-selection-edge:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: edge
+      args:
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://localhost:2019/config/
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend
+      - public
+
+  backup:
+    image: community-selection-ops:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: ops
+    profiles:
+      - maintenance
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      BACKUP_DIR: /var/backups/community-selection
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_ENCRYPTION_PASSPHRASE_FILE: /run/secrets/backup_passphrase
+    volumes:
+      - production-backups:/var/backups/community-selection
+      - ./secrets/backup_passphrase:/run/secrets/backup_passphrase:ro
+    command:
+      - /app/scripts/pg-backup.sh
+    networks:
+      - backend
+
+  restore:
+    image: community-selection-ops:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: ops
+    profiles:
+      - restore
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      BACKUP_FILE: ${BACKUP_FILE:-}
+      BACKUP_ENCRYPTION_PASSPHRASE_FILE: /run/secrets/backup_passphrase
+      RESTORE_CONFIRM: ${RESTORE_CONFIRM:-}
+    volumes:
+      - production-backups:/var/backups/community-selection
+      - ./secrets/backup_passphrase:/run/secrets/backup_passphrase:ro
+    command:
+      - /app/scripts/pg-restore.sh
+    networks:
+      - backend
+
+volumes:
+  production-postgres:
+  production-backups:
+  caddy-data:
+  caddy-config:
+
+networks:
+  backend:
+    internal: true
+  egress: {}
+  public:
