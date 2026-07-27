@@ -2,7 +2,12 @@ import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_AUTH_MODE = 'session';
 process.env.ADMIN_TOTP_ENCRYPTION_KEY = process.env.ADMIN_TOTP_ENCRYPTION_KEY ?? 'l13-local-verify-encryption-key';
@@ -27,6 +32,12 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
 
 async function post(url: string, payload: unknown) {
   return json(await app.inject({ method: 'POST', url, payload }));
+}
+
+async function consumerPost(url: string, userId: string, payload: unknown) {
+  return json(
+    await injectAsConsumer(app, userId, { method: 'POST', url, payload }),
+  );
 }
 
 async function adminPost(url: string, payload: unknown, cookie: string) {
@@ -72,7 +83,7 @@ async function main() {
     }
   });
   const appleGroupBuy = await post('/api/group-buys', { product_id: apple.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
-  const appleOrder = await post('/api/orders', { user_id: appleUser.id, group_buy_id: appleGroupBuy.id, client_request_id: `${prefix}-apple-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '苹果用户', receiver_phone: '13812345678' });
+  const appleOrder = await consumerPost('/api/orders', appleUser.id, { group_buy_id: appleGroupBuy.id, client_request_id: `${prefix}-apple-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '苹果用户', receiver_phone: '13812345678' });
   assert(appleOrder.quantity === 2, 'apple order should keep sale quantity');
   const applePayment = await post('/api/payments/mock', { order_id: appleOrder.id });
   assert(applePayment.pay_status === 'paid', 'apple order payment should succeed before inventory is deducted');
@@ -104,7 +115,7 @@ async function main() {
     }
   });
   const eggGroupBuy = await post('/api/group-buys', { product_id: egg.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
-  const eggOrder = await post('/api/orders', { user_id: eggUser.id, group_buy_id: eggGroupBuy.id, client_request_id: `${prefix}-egg-order`, quantity: 3, pickup_store_id: store.id, receiver_name: '鸡蛋用户', receiver_phone: '13912345678' });
+  const eggOrder = await consumerPost('/api/orders', eggUser.id, { group_buy_id: eggGroupBuy.id, client_request_id: `${prefix}-egg-order`, quantity: 3, pickup_store_id: store.id, receiver_name: '鸡蛋用户', receiver_phone: '13912345678' });
   const eggPayment = await post('/api/payments/mock', { order_id: eggOrder.id });
   assert(eggPayment.pay_status === 'paid', 'egg order payment should succeed before inventory is deducted');
   const afterEggOrder = await prisma.product.findUniqueOrThrow({ where: { id: egg.id } });
