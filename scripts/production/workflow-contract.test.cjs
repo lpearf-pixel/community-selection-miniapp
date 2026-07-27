@@ -35,3 +35,10 @@ test('runs production containers with the container-runner secrets override', ()
   );
   assert.match(workflow, /L52_SECRETS_VOLUME/);
 });
+
+test('invokes the Caddy binary explicitly when validating the edge image', () => {
+  assert.match(
+    workflow,
+    /run --rm --no-deps edge\s+\\?\s*caddy validate --config \/etc\/caddy\/Caddyfile/,
+  );
+});
