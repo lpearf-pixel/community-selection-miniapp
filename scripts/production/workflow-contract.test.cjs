@@ -28,12 +28,21 @@ test('stages API-owned fixture secrets without requiring host root', () => {
   );
 });
 
-test('runs production containers with the container-runner secrets override', () => {
-  assert.match(
-    workflow,
-    /-f \.github\/l52-compose\.override\.yml/,
+test('renders and validates the final CI topology before building images', () => {
+  const renderStep = workflow.indexOf(
+    'node scripts/production/render-l52-compose.mjs',
   );
-  assert.match(workflow, /L52_SECRETS_VOLUME/);
+  const finalValidation = workflow.indexOf(
+    '-f .github/l52-compose.rendered.json config --quiet',
+  );
+  const buildStep = workflow.indexOf('build api edge backup');
+
+  assert.match(workflow, /docker compose version/);
+  assert.ok(renderStep >= 0);
+  assert.ok(finalValidation > renderStep);
+  assert.ok(buildStep > finalValidation);
+  assert.doesNotMatch(workflow, /l52-compose\.override\.yml/);
+  assert.doesNotMatch(workflow, /\bsubpath:/);
 });
 
 test('invokes the Caddy binary explicitly when validating the edge image', () => {
