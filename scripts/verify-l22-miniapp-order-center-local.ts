@@ -308,9 +308,9 @@ async function main() {
   const groupBuy = await prisma.groupBuy.create({ data: { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 2, min_quantity: 2, current_people: 0, current_quantity: 0, price_cents: 1990, start_time: new Date(), end_time: new Date(Date.now() + 86400000), pickup_time: new Date(Date.now() + 172800000), status: 'pending' } });
 
   const normalOrder = await json(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, client_request_id: `${prefix}-normal`, quantity: 2, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L22普通用户', receiver_phone: '13812342222' } }));
-  await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
+  await json(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
   const groupOrder = await json(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/orders', payload: { group_buy_id: groupBuy.id, client_request_id: `${prefix}-group`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L22开团用户', receiver_phone: '13912342222' } }));
-  await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
+  await json(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
   const otherOrder = await json(await injectAsConsumer(app, other.id, { method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, client_request_id: `${prefix}-other`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L22其他用户', receiver_phone: '13712342222' } }));
 
   const list = await json(await app.inject({ method: 'GET', url: '/api/me/orders?page_size=100', headers: { 'x-user-id': customer.id } }));
@@ -347,7 +347,7 @@ async function main() {
       receiver_phone: '13612342222',
     },
   }));
-  await json(await app.inject({
+  await json(await injectAsConsumer(app, customer.id, {
     method: 'POST',
     url: '/api/payments/mock',
     payload: { order_id: zeroRemainderOrder.id },
