@@ -37,6 +37,7 @@ export async function markOrderPaid(
       include: { group_buy: true, product: true },
     });
     if (!order) throw new Error('订单不存在');
+    const paidAt = paymentInfo.provider_success_at ?? new Date();
 
     const payment = await findPaymentForOrder(tx, order.id, paymentInfo);
 
@@ -61,7 +62,7 @@ export async function markOrderPaid(
         const progress = await refreshGroupBuyAfterPayment(
           tx,
           order.group_buy_id,
-          new Date(),
+          paidAt,
         );
         if (progress?.is_success) {
           await markGroupPaidOrdersGrouped(tx, order.group_buy_id);
@@ -76,7 +77,7 @@ export async function markOrderPaid(
       if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') {
         throw new Error('当前团购不可支付');
       }
-      if (groupBuy.end_time.getTime() <= Date.now()) {
+      if (groupBuy.end_time.getTime() < paidAt.getTime()) {
         throw new Error('团购已截止');
       }
     }
@@ -85,7 +86,6 @@ export async function markOrderPaid(
       order,
       operator_user_id: order.user_id,
     });
-    const paidAt = new Date();
     const claimed = await claimOrderPayment(tx, order.id, paidAt);
     if (!claimed.claimed) {
       return { order: claimed.order, payment };

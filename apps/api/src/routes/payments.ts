@@ -1,52 +1,70 @@
+import { readFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
+import {
+  createPrismaWechatPaymentStore,
+  createWechatPaymentCommand,
+} from '../modules/payment/wechat-payment-command.js';
+import {
+  createPrismaWechatPaymentLookup,
+  createPrismaWechatReceiptStore,
+  processWechatPaymentNotification,
+} from '../modules/payment/wechat-payment-notification.js';
+import { publicCurrentUserError } from '../modules/current-user/current-user-security.js';
+import { loadWechatRuntimeConfig } from '../modules/wechat/wechat-config.js';
+import {
+  createJsapiPaySignature,
+  createWechatPayV3Client,
+} from '../modules/wechat/wechat-pay-v3-client.js';
+import { verifyAndDecryptWechatNotification } from '../modules/wechat/wechat-notify-verifier.js';
 import { markOrderPaid } from '../services/payment-service.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
+import { withCurrentUser } from './current-user-route.js';
 
-type MockPaymentBody = {
-  order_id?: string;
+type PaymentRouteOptions = {
+  paymentMode?: 'mock' | 'wechat';
+  initializeWechatPayment?: (input: {
+    userId: string;
+    orderId: string;
+    clientIp?: string;
+  }) => Promise<unknown>;
+  processWechatNotification?: (input: {
+    rawBody: Buffer;
+    headers: Record<string, unknown>;
+  }) => Promise<unknown>;
 };
 
-type WechatJsapiBody = {
-  order_id?: string;
-  openid?: string;
-};
-
-type WechatNotifyBody = {
-  out_trade_no?: string;
-  transaction_id?: string;
-};
-
-function isMockWechatPay(): boolean {
-  if (process.env.MOCK_WECHAT_PAY === 'true') return true;
-  if (process.env.MOCK_WECHAT_PAY === 'false') return false;
-  return process.env.WECHAT_PAY_MODE !== 'wechat';
-}
-
-function assertWechatPayConfig() {
-  const required = [
-    'WECHAT_APP_ID',
-    'WECHAT_MCH_ID',
-    'WECHAT_MCH_SERIAL_NO',
-    'WECHAT_API_V3_KEY',
-    'WECHAT_PRIVATE_KEY_PATH',
-    'WECHAT_PAY_NOTIFY_URL'
-  ];
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length > 0) throw new Error(`缺少微信支付配置：${missing.join(',')}`);
-}
-
-function makeOutTradeNo(orderNo: string): string {
-  return `PAY${orderNo}`;
+function parseOrderOnlyBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const entries = Object.entries(body);
+  if (entries.length !== 1 || entries[0]?.[0] !== 'order_id') return null;
+  const value = entries[0][1];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function makeMockTransactionId(outTradeNo: string): string {
   return `MOCKTXN${outTradeNo}`;
 }
 
-
-function toPublicPaymentResult(input: { payment?: any | null; order: any; mock?: boolean }) {
+function toPublicPaymentResult(input: {
+  payment?: {
+    id: string;
+    transaction_id?: string | null;
+  } | null;
+  order: {
+    id: string;
+    order_no: string;
+    pay_status: string;
+    order_status: string;
+    paid_at: Date | null;
+    product_amount_cents: number | null;
+    total_amount_cents: number;
+    delivery_fee_cents: number;
+    pay_amount_cents: number;
+  };
+  mock: boolean;
+}) {
   return {
     payment_id: input.payment?.id ?? null,
     order_id: input.order.id,
@@ -54,134 +72,187 @@ function toPublicPaymentResult(input: { payment?: any | null; order: any; mock?:
     pay_status: input.order.pay_status,
     order_status: input.order.order_status,
     paid_at: input.order.paid_at,
-    product_amount_cents: input.order.product_amount_cents ?? input.order.total_amount_cents,
-    delivery_fee_cents: input.order.delivery_fee_cents ?? 0,
+    product_amount_cents:
+      input.order.product_amount_cents ?? input.order.total_amount_cents,
+    delivery_fee_cents: input.order.delivery_fee_cents,
     pay_amount_cents: input.order.pay_amount_cents,
     transaction_id: input.payment?.transaction_id ?? null,
-    mock: input.mock ?? true
+    mock: input.mock,
   };
 }
 
-function makeWxRequestPaymentShape(outTradeNo: string) {
+function defaultWechatDependencies() {
+  const config = loadWechatRuntimeConfig();
+  if (config.paymentMode !== 'wechat') {
+    throw new Error('WECHAT_PAYMENT_MODE_DISABLED');
+  }
+  const privateKey = readFileSync(config.merchantPrivateKeyPath);
+  const platformPublicKey = readFileSync(config.platformCertificatePath);
+  const payClient = createWechatPayV3Client({
+    appId: config.appId,
+    merchantId: config.merchantId,
+    serialNo: config.merchantSerialNo,
+    privateKey,
+    platformSerialNo: config.platformSerialNo,
+    platformPublicKey,
+    paymentNotifyUrl: config.paymentNotifyUrl,
+    refundNotifyUrl: config.refundNotifyUrl,
+  });
+  const command = createWechatPaymentCommand({
+    store: createPrismaWechatPaymentStore(),
+    payClient,
+    signJsapi: ({ prepayId }) =>
+      createJsapiPaySignature({
+        appId: config.appId,
+        prepayId,
+        privateKey,
+      }),
+  });
   return {
-    timeStamp: Math.floor(Date.now() / 1000).toString(),
-    nonceStr: `nonce_${outTradeNo.slice(-12)}`,
-    package: `prepay_id=TODO_${outTradeNo}`,
-    signType: 'RSA',
-    paySign: 'TODO_SIGN_AFTER_WECHAT_JSAPI_PREPAY'
+    initializeWechatPayment: command.initialize,
+    async processWechatNotification(input: {
+      rawBody: Buffer;
+      headers: Record<string, unknown>;
+    }) {
+      const verified = verifyAndDecryptWechatNotification({
+        ...input,
+        platformSerialNo: config.platformSerialNo,
+        platformPublicKey,
+        apiV3Key: config.apiV3Key,
+      });
+      return processWechatPaymentNotification({
+        verified,
+        expectedAppId: config.appId,
+        expectedMerchantId: config.merchantId,
+        receipts: createPrismaWechatReceiptStore(),
+        payments: createPrismaWechatPaymentLookup(),
+        markOrderPaid,
+      });
+    },
   };
 }
 
-async function createOrReusePayment(orderId: string) {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) throw new Error('订单不存在');
-  if (order.pay_status === 'closed') throw new Error('订单已关闭');
-  if (order.order_status === 'refunding' || order.order_status === 'refunded') throw new Error('退款订单不可支付');
+export function registerPaymentRoutes(
+  app: FastifyInstance,
+  options: PaymentRouteOptions = {},
+) {
+  const paymentMode =
+    options.paymentMode ??
+    (process.env.WECHAT_PAY_MODE === 'wechat' &&
+    process.env.MOCK_WECHAT_PAY !== 'true'
+      ? 'wechat'
+      : 'mock');
 
-  const outTradeNo = makeOutTradeNo(order.order_no);
-  const payment = await prisma.payment.upsert({
-    where: { out_trade_no: outTradeNo },
-    update: {
-      amount_cents: order.pay_amount_cents,
-      trade_state: order.pay_status === 'paid' ? 'paid' : 'created'
-    },
-    create: {
-      order_id: order.id,
-      out_trade_no: outTradeNo,
-      amount_cents: order.pay_amount_cents,
-      trade_state: order.pay_status === 'paid' ? 'paid' : 'created'
-    }
-  });
-  await safeRecordBusinessEvent(prisma, {
-    event_type: 'payment_created',
-    event_source: 'payments-route',
-    order_id: order.id,
-    payment_id: payment.id,
-    after_snapshot: payment,
-    payload: { out_trade_no: payment.out_trade_no, amount_cents: payment.amount_cents }
-  });
-  return { order, payment };
-}
+  if (paymentMode === 'mock') {
+    app.post('/api/payments/mock', (request, reply) =>
+      withCurrentUser(request, reply, 'MOCK 支付失败', async (user) => {
+        const orderId = parseOrderOnlyBody(request.body);
+        if (!orderId) {
+          throw publicCurrentUserError('支付请求不合法', 400);
+        }
+        const store = createPrismaWechatPaymentStore();
+        const prepared = await store.prepare(user.id, orderId, new Date());
+        const paid = await markOrderPaid(orderId, {
+          payment_id: prepared.payment.id,
+          out_trade_no: prepared.payment.out_trade_no,
+          transaction_id: makeMockTransactionId(
+            prepared.payment.out_trade_no,
+          ),
+          provider_success_at: new Date(),
+        });
+        await safeRecordBusinessEvent(prisma, {
+          event_type: 'payment_mock_success',
+          event_source: 'payments-route',
+          order_id: orderId,
+          payment_id: (paid.payment ?? prepared.payment).id,
+          payload: { source: 'mock' },
+        });
+        return toPublicPaymentResult({
+          payment: paid.payment ?? prepared.payment,
+          order: paid.order,
+          mock: true,
+        });
+      }),
+    );
+  }
 
-export function registerPaymentRoutes(app: FastifyInstance) {
-  app.post('/api/payments/mock', async (request, reply) => {
-    const body = request.body as MockPaymentBody;
-    if (!body.order_id) {
-      reply.code(400);
-      return fail('缺少订单 ID');
-    }
+  app.post('/api/payments/wechat/jsapi', (request, reply) =>
+    withCurrentUser(
+      request,
+      reply,
+      '微信 JSAPI 支付初始化失败',
+      async (user) => {
+        if (paymentMode !== 'wechat') {
+          throw publicCurrentUserError('微信支付模式未启用', 400);
+        }
+        const orderId = parseOrderOnlyBody(request.body);
+        if (!orderId) {
+          throw publicCurrentUserError('支付请求不合法', 400);
+        }
+        const dependencies =
+          options.initializeWechatPayment || options.processWechatNotification
+            ? options
+            : defaultWechatDependencies();
+        const initialize =
+          options.initializeWechatPayment ??
+          dependencies.initializeWechatPayment;
+        if (!initialize) throw new Error('WECHAT_PAYMENT_UNAVAILABLE');
+        return initialize({
+          userId: user.id,
+          orderId,
+          clientIp: request.ip,
+        });
+      },
+    ),
+  );
 
-    try {
-      const { payment } = await createOrReusePayment(body.order_id);
-      const paid = await markOrderPaid(body.order_id, {
-        payment_id: payment.id,
-        out_trade_no: payment.out_trade_no,
-        transaction_id: payment.transaction_id ?? makeMockTransactionId(payment.out_trade_no),
-        raw_notify: { source: 'mock', order_id: body.order_id }
-      });
-      await safeRecordBusinessEvent(prisma, {
-        event_type: 'payment_mock_success',
-        event_source: 'payments-route',
-        order_id: body.order_id,
-        payment_id: (paid.payment ?? payment).id,
-        payload: { source: 'mock' }
-      });
-      return ok(toPublicPaymentResult({ payment: paid.payment ?? payment, order: paid.order, mock: true }));
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : 'MOCK 支付失败');
-    }
-  });
-
-  app.post('/api/payments/wechat/jsapi', async (request, reply) => {
-    const body = request.body as WechatJsapiBody;
-    if (!body.order_id || !body.openid) {
-      reply.code(400);
-      return fail('缺少微信支付必填字段');
-    }
-    if (isMockWechatPay()) {
-      reply.code(400);
-      return fail('当前为 MOCK 支付模式，请使用 /api/payments/mock');
-    }
-
-    try {
-      assertWechatPayConfig();
-      const { order, payment } = await createOrReusePayment(body.order_id);
-      return ok({
-        implemented: false,
-        message: '真实微信 JSAPI 下单结构已预留，待接入微信支付 SDK/签名工具',
-        order_id: order.id,
-        openid: body.openid,
-        out_trade_no: payment.out_trade_no,
-        amount_cents: payment.amount_cents,
-        wx_request_payment: makeWxRequestPaymentShape(payment.out_trade_no)
-      });
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '微信 JSAPI 支付初始化失败');
-    }
-  });
-
-  app.post('/api/payments/wechat/notify', async (_request, reply) => {
-    if (isMockWechatPay()) {
+  app.post('/api/payments/wechat/notify', async (request, reply) => {
+    if (paymentMode !== 'wechat') {
       reply.code(403);
-      await safeRecordBusinessEvent(prisma, {
-        event_type: 'payment_wechat_notify_rejected',
-        event_level: 'warning',
-        event_source: 'payments-route',
-        payload: { reason: 'mock_mode' }
-      });
       return fail('MOCK 模式拒绝真实微信支付回调');
     }
-
-    try {
-      assertWechatPayConfig();
-    } catch (error) {
+    if (!request.rawBody) {
       reply.code(400);
-      return fail(error instanceof Error ? error.message : '微信支付配置错误');
+      return fail('微信支付回调原始报文缺失');
     }
-
-    reply.code(501);
-    return fail('真实微信支付回调待实现：TODO 验签、解密、金额校验、幂等更新；未完成验签前不得修改订单');
+    try {
+      const dependencies =
+        options.processWechatNotification ||
+        options.initializeWechatPayment
+          ? options
+          : defaultWechatDependencies();
+      const processNotification =
+        options.processWechatNotification ??
+        dependencies.processWechatNotification;
+      if (!processNotification) throw new Error('WECHAT_PAYMENT_UNAVAILABLE');
+      await processNotification({
+        rawBody: request.rawBody,
+        headers: request.headers,
+      });
+      return reply.code(204).send();
+    } catch (error) {
+      const code =
+        error instanceof Error &&
+        /^(?:WECHAT_NOTIFY|WECHAT_PAYMENT)_/.test(error.message)
+          ? 400
+          : 500;
+      request.log.warn(
+        {
+          operation: 'wechat-payment-notification',
+          error_code:
+            error instanceof Error &&
+            /^[A-Z][A-Z0-9_]{0,63}$/.test(error.message)
+              ? error.message
+              : 'WECHAT_PAYMENT_NOTIFICATION_FAILED',
+        },
+        '微信支付回调处理失败',
+      );
+      reply.code(code);
+      return fail('微信支付回调处理失败');
+    }
   });
+
+  app.get('/api/public/runtime', async () =>
+    ok({ payment_mode: paymentMode, version: 'l51' }),
+  );
 }

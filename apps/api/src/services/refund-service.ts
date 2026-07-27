@@ -21,6 +21,7 @@ import {
   recordBusinessEvent,
   safeRecordBusinessEvent,
 } from './logging-service.js';
+import type { WechatRefundIntent } from '../modules/refund/wechat-refund-command.js';
 
 export { RefundOrderVersionConflictError };
 
@@ -321,10 +322,7 @@ export async function applyMockRefundInTransaction(
   });
   if (existing) {
     const repeated = await confirmRefundSuccess(tx, existing.id, {
-      raw_notify: {
-        source: 'mock',
-        client_refund_id: input.client_refund_id ?? null,
-      },
+      provider_status: 'MOCK_SUCCESS',
     });
     if (!repeated.first_success) return repeated.refund;
     return projectFirstRefundSuccess(tx, {
@@ -375,10 +373,7 @@ export async function applyMockRefundInTransaction(
   });
   const refund = await createPendingRefund(tx, { ...key, reason: input.reason });
   const confirmation = await confirmRefundSuccess(tx, refund.id, {
-    raw_notify: {
-      source: 'mock',
-      client_refund_id: input.client_refund_id ?? null,
-    },
+    provider_status: 'MOCK_SUCCESS',
   });
   if (!confirmation.first_success) return confirmation.refund;
   const success = await projectFirstRefundSuccess(tx, {
@@ -401,6 +396,97 @@ export async function createMockRefund(input: RefundInput) {
   return prisma.$transaction((tx: Prisma.TransactionClient) =>
     applyMockRefundInTransaction(tx, input),
   );
+}
+
+async function hydrateWechatRefundIntent(
+  tx: Prisma.TransactionClient,
+  order: Order,
+  refund: Refund,
+): Promise<WechatRefundIntent> {
+  const payment = await tx.payment.findFirst({
+    where: {
+      order_id: order.id,
+      trade_state: 'paid',
+    },
+    orderBy: [
+      { provider_success_at: 'desc' },
+      { created_at: 'desc' },
+    ],
+  });
+  if (!payment) throw new Error('WECHAT_REFUND_PAYMENT_NOT_FOUND');
+  return {
+    refund_id: refund.id,
+    order_id: order.id,
+    out_trade_no: payment.out_trade_no,
+    out_refund_no: refund.out_refund_no,
+    refund_amount_cents: refund.refund_amount_cents,
+    total_amount_cents: order.pay_amount_cents,
+    reason: refund.reason,
+    provider_status: refund.provider_status,
+  };
+}
+
+async function createWechatRefundIntentInTransaction(
+  tx: Prisma.TransactionClient,
+  input: RefundInput & { client_refund_id: string },
+): Promise<WechatRefundIntent> {
+  const order = await lockRefundableOrder(tx, input.order_id);
+  const outRefundNo = buildOutRefundNo(order, input.client_refund_id);
+  const existing = await findRefundByClientKey(tx, {
+    order_id: order.id,
+    out_refund_no: outRefundNo,
+    client_refund_id: input.client_refund_id,
+    refund_amount_cents: input.refund_amount_cents,
+    product_refund_amount_cents: input.product_refund_amount_cents,
+    delivery_refund_amount_cents: input.delivery_refund_amount_cents,
+  });
+  if (existing) {
+    return hydrateWechatRefundIntent(tx, order, existing);
+  }
+  const split = validateRefundInput(order, input);
+  const refund = await createPendingRefund(tx, {
+    order_id: order.id,
+    out_refund_no: outRefundNo,
+    client_refund_id: input.client_refund_id,
+    refund_amount_cents: input.refund_amount_cents,
+    product_refund_amount_cents: split.productRefund,
+    delivery_refund_amount_cents: split.deliveryRefund,
+    reason: input.reason,
+  });
+  await safeRecordBusinessEvent(tx, {
+    event_type: 'wechat_refund_intent_created',
+    event_source: 'refund-service',
+    order_id: order.id,
+    refund_id: refund.id,
+    idempotency_key: input.client_refund_id,
+    payload: {
+      out_refund_no: refund.out_refund_no,
+      refund_amount_cents: refund.refund_amount_cents,
+    },
+  });
+  return hydrateWechatRefundIntent(tx, order, refund);
+}
+
+export function createWechatRefundIntent(
+  input: RefundInput & { client_refund_id: string },
+) {
+  return prisma.$transaction((tx: Prisma.TransactionClient) =>
+    createWechatRefundIntentInTransaction(tx, input),
+  );
+}
+
+export async function saveWechatRefundProviderResult(
+  refundId: string,
+  result: {
+    refund_id?: string;
+    provider_status: string | null;
+    last_provider_error_code: string | null;
+  },
+) {
+  await prisma.refund.update({
+    where: { id: refundId },
+    data: result,
+  });
 }
 
 export async function markRefundSuccess(

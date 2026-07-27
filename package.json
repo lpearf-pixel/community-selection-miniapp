@@ -26,6 +26,7 @@
     "report:stage": "tsx scripts/generate-stage-report-entry.ts",
     "report:publish": "tsx scripts/publish-stage-report.ts",
     "verify:l49:static": "tsx scripts/verify-l49-brand-home-local.ts",
+    "verify:l51": "node --import tsx scripts/verify-l51-wechat-commerce-loop.ts && node --test apps/miniapp/utils/session.test.cjs apps/miniapp/utils/payment.test.cjs",
     "test:miniapp:theme": "node --test scripts/miniapp-theme/*.test.cjs",
     "verify:miniapp:theme": "tsx scripts/verify-miniapp-theme-local.ts",
     "miniapp:theme:activate": "node scripts/miniapp-theme/activate-theme.cjs",

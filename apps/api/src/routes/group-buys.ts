@@ -7,7 +7,8 @@ import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGroupBuyRefundHandled, getFailedGroupBuyClosureSummary, listExpiredPendingGroupBuys, listFailedGroupBuyPendingRefundOrders, markExpiredGroupBuyFailed, markGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
 import { ADMIN_SCOPE_FORBIDDEN, canAccessCommunity, canAccessOrderDataScope, getScopedOrderWhere, requireAdminPermission, resolveAdminAccessContext } from '../modules/admin-access/admin-access-control.js';
-import { withCurrentLeader } from './current-user-route.js';
+import { withCurrentLeader, withCurrentUser } from './current-user-route.js';
+import { publicCurrentUserError } from '../modules/current-user/current-user-security.js';
 
 type CreateGroupBuyBody = {
   product_id?: string;
@@ -320,25 +321,25 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
     }),
   );
 
-  app.post('/api/orders', async (request, reply) => {
-    try {
-      const order = await createGroupOrder(request.body as CreateOrderBody);
-      return ok(order);
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '下单失败');
-    }
-  });
+  app.post('/api/orders', (request, reply) =>
+    withCurrentUser(request, reply, '下单失败', async (user) => {
+      const body = request.body as CreateOrderBody;
+      if (body.user_id || body.user_openid) {
+        throw publicCurrentUserError('下单请求不得指定用户身份', 400);
+      }
+      return createGroupOrder({ ...body, user_id: user.id });
+    }),
+  );
 
-  app.post('/api/orders/normal', async (request, reply) => {
-    try {
-      const order = await createNormalOrder(request.body as CreateOrderBody & { product_id?: string });
-      return ok(order);
-    } catch (error) {
-      reply.code(400);
-      return fail(error instanceof Error ? error.message : '普通购买下单失败');
-    }
-  });
+  app.post('/api/orders/normal', (request, reply) =>
+    withCurrentUser(request, reply, '普通购买下单失败', async (user) => {
+      const body = request.body as CreateOrderBody & { product_id?: string };
+      if (body.user_id || body.user_openid) {
+        throw publicCurrentUserError('下单请求不得指定用户身份', 400);
+      }
+      return createNormalOrder({ ...body, user_id: user.id });
+    }),
+  );
 
 
 }

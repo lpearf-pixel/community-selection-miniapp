@@ -1,5 +1,11 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
+import {
+  createPrismaUserSessionStore,
+  createUserSessionOwner,
+  UserSessionError,
+  type SessionUser,
+} from './user-session-owner.js';
 
 export const CURRENT_USER_SELECT = {
   id: true,
@@ -27,6 +33,14 @@ export type SafeErrorLogMetadata = {
   operation: string;
   error_name: string;
   error_code: string;
+};
+
+export type ResolveCurrentUserOptions = {
+  nodeEnv?: string;
+  mockHeadersEnabled?: boolean;
+  sessionOwner?: {
+    resolve(token: string): Promise<SessionUser>;
+  };
 };
 
 export class PublicCurrentUserError extends Error {
@@ -62,10 +76,44 @@ function headerValue(value: unknown): string | undefined {
   return undefined;
 }
 
+function bearerToken(value: unknown): string | undefined {
+  const header = headerValue(value);
+  if (!header) return undefined;
+  const match = /^Bearer\s+([A-Za-z0-9_-]{16,512})$/i.exec(header);
+  return match?.[1];
+}
+
+function defaultSessionOwner() {
+  const secret = process.env.USER_SESSION_TOKEN_SECRET?.trim() ?? '';
+  if (secret.length < 32) {
+    throw publicCurrentUserError('用户登录已失效', 401);
+  }
+  return createUserSessionOwner({
+    secret,
+    store: createPrismaUserSessionStore(),
+  });
+}
+
 export async function resolveCurrentUser(
   headers: Record<string, unknown>,
   client: Pick<typeof prisma, 'user'> = prisma,
+  options: ResolveCurrentUserOptions = {},
 ): Promise<CurrentUserIdentity> {
+  const token = bearerToken(headers.authorization);
+  if (token) {
+    const owner = options.sessionOwner ?? defaultSessionOwner();
+    return owner.resolve(token);
+  }
+
+  const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? 'development';
+  const mockHeadersEnabled =
+    nodeEnv !== 'production' &&
+    (options.mockHeadersEnabled ??
+      process.env.CURRENT_USER_MOCK_HEADERS_ENABLED === 'true');
+  if (!mockHeadersEnabled) {
+    throw publicCurrentUserError('缺少用户身份', 401);
+  }
+
   const userId = headerValue(headers['x-user-id']);
   const openid = headerValue(headers['x-openid']);
 
@@ -107,7 +155,8 @@ export function mapCurrentUserRouteError(
   fallbackMessage: string,
 ): CurrentUserRouteError {
   if (
-    error instanceof PublicCurrentUserError &&
+    (error instanceof PublicCurrentUserError ||
+      error instanceof UserSessionError) &&
     Number.isInteger(error.statusCode) &&
     error.statusCode >= 400 &&
     error.statusCode < 500

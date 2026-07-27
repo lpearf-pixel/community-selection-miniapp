@@ -6,7 +6,20 @@ const payMode = process.env.WECHAT_PAY_MODE ?? 'mock';
 const mockWechatPay = process.env.MOCK_WECHAT_PAY !== 'false' && payMode !== 'wechat';
 const authMode = process.env.ADMIN_AUTH_MODE ?? (nodeEnv === 'production' ? 'session' : 'token');
 const requiredBase = ['DATABASE_URL', 'PORT', 'ADMIN_TOKEN'];
-const requiredWechat = ['WECHAT_APP_ID', 'WECHAT_MCH_ID', 'WECHAT_MCH_SERIAL_NO', 'WECHAT_API_V3_KEY', 'WECHAT_PRIVATE_KEY_PATH', 'WECHAT_PAY_NOTIFY_URL'];
+const requiredWechat = [
+  'WECHAT_APP_ID',
+  'WECHAT_APP_SECRET',
+  'WECHAT_MCH_ID',
+  'WECHAT_MCH_SERIAL_NO',
+  'WECHAT_API_V3_KEY',
+  'WECHAT_PRIVATE_KEY_PATH',
+  'WECHAT_PAY_PLATFORM_SERIAL_NO',
+  'WECHAT_PAY_PLATFORM_CERT_PATH',
+  'WECHAT_PAY_NOTIFY_URL',
+  'WECHAT_REFUND_NOTIFY_URL',
+  'MINIAPP_API_BASE_URL',
+  'USER_SESSION_TOKEN_SECRET',
+];
 const forbiddenRealPayout = ['WECHAT_TRANSFER_ENABLED', 'WECHAT_MERCHANT_TRANSFER_ENABLED', 'AUTO_PAYOUT_ENABLED'];
 const problems: string[] = [];
 
@@ -31,6 +44,13 @@ if (!mockWechatPay) {
   for (const key of requiredWechat) {
     if (!process.env[key]) problems.push(`Missing required WeChat Pay env in real mode: ${key}`);
   }
+  if (process.env.MOCK_WECHAT_PAY === 'true') {
+    problems.push('MOCK_WECHAT_PAY must be false in WeChat real mode');
+  }
+}
+
+if (nodeEnv === 'production' && process.env.CURRENT_USER_MOCK_HEADERS_ENABLED === 'true') {
+  problems.push('Production must not enable CURRENT_USER_MOCK_HEADERS_ENABLED');
 }
 
 for (const key of forbiddenRealPayout) {

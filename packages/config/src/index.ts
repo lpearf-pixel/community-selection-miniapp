@@ -12,7 +12,20 @@ export function validateRuntimeConfig() {
   if (!process.env.PORT) problems.push('PORT is required');
   if (config.adminAuthEnabled && !config.adminToken) problems.push('ADMIN_TOKEN is required when admin auth is enabled');
   if (!config.mockWechatPay) {
-    for (const key of ['WECHAT_APP_ID', 'WECHAT_MCH_ID', 'WECHAT_MCH_SERIAL_NO', 'WECHAT_API_V3_KEY', 'WECHAT_PRIVATE_KEY_PATH', 'WECHAT_PAY_NOTIFY_URL']) {
+    for (const key of [
+      'WECHAT_APP_ID',
+      'WECHAT_APP_SECRET',
+      'WECHAT_MCH_ID',
+      'WECHAT_MCH_SERIAL_NO',
+      'WECHAT_API_V3_KEY',
+      'WECHAT_PRIVATE_KEY_PATH',
+      'WECHAT_PAY_PLATFORM_SERIAL_NO',
+      'WECHAT_PAY_PLATFORM_CERT_PATH',
+      'WECHAT_PAY_NOTIFY_URL',
+      'WECHAT_REFUND_NOTIFY_URL',
+      'MINIAPP_API_BASE_URL',
+      'USER_SESSION_TOKEN_SECRET',
+    ]) {
       if (!process.env[key]) problems.push(`${key} is required when WeChat Pay real mode is enabled`);
     }
   }

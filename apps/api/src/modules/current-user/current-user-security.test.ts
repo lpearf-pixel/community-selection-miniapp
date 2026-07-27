@@ -18,7 +18,7 @@ const fakeClient = {
 const activeCustomer = {
   id: 'user-a',
   openid: 'openid-a',
-  role: 'customer',
+  role: 'customer' as const,
   status: 'active',
   nickname: 'Customer A',
   avatar_url: null,
@@ -43,6 +43,7 @@ describe('current-user security core', () => {
     const user = await resolveCurrentUser(
       { 'x-user-id': ' user-a ', 'x-openid': 'openid-b' },
       fakeClient,
+      { nodeEnv: 'test', mockHeadersEnabled: true },
     );
 
     expect(user.id).toBe('user-a');
@@ -60,6 +61,7 @@ describe('current-user security core', () => {
       resolveCurrentUser(
         { 'x-user-id': 'unknown-user', 'x-openid': 'known-openid' },
         fakeClient,
+        { nodeEnv: 'test', mockHeadersEnabled: true },
       ),
     ).rejects.toMatchObject({ statusCode: 404, message: '用户不存在' });
 
@@ -73,7 +75,11 @@ describe('current-user security core', () => {
   it('resolves x-openid when x-user-id is absent', async () => {
     findUnique.mockResolvedValue(activeCustomer);
 
-    const user = await resolveCurrentUser({ 'x-openid': [' ', 'openid-a'] }, fakeClient);
+    const user = await resolveCurrentUser(
+      { 'x-openid': [' ', 'openid-a'] },
+      fakeClient,
+      { nodeEnv: 'test', mockHeadersEnabled: true },
+    );
 
     expect(user.id).toBe('user-a');
     expect(findUnique).toHaveBeenCalledWith({
@@ -86,8 +92,50 @@ describe('current-user security core', () => {
     findUnique.mockResolvedValue({ ...activeCustomer, status: 'inactive' });
 
     await expect(
-      resolveCurrentUser({ 'x-user-id': 'user-a' }, fakeClient),
+      resolveCurrentUser(
+        { 'x-user-id': 'user-a' },
+        fakeClient,
+        { nodeEnv: 'test', mockHeadersEnabled: true },
+      ),
     ).rejects.toMatchObject({ statusCode: 403, message: '用户状态不可用' });
+  });
+
+  it('uses a server session Bearer token and ignores mock identity in production', async () => {
+    const resolve = vi.fn(async () => activeCustomer);
+    await expect(
+      resolveCurrentUser(
+        {
+          authorization: 'Bearer real-session-token-value',
+          'x-user-id': 'forged-user',
+          'x-openid': 'forged-openid',
+        },
+        fakeClient,
+        {
+          nodeEnv: 'production',
+          mockHeadersEnabled: false,
+          sessionOwner: { resolve },
+        },
+      ),
+    ).resolves.toEqual(activeCustomer);
+    expect(resolve).toHaveBeenCalledWith('real-session-token-value');
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects mock headers unless explicitly enabled outside production', async () => {
+    await expect(
+      resolveCurrentUser({ 'x-user-id': 'user-a' }, fakeClient, {
+        nodeEnv: 'development',
+        mockHeadersEnabled: false,
+      }),
+    ).rejects.toMatchObject({ statusCode: 401 });
+
+    await expect(
+      resolveCurrentUser({ 'x-user-id': 'user-a' }, fakeClient, {
+        nodeEnv: 'production',
+        mockHeadersEnabled: true,
+      }),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(findUnique).not.toHaveBeenCalled();
   });
 
   it('requires leader role', () => {

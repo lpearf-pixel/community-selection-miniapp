@@ -1,4 +1,5 @@
-const { getApiBaseUrl } = require('../../utils/api');
+const { request } = require('../../utils/api');
+const { payOrder } = require('../../utils/payment');
 const { getCurrentUser } = require('../../utils/user');
 const { getSelectedCommunity, getSelectedPickupStore } = require('../../utils/selection');
 
@@ -26,19 +27,15 @@ Page({
     this.setData({ quantity: Number(event.detail.value) || 1 });
   },
   submit() {
-    const user = getCurrentUser();
-    const apiBaseUrl = getApiBaseUrl();
     if (!this.data.pickup_store_id) {
       wx.showToast({ title: '请先选择自提点', icon: 'none' });
       return;
     }
-    wx.request({
-      url: `${apiBaseUrl}/api/orders`,
+    request({
+      url: '/api/orders',
       method: 'POST',
       data: {
         group_buy_id: this.data.group_buy_id,
-        user_id: user.user_id || undefined,
-        user_openid: user.openid,
         client_request_id: `miniapp-${Date.now()}`,
         quantity: this.data.quantity,
         pickup_type: 'store',
@@ -47,26 +44,15 @@ Page({
         receiver_name: this.data.receiver_name || '测试用户',
         receiver_phone: this.data.receiver_phone || '13800000001'
       },
-      success: (res) => {
-        const order = res.data && res.data.data;
-        if (!res.data || !res.data.success || !order) {
-          wx.showToast({ title: (res.data && res.data.message) || '下单失败', icon: 'none' });
-          return;
-        }
-        wx.request({
-          url: `${apiBaseUrl}/api/payments/mock`,
-          method: 'POST',
-          data: { order_id: order.id },
-          success: (paymentResponse) => {
-            if (paymentResponse.data && paymentResponse.data.success) {
-              wx.navigateTo({ url: '/pages/orders/index' });
-              return;
-            }
-            wx.showToast({ title: (paymentResponse.data && paymentResponse.data.message) || '支付失败', icon: 'none' });
-          },
-          fail: () => wx.showToast({ title: '支付请求失败', icon: 'none' })
+    })
+      .then((order) => payOrder(order.id))
+      .then(() => wx.navigateTo({ url: '/pages/orders/index' }))
+      .catch((error) => {
+        const cancelled = /cancel/i.test(error.errMsg || error.message || '');
+        wx.showToast({
+          title: cancelled ? '订单已保留，可稍后支付' : (error.message || '支付失败'),
+          icon: 'none',
         });
-      }
-    });
+      });
   }
 });

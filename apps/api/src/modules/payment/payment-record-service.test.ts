@@ -23,7 +23,7 @@ const payment = {
   prepay_id: null,
   amount_cents: 1200,
   trade_state: 'created',
-  raw_notify: null,
+  provider_success_at: null,
   created_at: new Date('2026-07-25T00:00:00.000Z'),
   updated_at: new Date('2026-07-25T00:00:00.000Z'),
 };
@@ -87,18 +87,19 @@ describe('payment record owner', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('keeps an existing transaction id and writes an explicitly supplied notify', async () => {
+  it('keeps an existing transaction id and records provider success time', async () => {
+    const providerSuccessAt = new Date('2026-07-25T00:01:00.000Z');
     const paid = {
       ...payment,
       trade_state: 'paid',
-      raw_notify: { event: 'paid' },
+      provider_success_at: providerSuccessAt,
     };
     update.mockResolvedValue(paid);
 
     await expect(
       confirmPaymentRecordPaid(tx, payment as any, {
         transaction_id: 'wechat-new-must-not-replace',
-        raw_notify: { event: 'paid' },
+        provider_success_at: providerSuccessAt,
       }),
     ).resolves.toEqual(paid);
 
@@ -107,12 +108,13 @@ describe('payment record owner', () => {
       data: {
         trade_state: 'paid',
         transaction_id: 'wechat-existing',
-        raw_notify: { event: 'paid' },
+        provider_success_at: providerSuccessAt,
+        last_provider_error_code: null,
       },
     });
   });
 
-  it('omits raw notify when the caller did not supply it', async () => {
+  it('allows provider success time to remain absent', async () => {
     const withoutTransaction = {
       ...payment,
       transaction_id: null,
@@ -132,6 +134,8 @@ describe('payment record owner', () => {
       data: {
         trade_state: 'paid',
         transaction_id: 'wechat-new',
+        provider_success_at: undefined,
+        last_provider_error_code: null,
       },
     });
   });

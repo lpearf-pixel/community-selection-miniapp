@@ -21,7 +21,8 @@ export type CreatePendingRefundInput = RefundRecordKeyInput & {
 export type RefundNotifyInfo = {
   refund_id?: string;
   out_refund_no?: string;
-  raw_notify?: Prisma.InputJsonValue | null;
+  provider_status?: string;
+  provider_success_at?: Date;
 };
 
 export function getRefundRecord(
@@ -120,10 +121,11 @@ export async function confirmRefundSuccess(
     if (notifyInfo.refund_id && !refund.refund_id) {
       data.refund_id = notifyInfo.refund_id;
     }
-    if (notifyInfo.raw_notify !== undefined) {
-      data.raw_notify = notifyInfo.raw_notify === null
-        ? Prisma.JsonNull
-        : notifyInfo.raw_notify;
+    if (notifyInfo.provider_status !== undefined) {
+      data.provider_status = notifyInfo.provider_status;
+    }
+    if (notifyInfo.provider_success_at && !refund.processed_at) {
+      data.processed_at = notifyInfo.provider_success_at;
     }
     if (Object.keys(data).length === 0) {
       return { refund, first_success: false };
@@ -144,14 +146,9 @@ export async function confirmRefundSuccess(
       data: {
         status: 'success',
         refund_id: notifyInfo.refund_id ?? refund.refund_id,
-        processed_at: new Date(),
-        ...(notifyInfo.raw_notify === undefined
-          ? {}
-          : {
-              raw_notify: notifyInfo.raw_notify === null
-                ? Prisma.JsonNull
-                : notifyInfo.raw_notify,
-            }),
+        provider_status: notifyInfo.provider_status ?? 'SUCCESS',
+        processed_at: notifyInfo.provider_success_at ?? new Date(),
+        last_provider_error_code: null,
       },
     }),
     first_success: true,

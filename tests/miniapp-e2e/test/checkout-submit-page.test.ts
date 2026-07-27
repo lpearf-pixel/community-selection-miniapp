@@ -22,7 +22,7 @@ function loadPage() {
   let definition: Record<string, unknown> | undefined;
   const order = deferred<{ id: string }>();
   const request = vi.fn(() => order.promise);
-  const createMockPayment = vi.fn(async () => ({ pay_status: 'paid' }));
+  const payOrder = vi.fn(async () => ({ pay_status: 'paid' }));
   const redirectTo = vi.fn();
   const source = fs.readFileSync(
     path.join(repoRoot, 'apps/miniapp/pages/orders/confirm/index.js'),
@@ -32,9 +32,9 @@ function loadPage() {
     require: (requestPath: string) => {
       if (requestPath === '../../../utils/api') return {
         request,
-        createMockPayment,
         formatYuan: (cents: number) => (Number(cents || 0) / 100).toFixed(2),
       };
+      if (requestPath === '../../../utils/payment') return { payOrder };
       if (requestPath === '../../../utils/user') return {
         getCurrentUser: () => ({ openid: 'buyer-1', nickname: '测试用户' }),
       };
@@ -67,21 +67,29 @@ function loadPage() {
       callback?.();
     },
   } as unknown as CheckoutHarness;
-  return { createMockPayment, order, page, redirectTo, request };
+  return { order, page, payOrder, redirectTo, request };
 }
 
 describe('checkout Mini Program page submit contract', () => {
-  it('returns the order, payment, and redirect completion chain', async () => {
-    const { createMockPayment, order, page, redirectTo, request } = loadPage();
+  it('returns the order, runtime payment, and redirect completion chain', async () => {
+    const { order, page, payOrder, redirectTo, request } = loadPage();
 
     const submission = page.submit();
     expect(typeof submission?.then).toBe('function');
     expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({
+          user_id: expect.anything(),
+          user_openid: expect.anything(),
+        }),
+      }),
+    );
 
     order.resolve({ id: 'order-1' });
     await submission;
 
-    expect(createMockPayment).toHaveBeenCalledWith('order-1');
+    expect(payOrder).toHaveBeenCalledWith('order-1');
     expect(redirectTo).toHaveBeenCalledWith({
       url: '/pages/orders/detail/index?id=order-1',
     });

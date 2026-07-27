@@ -3,8 +3,6 @@ import { prisma } from '../../db.js';
 
 type RiskLevel = 'high' | 'medium' | 'low';
 type RiskQuery = { risk_level?: RiskLevel; order_no?: string; group_buy_id?: string; from?: string; to?: string; page?: number; page_size?: number };
-type RefundRaw = { refund_transaction_id?: string | null; refund_channel?: string | null };
-
 type RiskItem = {
   risk_id: string;
   risk_level: RiskLevel;
@@ -26,10 +24,6 @@ type RiskItem = {
   created_at: Date;
   updated_at: Date;
 };
-
-function rawNotify(value: Prisma.JsonValue | null | undefined): RefundRaw {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as RefundRaw : {};
-}
 
 function maskPhone(phone: string | null | undefined): string {
   return phone && phone.length >= 7 ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : phone ? '****' : '';
@@ -76,7 +70,7 @@ async function buildRisks(query: RiskQuery): Promise<RiskItem[]> {
   const transactionCount = new Map<string, number>();
   const outRefundNoCount = new Map<string, number>();
   for (const refund of allRefunds) {
-    const refund_transaction_id = rawNotify(refund.raw_notify).refund_transaction_id ?? refund.refund_id ?? '';
+    const refund_transaction_id = refund.refund_id ?? '';
     if (refund_transaction_id) transactionCount.set(refund_transaction_id, (transactionCount.get(refund_transaction_id) ?? 0) + 1);
     if (refund.out_refund_no) outRefundNoCount.set(refund.out_refund_no, (outRefundNoCount.get(refund.out_refund_no) ?? 0) + 1);
   }
@@ -94,7 +88,7 @@ async function buildRisks(query: RiskQuery): Promise<RiskItem[]> {
     if (order.group_buy?.status === 'failed' && order.pay_status === 'paid' && order.refund_status === 'none') addRisk(items, order, 'low', 'failed_group_buy_paid_pending_manual_refund', '失败团购下 paid 订单待人工退款处理', '进入人工退款台账逐笔处理', refundRecordAmount);
     for (const refund of order.refunds) {
       if (refund.refund_amount_cents > order.pay_amount_cents) addRisk(items, order, 'high', 'single_refund_amount_over_pay_amount', '单笔退款记录金额大于支付金额', '冻结该退款记录后人工复核', refund.refund_amount_cents, refund.out_refund_no);
-      const refund_transaction_id = rawNotify(refund.raw_notify).refund_transaction_id ?? refund.refund_id ?? '';
+      const refund_transaction_id = refund.refund_id ?? '';
       if (refund_transaction_id && (transactionCount.get(refund_transaction_id) ?? 0) > 1) addRisk(items, order, 'high', 'duplicated_refund_transaction_id', '同一 refund_transaction_id 多次出现', '核对重复流水并避免重复人工登记', refund.refund_amount_cents, refund_transaction_id);
       if (refund.out_refund_no && (outRefundNoCount.get(refund.out_refund_no) ?? 0) > 1) addRisk(items, order, 'high', 'duplicated_out_refund_no', '同一 out_refund_no 多次出现', '按外部退款单号进行幂等复核', refund.refund_amount_cents, refund.out_refund_no);
     }
@@ -154,7 +148,7 @@ export async function validateManualRefundSafety(input: { order_id: string; refu
     if (order.group_buy_id && order.group_buy?.status !== 'failed' && ['paid', 'grouped', 'preparing', 'ready'].includes(order.order_status)) warnings.push('status compatibility requires existing after-sale/admin manual flow for non-failed groups');
   }
   if (input.refund_transaction_id) {
-    const duplicate = await prisma.refund.findFirst({ where: { OR: [{ refund_id: input.refund_transaction_id }, { raw_notify: { path: ['refund_transaction_id'], equals: input.refund_transaction_id } }] } });
+    const duplicate = await prisma.refund.findFirst({ where: { refund_id: input.refund_transaction_id } });
     if (duplicate) blocking_reasons.push('duplicate refund_transaction_id check');
   }
   if (input.out_refund_no) {

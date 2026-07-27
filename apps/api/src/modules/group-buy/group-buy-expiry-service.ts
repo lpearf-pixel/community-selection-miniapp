@@ -293,7 +293,8 @@ export async function markGroupBuyOrderManualRefunded(input: {
         reason: input.refund_reason ?? '团购失败人工退款记录',
         status: isFullRefund ? 'success' : 'processing',
         processed_at: new Date(),
-        raw_notify: { refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null, manual: true }
+        provider_status: `MANUAL_${input.refund_channel}`,
+        last_provider_error_code: null
       },
       create: {
         order_id: order.id,
@@ -306,7 +307,8 @@ export async function markGroupBuyOrderManualRefunded(input: {
         reason: input.refund_reason ?? '团购失败人工退款记录',
         status: isFullRefund ? 'success' : 'processing',
         processed_at: new Date(),
-        raw_notify: { refund_channel: input.refund_channel, refund_transaction_id: input.refund_transaction_id ?? null, admin_remark: input.admin_remark ?? null, manual: true }
+        provider_status: `MANUAL_${input.refund_channel}`,
+        last_provider_error_code: null
       }
     });
     if (isFullRefund) await restoreInventoryForRefund(tx, { refund_id: refund.id, event_type: 'group_failed_refund_restore' });
