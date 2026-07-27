@@ -138,6 +138,9 @@ jobs:
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             -f .github/l52-compose.rendered.json \
             build api edge backup
+          docker run --rm --network none \
+            community-selection-api:${IMAGE_TAG} \
+            ./node_modules/.bin/prisma -v
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             -f .github/l52-compose.rendered.json \
