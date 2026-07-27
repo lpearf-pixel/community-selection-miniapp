@@ -291,3 +291,12 @@ test('rejects Docker Compose v1', async () => {
     /Compose v2/,
   );
 });
+
+test('parses an explicit CI fixture owner without changing the production default', async () => {
+  const { parseApiRuntimeUid } = await import('./preflight.mjs');
+  assert.equal(typeof parseApiRuntimeUid, 'function');
+  assert.equal(parseApiRuntimeUid(undefined), 1000);
+  assert.equal(parseApiRuntimeUid('1001'), 1001);
+  assert.throws(() => parseApiRuntimeUid('-1'), /runtime uid/i);
+  assert.throws(() => parseApiRuntimeUid('not-a-number'), /runtime uid/i);
+});
