@@ -12,6 +12,7 @@ VCM-1 covers only consumer requests to:
 
 - `POST /api/orders`
 - `POST /api/orders/normal`
+- `POST /api/payments/mock`
 
 It does not change production authentication, administrator sessions, payment
 or refund contracts, group-buy ownership, or inactive historical verifiers.
@@ -76,4 +77,3 @@ database generation or migration.
 - Body-only forged identity does not authenticate.
 - L12, L50 refund gate, L51 gate, baseline audit, and `verify:all` pass.
 - Production authentication code is unchanged.
-
