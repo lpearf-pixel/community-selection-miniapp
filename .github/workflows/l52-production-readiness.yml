@@ -55,6 +55,8 @@ jobs:
           printf '%s\n' 'ci-backup-passphrase-abcdefghijklmnopqrstuvwxyz' \
             > secrets/backup_passphrase
           printf 'IMAGE_TAG=%s\n' "${IMAGE_TAG}" > .env.production.ci
+          printf 'L52_SECRETS_VOLUME=community-selection-l52-%s-secrets\n' \
+            "${GITHUB_RUN_ID}" >> .env.production.ci
           cat >> .env.production.ci <<'ENV'
           NODE_ENV=production
           PORT=13080
@@ -91,14 +93,19 @@ jobs:
           BACKUP_RETENTION_DAYS=14
           BACKUP_ENCRYPTION_PASSPHRASE_FILE=/run/secrets/backup_passphrase
           ENV
-          docker run --rm \
-            --entrypoint chown \
-            -v "${PWD}/secrets:/secrets" \
-            caddy:2.9.1-alpine \
-            1000:1000 \
-            /secrets/wechat_private_key.pem \
-            /secrets/wechat_platform_certificate.pem
           chmod 600 secrets/* .env.production.ci
+          secret_volume="community-selection-l52-${GITHUB_RUN_ID}-secrets"
+          helper="community-selection-l52-${GITHUB_RUN_ID}-secret-seed"
+          docker volume create "${secret_volume}"
+          docker create \
+            --name "${helper}" \
+            --entrypoint sh \
+            -v "${secret_volume}:/run/secrets" \
+            caddy:2.9.1-alpine \
+            -c 'chown 1000:1000 /run/secrets/wechat_private_key.pem /run/secrets/wechat_platform_certificate.pem && chmod 600 /run/secrets/*'
+          docker cp secrets/. "${helper}:/run/secrets/"
+          docker start --attach "${helper}"
+          docker rm "${helper}"
 
       - name: Verify production contracts
         run: |
@@ -108,7 +115,8 @@ jobs:
             scripts/pg-restore.sh \
             scripts/production/*.sh
           node scripts/production/preflight.mjs \
-            --env-file .env.production.ci
+            --env-file .env.production.ci \
+            --api-runtime-uid "$(id -u)"
 
       - name: Build immutable production images
         run: |
@@ -116,11 +124,13 @@ jobs:
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             --env-file .env.production.ci \
             -f docker-compose.production.yml \
+            -f .github/l52-compose.override.yml \
             build api edge backup
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             --env-file .env.production.ci \
             -f docker-compose.production.yml \
+            -f .github/l52-compose.override.yml \
             run --rm --no-deps edge \
             validate --config /etc/caddy/Caddyfile
 
@@ -130,11 +140,13 @@ jobs:
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             --env-file .env.production.ci \
             -f docker-compose.production.yml \
+            -f .github/l52-compose.override.yml \
             up -d --wait postgres
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             --env-file .env.production.ci \
             -f docker-compose.production.yml \
+            -f .github/l52-compose.override.yml \
             run --rm migrate
 
       - name: Reset production fixture
@@ -143,6 +155,7 @@ jobs:
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             --env-file .env.production.ci \
             -f docker-compose.production.yml \
+            -f .github/l52-compose.override.yml \
             down --volumes --remove-orphans
 
       - name: Select isolated verification PostgreSQL port
@@ -186,7 +199,10 @@ jobs:
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             --env-file .env.production.ci \
             -f docker-compose.production.yml \
+            -f .github/l52-compose.override.yml \
             down --volumes --remove-orphans || true
+          docker rm -f \
+            community-selection-l52-${GITHUB_RUN_ID}-secret-seed || true
           docker compose \
             --project-name community-selection-l52-verify-${GITHUB_RUN_ID} \
             -f docker-compose.yml \
