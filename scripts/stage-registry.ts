@@ -59,6 +59,13 @@ export const GLOBAL_STATIC_VERIFIERS = [
   'scripts/verify-report-markdown-local.ts',
 ] as const;
 
+export const STAGE_CONTRACT_DECLARATIONS = [
+  {
+    id: 'L51',
+    contracts: ['identity.consumer.v2'],
+  },
+] as const;
+
 const historicalStages = [
   ['L24', 'Miniapp Cart', 'scripts/verify-l24-miniapp-cart-local.ts'],
   ['L25', 'Order Confirm Quantity Guard', 'scripts/verify-l25-order-confirm-quantity-guard-local.ts'],
