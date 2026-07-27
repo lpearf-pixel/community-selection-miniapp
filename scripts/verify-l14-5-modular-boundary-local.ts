@@ -114,7 +114,7 @@ async function main() {
   const unpaidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(unpaidProduct.stock === 50000, 'unpaid order should not deduct inventory');
 
-  await post('/api/payments/mock', { order_id: order.id });
+  await consumerPost('/api/payments/mock', customer.id, { order_id: order.id });
   const afterPaymentProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(afterPaymentProduct.stock === 45000, 'paid order should deduct base stock quantity');
   const paymentLedger = await prisma.stockLedger.findFirst({ where: { product_id: product.id, source_type: 'order_payment', source_id: order.id, event_type: 'order_paid_deduct' } });
