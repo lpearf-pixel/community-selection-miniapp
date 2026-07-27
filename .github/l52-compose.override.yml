@@ -1,0 +1,22 @@
+services:
+  migrate:
+    volumes: !override
+      - l52-secrets:/run/secrets:ro
+
+  api:
+    volumes: !override
+      - l52-secrets:/run/secrets:ro
+
+  backup:
+    volumes: !override
+      - production-backups:/var/backups/community-selection
+      - l52-secrets:/run/secrets:ro
+
+  restore:
+    volumes: !override
+      - production-backups:/var/backups/community-selection
+      - l52-secrets:/run/secrets:ro
+
+volumes:
+  l52-secrets:
+    name: ${L52_SECRETS_VOLUME:?L52_SECRETS_VOLUME is required}
