@@ -18,9 +18,20 @@ test('uses the checked-out commit as the production image tag', () => {
 });
 
 test('stages API-owned fixture secrets without requiring host root', () => {
+  assert.match(workflow, /docker volume create[\s\S]*docker create[\s\S]*docker cp/);
+  assert.match(workflow, /chown 1000:1000[\s\S]*wechat_private_key\.pem/);
+  assert.doesNotMatch(workflow, /^\s*chown 1000:1000/m);
+  assert.doesNotMatch(workflow, /-v "\$\{PWD\}\/secrets:\/secrets"/);
   assert.match(
     workflow,
-    /docker run[\s\S]*--entrypoint chown[\s\S]*1000:1000[\s\S]*wechat_private_key\.pem/,
+    /--api-runtime-uid "\$\(id -u\)"/,
   );
-  assert.doesNotMatch(workflow, /^\s*chown 1000:1000/m);
+});
+
+test('runs production containers with the container-runner secrets override', () => {
+  assert.match(
+    workflow,
+    /-f \.github\/l52-compose\.override\.yml/,
+  );
+  assert.match(workflow, /L52_SECRETS_VOLUME/);
 });
