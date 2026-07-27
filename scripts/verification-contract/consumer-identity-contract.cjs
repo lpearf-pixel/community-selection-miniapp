@@ -2,12 +2,14 @@ const { existsSync, readFileSync } = require('node:fs');
 const { join, relative } = require('node:path');
 
 const PROTECTED_ENDPOINTS = new Set([
+  '/api/me/center-summary',
+  '/api/leaders/me/center-summary',
   '/api/orders',
   '/api/orders/normal',
   '/api/payments/mock',
 ]);
 const VERIFIER_PATTERN = /scripts\/(?:run-|verify-)[A-Za-z0-9.-]+\.ts/g;
-const CALL_PATTERN = /\b(injectAsConsumer|(?:app\.)?inject|post)\s*\(/g;
+const CALL_PATTERN = /\b(injectAsConsumer|requestData|(?:app\.)?inject|post)\s*\(/g;
 
 function normalized(path) {
   return path.replaceAll('\\', '/');
@@ -109,10 +111,11 @@ function findConsumerIdentityViolations(root, files) {
       }
       if (
         call.kind !== 'injectAsConsumer' &&
-        !/['"]x-user-id['"]\s*:/.test(call.source)
+        !/['"]x-user-id['"]\s*:/.test(call.source) &&
+        !(call.kind === 'requestData' && /\buserId\s*:/.test(call.source))
       ) {
         violations.push(
-          `${location}: ${endpoint} is missing injectAsConsumer or x-user-id`,
+          `${location}: ${endpoint} is missing consumer verifier identity`,
         );
       }
     }
