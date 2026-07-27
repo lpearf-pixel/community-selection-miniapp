@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  consumerVerifierHeaders,
   enableConsumerVerifierMockIdentity,
   injectAsConsumer,
 } from './consumer-verifier-request.js';
@@ -26,6 +27,21 @@ describe('consumer verifier request boundary', () => {
       }),
     ).rejects.toThrow('test user id');
     expect(inject).not.toHaveBeenCalled();
+  });
+
+  it('builds trusted consumer headers for external verifier requests', () => {
+    expect(
+      consumerVerifierHeaders(' user-a ', {
+        'x-trace-id': 'trace-a',
+        'x-user-id': 'forged-user',
+        'x-openid': 'forged-openid',
+      }),
+    ).toEqual({
+      'x-trace-id': 'trace-a',
+      'x-user-id': 'user-a',
+    });
+
+    expect(() => consumerVerifierHeaders('   ')).toThrow('test user id');
   });
 
   it('moves identity to a trusted header and strips body identity', async () => {
