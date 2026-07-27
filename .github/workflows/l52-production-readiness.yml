@@ -55,8 +55,6 @@ jobs:
           printf '%s\n' 'ci-backup-passphrase-abcdefghijklmnopqrstuvwxyz' \
             > secrets/backup_passphrase
           printf 'IMAGE_TAG=%s\n' "${IMAGE_TAG}" > .env.production.ci
-          printf 'L52_SECRETS_VOLUME=community-selection-l52-%s-secrets\n' \
-            "${GITHUB_RUN_ID}" >> .env.production.ci
           cat >> .env.production.ci <<'ENV'
           NODE_ENV=production
           PORT=13080
@@ -118,19 +116,31 @@ jobs:
             --env-file .env.production.ci \
             --api-runtime-uid "$(id -u)"
 
+      - name: Render container-runner production topology
+        shell: bash
+        run: |
+          docker compose version
+          docker compose \
+            --project-name community-selection-l52-${GITHUB_RUN_ID} \
+            --env-file .env.production.ci \
+            --profile '*' \
+            -f docker-compose.production.yml \
+            config --format json > .github/l52-compose.production.json
+          node scripts/production/render-l52-compose.mjs \
+            --input .github/l52-compose.production.json \
+            --output .github/l52-compose.rendered.json \
+            --secret-volume community-selection-l52-${GITHUB_RUN_ID}-secrets
+          docker compose --project-name community-selection-l52-${GITHUB_RUN_ID} -f .github/l52-compose.rendered.json config --quiet
+
       - name: Build immutable production images
         run: |
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            --env-file .env.production.ci \
-            -f docker-compose.production.yml \
-            -f .github/l52-compose.override.yml \
+            -f .github/l52-compose.rendered.json \
             build api edge backup
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            --env-file .env.production.ci \
-            -f docker-compose.production.yml \
-            -f .github/l52-compose.override.yml \
+            -f .github/l52-compose.rendered.json \
             run --rm --no-deps edge \
             caddy validate --config /etc/caddy/Caddyfile
 
@@ -138,25 +148,21 @@ jobs:
         run: |
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            --env-file .env.production.ci \
-            -f docker-compose.production.yml \
-            -f .github/l52-compose.override.yml \
+            -f .github/l52-compose.rendered.json \
             up -d --wait postgres
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            --env-file .env.production.ci \
-            -f docker-compose.production.yml \
-            -f .github/l52-compose.override.yml \
+            -f .github/l52-compose.rendered.json \
             run --rm migrate
 
       - name: Reset production fixture
         run: |
           docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            --env-file .env.production.ci \
-            -f docker-compose.production.yml \
-            -f .github/l52-compose.override.yml \
+            -f .github/l52-compose.rendered.json \
             down --volumes --remove-orphans
+          docker volume rm \
+            community-selection-l52-${GITHUB_RUN_ID}-secrets
 
       - name: Select isolated verification PostgreSQL port
         shell: bash
@@ -195,17 +201,22 @@ jobs:
         if: always()
         shell: bash
         run: |
-          docker compose \
-            --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            --env-file .env.production.ci \
-            -f docker-compose.production.yml \
-            -f .github/l52-compose.override.yml \
-            down --volumes --remove-orphans || true
+          if [[ -f .github/l52-compose.rendered.json ]]; then
+            docker compose \
+              --project-name community-selection-l52-${GITHUB_RUN_ID} \
+              -f .github/l52-compose.rendered.json \
+              down --volumes --remove-orphans || true
+          fi
           docker rm -f \
             community-selection-l52-${GITHUB_RUN_ID}-secret-seed || true
+          docker volume rm \
+            community-selection-l52-${GITHUB_RUN_ID}-secrets || true
           docker compose \
             --project-name community-selection-l52-verify-${GITHUB_RUN_ID} \
             -f docker-compose.yml \
             down --volumes --remove-orphans || true
-          rm -f .env.production.ci
+          rm -f \
+            .env.production.ci \
+            .github/l52-compose.production.json \
+            .github/l52-compose.rendered.json
           rm -rf secrets
