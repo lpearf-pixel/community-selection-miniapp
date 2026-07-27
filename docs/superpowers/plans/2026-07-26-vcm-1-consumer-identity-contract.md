@@ -107,8 +107,9 @@ Expected: failure because the analyzer module does not exist.
 - [ ] **Step 3: Implement target discovery and source analysis**
 
 Extract active TypeScript verifier paths from `verify-all-local.sh`, add Stage
-registry verifier paths, and analyze only calls to `/api/orders` and
-`/api/orders/normal`. Emit `path:line: message` for body identity or missing
+registry verifier paths, and analyze calls to `/api/orders`,
+`/api/orders/normal`, and the consumer-owned `/api/payments/mock` test
+confirmation route. Emit `path:line: message` for body identity or missing
 shared/explicit trusted identity.
 
 - [ ] **Step 4: Add the L51 contract declaration**
