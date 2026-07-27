@@ -16,6 +16,8 @@ export MOCK_WECHAT_PAY="${MOCK_WECHAT_PAY:-true}"
 export AUTO_PAYOUT_ENABLED="${AUTO_PAYOUT_ENABLED:-false}"
 export AUTO_TAX_FILING_ENABLED="${AUTO_TAX_FILING_ENABLED:-false}"
 
+pnpm test:vcm1
+node scripts/verify-consumer-identity-contract-local.cjs
 pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts
 
 pnpm db:generate
