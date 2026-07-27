@@ -132,7 +132,7 @@ jobs:
             -f docker-compose.production.yml \
             -f .github/l52-compose.override.yml \
             run --rm --no-deps edge \
-            validate --config /etc/caddy/Caddyfile
+            caddy validate --config /etc/caddy/Caddyfile
 
       - name: Verify one-shot production migration
         run: |
