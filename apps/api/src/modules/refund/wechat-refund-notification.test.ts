@@ -64,7 +64,10 @@ describe('WeChat refund notification', () => {
       provider_status: 'SUCCESS',
       provider_success_at: new Date('2026-07-26T12:00:00.000Z'),
     });
-    expect(deps.receipts.complete).toHaveBeenCalledWith('notify-refund-a');
+    expect(deps.receipts.complete).toHaveBeenCalledWith(
+      'notify-refund-a',
+      expect.any(String),
+    );
   });
 
   it('rejects failed or mismatched amounts without projecting', async () => {
@@ -114,6 +117,7 @@ describe('WeChat refund notification', () => {
     expect(deps.markRefundSuccess).not.toHaveBeenCalled();
     expect(deps.receipts.fail).toHaveBeenCalledWith(
       'notify-refund-a',
+      expect.any(String),
       'WECHAT_REFUND_NOT_FOUND',
     );
   });

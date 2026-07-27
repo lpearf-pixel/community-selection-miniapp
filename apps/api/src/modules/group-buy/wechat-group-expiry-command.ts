@@ -1,10 +1,15 @@
+type DuePayment = {
+  id: string;
+  out_trade_no: string;
+};
+
 type DueOrder = {
   id: string;
   quantity: number;
   pay_status: string;
   order_status: string;
   pay_amount_cents: number;
-  payments: Array<{ id: string; out_trade_no: string }>;
+  payments: DuePayment[];
 };
 
 type DueGroup = {
@@ -19,6 +24,7 @@ export function createWechatGroupExpiryCommand(options: {
   queryTransaction(outTradeNo: string): Promise<Record<string, unknown>>;
   convergePayment(
     order: DueOrder,
+    payment: DuePayment,
     provider: Record<string, unknown>,
   ): Promise<void>;
   refreshGroupProgress(groupId: string): Promise<{
@@ -46,6 +52,7 @@ export function createWechatGroupExpiryCommand(options: {
       }
       const groups = await options.listDueGroups(now);
       for (const group of groups) {
+        let paymentResolutionBlocked = false;
         for (const order of group.orders) {
           if (
             order.pay_status !== 'unpaid' ||
@@ -53,22 +60,45 @@ export function createWechatGroupExpiryCommand(options: {
           ) {
             continue;
           }
-          const payment = order.payments[0];
-          if (!payment) continue;
-          try {
-            const provider = await options.queryTransaction(
-              payment.out_trade_no,
-            );
-            if (provider.trade_state === 'SUCCESS') {
-              await options.convergePayment(order, provider);
+          for (const payment of order.payments) {
+            try {
+              const provider = await options.queryTransaction(
+                payment.out_trade_no,
+              );
+              if (provider.trade_state === 'SUCCESS') {
+                await options.convergePayment(order, payment, provider);
+                continue;
+              }
+              if (
+                !['CLOSED', 'REVOKED', 'PAYERROR'].includes(
+                  String(provider.trade_state),
+                )
+              ) {
+                paymentResolutionBlocked = true;
+                await options.upsertAlert(
+                  `group-expiry:${group.id}:${order.id}:${payment.id}:pending`,
+                  {
+                    group_buy_id: group.id,
+                    order_id: order.id,
+                    payment_id: payment.id,
+                    provider_state: provider.trade_state ?? null,
+                  },
+                );
+              }
+            } catch (error) {
+              paymentResolutionBlocked = true;
+              await options.upsertAlert(
+                `group-expiry:${group.id}:${order.id}:${payment.id}:query`,
+                {
+                  group_buy_id: group.id,
+                  order_id: order.id,
+                  payment_id: payment.id,
+                },
+              );
             }
-          } catch (error) {
-            await options.upsertAlert(
-              `group-expiry:${group.id}:${order.id}:query`,
-              { group_buy_id: group.id, order_id: order.id },
-            );
           }
         }
+        if (paymentResolutionBlocked) continue;
         const progress = await options.refreshGroupProgress(group.id);
         await options.closeUnpaidOrders(group.id);
         if (progress.paid_quantity >= group.min_quantity) {

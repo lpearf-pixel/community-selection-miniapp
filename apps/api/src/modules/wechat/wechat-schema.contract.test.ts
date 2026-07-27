@@ -19,6 +19,8 @@ describe('L51 WeChat persistence contract', () => {
     expect(schema).toContain('model WechatNotificationReceipt');
     expect(schema).toMatch(/token_hash\s+String\s+@unique/);
     expect(schema).toMatch(/notification_id\s+String\s+@unique/);
+    expect(schema).toMatch(/claim_token\s+String/);
+    expect(migration).toContain('"claim_token" TEXT NOT NULL');
   });
 
   it('tracks retryable provider state without raw notification storage', () => {

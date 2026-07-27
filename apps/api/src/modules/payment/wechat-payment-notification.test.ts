@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { processWechatPaymentNotification } from './wechat-payment-notification.js';
+import {
+  createPrismaWechatReceiptStore,
+  processWechatPaymentNotification,
+} from './wechat-payment-notification.js';
 
 const verified = {
   notificationId: 'notification-a',
@@ -65,7 +68,10 @@ describe('verified WeChat payment notification', () => {
       transaction_id: 'transaction-a',
       provider_success_at: new Date('2026-07-26T16:00:00.000Z'),
     });
-    expect(deps.receipts.complete).toHaveBeenCalledWith('notification-a');
+    expect(deps.receipts.complete).toHaveBeenCalledWith(
+      'notification-a',
+      expect.any(String),
+    );
   });
 
   it('acknowledges identical replay without projecting twice', async () => {
@@ -116,5 +122,149 @@ describe('verified WeChat payment notification', () => {
       expect(deps.markOrderPaid).not.toHaveBeenCalled();
       expect(deps.receipts.fail).toHaveBeenCalled();
     }
+  });
+});
+
+describe('WeChat notification receipt claims', () => {
+  const input = {
+    notificationId: 'notification-a',
+    notificationType: 'payment' as const,
+    eventType: 'TRANSACTION.SUCCESS',
+    resourceIdentifier: 'PAYORDERA001',
+    bodySha256: 'a'.repeat(64),
+    claimToken: 'claim-new',
+  };
+
+  function duplicateClient(existing: {
+    id: string;
+    body_sha256: string;
+    status: string;
+    updated_at: Date;
+  }) {
+    return {
+      wechatNotificationReceipt: {
+        create: vi.fn(async () => {
+          throw { code: 'P2002' };
+        }),
+        findUniqueOrThrow: vi.fn(async () => existing),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    };
+  }
+
+  it('atomically reclaims a failed receipt instead of acknowledging it', async () => {
+    const existing = {
+      id: 'receipt-a',
+      body_sha256: input.bodySha256,
+      status: 'failed',
+      updated_at: new Date('2026-07-26T12:00:00.000Z'),
+    };
+    const client = duplicateClient(existing);
+    const store = createPrismaWechatReceiptStore(client as any);
+
+    await expect(store.begin(input)).resolves.toBe('new');
+    expect(client.wechatNotificationReceipt.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: existing.id,
+        body_sha256: input.bodySha256,
+        status: 'failed',
+        updated_at: existing.updated_at,
+      },
+      data: {
+        status: 'processing',
+        claim_token: input.claimToken,
+        failure_code: null,
+        processed_at: null,
+      },
+    });
+  });
+
+  it('only acknowledges an already applied receipt as a replay', async () => {
+    const client = duplicateClient({
+      id: 'receipt-a',
+      body_sha256: input.bodySha256,
+      status: 'applied',
+      updated_at: new Date(),
+    });
+    const store = createPrismaWechatReceiptStore(client as any);
+
+    await expect(store.begin(input)).resolves.toBe('replay');
+    expect(client.wechatNotificationReceipt.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('reports a fresh in-flight receipt as busy', async () => {
+    const client = duplicateClient({
+      id: 'receipt-a',
+      body_sha256: input.bodySha256,
+      status: 'processing',
+      updated_at: new Date(),
+    });
+    const store = createPrismaWechatReceiptStore(client as any);
+
+    await expect(store.begin(input)).resolves.toBe('busy');
+    expect(client.wechatNotificationReceipt.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('atomically reclaims an expired processing lease', async () => {
+    const existing = {
+      id: 'receipt-a',
+      body_sha256: input.bodySha256,
+      status: 'processing',
+      updated_at: new Date('2020-01-01T00:00:00.000Z'),
+    };
+    const client = duplicateClient(existing);
+    const store = createPrismaWechatReceiptStore(client as any);
+
+    await expect(store.begin(input)).resolves.toBe('new');
+    expect(client.wechatNotificationReceipt.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: existing.id,
+        body_sha256: input.bodySha256,
+        status: 'processing',
+        updated_at: existing.updated_at,
+      },
+      data: {
+        status: 'processing',
+        claim_token: input.claimToken,
+        failure_code: null,
+        processed_at: null,
+      },
+    });
+  });
+
+  it('rejects completion and failure from a superseded claimant', async () => {
+    const client = duplicateClient({
+      id: 'receipt-a',
+      body_sha256: input.bodySha256,
+      status: 'processing',
+      updated_at: new Date(),
+    });
+    client.wechatNotificationReceipt.updateMany.mockResolvedValue({
+      count: 0,
+    });
+    const store = createPrismaWechatReceiptStore(client as any);
+
+    await expect(
+      store.complete(input.notificationId, 'claim-old'),
+    ).rejects.toThrow('WECHAT_NOTIFY_RECEIPT_CLAIM_LOST');
+    await expect(
+      store.fail(
+        input.notificationId,
+        'claim-old',
+        'WECHAT_PAYMENT_NOTIFICATION_FAILED',
+      ),
+    ).rejects.toThrow('WECHAT_NOTIFY_RECEIPT_CLAIM_LOST');
+    expect(client.wechatNotificationReceipt.updateMany).toHaveBeenCalledWith({
+      where: {
+        notification_id: input.notificationId,
+        status: 'processing',
+        claim_token: 'claim-old',
+      },
+      data: {
+        status: 'applied',
+        processed_at: expect.any(Date),
+        failure_code: null,
+      },
+    });
   });
 });

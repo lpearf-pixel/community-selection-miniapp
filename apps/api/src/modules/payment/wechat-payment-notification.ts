@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../db.js';
 
 type VerifiedNotification = {
@@ -7,7 +8,13 @@ type VerifiedNotification = {
   resource: Record<string, unknown>;
 };
 
-export type ReceiptBeginResult = 'new' | 'replay' | 'collision';
+export type ReceiptBeginResult =
+  | 'new'
+  | 'replay'
+  | 'collision'
+  | 'busy';
+
+const RECEIPT_PROCESSING_LEASE_MS = 5 * 60 * 1000;
 
 export type WechatReceiptStore = {
   begin(input: {
@@ -16,9 +23,14 @@ export type WechatReceiptStore = {
     eventType: string;
     resourceIdentifier: string | null;
     bodySha256: string;
+    claimToken: string;
   }): Promise<ReceiptBeginResult>;
-  complete(notificationId: string): Promise<void>;
-  fail(notificationId: string, code?: string): Promise<void>;
+  complete(notificationId: string, claimToken: string): Promise<void>;
+  fail(
+    notificationId: string,
+    claimToken: string,
+    code?: string,
+  ): Promise<void>;
 };
 
 export function createPrismaWechatReceiptStore(
@@ -34,6 +46,7 @@ export function createPrismaWechatReceiptStore(
             event_type: input.eventType,
             resource_identifier: input.resourceIdentifier,
             body_sha256: input.bodySha256,
+            claim_token: input.claimToken,
           },
         });
         return 'new';
@@ -50,30 +63,70 @@ export function createPrismaWechatReceiptStore(
           await client.wechatNotificationReceipt.findUniqueOrThrow({
             where: { notification_id: input.notificationId },
           });
-        return existing.body_sha256 === input.bodySha256
-          ? 'replay'
-          : 'collision';
+        if (existing.body_sha256 !== input.bodySha256) {
+          return 'collision';
+        }
+        if (existing.status === 'applied') {
+          return 'replay';
+        }
+        const processingLeaseExpired =
+          existing.status === 'processing' &&
+          existing.updated_at.getTime() <=
+            Date.now() - RECEIPT_PROCESSING_LEASE_MS;
+        if (existing.status !== 'failed' && !processingLeaseExpired) {
+          return 'busy';
+        }
+        const claimed =
+          await client.wechatNotificationReceipt.updateMany({
+            where: {
+              id: existing.id,
+              body_sha256: input.bodySha256,
+              status: existing.status,
+              updated_at: existing.updated_at,
+            },
+            data: {
+              status: 'processing',
+              claim_token: input.claimToken,
+              failure_code: null,
+              processed_at: null,
+            },
+          });
+        return claimed.count === 1 ? 'new' : 'busy';
       }
     },
-    async complete(notificationId) {
-      await client.wechatNotificationReceipt.update({
-        where: { notification_id: notificationId },
+    async complete(notificationId, claimToken) {
+      const completed = await client.wechatNotificationReceipt.updateMany({
+        where: {
+          notification_id: notificationId,
+          status: 'processing',
+          claim_token: claimToken,
+        },
         data: {
           status: 'applied',
           processed_at: new Date(),
           failure_code: null,
         },
       });
+      if (completed.count !== 1) {
+        throw new Error('WECHAT_NOTIFY_RECEIPT_CLAIM_LOST');
+      }
     },
-    async fail(notificationId, code) {
-      await client.wechatNotificationReceipt.updateMany({
-        where: { notification_id: notificationId },
+    async fail(notificationId, claimToken, code) {
+      const failed = await client.wechatNotificationReceipt.updateMany({
+        where: {
+          notification_id: notificationId,
+          status: 'processing',
+          claim_token: claimToken,
+        },
         data: {
           status: 'failed',
           processed_at: new Date(),
           failure_code: code ?? 'WECHAT_PAYMENT_NOTIFICATION_FAILED',
         },
       });
+      if (failed.count !== 1) {
+        throw new Error('WECHAT_NOTIFY_RECEIPT_CLAIM_LOST');
+      }
     },
   };
 }
@@ -131,15 +184,18 @@ export async function processWechatPaymentNotification(input: {
     typeof resource.out_trade_no === 'string'
       ? resource.out_trade_no
       : null;
+  const claimToken = randomUUID();
   const begin = await input.receipts.begin({
     notificationId: input.verified.notificationId,
     notificationType: 'payment',
     eventType: input.verified.eventType,
     resourceIdentifier: outTradeNo,
     bodySha256: input.verified.bodySha256,
+    claimToken,
   });
   if (begin === 'replay') return { replay: true };
   if (begin === 'collision') throw new Error('WECHAT_NOTIFY_ID_COLLISION');
+  if (begin === 'busy') throw new Error('WECHAT_NOTIFY_IN_PROGRESS');
 
   try {
     if (
@@ -183,11 +239,15 @@ export async function processWechatPaymentNotification(input: {
       transaction_id: requireString(resource, 'transaction_id'),
       provider_success_at: successAt,
     });
-    await input.receipts.complete(input.verified.notificationId);
+    await input.receipts.complete(
+      input.verified.notificationId,
+      claimToken,
+    );
     return { replay: false };
   } catch (error) {
     await input.receipts.fail(
       input.verified.notificationId,
+      claimToken,
       errorCode(error),
     );
     throw error;

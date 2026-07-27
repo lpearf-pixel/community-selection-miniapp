@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../db.js';
 import type { WechatReceiptStore } from '../payment/wechat-payment-notification.js';
 
@@ -59,15 +60,18 @@ export async function processWechatRefundNotification(input: {
     typeof resource.out_refund_no === 'string'
       ? resource.out_refund_no
       : null;
+  const claimToken = randomUUID();
   const begin = await input.receipts.begin({
     notificationId: input.verified.notificationId,
     notificationType: 'refund',
     eventType: input.verified.eventType,
     resourceIdentifier: outRefundNo,
     bodySha256: input.verified.bodySha256,
+    claimToken,
   });
   if (begin === 'replay') return { replay: true };
   if (begin === 'collision') throw new Error('WECHAT_NOTIFY_ID_COLLISION');
+  if (begin === 'busy') throw new Error('WECHAT_NOTIFY_IN_PROGRESS');
 
   try {
     if (
@@ -109,11 +113,15 @@ export async function processWechatRefundNotification(input: {
       provider_status: 'SUCCESS',
       provider_success_at: successAt,
     });
-    await input.receipts.complete(input.verified.notificationId);
+    await input.receipts.complete(
+      input.verified.notificationId,
+      claimToken,
+    );
     return { replay: false };
   } catch (error) {
     await input.receipts.fail(
       input.verified.notificationId,
+      claimToken,
       errorCode(error),
     );
     throw error;

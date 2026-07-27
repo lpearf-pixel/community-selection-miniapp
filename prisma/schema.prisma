@@ -552,6 +552,7 @@ model WechatNotificationReceipt {
   event_type           String
   resource_identifier String?
   body_sha256          String
+  claim_token          String
   status               String    @default("processing")
   failure_code         String?
   processed_at         DateTime?

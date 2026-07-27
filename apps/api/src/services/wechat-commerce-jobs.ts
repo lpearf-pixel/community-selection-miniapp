@@ -164,7 +164,6 @@ export async function runWechatCommerceJobs(now = new Date()) {
                 include: {
                   payments: {
                     orderBy: { attempt_no: 'desc' },
-                    take: 1,
                   },
                 },
               },
@@ -174,9 +173,7 @@ export async function runWechatCommerceJobs(now = new Date()) {
           });
         },
         queryTransaction: payClient.queryTransaction,
-        async convergePayment(order, provider) {
-          const payment = order.payments[0];
-          if (!payment) return;
+        async convergePayment(order, payment, provider) {
           await markOrderPaid(order.id, {
             payment_id: payment.id,
             out_trade_no: payment.out_trade_no,

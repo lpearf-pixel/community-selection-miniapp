@@ -30,6 +30,7 @@ CREATE TABLE "WechatNotificationReceipt" (
   "event_type" TEXT NOT NULL,
   "resource_identifier" TEXT,
   "body_sha256" TEXT NOT NULL,
+  "claim_token" TEXT NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'processing',
   "failure_code" TEXT,
   "processed_at" TIMESTAMP(3),
