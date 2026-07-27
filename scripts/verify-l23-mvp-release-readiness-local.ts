@@ -3,7 +3,12 @@ import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.WECHAT_PAY_MODE = 'mock';
 process.env.MOCK_WECHAT_PAY = 'true';
 process.env.AUTO_PAYOUT_ENABLED = 'false';
@@ -65,7 +70,7 @@ async function verifyApiSmoke() {
   assertNoSensitive(await json(await app.inject({ method: 'GET', url: '/api/products' })), 'products');
   await json(await app.inject({ method: 'GET', url: '/api/communities' }));
   await json(await app.inject({ method: 'GET', url: '/api/pickup-stores' }));
-  const order = await json(await app.inject({ method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, user_id: user.id, client_request_id: `${prefix}-normal`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L23用户', receiver_phone: '13812345678' } }));
+  const order = await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, client_request_id: `${prefix}-normal`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L23用户', receiver_phone: '13812345678' } }));
   await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
   const list = await json(await app.inject({ method: 'GET', url: '/api/me/orders?page_size=100', headers: { 'x-user-id': user.id } }));
   assert(list.items.some((item: any) => item.order_id === order.id), 'order list should include smoke order');
