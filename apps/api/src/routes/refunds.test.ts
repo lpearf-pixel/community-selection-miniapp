@@ -70,4 +70,43 @@ describe('refund notification route', () => {
     expect(response.statusCode).toBe(403);
     expect(processWechatNotification).not.toHaveBeenCalled();
   });
+
+  it('rejects a notification when the raw request body is missing', async () => {
+    const processWechatNotification = vi.fn();
+    const app = buildTestApp({
+      paymentMode: 'wechat',
+      processWechatNotification,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/refunds/wechat/notify',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(processWechatNotification).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['WECHAT_REFUND_NOT_FOUND', 400],
+    ['database unavailable', 500],
+  ])(
+    'maps processor failure %s to HTTP %i',
+    async (message, expectedStatus) => {
+      const app = buildTestApp({
+        paymentMode: 'wechat',
+        processWechatNotification: vi.fn(async () => {
+          throw new Error(message);
+        }),
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/refunds/wechat/notify',
+        payload: { id: 'refund-notify-a' },
+      });
+
+      expect(response.statusCode).toBe(expectedStatus);
+    },
+  );
 });
