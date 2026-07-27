@@ -52,6 +52,13 @@ test('invokes the Caddy binary explicitly when validating the edge image', () =>
   );
 });
 
+test('proves the production image carries an offline Prisma schema engine', () => {
+  assert.match(
+    workflow,
+    /docker run --rm --network none[\s\S]*community-selection-api:\$\{IMAGE_TAG\}[\s\S]*\.\/node_modules\/\.bin\/prisma -v/,
+  );
+});
+
 test('bounds migration waits and preserves failed migration diagnostics', () => {
   assert.match(workflow, /timeout 240s "\$\{compose\[@\]\}" up -d --wait postgres/);
   assert.match(
