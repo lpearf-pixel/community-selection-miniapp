@@ -6,6 +6,7 @@ on:
       - codex/l51-real-wechat-commerce-loop
     paths:
       - .github/workflows/l51-workspace-recovery.yml
+      - .github/l51-workspace-recovery.trigger
   workflow_dispatch:
 
 permissions:
