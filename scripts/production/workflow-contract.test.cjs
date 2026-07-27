@@ -52,9 +52,16 @@ test('invokes the Caddy binary explicitly when validating the edge image', () =>
   );
 });
 
-test('bounds migration waits and prints container diagnostics on failure', () => {
+test('bounds migration waits and preserves failed migration diagnostics', () => {
   assert.match(workflow, /timeout 240s "\$\{compose\[@\]\}" up -d --wait postgres/);
-  assert.match(workflow, /timeout 180s "\$\{compose\[@\]\}" run --rm migrate/);
+  assert.match(
+    workflow,
+    /timeout 180s "\$\{compose\[@\]\}" run --name "\$\{migration_container\}" migrate/,
+  );
+  assert.doesNotMatch(workflow, /run --rm migrate/);
+  assert.match(workflow, /docker inspect "\$\{migration_container\}"/);
+  assert.match(workflow, /docker logs "\$\{migration_container\}"/);
+  assert.match(workflow, /docker rm -f "\$\{migration_container\}"/);
   assert.match(workflow, /"\$\{compose\[@\]\}" ps --all/);
   assert.match(
     workflow,
