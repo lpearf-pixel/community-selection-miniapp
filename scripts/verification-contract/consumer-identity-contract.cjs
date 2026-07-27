@@ -1,7 +1,11 @@
 const { existsSync, readFileSync } = require('node:fs');
 const { join, relative } = require('node:path');
 
-const PROTECTED_ENDPOINTS = new Set(['/api/orders', '/api/orders/normal']);
+const PROTECTED_ENDPOINTS = new Set([
+  '/api/orders',
+  '/api/orders/normal',
+  '/api/payments/mock',
+]);
 const VERIFIER_PATTERN = /scripts\/(?:run-|verify-)[A-Za-z0-9.-]+\.ts/g;
 const CALL_PATTERN = /\b(injectAsConsumer|(?:app\.)?inject|post)\s*\(/g;
 
@@ -120,4 +124,3 @@ module.exports = {
   activeVerifierFiles,
   findConsumerIdentityViolations,
 };
-
