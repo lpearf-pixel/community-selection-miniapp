@@ -17,6 +17,25 @@ export function enableConsumerVerifierMockIdentity(
   env.CURRENT_USER_MOCK_HEADERS_ENABLED = 'true';
 }
 
+export function consumerVerifierHeaders(
+  userId: string,
+  headers: Record<string, string> = {},
+): Record<string, string> {
+  const trustedUserId = userId.trim();
+  if (!trustedUserId) {
+    throw new Error('Consumer verifier requires a non-empty test user id');
+  }
+  const {
+    'x-user-id': _userId,
+    'x-openid': _openid,
+    ...businessHeaders
+  } = headers;
+  return {
+    ...businessHeaders,
+    'x-user-id': trustedUserId,
+  };
+}
+
 function withoutBodyIdentity(payload: unknown): unknown {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return payload;
@@ -34,17 +53,9 @@ export async function injectAsConsumer<TResponse>(
   userId: string,
   request: ConsumerInjectOptions,
 ): Promise<TResponse> {
-  const trustedUserId = userId.trim();
-  if (!trustedUserId) {
-    throw new Error('Consumer verifier requires a non-empty test user id');
-  }
-
   return app.inject({
     ...request,
-    headers: {
-      ...request.headers,
-      'x-user-id': trustedUserId,
-    },
+    headers: consumerVerifierHeaders(userId, request.headers),
     payload: withoutBodyIdentity(request.payload),
   });
 }
