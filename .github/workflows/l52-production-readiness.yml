@@ -150,11 +150,13 @@ jobs:
           compose=(docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
             -f .github/l52-compose.rendered.json)
+          migration_container="community-selection-l52-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}-migrate"
+          docker rm -f "${migration_container}" >/dev/null 2>&1 || true
           set +e
           timeout 240s "${compose[@]}" up -d --wait postgres
           database_status=$?
           if (( database_status == 0 )); then
-            timeout 180s "${compose[@]}" run --rm migrate
+            timeout 180s "${compose[@]}" run --name "${migration_container}" migrate
             migration_status=$?
           else
             migration_status=0
@@ -162,9 +164,13 @@ jobs:
           set -e
           if (( database_status != 0 || migration_status != 0 )); then
             "${compose[@]}" ps --all
+            docker inspect "${migration_container}" || true
+            docker logs "${migration_container}" || true
             "${compose[@]}" logs --no-color --tail 200 postgres
+            docker rm -f "${migration_container}" || true
             exit $(( database_status != 0 ? database_status : migration_status ))
           fi
+          docker rm -f "${migration_container}"
 
       - name: Reset production fixture
         run: |
@@ -219,7 +225,8 @@ jobs:
               down --volumes --remove-orphans || true
           fi
           docker rm -f \
-            community-selection-l52-${GITHUB_RUN_ID}-secret-seed || true
+            community-selection-l52-${GITHUB_RUN_ID}-secret-seed \
+            community-selection-l52-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}-migrate || true
           docker volume rm \
             community-selection-l52-${GITHUB_RUN_ID}-secrets || true
           docker compose \
