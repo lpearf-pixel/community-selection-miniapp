@@ -57,7 +57,7 @@ async function main() {
   const unpaidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(unpaidProduct.stock === 20, 'unpaid normal order should not deduct stock');
 
-  await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
+  await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
   const paidOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   const paidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(paidOrder.pay_status === 'paid', 'normal order should be paid by mock payment');
