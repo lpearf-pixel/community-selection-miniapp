@@ -1,0 +1,38 @@
+{
+	email {$ACME_EMAIL}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+{$API_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+
+	respond /healthz "ok" 200
+	reverse_proxy api:13080
+}
+
+{$ADMIN_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+
+	respond /healthz "ok" 200
+
+	handle /api/* {
+		reverse_proxy api:13080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
