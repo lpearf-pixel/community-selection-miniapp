@@ -18,6 +18,10 @@ on:
       - apps/api/src/services/wechat-commerce-jobs.ts
       - apps/miniapp/**
       - prisma/**
+      - scripts/lib/consumer-verifier-request.ts
+      - scripts/lib/consumer-verifier-request.test.ts
+      - scripts/verification-contract/**
+      - scripts/verify-consumer-identity-contract-local.cjs
       - scripts/verify-l51-wechat-commerce-loop.ts
   workflow_dispatch:
 
@@ -64,6 +68,10 @@ jobs:
           echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
 
       - run: pnpm install --frozen-lockfile
+      - name: Verify consumer identity contract
+        run: |
+          pnpm test:vcm1
+          node scripts/verify-consumer-identity-contract-local.cjs
       - run: pnpm db:generate
 
       - name: Start isolated PostgreSQL
