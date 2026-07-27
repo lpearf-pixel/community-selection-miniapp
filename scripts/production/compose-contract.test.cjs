@@ -14,6 +14,8 @@ function loadCompose() {
         'docker',
         [
           'compose',
+          '--profile',
+          '*',
           '-f',
           composePath,
           'config',
@@ -91,6 +93,7 @@ function hasBackupVolume(service) {
 test('uses Docker Compose before the local Python fallback', () => {
   const source = fs.readFileSync(__filename, 'utf8');
   assert.match(source, /execFileSync\(\s*'docker'/);
+  assert.match(source, /'--profile',\s*'\*'/);
   assert.match(source, /'--no-interpolate'/);
   assert.match(source, /error\.code !== 'ENOENT'/);
 });
