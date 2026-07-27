@@ -28,12 +28,19 @@ function dependencies() {
       fail: vi.fn(async () => undefined),
     },
     refunds: {
-      findByOutRefundNo: vi.fn(async () => ({
-        id: 'refund-a',
-        out_refund_no: 'RF-A',
-        refund_amount_cents: 500,
-        order: { pay_amount_cents: 1200 },
-      })),
+      findByOutRefundNo: vi.fn(
+        async (): Promise<{
+          id: string;
+          out_refund_no: string;
+          refund_amount_cents: number;
+          order: { pay_amount_cents: number };
+        } | null> => ({
+          id: 'refund-a',
+          out_refund_no: 'RF-A',
+          refund_amount_cents: 500,
+          order: { pay_amount_cents: 1200 },
+        }),
+      ),
     },
     markRefundSuccess: vi.fn(async () => ({ id: 'refund-a' })),
   };
@@ -90,6 +97,25 @@ describe('WeChat refund notification', () => {
       }),
     ).rejects.toThrow('WECHAT_REFUND_AMOUNT_INVALID');
     expect(mismatched.markRefundSuccess).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown refund without projecting success', async () => {
+    const deps = dependencies();
+    deps.refunds.findByOutRefundNo.mockResolvedValue(null);
+
+    await expect(
+      processWechatRefundNotification({
+        verified,
+        expectedMerchantId: 'merchant-a',
+        ...deps,
+      }),
+    ).rejects.toThrow('WECHAT_REFUND_NOT_FOUND');
+
+    expect(deps.markRefundSuccess).not.toHaveBeenCalled();
+    expect(deps.receipts.fail).toHaveBeenCalledWith(
+      'notify-refund-a',
+      'WECHAT_REFUND_NOT_FOUND',
+    );
   });
 
   it('treats duplicate callback/query convergence as one projection', async () => {
