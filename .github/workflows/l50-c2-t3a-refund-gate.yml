@@ -65,6 +65,8 @@ jobs:
           pnpm --filter @community-selection/api test -- \
             src/modules/refund/admin-refund-command.test.ts \
             src/modules/refund/admin-refund-executor.test.ts \
+            src/modules/refund/wechat-refund-notification.test.ts \
+            src/routes/refunds.test.ts \
             src/modules/after-sale/after-sale-service.test.ts
           pnpm --filter @community-selection/admin test -- \
             src/features/sales/after-sales
