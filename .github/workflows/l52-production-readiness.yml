@@ -91,9 +91,13 @@ jobs:
           BACKUP_RETENTION_DAYS=14
           BACKUP_ENCRYPTION_PASSPHRASE_FILE=/run/secrets/backup_passphrase
           ENV
-          chown 1000:1000 \
-            secrets/wechat_private_key.pem \
-            secrets/wechat_platform_certificate.pem
+          docker run --rm \
+            --entrypoint chown \
+            -v "${PWD}/secrets:/secrets" \
+            caddy:2.9.1-alpine \
+            1000:1000 \
+            /secrets/wechat_private_key.pem \
+            /secrets/wechat_platform_certificate.pem
           chmod 600 secrets/* .env.production.ci
 
       - name: Verify production contracts
