@@ -8,17 +8,92 @@ const root = path.resolve(__dirname, '../..');
 const composePath = path.join(root, 'docker-compose.production.yml');
 
 function loadCompose() {
-  const parser = [
-    'import json, sys, yaml',
-    'with open(sys.argv[1], encoding="utf-8") as stream:',
-    '  print(json.dumps(yaml.safe_load(stream)))',
-  ].join('\n');
-  return JSON.parse(
-    execFileSync('python3', ['-c', parser, composePath], {
-      encoding: 'utf8',
-    }),
+  try {
+    return JSON.parse(
+      execFileSync(
+        'docker',
+        [
+          'compose',
+          '-f',
+          composePath,
+          'config',
+          '--no-interpolate',
+          '--format',
+          'json',
+        ],
+        {
+          cwd: root,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      ),
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+
+    const parser = [
+      'import json, sys, yaml',
+      'with open(sys.argv[1], encoding="utf-8") as stream:',
+      '    print(json.dumps(yaml.safe_load(stream)))',
+    ].join('\n');
+    return JSON.parse(
+      execFileSync('python3', ['-c', parser, composePath], {
+        encoding: 'utf8',
+      }),
+    );
+  }
+}
+
+function networkNames(networks) {
+  return Array.isArray(networks) ? networks : Object.keys(networks ?? {});
+}
+
+function publishedPorts(ports) {
+  return (ports ?? []).map((port) =>
+    typeof port === 'string' ? port : `${port.published}:${port.target}`,
   );
 }
+
+function volumeMounts(volumes) {
+  return (volumes ?? []).map((volume) => {
+    if (typeof volume === 'string') {
+      const [source, target, mode] = volume.split(':');
+      return { source, target, readOnly: mode === 'ro' };
+    }
+    return {
+      source: volume.source,
+      target: volume.target,
+      readOnly: volume.read_only === true,
+    };
+  });
+}
+
+function hasReadOnlySecret(service, filename) {
+  const expectedTarget = `/run/secrets/${filename}`;
+  return volumeMounts(service.volumes).some(
+    (volume) =>
+      volume.target === expectedTarget &&
+      volume.readOnly &&
+      volume.source.replaceAll('\\', '/').endsWith(`/secrets/${filename}`),
+  );
+}
+
+function hasBackupVolume(service) {
+  return volumeMounts(service.volumes).some(
+    (volume) =>
+      volume.target === '/var/backups/community-selection' &&
+      volume.source.endsWith('production-backups'),
+  );
+}
+
+test('uses Docker Compose before the local Python fallback', () => {
+  const source = fs.readFileSync(__filename, 'utf8');
+  assert.match(source, /execFileSync\(\s*'docker'/);
+  assert.match(source, /'--no-interpolate'/);
+  assert.match(source, /error\.code !== 'ENOENT'/);
+});
 
 test('keeps PostgreSQL and API off host ports behind the HTTPS edge', () => {
   const compose = loadCompose();
@@ -32,12 +107,20 @@ test('keeps PostgreSQL and API off host ports behind the HTTPS edge', () => {
   ]);
   assert.equal(compose.services.postgres.ports, undefined);
   assert.equal(compose.services.api.ports, undefined);
-  assert.deepEqual(compose.services.edge.ports, ['80:80', '443:443']);
+  assert.deepEqual(publishedPorts(compose.services.edge.ports), [
+    '80:80',
+    '443:443',
+  ]);
   assert.equal(compose.networks.backend.internal, true);
   assert.equal(compose.networks.egress.internal, undefined);
-  assert.deepEqual(compose.services.postgres.networks, ['backend']);
-  assert.deepEqual(compose.services.api.networks.sort(), ['backend', 'egress']);
-  assert.deepEqual(compose.services.edge.networks.sort(), [
+  assert.deepEqual(networkNames(compose.services.postgres.networks), [
+    'backend',
+  ]);
+  assert.deepEqual(networkNames(compose.services.api.networks).sort(), [
+    'backend',
+    'egress',
+  ]);
+  assert.deepEqual(networkNames(compose.services.edge.networks).sort(), [
     'backend',
     'public',
   ]);
@@ -79,14 +162,11 @@ test('pins application images and mounts payment secrets read-only', () => {
     compose.services.api.environment.CURRENT_USER_MOCK_HEADERS_ENABLED,
     'false',
   );
+  assert.ok(hasReadOnlySecret(compose.services.api, 'wechat_private_key.pem'));
   assert.ok(
-    compose.services.api.volumes.includes(
-      './secrets/wechat_private_key.pem:/run/secrets/wechat_private_key.pem:ro',
-    ),
-  );
-  assert.ok(
-    compose.services.api.volumes.includes(
-      './secrets/wechat_platform_certificate.pem:/run/secrets/wechat_platform_certificate.pem:ro',
+    hasReadOnlySecret(
+      compose.services.api,
+      'wechat_platform_certificate.pem',
     ),
   );
 });
@@ -97,16 +177,8 @@ test('keeps destructive and maintenance jobs behind explicit profiles', () => {
   assert.deepEqual(compose.services.restore.profiles, ['restore']);
   assert.equal(compose.services.backup.restart, 'no');
   assert.equal(compose.services.restore.restart, 'no');
-  assert.ok(
-    compose.services.backup.volumes.includes(
-      'production-backups:/var/backups/community-selection',
-    ),
-  );
-  assert.ok(
-    compose.services.restore.volumes.includes(
-      'production-backups:/var/backups/community-selection',
-    ),
-  );
+  assert.ok(hasBackupVolume(compose.services.backup));
+  assert.ok(hasBackupVolume(compose.services.restore));
 });
 
 test('defines every production build target and excludes secret material', () => {
