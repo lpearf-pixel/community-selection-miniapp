@@ -1,5 +1,11 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = require('node:fs');
+const {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -120,4 +126,17 @@ test('reports a protected request without helper or trusted header', () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('enables verifier-only identity before the L47 API is built', () => {
+  const source = readFileSync(
+    join(__dirname, '../run-l47-center-docker-api-e2e-local.ts'),
+    'utf8',
+  );
+  const enableIndex = source.indexOf('enableConsumerVerifierMockIdentity()');
+  const buildIndex = source.indexOf('buildApp()');
+
+  assert.ok(enableIndex >= 0, 'L47 wrapper must enable verifier mock identity');
+  assert.ok(buildIndex >= 0, 'L47 wrapper must build the isolated API');
+  assert.ok(enableIndex < buildIndex, 'L47 verifier identity must be enabled before buildApp');
 });
