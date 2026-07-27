@@ -56,7 +56,7 @@ const requiredKeywords = [
   "pages/cart/index",
   "from_cart",
   "/api/orders/normal",
-  "/api/payments/mock",
+  "payOrder",
 ];
 for (const keyword of requiredKeywords)
   assert(source.includes(keyword), `missing keyword: ${keyword}`);
@@ -146,9 +146,23 @@ for (const keyword of [
   "quantity",
   "removeCartItem",
   "/api/orders/normal",
-  "/api/payments/mock",
+  "payOrder",
 ])
   assert(confirm.includes(keyword), `orders confirm missing ${keyword}`);
+assert(
+  /require\(["']\.\.\/\.\.\/\.\.\/utils\/payment["']\)/.test(confirm),
+  "orders confirm must use the centralized payment adapter",
+);
+for (const keyword of [
+  "/api/payments/mock",
+  "/api/payments/" + "wechat",
+  "wx.request" + "Payment",
+]) {
+  assert(
+    !confirm.includes(keyword),
+    `orders confirm must not call payment runtime directly: ${keyword}`,
+  );
+}
 
 scanComplianceFiles([
   "apps/miniapp/utils/cart.js",
