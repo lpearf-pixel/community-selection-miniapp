@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
-import { createGroupOrder, createNormalOrder } from '../modules/order/order-service.js';
+import {
+  createGroupOrder,
+  createNormalOrder,
+  OrderRequestError,
+} from '../modules/order/order-service.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { recordAdminAudit } from '../modules/audit/audit-service.js';
 import { closeFailedGroupBuy, closeFailedGroupBuyUnpaidOrders, confirmFailedGroupBuyRefundHandled, getFailedGroupBuyClosureSummary, listExpiredPendingGroupBuys, listFailedGroupBuyPendingRefundOrders, markExpiredGroupBuyFailed, markGroupBuyFailed, markGroupBuyOrderManualRefunded } from '../modules/group-buy/group-buy-expiry-service.js';
@@ -36,6 +40,17 @@ type CreateOrderBody = {
   credit_amount_cents?: number;
   credit_source_id?: string;
 };
+
+async function exposeOrderRequest<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof OrderRequestError) {
+      throw publicCurrentUserError(error.message, error.statusCode);
+    }
+    throw error;
+  }
+}
 
 async function toSafeGroupBuyDetail(groupBuy: any) {
   const paid = await prisma.order.aggregate({
@@ -327,7 +342,9 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
       if (body.user_id || body.user_openid) {
         throw publicCurrentUserError('下单请求不得指定用户身份', 400);
       }
-      return createGroupOrder({ ...body, user_id: user.id });
+      return exposeOrderRequest(() =>
+        createGroupOrder({ ...body, user_id: user.id }),
+      );
     }),
   );
 
@@ -337,7 +354,9 @@ export function registerPublicGroupBuyRoutes(app: FastifyInstance) {
       if (body.user_id || body.user_openid) {
         throw publicCurrentUserError('下单请求不得指定用户身份', 400);
       }
-      return createNormalOrder({ ...body, user_id: user.id });
+      return exposeOrderRequest(() =>
+        createNormalOrder({ ...body, user_id: user.id }),
+      );
     }),
   );
 
