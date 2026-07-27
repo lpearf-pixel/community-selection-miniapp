@@ -23,6 +23,7 @@ export function buildApp() {
       try {
         done(null, JSON.parse(rawBody.toString('utf8')));
       } catch (error) {
+        Object.assign(error as Error, { statusCode: 400 });
         done(error as Error);
       }
     },
