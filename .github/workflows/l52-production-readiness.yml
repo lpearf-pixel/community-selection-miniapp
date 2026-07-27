@@ -145,15 +145,26 @@ jobs:
             caddy validate --config /etc/caddy/Caddyfile
 
       - name: Verify one-shot production migration
+        shell: bash
         run: |
-          docker compose \
+          compose=(docker compose \
             --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            -f .github/l52-compose.rendered.json \
-            up -d --wait postgres
-          docker compose \
-            --project-name community-selection-l52-${GITHUB_RUN_ID} \
-            -f .github/l52-compose.rendered.json \
-            run --rm migrate
+            -f .github/l52-compose.rendered.json)
+          set +e
+          timeout 240s "${compose[@]}" up -d --wait postgres
+          database_status=$?
+          if (( database_status == 0 )); then
+            timeout 180s "${compose[@]}" run --rm migrate
+            migration_status=$?
+          else
+            migration_status=0
+          fi
+          set -e
+          if (( database_status != 0 || migration_status != 0 )); then
+            "${compose[@]}" ps --all
+            "${compose[@]}" logs --no-color --tail 200 postgres
+            exit $(( database_status != 0 ? database_status : migration_status ))
+          fi
 
       - name: Reset production fixture
         run: |
