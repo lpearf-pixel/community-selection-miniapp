@@ -253,6 +253,14 @@ function optionValue(name) {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
+export function parseApiRuntimeUid(value) {
+  if (value === undefined) return 1000;
+  if (!/^[0-9]+$/.test(value)) {
+    throw new Error('API runtime uid must be a non-negative integer');
+  }
+  return Number(value);
+}
+
 async function main() {
   const root = process.cwd();
   const envFile = optionValue('--env-file') ?? '.env.production';
@@ -261,7 +269,7 @@ async function main() {
     env: { ...fileEnv, ...process.env },
     root,
     envFile,
-    apiRuntimeUid: 1000,
+    apiRuntimeUid: parseApiRuntimeUid(optionValue('--api-runtime-uid')),
   });
 }
 
