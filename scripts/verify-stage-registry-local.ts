@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import {
+  STAGE_CONTRACT_DECLARATIONS,
   STAGE_REGISTRY,
   assertStageRegistryFiles,
   getStageChain,
@@ -47,6 +48,14 @@ assert(
 assert(
   getStageDefinition('L46')?.additionalVerifiers?.includes('scripts/verify-l46-tax-record-db-scope-local.ts'),
   'L46 additional verifier missing',
+);
+
+assert(
+  STAGE_CONTRACT_DECLARATIONS.length === 1 &&
+    STAGE_CONTRACT_DECLARATIONS[0].id === 'L51' &&
+    STAGE_CONTRACT_DECLARATIONS[0].contracts.length === 1 &&
+    STAGE_CONTRACT_DECLARATIONS[0].contracts[0] === 'identity.consumer.v2',
+  'L51 identity.consumer.v2 contract declaration missing',
 );
 
 const l47 = getStageDefinition('L47');
