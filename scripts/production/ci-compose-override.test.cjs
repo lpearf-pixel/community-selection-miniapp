@@ -14,8 +14,17 @@ test('replaces only secret bind mounts with an isolated CI named volume', () => 
   for (const service of ['migrate', 'api', 'backup', 'restore']) {
     assert.match(source, new RegExp(`\\n  ${service}:\\n`));
   }
-  assert.equal((source.match(/!override/g) ?? []).length, 4);
-  assert.match(source, /l52-secrets:\/run\/secrets:ro/);
+  assert.doesNotMatch(source, /!override/);
+  assert.match(source, /target:\s*\/run\/secrets\/wechat_private_key\.pem/);
+  assert.match(source, /subpath:\s*wechat_private_key\.pem/);
+  assert.match(
+    source,
+    /target:\s*\/run\/secrets\/wechat_platform_certificate\.pem/,
+  );
+  assert.match(source, /subpath:\s*wechat_platform_certificate\.pem/);
+  assert.match(source, /target:\s*\/run\/secrets\/backup_passphrase/);
+  assert.match(source, /subpath:\s*backup_passphrase/);
+  assert.equal((source.match(/read_only:\s*true/g) ?? []).length, 6);
   assert.match(
     source,
     /name:\s*\$\{L52_SECRETS_VOLUME:\?L52_SECRETS_VOLUME is required\}/,
