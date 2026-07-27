@@ -79,6 +79,29 @@ test('reports active body identity with the exact file and line', () => {
   }
 });
 
+test('reports legacy x-openid on current-user verifier requests', () => {
+  const root = fixture();
+  try {
+    writeFileSync(
+      join(root, 'scripts/verify-active-header-local.ts'),
+      "await requestData('/api/me/center-summary', { headers: { 'x-openid': user.openid } });",
+    );
+
+    const violations = findConsumerIdentityViolations(
+      root,
+      activeVerifierFiles(root, []),
+    );
+
+    assert.equal(violations.length, 3);
+    assert.match(
+      violations.join('\n'),
+      /\/api\/me\/center-summary is missing consumer verifier identity/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('reports a protected request without helper or trusted header', () => {
   const root = fixture();
   try {
@@ -93,7 +116,7 @@ test('reports a protected request without helper or trusted header', () => {
     );
 
     assert.equal(violations.length, 3);
-    assert.match(violations.join('\n'), /missing injectAsConsumer or x-user-id/);
+    assert.match(violations.join('\n'), /missing consumer verifier identity/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
