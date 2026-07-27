@@ -2,7 +2,12 @@ import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_AUTH_MODE = 'session';
 process.env.ADMIN_TOTP_ENCRYPTION_KEY = process.env.ADMIN_TOTP_ENCRYPTION_KEY ?? 'l12-local-verify-encryption-key';
@@ -23,6 +28,12 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
 
 async function post(url: string, payload: unknown) {
   return json(await app.inject({ method: 'POST', url, payload }));
+}
+
+async function consumerPost(url: string, userId: string, payload: unknown) {
+  return json(
+    await injectAsConsumer(app, userId, { method: 'POST', url, payload }),
+  );
 }
 
 async function adminPost(url: string, payload: unknown, cookie: string) {
@@ -50,7 +61,7 @@ async function main() {
   const product = await prisma.product.create({ data: { name: `${prefix}-product`, category_id: category.id, price_cents: 1200, cost_price_cents: 800, stock: 100, unit: '份', is_group_enabled: true, status: 'active', commission_type: 'fixed', commission_value: 100 } });
   const pickupTime = new Date(Date.now() + 7200_000);
   const groupBuy = await post('/api/group-buys', { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: pickupTime.toISOString() });
-  const order = await post('/api/orders', { user_id: user.id, group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '张三', receiver_phone: '13812345678' });
+  const order = await consumerPost('/api/orders', user.id, { group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '张三', receiver_phone: '13812345678' });
   await post('/api/payments/mock', { order_id: order.id });
   const paidOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   const ready = await adminPost(`/api/admin/orders/${order.id}/status`, {
