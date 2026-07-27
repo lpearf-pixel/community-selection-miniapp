@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { buildApp } from '../apps/api/src/app.js';
+import { enableConsumerVerifierMockIdentity } from './lib/consumer-verifier-request.ts';
 
 function runFocusedVerifier(apiBaseUrl: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -39,6 +40,7 @@ function runFocusedVerifier(apiBaseUrl: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  enableConsumerVerifierMockIdentity();
   const app = buildApp();
   let address = '';
 
