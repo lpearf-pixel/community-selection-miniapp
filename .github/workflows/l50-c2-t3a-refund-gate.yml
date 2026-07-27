@@ -14,6 +14,10 @@ on:
       - apps/api/src/routes/admin-refund-route.integration.test.ts
       - apps/api/test/l4-routes.test.ts
       - apps/admin/src/features/sales/after-sales/**
+      - scripts/lib/consumer-verifier-request.ts
+      - scripts/lib/consumer-verifier-request.test.ts
+      - scripts/verification-contract/**
+      - scripts/verify-consumer-identity-contract-local.cjs
       - scripts/admin-e2e/**
   workflow_dispatch:
 
@@ -51,6 +55,10 @@ jobs:
           echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
           echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
       - run: pnpm install --frozen-lockfile
+      - name: Verify consumer identity contract
+        run: |
+          pnpm test:vcm1
+          node scripts/verify-consumer-identity-contract-local.cjs
       - name: Generate Prisma client
         run: pnpm db:generate
       - name: Build API workspace dependencies
