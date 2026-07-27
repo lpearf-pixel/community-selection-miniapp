@@ -85,7 +85,7 @@ async function main() {
   const appleGroupBuy = await post('/api/group-buys', { product_id: apple.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
   const appleOrder = await consumerPost('/api/orders', appleUser.id, { group_buy_id: appleGroupBuy.id, client_request_id: `${prefix}-apple-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '苹果用户', receiver_phone: '13812345678' });
   assert(appleOrder.quantity === 2, 'apple order should keep sale quantity');
-  const applePayment = await post('/api/payments/mock', { order_id: appleOrder.id });
+  const applePayment = await consumerPost('/api/payments/mock', appleUser.id, { order_id: appleOrder.id });
   assert(applePayment.pay_status === 'paid', 'apple order payment should succeed before inventory is deducted');
 
   const afterAppleOrder = await prisma.product.findUniqueOrThrow({ where: { id: apple.id } });
@@ -116,7 +116,7 @@ async function main() {
   });
   const eggGroupBuy = await post('/api/group-buys', { product_id: egg.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
   const eggOrder = await consumerPost('/api/orders', eggUser.id, { group_buy_id: eggGroupBuy.id, client_request_id: `${prefix}-egg-order`, quantity: 3, pickup_store_id: store.id, receiver_name: '鸡蛋用户', receiver_phone: '13912345678' });
-  const eggPayment = await post('/api/payments/mock', { order_id: eggOrder.id });
+  const eggPayment = await consumerPost('/api/payments/mock', eggUser.id, { order_id: eggOrder.id });
   assert(eggPayment.pay_status === 'paid', 'egg order payment should succeed before inventory is deducted');
   const afterEggOrder = await prisma.product.findUniqueOrThrow({ where: { id: egg.id } });
   assert(afterEggOrder.stock === 810, 'egg stock should decrease by 90 eggs');
