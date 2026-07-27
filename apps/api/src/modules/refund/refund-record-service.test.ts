@@ -24,7 +24,8 @@ const existing = {
   reason: '售后退款',
   status: 'pending',
   stock_restored: false,
-  raw_notify: null,
+  provider_status: null,
+  last_provider_error_code: null,
   processed_at: null,
 };
 
@@ -130,7 +131,7 @@ describe('refund record owner', () => {
       ...existing,
       status: 'success',
       refund_id: 'wx-refund-1',
-      raw_notify: { source: 'wechat' },
+      provider_status: 'SUCCESS',
       processed_at: new Date('2026-07-26T00:00:00.000Z'),
     };
     findUnique
@@ -141,7 +142,8 @@ describe('refund record owner', () => {
     await expect(confirmRefundSuccess(tx, existing.id, {
       refund_id: 'wx-refund-1',
       out_refund_no: 'RF-1',
-      raw_notify: { source: 'wechat' },
+      provider_status: 'SUCCESS',
+      provider_success_at: new Date('2026-07-26T00:00:00.000Z'),
     })).resolves.toEqual({ refund: successful, first_success: true });
 
     expect(update).toHaveBeenCalledWith({
@@ -149,8 +151,9 @@ describe('refund record owner', () => {
       data: {
         status: 'success',
         refund_id: 'wx-refund-1',
-        processed_at: expect.any(Date),
-        raw_notify: { source: 'wechat' },
+        provider_status: 'SUCCESS',
+        processed_at: new Date('2026-07-26T00:00:00.000Z'),
+        last_provider_error_code: null,
       },
     });
   });

@@ -135,7 +135,7 @@ async function pay(
     payment_id: payment.id,
     out_trade_no: payment.out_trade_no,
     transaction_id: `L50C3-TXN-${payment.id}`,
-    raw_notify: { source: 'l50-c3-integration' },
+    provider_success_at: new Date(),
   });
 }
 

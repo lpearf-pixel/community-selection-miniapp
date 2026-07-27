@@ -15,6 +15,7 @@ import {
   L47_PROHIBITED_RESPONSE_KEYS,
   L47_RUNTIME_MARKERS,
 } from './l47-center-contract.ts';
+import { consumerVerifierHeaders } from './lib/consumer-verifier-request.ts';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -24,6 +25,7 @@ type ApiEnvelope<T> = {
 
 type RequestOptions = {
   headers?: Record<string, string>;
+  userId?: string;
   expectedStatus?: number;
 };
 
@@ -76,7 +78,9 @@ async function waitForApiReady(maxAttempts = 60): Promise<void> {
 
 async function requestData<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: options.headers,
+    headers: options.userId
+      ? consumerVerifierHeaders(options.userId, options.headers)
+      : options.headers,
   });
   const text = await response.text();
   let body: ApiEnvelope<T>;
@@ -446,7 +450,7 @@ async function runL47CenterScenario(): Promise<void> {
     }
 
     const me = await requestData<MeCenterSummary>('/api/me/center-summary', {
-      headers: { 'x-openid': customer.openid },
+      userId: customer.id,
     });
     assert(me.profile.user_id === customer.id, 'L47 personal profile user mismatch');
     assert(me.profile.role === 'user', 'L47 customer profile role mismatch');
@@ -465,13 +469,13 @@ async function runL47CenterScenario(): Promise<void> {
     emitMarker(markers.meAfterSales);
 
     await requestData<null>('/api/leaders/me/center-summary', {
-      headers: { 'x-openid': customer.openid },
+      userId: customer.id,
       expectedStatus: 403,
     });
     emitMarker(markers.nonLeaderForbidden);
 
     const leaderSummary = await requestData<LeaderCenterSummary>('/api/leaders/me/center-summary', {
-      headers: { 'x-openid': leader.openid },
+      userId: leader.id,
     });
     assert(leaderSummary.updated_at.length > 0, 'L47 leader summary timestamp missing');
     emitMarker(markers.leaderSuccess);

@@ -1,15 +1,14 @@
 const {
   request,
-  createMockPayment,
   formatYuan,
 } = require("../../../utils/api");
+const { payOrder } = require("../../../utils/payment");
 const { getCurrentUser } = require("../../../utils/user");
 const {
   getSelectedCommunity,
   getSelectedPickupStore,
 } = require("../../../utils/selection");
 const { removeCartItem } = require("../../../utils/cart");
-const MOCK_PAYMENT_ENDPOINT = "/api/payments/mock";
 const DELIVERY_RULES_ENDPOINT_LABEL = "GET /api/delivery/rules";
 function validPhone(phone) {
   return /^1\d{10}$/.test(String(phone || ""));
@@ -228,11 +227,8 @@ Page({
       return;
     }
     const isGroupBuy = this.data.type === "group_buy";
-    const user = getCurrentUser();
     const payload = {
       client_request_id: `miniapp-l25-${Date.now()}`,
-      user_id: user.user_id || undefined,
-      user_openid: user.openid,
       quantity: Number(this.data.quantity) || 1,
       pickup_type: this.data.pickup_type,
       pickup_store_id: this.data.pickup_store_id,
@@ -250,7 +246,19 @@ Page({
       method: "POST",
       data: payload,
     })
-      .then((order) => createMockPayment(order.id).then(() => order))
+      .then((order) =>
+        payOrder(order.id)
+          .then(() => order)
+          .catch((paymentError) => {
+            if (
+              paymentError &&
+              /cancel/i.test(paymentError.errMsg || paymentError.message || "")
+            ) {
+              return order;
+            }
+            throw paymentError;
+          }),
+      )
       .then((order) => {
         if (this.data.from_cart && this.data.product_id)
           removeCartItem(this.data.product_id);
@@ -267,4 +275,3 @@ Page({
       });
   },
 });
-

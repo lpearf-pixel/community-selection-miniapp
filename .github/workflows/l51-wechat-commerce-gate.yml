@@ -1,0 +1,123 @@
+name: L51 WeChat Commerce Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - .github/workflows/l51-wechat-commerce-gate.yml
+      - apps/api/src/modules/current-user/**
+      - apps/api/src/modules/payment/**
+      - apps/api/src/modules/refund/**
+      - apps/api/src/modules/wechat/**
+      - apps/api/src/modules/group-buy/**
+      - apps/api/src/modules/operations/**
+      - apps/api/src/routes/payments.ts
+      - apps/api/src/routes/refunds.ts
+      - apps/api/src/routes/wechat-auth.ts
+      - apps/api/src/services/wechat-commerce-jobs.ts
+      - apps/miniapp/**
+      - prisma/**
+      - scripts/lib/consumer-verifier-request.ts
+      - scripts/lib/consumer-verifier-request.test.ts
+      - scripts/verification-contract/**
+      - scripts/verify-consumer-identity-contract-local.cjs
+      - scripts/verify-l51-wechat-commerce-loop.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l51-wechat-commerce-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    runs-on: [self-hosted, community]
+    timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      WECHAT_PAY_MODE: mock
+      MOCK_WECHAT_PAY: "true"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
+      USER_SESSION_TOKEN_SECRET: l51-runner-session-secret-at-least-32-bytes
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+
+      - name: Select isolated PostgreSQL port
+        shell: bash
+        run: |
+          port=$((45000 + GITHUB_RUN_NUMBER % 5000))
+          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
+          echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+
+      - run: pnpm install --frozen-lockfile
+      - name: Verify consumer identity contract
+        run: |
+          pnpm test:vcm1
+          node scripts/verify-consumer-identity-contract-local.cjs
+      - run: pnpm db:generate
+
+      - name: Start isolated PostgreSQL
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-l51-${GITHUB_RUN_ID} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Apply migrations
+        run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Verify L51 contracts
+        run: |
+          pnpm verify:l51
+          pnpm --filter @community-selection/api test -- \
+            wechat-schema.contract.test.ts \
+            wechat-config.test.ts \
+            user-session-owner.test.ts \
+            wechat-login-client.test.ts \
+            wechat-pay-v3-client.test.ts \
+            wechat-notify-verifier.test.ts \
+            wechat-payment-command.test.ts \
+            wechat-payment-notification.test.ts \
+            wechat-refund-command.test.ts \
+            wechat-refund-notification.test.ts \
+            wechat-reconciler.test.ts \
+            wechat-group-expiry-command.test.ts \
+            ops-alert-owner.test.ts \
+            payment-domain-ownership.integration.test.ts \
+            refund-domain-ownership.integration.test.ts
+
+      - name: Verify repository
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
+      - name: Verify full release gate
+        run: pnpm verify:all
+
+      - name: Cleanup PostgreSQL
+        if: always()
+        shell: bash
+        run: |
+          docker compose \
+            -p community-selection-l51-${GITHUB_RUN_ID} \
+            -f docker-compose.yml down --volumes --remove-orphans || true

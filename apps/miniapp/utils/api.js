@@ -1,5 +1,9 @@
 const config = require('../config');
-const { getUserHeaders } = require('./user');
+const {
+  clearSession,
+  ensureSession,
+  getAuthorizationHeader,
+} = require('./session');
 
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:13080';
 
@@ -15,8 +19,24 @@ function getApiBaseUrl() {
   const appValue = app && app.globalData && app.globalData.apiBaseUrl;
   if (appValue) return trimTrailingSlash(appValue);
 
-  if (config && config.apiBaseUrl) return trimTrailingSlash(config.apiBaseUrl);
-  return DEFAULT_API_BASE_URL;
+  const selected = config && config.apiBaseUrl
+    ? trimTrailingSlash(config.apiBaseUrl)
+    : DEFAULT_API_BASE_URL;
+  const accountInfo =
+    typeof wx.getAccountInfoSync === 'function'
+      ? wx.getAccountInfoSync()
+      : null;
+  const envVersion =
+    accountInfo &&
+    accountInfo.miniProgram &&
+    accountInfo.miniProgram.envVersion;
+  if (
+    envVersion === 'release' &&
+    /^http:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/.test(selected)
+  ) {
+    throw new Error('正式版 API 地址不能使用 localhost');
+  }
+  return selected;
 }
 
 function buildQuery(params) {
@@ -41,7 +61,7 @@ function apiError(message, statusCode, body) {
   return error;
 }
 
-function request(options) {
+function dispatchRequest(options, retried) {
   const opts = options || {};
   const headers = opts.headers || opts.header || {};
   return new Promise((resolve, reject) => {
@@ -49,10 +69,17 @@ function request(options) {
       url: buildUrl(opts.url, opts.params),
       method: opts.method || 'GET',
       data: opts.data,
-      header: { ...getUserHeaders(), ...headers },
+      header: { ...getAuthorizationHeader(), ...headers },
       success: (res) => {
         const statusCode = Number(res.statusCode || 0);
         const body = res.data || {};
+        if (statusCode === 401 && !retried) {
+          clearSession();
+          ensureSession(getApiBaseUrl())
+            .then(() => dispatchRequest(opts, true))
+            .then(resolve, reject);
+          return;
+        }
         if (statusCode >= 400) {
           const message = body.message || `HTTP ${statusCode}`;
           wx.showToast({ title: message, icon: 'none' });
@@ -70,6 +97,14 @@ function request(options) {
       fail: (error) => reject(apiError(error.errMsg || '网络请求失败', 0, null))
     });
   });
+}
+
+function request(options) {
+  const opts = options || {};
+  if (opts.skipAuth === true) return dispatchRequest(opts, false);
+  return ensureSession(getApiBaseUrl()).then(() =>
+    dispatchRequest(opts, false),
+  );
 }
 
 function getJSON(path, params) {

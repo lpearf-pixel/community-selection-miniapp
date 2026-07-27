@@ -11,7 +11,9 @@ const assert = (condition: unknown, message: string) => { if (!condition) throw 
 async function main() {
   const requiredFiles = [
     'apps/api/src/modules/finance/finance-report-service.ts',
+    'apps/api/src/modules/payment/wechat-payment-notification.ts',
     'apps/api/src/routes/admin/finance.ts',
+    'prisma/schema.prisma',
     'scripts/verify-l28-refund-ledger-finance-check-local.ts',
     'scripts/stage-workflow.ts',
     'scripts/generate-stage-report.ts',
@@ -22,6 +24,8 @@ async function main() {
 
   const service = read('apps/api/src/modules/finance/finance-report-service.ts');
   const routes = read('apps/api/src/routes/admin/finance.ts');
+  const schema = read('prisma/schema.prisma');
+  const notification = read('apps/api/src/modules/payment/wechat-payment-notification.ts');
   const workflow = read('scripts/stage-workflow.ts');
   const report = read('scripts/generate-stage-report.ts');
   const verifyAll = read('scripts/verify-all-local.sh');
@@ -31,9 +35,16 @@ async function main() {
   [
     'getFinanceRefundLedger', 'getFinanceRefundLedgerCsv', 'refundWhere', 'order_no', 'group_buy_id', 'refund_method',
     'refund_status', 'refund_amount_cents', 'summary', 'refund_amount_cents: sum', 'receiver_phone_masked', 'maskPhone',
-    'manual_record_only', 'raw_notify', 'refund_channel', 'export.csv', '/api/admin/finance/refund-ledger'
+    'manual_record_only', 'provider_status', 'out_refund_no', 'export.csv', '/api/admin/finance/refund-ledger'
   ].forEach((keyword) => assert(combined.includes(keyword), `Missing refund ledger keyword: ${keyword}`));
 
+  assert(!schema.includes('raw_notify'), 'Payment and Refund must not persist raw notification payloads');
+  for (const keyword of ['model WechatNotificationReceipt', 'notification_id', 'notification_type', 'resource_identifier']) {
+    assert(schema.includes(keyword), `Missing safe WeChat notification receipt field: ${keyword}`);
+  }
+  for (const keyword of ['notification_id', 'notification_type', 'resource_identifier', 'complete', 'fail']) {
+    assert(notification.includes(keyword), `Missing WeChat notification receipt lifecycle: ${keyword}`);
+  }
   assert(!combined.includes('receiver_phone:'), 'Refund ledger must not expose receiver_phone field');
   assert(/\^\[=\+\\-@\\t\\r\]/.test(service), 'CSV export must guard formula injection prefixes');
   assert(service.includes("? `'${text}` : text") || service.includes("? '\\''"), 'CSV export must prefix dangerous cells with apostrophe');

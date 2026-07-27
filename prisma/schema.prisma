@@ -110,6 +110,23 @@ model User {
   withdrawals         Withdrawal[]        @relation("WithdrawalLeader")
   audit_logs          AuditLog[]          @relation("AuditActor")
   after_sale_cases    AfterSaleCase[]
+  sessions            UserSession[]
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  user_id      String
+  token_hash   String    @unique
+  expires_at   DateTime
+  revoked_at   DateTime?
+  last_seen_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  user         User      @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@index([revoked_at])
 }
 
 model Category {
@@ -278,17 +295,25 @@ model Order {
 }
 
 model Payment {
-  id             String   @id @default(cuid())
-  order_id       String
-  out_trade_no   String   @unique
-  transaction_id String?  @unique
-  prepay_id      String?
-  amount_cents   Int
-  trade_state    String
-  raw_notify     Json?
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
-  order          Order    @relation(fields: [order_id], references: [id])
+  id                       String   @id @default(cuid())
+  order_id                 String
+  attempt_no               Int      @default(1)
+  out_trade_no             String   @unique
+  transaction_id           String?  @unique
+  prepay_id                String?
+  prepay_expires_at        DateTime?
+  provider_success_at      DateTime?
+  amount_cents             Int
+  trade_state              String
+  last_reconciled_at       DateTime?
+  reconcile_attempts       Int      @default(0)
+  last_provider_error_code String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+  order                    Order    @relation(fields: [order_id], references: [id])
+
+  @@unique([order_id, attempt_no])
+  @@index([trade_state, last_reconciled_at])
 }
 
 model Refund {
@@ -304,7 +329,10 @@ model Refund {
   processed_at        DateTime?
   reason              String
   status              RefundStatus @default(pending)
-  raw_notify          Json?
+  provider_status     String?
+  last_reconciled_at  DateTime?
+  reconcile_attempts  Int          @default(0)
+  last_provider_error_code String?
   created_at          DateTime     @default(now())
   updated_at          DateTime     @updatedAt
   order               Order        @relation(fields: [order_id], references: [id])
@@ -492,6 +520,7 @@ model OrderTimelineLog {
 model OpsAlertLog {
   id              String         @id @default(cuid())
   alert_type      String
+  dedupe_key      String?        @unique
   alert_level     OpsAlertLevel  @default(warning)
   status          OpsAlertStatus @default(open)
   order_id        String?
@@ -514,6 +543,24 @@ model OpsAlertLog {
   @@index([alert_level])
   @@index([order_id])
   @@index([created_at])
+}
+
+model WechatNotificationReceipt {
+  id                  String    @id @default(cuid())
+  notification_id     String    @unique
+  notification_type   String
+  event_type           String
+  resource_identifier String?
+  body_sha256          String
+  claim_token          String
+  status               String    @default("processing")
+  failure_code         String?
+  processed_at         DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  @@index([status, created_at])
+  @@index([notification_type, resource_identifier])
 }
 
 

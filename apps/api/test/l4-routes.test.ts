@@ -47,7 +47,8 @@ describe('L4 group-buy and order routes', () => {
     expect(refundSource.includes("/api/refunds/wechat/apply'")).toBe(false);
     expect(refundSource.includes("/api/refunds/wechat/notify'")).toBe(true);
     expect(refundSource.includes('createMockRefund')).toBe(false);
-    expect(refundSource.includes('reply.code(501)')).toBe(true);
+    expect(refundSource.includes('verifyAndDecryptWechatNotification')).toBe(true);
+    expect(refundSource.includes('processWechatRefundNotification')).toBe(true);
   });
 
   it('registers L7 commission API routes and service hooks', () => {
@@ -256,9 +257,11 @@ describe('L4 group-buy and order routes', () => {
 
   it('keeps L5 payment idempotency safeguards visible', () => {
     const paymentSource = readFileSync(new URL('../src/routes/payments.ts', import.meta.url), 'utf8');
+    const paymentCommandSource = readFileSync(new URL('../src/modules/payment/wechat-payment-command.ts', import.meta.url), 'utf8');
     const serviceSource = readFileSync(new URL('../src/services/payment-service.ts', import.meta.url), 'utf8');
     const orderPaymentSource = readFileSync(new URL('../src/modules/order/order-payment-service.ts', import.meta.url), 'utf8');
-    expect(paymentSource.includes('payment.upsert')).toBe(true);
+    expect(paymentCommandSource.includes('attempt_no:')).toBe(true);
+    expect(paymentCommandSource.includes('prepay_expires_at')).toBe(true);
     expect(paymentSource.includes('markOrderPaid')).toBe(true);
     expect(paymentSource.includes('MOCK_WECHAT_PAY')).toBe(true);
     expect(orderPaymentSource.includes("where: { id: orderId, pay_status: 'unpaid' }")).toBe(true);

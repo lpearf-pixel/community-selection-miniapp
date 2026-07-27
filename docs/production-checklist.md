@@ -9,7 +9,9 @@
 - `WECHAT_PAY_MODE`：默认 `mock`；切换为 `wechat` 前必须完成人工配置复核。
 - `MOCK_WECHAT_PAY`：默认 `true`；真实支付模式需明确设置为 `false`。
 - `WECHAT_APP_ID` / `WECHAT_MCH_ID` / `WECHAT_MCH_SERIAL_NO` / `WECHAT_API_V3_KEY` / `WECHAT_PRIVATE_KEY_PATH` / `WECHAT_PAY_NOTIFY_URL`：启用 `WECHAT_PAY_MODE=wechat` 前必须完整配置。
-- `WECHAT_REFUND_NOTIFY_URL`：微信退款回调预留地址，真实退款未启用前仅保留配置位。
+- `WECHAT_REFUND_NOTIFY_URL`：微信退款回调 HTTPS 地址。
+- `WECHAT_PLATFORM_SERIAL_NO` / `WECHAT_PLATFORM_CERT_PATH`：微信支付平台证书序列号和只读证书路径。
+- `USER_SESSION_TOKEN_SECRET`：至少 32 字节的独立强随机会话摘要密钥。
 - `AUTO_PAYOUT_ENABLED`：必须为 `false`。
 - `WECHAT_TRANSFER_ENABLED`：必须为 `false`。
 - `WECHAT_MERCHANT_TRANSFER_ENABLED`：必须为 `false`。
@@ -19,6 +21,7 @@
 
 - 不保存完整身份证号、银行卡号、私钥、证书、token。
 - 私钥和证书文件必须放在受控路径，不能提交到 Git。
+- 微信回调只保存通知摘要与稳定标识，不保存原始或解密后的完整报文。
 - 后台访问必须启用 `ADMIN_AUTH_ENABLED=true` 并通过 `x-admin-token` 传入强随机 `ADMIN_TOKEN`。
 
 ## 上线前必须通过
@@ -29,9 +32,11 @@ pnpm migrations:check
 pnpm seed:check
 pnpm compliance:scan
 pnpm verify:all
+pnpm verify:l51
 ```
 
 - `pnpm verify:all` 必须通过。
+- `pnpm verify:l51` 必须通过，且恢复源码用的临时 workflow 不得存在。
 - compliance scan 必须通过。
 - migration check 必须通过。
 - seed check 必须通过。
@@ -47,6 +52,7 @@ pnpm verify:all
 
 - 检查 BusinessEventLog、OrderTimelineLog、OpsAlertLog 是否可写入和查询。
 - 检查告警中心 open / resolved / ignored 状态流转。
+- 检查微信支付/退款主动对账、团购到期扫描和去重告警只有一个锁持有者执行。
 - 检查 AI context 是否能返回订单、时间线、业务事件、告警和 suggested_focus。
 
 ## 上线后人工处理边界

@@ -75,7 +75,6 @@ const refund = {
   reason: '部分退款',
   status: 'success',
   stock_restored: false,
-  raw_notify: null,
   processed_at: new Date(),
   created_at: new Date(),
   updated_at: new Date(),

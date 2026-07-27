@@ -4,7 +4,7 @@ export type PaymentInfo = {
   payment_id?: string;
   out_trade_no?: string;
   transaction_id?: string;
-  raw_notify?: Prisma.InputJsonValue;
+  provider_success_at?: Date;
 };
 
 export async function findPaymentForOrder(
@@ -37,7 +37,9 @@ export async function confirmPaymentRecordPaid(
     data: {
       trade_state: 'paid',
       transaction_id: payment.transaction_id ?? info.transaction_id,
-      ...(info.raw_notify === undefined ? {} : { raw_notify: info.raw_notify }),
+      provider_success_at:
+        payment.provider_success_at ?? info.provider_success_at,
+      last_provider_error_code: null,
     },
   });
 }

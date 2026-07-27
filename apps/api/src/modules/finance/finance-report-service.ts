@@ -19,10 +19,14 @@ function orderWhere(query: Query): Prisma.OrderWhereInput {
 }
 function sum(items: Array<number | null | undefined>): number { return items.reduce<number>((total, value) => total + toCents(value), 0); }
 
-type RefundRawNotify = { refund_channel?: string; refund_transaction_id?: string | null; admin_remark?: string | null; manual?: boolean };
-function rawNotify(value: Prisma.JsonValue): RefundRawNotify { return value && typeof value === 'object' && !Array.isArray(value) ? value as RefundRawNotify : {}; }
 function maskPhone(phone: string | null | undefined): string { return phone && phone.length >= 7 ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : phone ? '****' : ''; }
-function refundMethod(refund: { raw_notify: Prisma.JsonValue }): string { return rawNotify(refund.raw_notify).refund_channel ?? 'unknown'; }
+function refundMethod(refund: { provider_status: string | null }): string {
+  return refund.provider_status?.startsWith('MANUAL_')
+    ? refund.provider_status.slice('MANUAL_'.length).toLowerCase()
+    : refund.provider_status === 'MOCK_SUCCESS'
+      ? 'mock'
+      : 'wechat';
+}
 
 function refundWhere(query: Query): Prisma.RefundWhereInput {
   return {
@@ -38,7 +42,6 @@ function refundWhere(query: Query): Prisma.RefundWhereInput {
 }
 
 function refundLedgerRow(refund: Prisma.RefundGetPayload<{ include: { order: { include: { group_buy: { include: { product: true } } } } } }>) {
-  const raw = rawNotify(refund.raw_notify);
   return {
     refund_id: refund.id,
     order_id: refund.order_id,
@@ -46,18 +49,18 @@ function refundLedgerRow(refund: Prisma.RefundGetPayload<{ include: { order: { i
     group_buy_id: refund.order.group_buy_id,
     product_name: refund.order.group_buy?.product.name ?? '',
     refund_status: refund.status,
-    refund_method: raw.refund_channel ?? 'unknown',
+    refund_method: refundMethod(refund),
     refund_amount_cents: refund.refund_amount_cents,
     product_refund_amount_cents: refund.product_refund_amount_cents,
     delivery_refund_amount_cents: refund.delivery_refund_amount_cents,
     remaining_refundable_amount_cents: Math.max(0, refund.order.pay_amount_cents - refund.order.refund_amount_cents),
-    refund_transaction_id: raw.refund_transaction_id ?? refund.refund_id ?? '',
+    refund_transaction_id: refund.refund_id ?? '',
     out_refund_no: refund.out_refund_no,
-    manual_record_only: raw.manual === true,
+    manual_record_only: refund.provider_status?.startsWith('MANUAL_') ?? false,
     receiver_name: refund.order.receiver_name,
     receiver_phone_masked: maskPhone(refund.order.receiver_phone),
     reason: refund.reason,
-    admin_remark: raw.admin_remark ?? '',
+    admin_remark: '',
     created_at: refund.created_at,
     processed_at: refund.processed_at
   };

@@ -5,8 +5,29 @@ import { registerAdminRoutes } from './routes/admin/index.js';
 import { requireAdminSession } from './routes/admin-auth.js';
 import { HTTP_LOGGER_OPTIONS } from './services/http-log-privacy.js';
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    rawBody?: Buffer;
+  }
+}
+
 export function buildApp() {
   const app = Fastify({ logger: HTTP_LOGGER_OPTIONS });
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (request, body, done) => {
+      const rawBody = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      request.rawBody = rawBody;
+      try {
+        done(null, JSON.parse(rawBody.toString('utf8')));
+      } catch (error) {
+        Object.assign(error as Error, { statusCode: 400 });
+        done(error as Error);
+      }
+    },
+  );
 
   app.addHook('preHandler', async (request, reply) => {
     if (!request.url.startsWith('/api/admin')) return;

@@ -39,6 +39,14 @@ type CreateNormalOrderInput = {
 
 type AdminMeta = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
 
+export class OrderRequestError extends Error {
+  readonly statusCode = 400;
+}
+
+function orderRequestError(message: string) {
+  return new OrderRequestError(message);
+}
+
 function positiveInt(value: unknown, fallback: number) {
   const parsed = Number(value ?? fallback);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -63,13 +71,13 @@ function normalizePickupType(value: unknown): PickupType {
 async function validateFulfillment(input: { pickup_type?: string; pickup_store_id?: string; receiver_name?: string; receiver_phone?: string; receiver_address?: string; delivery_time_window_code?: string }) {
   const pickupType = normalizePickupType(input.pickup_type);
   // L35: 自提点必填校验
-  if (!input.pickup_store_id?.trim()) throw new Error('自提点必填校验：请选择自提点');
+  if (!input.pickup_store_id?.trim()) throw orderRequestError('自提点必填校验：请选择自提点');
   if (pickupType === PickupType.delivery) {
     // L35: 收货人必填校验
     // L35: 手机号必填校验
     // L35: 配送地址必填校验
     const result = await validateDeliveryRuleForOrder(input);
-    if (!result.ok) throw new Error(result.error_message || '配送规则校验失败');
+    if (!result.ok) throw orderRequestError(result.error_message || '配送规则校验失败');
   }
   return pickupType;
 }
@@ -165,7 +173,7 @@ async function getCreditBalance(tx: Prisma.TransactionClient, userId: string) {
 export async function createGroupOrder(input: CreateGroupOrderInput) {
   const saleQuantity = positiveInt(input.quantity, 1);
   const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, input.receiver_name ?? '社区用户') : undefined);
-  if (!userId || !input.group_buy_id || !input.client_request_id || !input.receiver_name || !input.receiver_phone) throw new Error('缺少下单必填字段');
+  if (!userId || !input.group_buy_id || !input.client_request_id || !input.receiver_name || !input.receiver_phone) throw orderRequestError('缺少下单必填字段');
   const groupBuyId = input.group_buy_id;
   const clientRequestId = input.client_request_id;
   const receiverName = input.receiver_name;
@@ -183,9 +191,9 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
     }
 
     const groupBuy = await tx.groupBuy.findUnique({ where: { id: groupBuyId }, include: { product: true } });
-    if (!groupBuy) throw new Error('团购不存在');
-    if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw new Error('当前团购不可下单');
-    if (groupBuy.end_time.getTime() <= Date.now()) throw new Error('团购已截止');
+    if (!groupBuy) throw orderRequestError('团购不存在');
+    if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw orderRequestError('当前团购不可下单');
+    if (groupBuy.end_time.getTime() <= Date.now()) throw orderRequestError('团购已截止');
 
     const productAmountCents = groupBuy.price_cents * saleQuantity;
     const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
@@ -194,16 +202,16 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
     const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
     const amount = productAmountCents;
     const creditAmount = Number(input.credit_amount_cents ?? 0);
-    if (!Number.isInteger(creditAmount) || creditAmount < 0) throw new Error('消费额度抵扣金额不合法');
-    if (creditAmount > productAmountCents) throw new Error('消费额度抵扣金额不能超过商品金额');
-    if (creditAmount > 0 && !input.credit_source_id) throw new Error('缺少消费额度来源');
+    if (!Number.isInteger(creditAmount) || creditAmount < 0) throw orderRequestError('消费额度抵扣金额不合法');
+    if (creditAmount > productAmountCents) throw orderRequestError('消费额度抵扣金额不能超过商品金额');
+    if (creditAmount > 0 && !input.credit_source_id) throw orderRequestError('缺少消费额度来源');
 
     let creditBalanceAfter: number | null = null;
     if (creditAmount > 0) {
       const conversion = await tx.rewardConversion.findUnique({ where: { id: input.credit_source_id } });
-      if (!conversion || conversion.status !== 'success' || conversion.conversion_type !== 'credit' || conversion.leader_user_id !== userId) throw new Error('消费额度来源不可用');
+      if (!conversion || conversion.status !== 'success' || conversion.conversion_type !== 'credit' || conversion.leader_user_id !== userId) throw orderRequestError('消费额度来源不可用');
       const currentCreditBalance = await getCreditBalance(tx, userId);
-      if (currentCreditBalance < creditAmount) throw new Error('消费额度余额不足');
+      if (currentCreditBalance < creditAmount) throw orderRequestError('消费额度余额不足');
       creditBalanceAfter = currentCreditBalance - creditAmount;
     }
 
@@ -253,7 +261,7 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
   const receiverPhone = input.receiver_phone?.trim();
   const userId = input.user_id ?? (input.user_openid ? await findUserIdByOpenid(input.user_openid, receiverName ?? '社区用户') : undefined);
   const clientRequestId = input.client_request_id ?? `normal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-  if (!userId || !productId || !receiverName || !receiverPhone) throw new Error('缺少普通购买下单必填字段');
+  if (!userId || !productId || !receiverName || !receiverPhone) throw orderRequestError('缺少普通购买下单必填字段');
   const pickupType = await validateFulfillment({ pickup_type: input.pickup_type, pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code });
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -264,15 +272,15 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
     if (existing) return toPublicOrder(existing);
 
     const product = await tx.product.findUnique({ where: { id: productId } });
-    if (!product) throw new Error('商品不存在');
-    if (product.status !== 'active') throw new Error('商品不可购买');
+    if (!product) throw orderRequestError('商品不存在');
+    if (product.status !== 'active') throw orderRequestError('商品不可购买');
     if (input.community_id) {
       const community = await tx.community.findUnique({ where: { id: input.community_id } });
-      if (!community) throw new Error('社区不存在');
+      if (!community) throw orderRequestError('社区不存在');
     }
     if (input.pickup_store_id) {
       const pickupStore = await tx.pickupStore.findUnique({ where: { id: input.pickup_store_id } });
-      if (!pickupStore) throw new Error('自提点不存在');
+      if (!pickupStore) throw orderRequestError('自提点不存在');
     }
 
     const productAmountCents = product.price_cents * saleQuantity;

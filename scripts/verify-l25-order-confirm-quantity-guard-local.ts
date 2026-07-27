@@ -43,12 +43,27 @@ const requiredKeywords = [
   "from_cart",
   "removeCartItem",
   "/api/orders/normal",
-  "/api/payments/mock",
+  "payOrder",
   "请选择自提点",
   "商品库存不足",
 ];
 for (const keyword of requiredKeywords)
   assert(source.includes(keyword), `missing keyword: ${keyword}`);
+const confirm = read("apps/miniapp/pages/orders/confirm/index.js");
+assert(
+  /require\(["']\.\.\/\.\.\/\.\.\/utils\/payment["']\)/.test(confirm),
+  "orders confirm must use the centralized payment adapter",
+);
+for (const keyword of [
+  "/api/payments/mock",
+  "/api/payments/" + "wechat",
+  "wx.request" + "Payment",
+]) {
+  assert(
+    !confirm.includes(keyword),
+    `orders confirm must not call payment runtime directly: ${keyword}`,
+  );
+}
 
 const forbiddenKeywords = [
   "wx.request" + "Payment",
@@ -69,11 +84,10 @@ const forbiddenKeywords = [
 for (const keyword of forbiddenKeywords)
   assert(!source.includes(keyword), `forbidden keyword found: ${keyword}`);
 
-const confirm = read("apps/miniapp/pages/orders/confirm/index.js");
 assert(confirm.includes("this.updateQuantity(this.data.quantity"), "product load must normalize quantity after stock is known");
 assert(confirm.includes("stock <= 0") && confirm.includes("商品库存不足"), "confirm page must guard stock <= 0");
 assert(confirm.includes("this.data.from_cart") && confirm.includes("removeCartItem(this.data.product_id)"), "from_cart removal must remain success-only");
-assert(confirm.indexOf("removeCartItem") > confirm.indexOf("createMockPayment"), "cart item must be removed only after mock payment succeeds");
+assert(confirm.indexOf("removeCartItem") > confirm.indexOf("payOrder"), "cart item must be removed only after runtime payment succeeds");
 
 const productDetail = read("apps/miniapp/pages/product-detail/index.js");
 const products = read("apps/miniapp/pages/products/index.js");

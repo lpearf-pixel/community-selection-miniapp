@@ -1,7 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.WECHAT_PAY_MODE = 'mock';
 process.env.MOCK_WECHAT_PAY = 'true';
 process.env.AUTO_PAYOUT_ENABLED = 'false';
@@ -61,15 +66,15 @@ async function main() {
   assert(new Date(listedGroupBuy.end_time).getTime() > Date.now(), 'group buy end time should be in the future');
   assert(listedGroupBuy.community_id === community.id && listedGroupBuy.community_name === community.name, 'group buy community should match');
 
-  const normalOrder = await data(await app.inject({ method: 'POST', url: '/api/orders/normal', payload: { product_id: activeProduct.id, user_id: customer.id, client_request_id: `${prefix}-normal`, quantity: 2, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L19普通用户', receiver_phone: '13812345678' } }));
-  await data(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
+  const normalOrder = await data(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/orders/normal', payload: { product_id: activeProduct.id, client_request_id: `${prefix}-normal`, quantity: 2, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L19普通用户', receiver_phone: '13812345678' } }));
+  await data(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: normalOrder.id } }));
   const normalDetail = await data(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}`, headers: { 'x-user-id': customer.id } }));
   assert(normalDetail.order_type === 'normal', 'normal order detail should be normal type');
   assert(normalDetail.product.name === activeProduct.name, 'normal order product name should match');
   assert(await prisma.commission.count({ where: { order_id: normalOrder.id } }) === 0, 'normal order should not create service reward');
 
-  const groupOrder = await data(await app.inject({ method: 'POST', url: '/api/orders', payload: { group_buy_id: groupBuy.id, user_id: customer.id, client_request_id: `${prefix}-group`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L19开团用户', receiver_phone: '13912345678' } }));
-  await data(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
+  const groupOrder = await data(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/orders', payload: { group_buy_id: groupBuy.id, client_request_id: `${prefix}-group`, quantity: 1, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: 'L19开团用户', receiver_phone: '13912345678' } }));
+  await data(await injectAsConsumer(app, customer.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: groupOrder.id } }));
   const groupDetail = await data(await app.inject({ method: 'GET', url: `/api/me/orders/${groupOrder.id}`, headers: { 'x-user-id': customer.id } }));
   assert(groupDetail.order_type === 'group_buy', 'group order detail should be group buy type');
   assert(groupDetail.group_buy?.group_buy_id === groupBuy.id, 'group order detail should include group buy');

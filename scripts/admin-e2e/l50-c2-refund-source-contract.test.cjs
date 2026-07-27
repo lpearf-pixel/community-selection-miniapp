@@ -61,11 +61,17 @@ test('Admin after-sale list exposes reliable refund execution inputs', () => {
   assert.doesNotMatch(adminTypes, /order_version:/);
 });
 
-test('public refund mutations are retired while notify fails closed', () => {
+test('public refund mutations stay retired while WeChat notify is explicitly gated', () => {
   assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/mock'/);
   assert.doesNotMatch(refunds, /app\.post\('\/api\/refunds\/wechat\/apply'/);
   assert.match(refunds, /app\.post\('\/api\/refunds\/wechat\/notify'/);
-  assert.match(refunds, /reply\.code\(501\)/);
+  assert.match(refunds, /if \(paymentMode !== 'wechat'\)/);
+  assert.match(refunds, /reply\.code\(403\)/);
+  assert.match(refunds, /if \(!request\.rawBody\)/);
+  assert.match(refunds, /reply\.code\(400\)/);
+  assert.match(refunds, /return reply\.code\(204\)\.send\(\)/);
+  assert.match(refunds, /\?\s*400\s*:\s*500/);
+  assert.doesNotMatch(refunds, /reply\.code\(501\)/);
 });
 
 test('real Admin browser proves same-version refund execution is atomic', () => {

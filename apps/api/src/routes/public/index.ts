@@ -11,8 +11,10 @@ import { registerUserOrderRoutes } from '../me/orders.js';
 import { registerLeaderCenterRoutes } from '../leaders/center.js';
 import { registerPublicLocationRoutes } from './locations.js';
 import { registerPublicDeliveryRoutes } from './delivery.js';
+import { registerWechatAuthRoutes } from '../wechat-auth.js';
 
 export function registerPublicRoutes(app: FastifyInstance) {
+  registerWechatAuthRoutes(app);
   registerCatalogRoutes(app);
   registerUserProductRoutes(app);
   registerPublicLocationRoutes(app);

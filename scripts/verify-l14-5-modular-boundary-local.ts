@@ -3,7 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_AUTH_MODE = 'session';
 process.env.ADMIN_TOTP_ENCRYPTION_KEY = process.env.ADMIN_TOTP_ENCRYPTION_KEY ?? 'l14-5-local-verify-encryption-key';
@@ -24,6 +29,12 @@ async function json(response: Awaited<ReturnType<typeof app.inject>>) {
 
 async function post(url: string, payload: unknown) {
   return json(await app.inject({ method: 'POST', url, payload }));
+}
+
+async function consumerPost(url: string, userId: string, payload: unknown) {
+  return json(
+    await injectAsConsumer(app, userId, { method: 'POST', url, payload }),
+  );
 }
 
 
@@ -98,12 +109,12 @@ async function main() {
   });
 
   const groupBuy = await post('/api/group-buys', { product_id: product.id, leader_user_id: leader.id, community_id: community.id, min_people: 1, min_quantity: 1, end_time: new Date(Date.now() + 3600_000).toISOString(), pickup_time: new Date(Date.now() + 7200_000).toISOString() });
-  const order = await post('/api/orders', { user_id: customer.id, group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '模块用户', receiver_phone: '13812345678' });
+  const order = await consumerPost('/api/orders', customer.id, { group_buy_id: groupBuy.id, client_request_id: `${prefix}-order`, quantity: 2, pickup_store_id: store.id, receiver_name: '模块用户', receiver_phone: '13812345678' });
   assert(order.quantity === 2, 'order should keep sale quantity');
   const unpaidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(unpaidProduct.stock === 50000, 'unpaid order should not deduct inventory');
 
-  await post('/api/payments/mock', { order_id: order.id });
+  await consumerPost('/api/payments/mock', customer.id, { order_id: order.id });
   const afterPaymentProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(afterPaymentProduct.stock === 45000, 'paid order should deduct base stock quantity');
   const paymentLedger = await prisma.stockLedger.findFirst({ where: { product_id: product.id, source_type: 'order_payment', source_id: order.id, event_type: 'order_paid_deduct' } });

@@ -1,7 +1,7 @@
 const activeTheme = require('./themes/active.generated');
 
 const config = {
-  apiBaseUrl: 'http://localhost:13080',
+  apiBaseUrl: '',
   homeTemplateKey: activeTheme.id,
   themeId: activeTheme.id,
 };

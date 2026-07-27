@@ -3,7 +3,12 @@ import { PrismaClient } from '@prisma/client';
 import { buildApp } from '../apps/api/src/app.js';
 import { hashPassword } from '../apps/api/src/services/admin-auth-service.js';
 import { scanComplianceFiles } from './lib/compliance-scan.js';
+import {
+  enableConsumerVerifierMockIdentity,
+  injectAsConsumer,
+} from './lib/consumer-verifier-request.js';
 
+enableConsumerVerifierMockIdentity();
 process.env.ADMIN_AUTH_ENABLED = 'true';
 process.env.ADMIN_AUTH_MODE = 'session';
 process.env.ADMIN_TOTP_ENCRYPTION_KEY = process.env.ADMIN_TOTP_ENCRYPTION_KEY ?? 'l17-5-local-verify-encryption-key';
@@ -44,7 +49,7 @@ async function main() {
   const user = await prisma.user.create({ data: { openid: `${prefix}-user`, nickname: 'L17.5普通购买用户', role: 'customer', status: 'active' } });
   const product = await prisma.product.create({ data: { name: `${prefix}-normal-product`, category_id: category.id, price_cents: 1234, cost_price_cents: 800, stock: 20, unit: '份', stock_unit: 'piece', sale_unit: '份', sale_spec_name: '1份装', stock_deduct_quantity: 1, status: 'active' } });
 
-  const order = await json(await app.inject({ method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, user_id: user.id, client_request_id: `${prefix}-normal-order`, quantity: 3, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: '普通购买用户', receiver_phone: '13812345678' } }));
+  const order = await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/orders/normal', payload: { product_id: product.id, client_request_id: `${prefix}-normal-order`, quantity: 3, pickup_store_id: pickupStore.id, community_id: community.id, receiver_name: '普通购买用户', receiver_phone: '13812345678' } }));
   assert(order.group_buy_id === null, 'normal order should not reference group buy');
   assert(order.product_id === product.id, 'normal order should reference product');
   assert(order.pay_amount_cents === product.price_cents * 3, 'normal order pay amount mismatch');
@@ -52,7 +57,7 @@ async function main() {
   const unpaidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(unpaidProduct.stock === 20, 'unpaid normal order should not deduct stock');
 
-  await json(await app.inject({ method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
+  await json(await injectAsConsumer(app, user.id, { method: 'POST', url: '/api/payments/mock', payload: { order_id: order.id } }));
   const paidOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
   const paidProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert(paidOrder.pay_status === 'paid', 'normal order should be paid by mock payment');

@@ -1,38 +1,72 @@
+import { readFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
+import { createPrismaWechatReceiptStore } from '../modules/payment/wechat-payment-notification.js';
+import {
+  createPrismaWechatRefundLookup,
+  processWechatRefundNotification,
+} from '../modules/refund/wechat-refund-notification.js';
+import { loadWechatRuntimeConfig } from '../modules/wechat/wechat-config.js';
+import { verifyAndDecryptWechatNotification } from '../modules/wechat/wechat-notify-verifier.js';
+import { markRefundSuccess } from '../services/refund-service.js';
 
-function isMockRefundEnabled(): boolean {
-  if (process.env.MOCK_WECHAT_PAY === 'true') return true;
-  if (process.env.MOCK_WECHAT_PAY === 'false') return false;
-  return process.env.WECHAT_PAY_MODE !== 'wechat';
+type RefundRouteOptions = {
+  paymentMode?: 'mock' | 'wechat';
+  processWechatNotification?: (input: {
+    rawBody: Buffer;
+    headers: Record<string, unknown>;
+  }) => Promise<unknown>;
+};
+
+function defaultWechatNotificationProcessor() {
+  const config = loadWechatRuntimeConfig();
+  if (config.paymentMode !== 'wechat') {
+    throw new Error('WECHAT_REFUND_MODE_DISABLED');
+  }
+  const platformPublicKey = readFileSync(config.platformCertificatePath);
+  return async (input: {
+    rawBody: Buffer;
+    headers: Record<string, unknown>;
+  }) => {
+    const verified = verifyAndDecryptWechatNotification({
+      ...input,
+      platformSerialNo: config.platformSerialNo,
+      platformPublicKey,
+      apiV3Key: config.apiV3Key,
+    });
+    return processWechatRefundNotification({
+      verified,
+      expectedMerchantId: config.merchantId,
+      receipts: createPrismaWechatReceiptStore(),
+      refunds: createPrismaWechatRefundLookup(),
+      markRefundSuccess,
+    });
+  };
 }
 
-function assertWechatRefundConfig() {
-  const required = [
-    'WECHAT_APP_ID',
-    'WECHAT_MCH_ID',
-    'WECHAT_MCH_SERIAL_NO',
-    'WECHAT_API_V3_KEY',
-    'WECHAT_PRIVATE_KEY_PATH',
-    'WECHAT_REFUND_NOTIFY_URL'
-  ];
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length > 0) throw new Error(`缺少微信退款配置：${missing.join(',')}`);
-}
+export function registerRefundRoutes(
+  app: FastifyInstance,
+  options: RefundRouteOptions = {},
+) {
+  const paymentMode =
+    options.paymentMode ??
+    (process.env.WECHAT_PAY_MODE === 'wechat' &&
+    process.env.MOCK_WECHAT_PAY !== 'true'
+      ? 'wechat'
+      : 'mock');
 
-export function registerRefundRoutes(app: FastifyInstance) {
   app.get('/api/refunds', async () => {
     const refunds = await prisma.refund.findMany({
       include: {
         order: {
           include: {
             payments: true,
-            group_buy: { include: { product: true } }
-          }
-        }
+            group_buy: { include: { product: true } },
+          },
+        },
       },
-      orderBy: { created_at: 'desc' }
+      orderBy: { created_at: 'desc' },
     });
     return ok(refunds);
   });
@@ -45,10 +79,10 @@ export function registerRefundRoutes(app: FastifyInstance) {
         order: {
           include: {
             payments: true,
-            group_buy: { include: { product: true } }
-          }
-        }
-      }
+            group_buy: { include: { product: true } },
+          },
+        },
+      },
     });
     if (!refund) {
       reply.code(404);
@@ -57,20 +91,43 @@ export function registerRefundRoutes(app: FastifyInstance) {
     return ok(refund);
   });
 
-  app.post('/api/refunds/wechat/notify', async (_request, reply) => {
-    if (isMockRefundEnabled()) {
+  app.post('/api/refunds/wechat/notify', async (request, reply) => {
+    if (paymentMode !== 'wechat') {
       reply.code(403);
       return fail('MOCK 模式拒绝真实微信退款回调');
     }
-
-    try {
-      assertWechatRefundConfig();
-    } catch (error) {
+    if (!request.rawBody) {
       reply.code(400);
-      return fail(error instanceof Error ? error.message : '微信退款配置错误');
+      return fail('微信退款回调原始报文缺失');
     }
-
-    reply.code(501);
-    return fail('真实微信退款回调待实现：TODO 验签、解密、金额校验、幂等更新；未完成验签前不得修改订单');
+    try {
+      const processNotification =
+        options.processWechatNotification ??
+        defaultWechatNotificationProcessor();
+      await processNotification({
+        rawBody: request.rawBody,
+        headers: request.headers,
+      });
+      return reply.code(204).send();
+    } catch (error) {
+      const code =
+        error instanceof Error &&
+        /^(?:WECHAT_NOTIFY|WECHAT_REFUND)_/.test(error.message)
+          ? 400
+          : 500;
+      request.log.warn(
+        {
+          operation: 'wechat-refund-notification',
+          error_code:
+            error instanceof Error &&
+            /^[A-Z][A-Z0-9_]{0,63}$/.test(error.message)
+              ? error.message
+              : 'WECHAT_REFUND_NOTIFICATION_FAILED',
+        },
+        '微信退款回调处理失败',
+      );
+      reply.code(code);
+      return fail('微信退款回调处理失败');
+    }
   });
 }
