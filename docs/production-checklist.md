@@ -1,71 +1,58 @@
 # 生产前 Checklist
 
-## 环境变量清单
-
-- `DATABASE_URL`：生产 PostgreSQL 连接串，必须使用生产库账号与独立权限。
-- `PORT`：API 服务端口。
-- `ADMIN_TOKEN`：后台管理员令牌，必须强随机，不得使用 `dev-admin-token`。
-- `ADMIN_AUTH_ENABLED`：生产必须为 `true`。
-- `WECHAT_PAY_MODE`：默认 `mock`；切换为 `wechat` 前必须完成人工配置复核。
-- `MOCK_WECHAT_PAY`：默认 `true`；真实支付模式需明确设置为 `false`。
-- `WECHAT_APP_ID` / `WECHAT_MCH_ID` / `WECHAT_MCH_SERIAL_NO` / `WECHAT_API_V3_KEY` / `WECHAT_PRIVATE_KEY_PATH` / `WECHAT_PAY_NOTIFY_URL`：启用 `WECHAT_PAY_MODE=wechat` 前必须完整配置。
-- `WECHAT_REFUND_NOTIFY_URL`：微信退款回调 HTTPS 地址。
-- `WECHAT_PLATFORM_SERIAL_NO` / `WECHAT_PLATFORM_CERT_PATH`：微信支付平台证书序列号和只读证书路径。
-- `USER_SESSION_TOKEN_SECRET`：至少 32 字节的独立强随机会话摘要密钥。
-- `AUTO_PAYOUT_ENABLED`：必须为 `false`。
-- `WECHAT_TRANSFER_ENABLED`：必须为 `false`。
-- `WECHAT_MERCHANT_TRANSFER_ENABLED`：必须为 `false`。
-- `AUTO_TAX_FILING_ENABLED`：必须为 `false`。
-
-## 安全与敏感信息
-
-- 不保存完整身份证号、银行卡号、私钥、证书、token。
-- 私钥和证书文件必须放在受控路径，不能提交到 Git。
-- 微信回调只保存通知摘要与稳定标识，不保存原始或解密后的完整报文。
-- 后台访问必须启用 `ADMIN_AUTH_ENABLED=true` 并通过 `x-admin-token` 传入强随机 `ADMIN_TOKEN`。
-
-## 上线前必须通过
+## 自动门禁
 
 ```bash
-pnpm env:check
+pnpm prod:preflight
 pnpm migrations:check
-pnpm seed:check
 pnpm compliance:scan
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 pnpm verify:all
 pnpm verify:l51
 ```
 
-- `pnpm verify:all` 必须通过。
-- `pnpm verify:l51` 必须通过，且恢复源码用的临时 workflow 不得存在。
-- compliance scan 必须通过。
-- migration check 必须通过。
-- seed check 必须通过。
+- L52 Runner 必须完成生产 Compose 渲染、API/Edge/Ops 镜像构建、Caddy 配置验证和一次性生产迁移。
+- `stable/l50-a3-4-business-base` 的 L50、L51 与基线门禁不得因本次改动回归。
+- 临时源码恢复 workflow、真实 `.env.production`、证书、私钥和备份不得进入 Git。
 
-## 数据库备份与回滚方案
+## 配置与安全
 
-- 上线前完成数据库全量备份，并记录备份文件位置、负责人和恢复演练命令。
-- 每次 migration 前确认 `prisma/migrations` 已随代码合并。
-- 回滚时优先恢复数据库备份，再回退应用镜像或代码版本。
-- 任何涉及金额、退款、开团服务奖励、提现状态的数据修复必须保留审计记录。
+- `NODE_ENV=production`。
+- `ADMIN_AUTH_ENABLED=true`、`ADMIN_AUTH_MODE=session`。
+- `ADMIN_TOKEN` 与 `ADMIN_TOTP_ENCRYPTION_KEY` 均为独立强随机值。
+- `WECHAT_PAY_MODE=wechat`、`MOCK_WECHAT_PAY=false`。
+- `CURRENT_USER_MOCK_HEADERS_ENABLED=false`。
+- `WECHAT_APP_ID`、App Secret、商户号、商户/平台证书序列号与 API v3 key 已交叉复核。
+- `WECHAT_PRIVATE_KEY_PATH=/run/secrets/wechat_private_key.pem`。
+- `WECHAT_PAY_PLATFORM_CERT_PATH=/run/secrets/wechat_platform_certificate.pem`。
+- 支付与退款通知 URL 使用 API 域名 HTTPS。
+- `USER_SESSION_TOKEN_SECRET` 至少 32 字符，且不与其他密钥复用。
+- 自动打款、商家转账和自动报税全部保持 `false`。
+- PostgreSQL 没有宿主机端口；公网只开放 80/443 和受限 SSH。
 
-## 日志和告警检查
+## 数据与回滚
 
-- 检查 BusinessEventLog、OrderTimelineLog、OpsAlertLog 是否可写入和查询。
-- 检查告警中心 open / resolved / ignored 状态流转。
-- 检查微信支付/退款主动对账、团购到期扫描和去重告警只有一个锁持有者执行。
-- 检查 AI context 是否能返回订单、时间线、业务事件、告警和 suggested_focus。
+- 上线前加密备份已生成且可解密。
+- 最近 30 天内完成过独立恢复演练；首次上线必须完成一次。
+- 记录当前和上一个已验收 `IMAGE_TAG`。
+- 明确应用回滚不会逆转数据库迁移；schema 不兼容时不得强行回滚。
+- 金额、退款、开团服务奖励和提现修复必须保留审计记录。
 
-## 上线后人工处理边界
+## 后台与人工边界
 
-- 提现只做后台人工处理，不接真实打款。
-- 税务只做人工复核记录，不自动报税。
-- 退款异常、提现后退款、提现审核期间退款均进入人工复核。
-- 用户可见文案继续统一使用“开团服务奖励”。
+- 至少存在一个 active `AdminUser`，密码为 bcrypt hash。
+- 首次登录后启用 TOTP，并离线保存一次性 recovery codes。
+- 抽查 `AdminAuditLog` 包含操作人、来源 IP、对象和动作。
+- 提现保持后台人工审核，不接真实自动打款。
+- 税务保持人工复核记录，不自动申报。
+- 退款异常、提现后退款和审核期间退款进入人工复核。
 
-## L11 后台登录上线检查
+## 上线验收
 
-- 生产建议设置 `ADMIN_AUTH_MODE=session`，简单令牌模式仅作为短期兼容入口。
-- 至少创建一个状态为 active 的 `AdminUser`，密码必须为 bcrypt hash。
-- 管理员必须启用 TOTP，并离线保存一次性 recovery codes。
-- `ADMIN_TOTP_ENCRYPTION_KEY` 必须为强随机值，不能与开发环境共用。
-- 后台敏感操作上线前需抽查 `AdminAuditLog` 是否记录操作人、来源 IP、对象和动作。
+- 执行 [购买与拼团生产验收](ops/purchase-group-production-acceptance.md)。
+- `BusinessEventLog`、`OrderTimelineLog`、`OpsAlertLog` 可查询。
+- 微信主动对账和拼团到期扫描只有一个 API 实例；数据库 advisory lock 能阻止重复执行。
+- 购买、成团、失败退款和自提证据均已脱敏归档。
