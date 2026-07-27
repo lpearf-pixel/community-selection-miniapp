@@ -7,6 +7,10 @@ on:
     paths:
       - .github/workflows/verification-baseline-audit.yml
       - scripts/lib/verification-audit.cjs
+      - scripts/lib/consumer-verifier-request.ts
+      - scripts/lib/consumer-verifier-request.test.ts
+      - scripts/verification-contract/**
+      - scripts/verify-consumer-identity-contract-local.cjs
       - scripts/verification-audit/**
       - scripts/verification-baseline-manifest.ts
       - scripts/verify-baseline-audit-local.ts
@@ -50,6 +54,11 @@ jobs:
           echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
           echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
       - run: pnpm install --frozen-lockfile
+
+      - name: Verify consumer identity contract
+        run: |
+          pnpm test:vcm1
+          node scripts/verify-consumer-identity-contract-local.cjs
 
       - name: Verify audit collector contract
         run: node --test scripts/verification-audit/*.test.cjs
