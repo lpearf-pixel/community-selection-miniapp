@@ -15,6 +15,13 @@ const realWechatKeys = [
   'USER_SESSION_TOKEN_SECRET',
 ] as const;
 
+const firstLaunchDisabledKeys = [
+  'MEMBERSHIP_ENABLED',
+  'COUPONS_ENABLED',
+  'CASH_REWARDS_ENABLED',
+  'WITHDRAWALS_ENABLED',
+] as const;
+
 const disabledAutomationKeys = [
   'AUTO_PAYOUT_ENABLED',
   'AUTO_TAX_FILING_ENABLED',
@@ -107,6 +114,14 @@ export function validateRuntimeConfig(env: RuntimeEnv = process.env) {
   }
 
   if (production) {
+    if (env.FIRST_LAUNCH_MODE !== 'true') {
+      problems.push('Production requires FIRST_LAUNCH_MODE=true');
+    }
+    for (const key of firstLaunchDisabledKeys) {
+      if (env[key] !== 'false') {
+        problems.push(`Production first launch requires ${key}=false`);
+      }
+    }
     if (env.ADMIN_AUTH_ENABLED !== 'true') {
       problems.push('Production requires ADMIN_AUTH_ENABLED=true');
     }
