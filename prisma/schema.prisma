@@ -150,13 +150,16 @@ model UserSession {
 }
 
 model Category {
-  id         String    @id @default(cuid())
-  name       String    @unique
-  sort_order Int       @default(0)
-  status     String    @default("active")
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  products   Product[]
+  id              String    @id @default(cuid())
+  name            String    @unique
+  compliance_code String?
+  sort_order      Int       @default(0)
+  status          String    @default("active")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  products        Product[]
+
+  @@index([compliance_code])
 }
 
 model Product {
@@ -166,6 +169,9 @@ model Product {
   cover_image          String?
   images               Json            @default("[]")
   description          String?
+  primary_supplier_id  String?
+  origin_text          String?
+  labels               Json            @default("[]")
   price_cents          Int
   cost_price_cents     Int
   stock                Int             @default(0)
@@ -181,6 +187,7 @@ model Product {
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
   category             Category        @relation(fields: [category_id], references: [id])
+  primary_supplier     Supplier?       @relation("ProductPrimarySupplier", fields: [primary_supplier_id], references: [id])
   group_buys           GroupBuy[]
   stock_ledgers        StockLedger[]
   purchase_plan_items  PurchasePlanItem[]
@@ -190,6 +197,9 @@ model Product {
   stock_check_items    StockCheckItem[]
   orders               Order[]
   after_sale_cases     AfterSaleCase[]
+  compliance_reviews   ProductComplianceReview[]
+
+  @@index([primary_supplier_id])
 }
 
 model Community {
@@ -767,21 +777,30 @@ model PurchasePlanItem {
 }
 
 model Supplier {
-  id                 String          @id @default(cuid())
-  name               String          @unique
-  contact_name       String?
-  contact_phone      String?
-  address            String?
-  license_no         String?
-  certification_info Json?
-  status             String          @default("active")
-  remark             String?
-  created_at         DateTime        @default(now())
-  updated_at         DateTime        @updatedAt
-  product_batches    ProductBatch[]
-  inventory_losses   InventoryLoss[]
+  id                  String                  @id @default(cuid())
+  name                String                  @unique
+  subject_type        String?
+  contact_name        String?
+  contact_phone       String?
+  address             String?
+  source_address      String?
+  market_name         String?
+  stall_no            String?
+  license_no          String?
+  certification_info  Json?
+  profile_fingerprint String?
+  profile_version     Int                     @default(1)
+  status              String                  @default("active")
+  remark              String?
+  created_at          DateTime                @default(now())
+  updated_at          DateTime                @updatedAt
+  product_batches     ProductBatch[]
+  inventory_losses    InventoryLoss[]
+  primary_products    Product[]               @relation("ProductPrimarySupplier")
+  qualifications      SupplierQualification[]
 
   @@index([status])
+  @@index([subject_type])
   @@index([created_at])
 }
 
@@ -798,6 +817,7 @@ model ProductBatch {
   initial_quantity       Int
   remaining_quantity     Int
   cost_price_cents       Int?
+  origin_text            String?
   production_date        DateTime?
   arrival_date           DateTime
   shelf_life_days        Int?
@@ -814,6 +834,7 @@ model ProductBatch {
   batch_stock_ledgers    BatchStockLedger[]
   inventory_losses       InventoryLoss[]
   stock_check_items      StockCheckItem[]
+  compliance_evidence    ProductBatchEvidence[]
 
   @@index([product_id])
   @@index([supplier_id])
@@ -821,6 +842,105 @@ model ProductBatch {
   @@index([expire_at])
   @@index([status])
   @@index([created_at])
+}
+
+
+model SupplierQualification {
+  id                         String   @id @default(cuid())
+  supplier_id                String
+  qualification_type         String
+  version                    Int
+  status                     String   @default("submitted")
+  object_key                 String
+  file_sha256                String
+  issued_at                  DateTime?
+  valid_from                 DateTime?
+  expires_at                 DateTime?
+  masked_summary             Json
+  critical_fingerprint       String
+  submitted_by_admin_id      String
+  submitted_at               DateTime @default(now())
+  reviewed_by_admin_id       String?
+  reviewed_at                DateTime?
+  review_note                String?
+  revoked_by_admin_id        String?
+  revoked_at                 DateTime?
+  revoke_reason              String?
+  created_at                 DateTime @default(now())
+  supplier                   Supplier @relation(fields: [supplier_id], references: [id])
+
+  @@unique([supplier_id, qualification_type, version])
+  @@index([supplier_id, status])
+  @@index([status, expires_at])
+  @@index([critical_fingerprint])
+}
+
+model ProductBatchEvidence {
+  id                       String       @id @default(cuid())
+  batch_id                 String
+  evidence_type            String
+  status                   String       @default("active")
+  object_key               String?
+  file_sha256              String?
+  payment_reference_hash   String?
+  invoice_evidence_status  String?
+  issued_at                DateTime?
+  expires_at               DateTime?
+  masked_summary           Json
+  evidence_fingerprint     String
+  created_by_admin_id      String
+  revoked_by_admin_id      String?
+  revoked_at               DateTime?
+  revoke_reason            String?
+  created_at               DateTime     @default(now())
+  batch                    ProductBatch @relation(fields: [batch_id], references: [id])
+
+  @@index([batch_id, status])
+  @@index([status, expires_at])
+  @@index([evidence_fingerprint])
+}
+
+model ProductComplianceReview {
+  id                         String   @id @default(cuid())
+  product_id                 String
+  status                     String
+  compliance_fingerprint     String
+  fingerprint_version        String
+  category_rule_version      String
+  qualification_rule_version String
+  product_snapshot           Json
+  supplier_snapshot          Json
+  qualification_snapshot     Json
+  batch_evidence_snapshot    Json
+  submitted_by_admin_id      String
+  submitted_at               DateTime
+  reviewed_by_admin_id       String?
+  reviewed_at                DateTime?
+  review_note                String?
+  invalidated_at             DateTime?
+  invalidation_reason        String?
+  created_at                 DateTime @default(now())
+  product                    Product  @relation(fields: [product_id], references: [id])
+
+  @@index([product_id, status, created_at])
+  @@index([compliance_fingerprint])
+}
+
+/// 弱关联审计记录保留历史证据访问事实，不对证据表建立外键。
+model ComplianceEvidenceAccessLog {
+  id            String   @id @default(cuid())
+  admin_user_id String
+  evidence_type String
+  evidence_id   String
+  purpose       String
+  outcome       String
+  ip_address    String?
+  user_agent    String?
+  created_at    DateTime @default(now())
+
+  @@index([admin_user_id, created_at])
+  @@index([evidence_type, evidence_id])
+  @@index([outcome, created_at])
 }
 
 model BatchStockLedger {
