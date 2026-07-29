@@ -30,7 +30,7 @@
     </view>
     <view class="cq-card detail-card" wx:if="{{order.pickup_type === 'delivery'}}">
       <view class="cq-section-title card-title">门店配送</view>
-      <view class="detail-lines"><view>配送地址：{{order.delivery.receiver_address || order.receiver.receiver_address}}</view><view>承诺时段：{{order.fulfillment_promise.display_text}}</view><view>配送费：¥{{order.delivery_fee_yuan}}</view><view class="cq-muted">{{order.delivery.notice || '当前为门店配送，暂不接第三方配送。'}}</view><view>配送范围：{{order.delivery.service_radius_text || order.service_radius_text}}</view><view>配送状态：{{order.fulfillment_status_text}}</view><view wx:if="{{order.pickup}}">发货点：{{order.pickup.pickup_store_name}}</view></view>
+      <view class="detail-lines"><view>配送地址：{{order.delivery.receiver_address || order.receiver.receiver_address}}</view><view>承诺配送时段：{{order.fulfillment_promise.display_text}}</view><view>配送费：¥{{order.delivery_fee_yuan}}</view><view class="cq-muted">{{order.delivery.notice || '当前为门店配送，暂不接第三方配送。'}}</view><view>配送范围：{{order.delivery.service_radius_text || order.service_radius_text}}</view><view>配送状态：{{order.fulfillment_status_text}}</view><view wx:if="{{order.pickup}}">发货点：{{order.pickup.pickup_store_name}}</view></view>
     </view>
     <view class="cq-card detail-card"><view class="cq-section-title card-title">收货人</view><view>{{order.receiver.receiver_name}}</view><view class="cq-muted">{{order.receiver_phone_masked}}</view></view>
     <view class="cq-card detail-card"><view class="cq-section-title card-title">售后摘要</view><view wx:if="{{order.has_after_sale}}">{{order.after_sale_summary.latest_status || '处理中'}}</view><view wx:else class="cq-muted">暂无售后记录</view></view>
