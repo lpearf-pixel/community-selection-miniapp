@@ -1,0 +1,81 @@
+name: L53 D2 Supplier Qualification Gate
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/l53-d2-compliance-gate.yml
+      - scripts/production/l53-d2-compliance-gate-contract.test.cjs
+      - apps/api/src/modules/compliance/supplier-qualification-command.ts
+      - apps/api/src/modules/compliance/supplier-qualification-command.test.ts
+      - apps/api/src/modules/compliance/supplier-qualification-executor.ts
+      - apps/api/src/modules/compliance/supplier-qualification-executor.integration.test.ts
+      - apps/api/src/modules/supplier/supplier-service.ts
+      - apps/api/src/routes/suppliers.ts
+      - apps/api/src/routes/supplier-qualification-route.test.ts
+      - docker-compose.yml
+      - prisma/schema.prisma
+      - prisma/migrations/202607290002_l53_d2_product_compliance/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l53-d2-compliance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    runs-on: [self-hosted, community]
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+      - name: Select isolated PostgreSQL port
+        run: |
+          port=$((40000 + GITHUB_RUN_NUMBER % 10000))
+          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
+          echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Build API workspace dependencies
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-l53-d2-${{ github.run_id }} \
+            -f docker-compose.yml up -d --wait postgres
+      - name: Prepare PostgreSQL
+        run: |
+          pnpm db:generate
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Verify supplier qualification workflow
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/supplier-qualification-command.test.ts \
+            src/routes/supplier-qualification-route.test.ts \
+            src/modules/compliance/supplier-qualification-executor.integration.test.ts
+      - name: Verify API types
+        run: pnpm --filter @community-selection/api typecheck
+      - name: Cleanup isolated PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-l53-d2-${{ github.run_id }} \
+            -f docker-compose.yml down --volumes --remove-orphans || true

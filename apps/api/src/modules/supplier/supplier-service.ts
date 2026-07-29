@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { prisma } from '../../db.js';
 import { recordAdminAudit } from '../audit/audit-service.js';
+import { parseSupplierSubjectProfile } from '../compliance/supplier-qualification-command.js';
 
 type SupplierBody = {
   name?: string;
@@ -10,6 +12,7 @@ type SupplierBody = {
   license_no?: string | null;
   certification_info?: unknown;
   remark?: string | null;
+  subject_profile?: unknown;
 };
 
 type AdminMeta = { admin_user_id: string; ip_address?: string | null; user_agent?: string | null };
@@ -25,6 +28,18 @@ function supplierData(body: SupplierBody, partial = false) {
     if (!partial || body[key] !== undefined) data[key] = body[key]?.trim() || null;
   }
   if (!partial || body.certification_info !== undefined) data.certification_info = body.certification_info === undefined ? Prisma.JsonNull : body.certification_info as Prisma.InputJsonValue;
+  if (body.subject_profile !== undefined) {
+    const parsed = parseSupplierSubjectProfile(body.subject_profile);
+    if (!parsed.ok) throw new Error(parsed.message);
+    data.subject_type = parsed.value.subject_type;
+    data.source_address = parsed.value.source_address;
+    data.market_name = parsed.value.market_name;
+    data.stall_no = parsed.value.stall_no;
+    data.profile_fingerprint = createHash('sha256')
+      .update(JSON.stringify(parsed.value))
+      .digest('hex');
+    if (partial) data.profile_version = { increment: 1 };
+  }
   return data;
 }
 
