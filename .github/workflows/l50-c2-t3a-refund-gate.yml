@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   focused:
-    runs-on: self-hosted
+    runs-on: [self-hosted, community]
     timeout-minutes: 120
     env:
       NODE_OPTIONS: --max-old-space-size=3072
@@ -84,7 +84,11 @@ jobs:
             src/modules/after-sale/after-sale-service.test.ts
           pnpm --filter @community-selection/api test -- \
             src/modules/wechat/wechat-access-token-client.test.ts \
-            src/modules/wechat-shipping \
+            src/modules/wechat-shipping/admin-wechat-shipping-retry.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-client.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-intent.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-policy.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-worker.test.ts \
             src/services/wechat-shipping-jobs.test.ts
           pnpm --filter @community-selection/admin test -- \
             src/features/sales/after-sales
