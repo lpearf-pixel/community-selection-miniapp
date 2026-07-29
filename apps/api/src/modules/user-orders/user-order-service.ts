@@ -39,6 +39,7 @@ const USER_AFTER_SALE_BAD_REQUEST_MESSAGES = new Set([
   '配送费退款金额超过配送费可退金额',
   '退款金额超过订单实付金额',
   '订单没有可退金额',
+  '订单没有可退商品金额',
   '退款金额超过订单剩余可退金额',
   '售后凭证必须是图片 URL 字符串数组',
 ]);
@@ -447,6 +448,27 @@ export async function listUserOrderAfterSales(userId: string, orderId: string) {
   return cases.map(mapAfterSale);
 }
 
+export function resolveUserRequestedProductRefundCents(
+  order: {
+    product_amount_cents?: number | null;
+    total_amount_cents: number;
+    product_refund_amount_cents: number;
+  },
+  requestedProductRefundCents?: number,
+) {
+  const remainingProductRefundCents = Math.max(
+    0,
+    (order.product_amount_cents ?? order.total_amount_cents) -
+      order.product_refund_amount_cents,
+  );
+  const resolvedAmount =
+    requestedProductRefundCents ?? remainingProductRefundCents;
+  if (remainingProductRefundCents <= 0) {
+    throw new Error('订单没有可退商品金额');
+  }
+  return resolvedAmount;
+}
+
 export async function createUserOrderAfterSale(
   userId: string,
   orderId: string,
@@ -456,14 +478,12 @@ export async function createUserOrderAfterSale(
   if (!body.type || !body.reason) {
     throw publicCurrentUserError('缺少售后必填字段', 400);
   }
-  const requestedProductRefundCents =
-    body.requested_product_refund_cents ??
-    Math.max(
-      0,
-      (order.product_amount_cents ?? order.total_amount_cents) -
-        order.product_refund_amount_cents,
-    );
   try {
+    const requestedProductRefundCents =
+      resolveUserRequestedProductRefundCents(
+        order,
+        body.requested_product_refund_cents,
+      );
     const afterSaleCase = await createAfterSaleCase({
       order_id: orderId,
       user_id: userId,

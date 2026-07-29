@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { toUserFulfillment } from './user-order-service.js';
+import {
+  resolveUserRequestedProductRefundCents,
+  toUserFulfillment,
+} from './user-order-service.js';
+
+describe('L53-C user product refund request', () => {
+  it('rejects an order with no remaining refundable product amount', () => {
+    expect(() =>
+      resolveUserRequestedProductRefundCents({
+        product_amount_cents: 2200,
+        total_amount_cents: 2200,
+        product_refund_amount_cents: 2200,
+      }),
+    ).toThrowError('订单没有可退商品金额');
+  });
+
+  it('preserves the user requested product amount when product balance remains', () => {
+    expect(
+      resolveUserRequestedProductRefundCents(
+        {
+          product_amount_cents: 2200,
+          total_amount_cents: 2200,
+          product_refund_amount_cents: 0,
+        },
+        1,
+      ),
+    ).toBe(1);
+  });
+});
 
 describe('L53-B user fulfillment DTO', () => {
   it('uses the stored delivery state and promise snapshot', () => {

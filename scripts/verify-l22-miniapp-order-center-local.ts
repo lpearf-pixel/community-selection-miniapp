@@ -401,7 +401,7 @@ async function main() {
     message: string;
   };
   assert(zeroRemainderResponse.statusCode === 400, 'zero remainder after-sale must return 400');
-  assert(zeroRemainderBody.message === '订单没有可退金额', 'zero remainder message mismatch');
+  assert(zeroRemainderBody.message === '订单没有可退商品金额', 'zero product remainder message mismatch');
   assert(
     !(await prisma.afterSaleCase.findFirst({ where: { order_id: zeroRemainderOrder.id } })),
     'zero remainder after-sale must not create a case',
@@ -419,12 +419,9 @@ async function main() {
       requested_delivery_refund_cents: 99,
     },
   }));
-  assert(
-    afterSale.requested_refund_cents === expectedFullRefundCents,
-    'user after-sale must derive the full remaining refundable amount on the server',
-  );
-  assert(afterSale.requested_product_refund_cents == null, 'user after-sale must ignore product split amount');
-  assert(afterSale.requested_delivery_refund_cents == null, 'user after-sale must ignore delivery split amount');
+  assert(afterSale.requested_refund_cents === 1, 'user after-sale must preserve the requested product amount');
+  assert(afterSale.requested_product_refund_cents === 1, 'user after-sale must preserve the product split amount');
+  assert(afterSale.requested_delivery_refund_cents === 0, 'user after-sale must ignore the client delivery split amount');
   assert(afterSale.status === 'submitted', 'after sale should submit');
   assertNotExposed(afterSale, 'after sale create');
   const afterSales = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: { 'x-user-id': customer.id } }));
