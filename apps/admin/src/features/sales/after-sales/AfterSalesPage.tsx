@@ -26,6 +26,10 @@ import {
   canExecuteApprovedRefund,
   useRefundExecution,
 } from "./useRefundExecution";
+import {
+  buildAfterSaleReviewInput,
+  canRefundDeliveryFee,
+} from "./refund-decision";
 
 export type AfterSalesPageProps = {
   refreshVersion: number;
@@ -76,11 +80,11 @@ export function AfterSalesPage(props: AfterSalesPageProps) {
     item: AfterSaleCase,
     status: "approved" | "rejected" | "reviewing",
   ) => {
-    const refundText =
+    const productRefundText =
       status === "approved"
         ? window.prompt(
-            "请输入审核通过退款金额（分，可留空）",
-            String(item.requested_refund_cents ?? 0),
+            "请输入审核通过的商品退款金额（分）",
+            String(item.requested_product_refund_cents ?? 0),
           )
         : null;
     const responsibility =
@@ -95,14 +99,28 @@ export function AfterSalesPage(props: AfterSalesPageProps) {
         "请输入售后审核备注",
         status === "rejected" ? "售后审核拒绝" : "售后审核处理",
       ) ?? "";
-    await reviewAfterSale(item.id, {
-      status,
-      approved_refund_cents:
-        refundText === null ? undefined : Number(refundText),
-      resolution_type: status === "approved" ? "partial_refund" : "reject",
-      responsibility,
-      admin_note: adminNote,
-    });
+    const deliveryEligible = canRefundDeliveryFee(item.type);
+    const refundDeliveryFee =
+      status === "approved" &&
+      deliveryEligible &&
+      window.confirm(
+        "该售后符合配送费退款条件。是否同时退还剩余配送费？默认选择“取消”不退配送费。",
+      );
+    const payload =
+      status === "approved"
+        ? buildAfterSaleReviewInput(item, {
+            product_refund_cents: Number(productRefundText),
+            refund_delivery_fee: refundDeliveryFee,
+            responsibility: responsibility ?? "unknown",
+            admin_note: adminNote,
+          })
+        : {
+            status,
+            resolution_type: "reject",
+            responsibility,
+            admin_note: adminNote,
+          };
+    await reviewAfterSale(item.id, payload);
     props.onMessage("售后审核已保存");
     props.onMutationCommitted();
   };

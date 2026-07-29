@@ -14,6 +14,7 @@ export type UserAfterSaleSubmission = {
   reason?: string;
   description?: string;
   evidence_image_urls?: string[];
+  requested_product_refund_cents?: number;
 };
 
 const orderInclude = {
@@ -30,6 +31,8 @@ const USER_AFTER_SALE_BAD_REQUEST_MESSAGES = new Set([
   '申请退款金额必须大于 0',
   '申请商品退款金额必须大于 0',
   '申请配送费退款金额必须大于 0',
+  '申请配送费退款金额必须为非负整数分',
+  '配送费是否退还由商家审核决定',
   '申请商品退款金额与配送费退款金额之和必须等于总退款金额',
   '商品退款金额与配送费退款金额之和必须等于总退款金额',
   '商品退款金额超过商品可退金额',
@@ -245,6 +248,15 @@ function listItem(order: any) {
       0,
       order.pay_amount_cents - order.refund_amount_cents,
     ),
+    remaining_product_refundable_amount_cents: Math.max(
+      0,
+      (order.product_amount_cents ?? order.total_amount_cents) -
+        order.product_refund_amount_cents,
+    ),
+    remaining_delivery_refundable_amount_cents: Math.max(
+      0,
+      (order.delivery_fee_cents ?? 0) - order.delivery_refund_amount_cents,
+    ),
     pay_status: order.pay_status,
     order_status: order.order_status,
     user_status_text: toUserOrderStatus(order),
@@ -440,10 +452,17 @@ export async function createUserOrderAfterSale(
   orderId: string,
   body: UserAfterSaleSubmission,
 ) {
-  await ownedOrder(userId, orderId);
+  const order = await ownedOrder(userId, orderId);
   if (!body.type || !body.reason) {
     throw publicCurrentUserError('缺少售后必填字段', 400);
   }
+  const requestedProductRefundCents =
+    body.requested_product_refund_cents ??
+    Math.max(
+      0,
+      (order.product_amount_cents ?? order.total_amount_cents) -
+        order.product_refund_amount_cents,
+    );
   try {
     const afterSaleCase = await createAfterSaleCase({
       order_id: orderId,
@@ -452,7 +471,9 @@ export async function createUserOrderAfterSale(
       reason: body.reason,
       description: body.description ?? null,
       evidence_image_urls: body.evidence_image_urls ?? null,
-      requested_refund_mode: 'full_remaining',
+      requested_refund_cents: requestedProductRefundCents,
+      requested_product_refund_cents: requestedProductRefundCents,
+      requested_delivery_refund_cents: 0,
     });
     return mapAfterSale(afterSaleCase);
   } catch (error) {

@@ -2,8 +2,13 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../db.js';
 import { safeRecordBusinessEvent, safeRecordOrderTimeline } from '../../services/logging-service.js';
 import { recordBatchLoss } from '../inventory/inventory-service.js';
+import {
+  AFTER_SALE_TYPES,
+  assertAfterSaleRefundDecision,
+  type AfterSaleType,
+} from './after-sale-refund-policy.js';
 
-const afterSaleTypes = ['bad_quality', 'short_weight', 'missing_item', 'wrong_item', 'damaged', 'not_fresh', 'other'] as const;
+const afterSaleTypes = AFTER_SALE_TYPES;
 const activeStatuses = ['submitted', 'reviewing', 'approved', 'processing'] as const;
 const cancellableStatuses = ['submitted', 'reviewing'] as const;
 const reviewStatuses = ['reviewing', 'approved', 'rejected'] as const;
@@ -11,7 +16,6 @@ const resolutionTypes = ['refund', 'partial_refund', 'resend', 'compensation_not
 const responsibilities = ['supplier', 'platform', 'leader', 'customer', 'unknown'] as const;
 
 type Actor = { actor_type: 'user' | 'admin' | 'system'; actor_id?: string | null };
-type AfterSaleType = typeof afterSaleTypes[number];
 type ResolutionType = typeof resolutionTypes[number];
 type Responsibility = typeof responsibilities[number];
 
@@ -88,6 +92,12 @@ function isOneOf<T extends readonly string[]>(value: string, values: T): value i
 function ensurePositiveInteger(value: unknown, message: string) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(message);
+  return parsed;
+}
+
+function ensureNonNegativeInteger(value: unknown, message: string) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(message);
   return parsed;
 }
 
@@ -189,7 +199,7 @@ export async function createAfterSaleCase(input: CreateAfterSaleInput) {
   if (!input.order_id || !input.reason) throw new Error('缺少售后必填字段');
   const explicitRequestedRefundCents = input.requested_refund_cents == null ? null : ensurePositiveInteger(input.requested_refund_cents, '申请退款金额必须大于 0');
   const requestedProductRefundCents = input.requested_product_refund_cents == null ? null : ensurePositiveInteger(input.requested_product_refund_cents, '申请商品退款金额必须大于 0');
-  const requestedDeliveryRefundCents = input.requested_delivery_refund_cents == null ? null : ensurePositiveInteger(input.requested_delivery_refund_cents, '申请配送费退款金额必须大于 0');
+  const requestedDeliveryRefundCents = input.requested_delivery_refund_cents == null ? null : ensureNonNegativeInteger(input.requested_delivery_refund_cents, '申请配送费退款金额必须为非负整数分');
   if ((requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0) > 0 && explicitRequestedRefundCents !== (requestedProductRefundCents ?? 0) + (requestedDeliveryRefundCents ?? 0)) throw new Error('申请商品退款金额与配送费退款金额之和必须等于总退款金额');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const order = await tx.order.findUnique({ where: { id: input.order_id }, include: { group_buy: true, product: true } });
@@ -202,6 +212,9 @@ export async function createAfterSaleCase(input: CreateAfterSaleInput) {
       throw new Error('订单没有可退金额');
     }
     ensureRefundSplitWithinOrder(order, requestedProductRefundCents, requestedDeliveryRefundCents, requestedRefundCents);
+    if ((requestedDeliveryRefundCents ?? 0) > 0) {
+      throw new Error('配送费是否退还由商家审核决定');
+    }
     if (input.user_id && input.user_id !== order.user_id) throw new Error('不能为无关订单提交售后');
     if (order.pay_status !== 'paid' || ['unpaid', 'closed', 'refunded'].includes(order.order_status)) throw new Error('当前订单状态不可提交售后');
     const productId = input.product_id ?? order.group_buy?.product_id ?? order.product_id ?? null;
@@ -253,14 +266,34 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
   const resolutionType = input.resolution_type ? ensureIn(input.resolution_type, resolutionTypes, '售后处理结果不合法') as ResolutionType : null;
   const responsibility = input.responsibility ? ensureIn(input.responsibility, responsibilities, '售后责任方不合法') as Responsibility : null;
   const approvedRefundCents = input.approved_refund_cents == null ? null : ensurePositiveInteger(input.approved_refund_cents, '审核退款金额必须大于 0');
-  const approvedProductRefundCents = input.approved_product_refund_cents == null ? null : ensurePositiveInteger(input.approved_product_refund_cents, '审核商品退款金额必须大于 0');
-  const approvedDeliveryRefundCents = input.approved_delivery_refund_cents == null ? null : ensurePositiveInteger(input.approved_delivery_refund_cents, '审核配送费退款金额必须大于 0');
+  const approvedProductRefundCents = input.approved_product_refund_cents == null ? null : ensureNonNegativeInteger(input.approved_product_refund_cents, '审核商品退款金额必须为非负整数分');
+  const approvedDeliveryRefundCents = input.approved_delivery_refund_cents == null ? null : ensureNonNegativeInteger(input.approved_delivery_refund_cents, '审核配送费退款金额必须为非负整数分');
   if ((approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0) > 0 && approvedRefundCents !== (approvedProductRefundCents ?? 0) + (approvedDeliveryRefundCents ?? 0)) throw new Error('审核商品退款金额与配送费退款金额之和必须等于总退款金额');
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const adminUserId = await requireExistingAdmin(tx, input.admin_user_id);
-    const current = await tx.afterSaleCase.findUnique({ where: { id } });
+    const current = await tx.afterSaleCase.findUnique({ where: { id }, include: { order: true } });
     if (!current) throw new Error('售后工单不存在');
     if (!['submitted', 'reviewing'].includes(current.status)) throw new Error('当前售后状态不可审核');
+    let refundDecision: ReturnType<typeof assertAfterSaleRefundDecision> | null = null;
+    if (status === 'approved') {
+      if (!input.admin_note?.trim()) throw new Error('售后审核原因必填');
+      refundDecision = assertAfterSaleRefundDecision({
+        type: current.type,
+        approved_refund_cents: approvedRefundCents ?? 0,
+        approved_product_refund_cents: approvedProductRefundCents ?? 0,
+        approved_delivery_refund_cents: approvedDeliveryRefundCents ?? 0,
+        product_remaining_cents: Math.max(
+          0,
+          (current.order.product_amount_cents ?? current.order.total_amount_cents) -
+            current.order.product_refund_amount_cents,
+        ),
+        delivery_remaining_cents: Math.max(
+          0,
+          current.order.delivery_fee_cents -
+            current.order.delivery_refund_amount_cents,
+        ),
+      });
+    }
     const updated = await mapAdminForeignKeyError(tx.afterSaleCase.update({
       where: { id },
       data: {
@@ -276,7 +309,11 @@ export async function reviewAfterSaleCase(id: string, input: ReviewAfterSaleInpu
       }
     }));
     const eventType = status === 'approved' ? 'after_sale_approved' : status === 'rejected' ? 'after_sale_rejected' : 'after_sale_reviewed';
-    await recordAfterSaleLog(tx, updated, eventType, { actor_type: 'admin', actor_id: adminUserId }, input.admin_note, { previous_status: current.status });
+    await recordAfterSaleLog(tx, updated, eventType, { actor_type: 'admin', actor_id: adminUserId }, input.admin_note, {
+      previous_status: current.status,
+      ...(refundDecision ?? {}),
+      delivery_refund_decision_reason: input.admin_note ?? null,
+    });
     return updated;
   });
 }
