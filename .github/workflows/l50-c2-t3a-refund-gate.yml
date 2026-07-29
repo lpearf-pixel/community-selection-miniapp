@@ -37,6 +37,7 @@ jobs:
       VITEST_MAX_THREADS: "2"
       VITEST_MIN_THREADS: "1"
       MOCK_WECHAT_PAY: "true"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:

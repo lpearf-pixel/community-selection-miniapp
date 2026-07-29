@@ -47,7 +47,7 @@ Page({
         const canApply = canApplyAfterSale(order);
         this.setData({
           remaining_refundable_amount_cents: cents,
-          refund_amount_yuan: formatOrderAmount(order.remaining_refundable_amount_cents),
+          refund_amount_yuan: formatOrderAmount(order.remaining_product_refundable_amount_cents),
           product_refund_amount_yuan: formatOrderAmount(cents),
           can_submit: canApply && cents > 0,
           error: !canApply ? '当前订单状态不可申请售后' : (cents <= 0 ? '该订单已无可退金额' : '')
@@ -58,7 +58,11 @@ Page({
   },
   onTypeChange(event) {
     const typeIndex = Number(event.detail.value || 0);
-    this.setData({ typeIndex, ...refundDefaultsForType(this.data.types[typeIndex].value) });
+    const defaults = refundDefaultsForType(this.data.types[typeIndex].value);
+    this.setData({
+      typeIndex: typeIndex,
+      delivery_refund_notice: defaults.delivery_refund_notice
+    });
   },
   onInput(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value }); },
   submit() {

@@ -36,6 +36,7 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=3072
       VITEST_MAX_THREADS: "2"
       VITEST_MIN_THREADS: "1"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
