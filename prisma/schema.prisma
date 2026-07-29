@@ -84,6 +84,13 @@ enum PickupType {
   delivery
 }
 
+enum DeliveryFulfillmentStatus {
+  pending_dispatch
+  delivering
+  delivered
+  exception
+}
+
 enum WithdrawalStatus {
   pending
   approved
@@ -257,6 +264,11 @@ model Order {
   delivery_fee_cents  Int          @default(0)
   delivery_time_window_code String?
   delivery_time_window_text String?
+  delivery_status     DeliveryFulfillmentStatus?
+  delivery_status_updated_at DateTime?
+  fulfillment_promise_snapshot Json?
+  promised_fulfillment_start_at DateTime?
+  promised_fulfillment_end_at DateTime?
   pay_amount_cents    Int
   quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)
@@ -292,6 +304,8 @@ model Order {
   @@index([user_id])
   @@index([group_buy_id])
   @@index([product_id])
+  @@index([delivery_status])
+  @@index([promised_fulfillment_start_at])
 }
 
 model Payment {

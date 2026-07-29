@@ -8,6 +8,8 @@ export type DeliveryTimeWindow = {
   day_offset?: number;
 };
 export type DeliveryRule = {
+  id?: string;
+  updated_at?: Date;
   enabled: boolean;
   delivery_mode: 'store_delivery';
   base_fee_cents: number;
@@ -105,7 +107,13 @@ export async function validateDeliveryRuleForOrder(input: { delivery_time_window
   const orderAmount = Number(input.order_amount_cents ?? 0);
   const delivery_fee_cents = rule.free_threshold_cents != null && orderAmount >= rule.free_threshold_cents ? 0 : rule.base_fee_cents;
   // 不计算距离，不请求用户定位，不调用第三方配送 API，不调用达达，不创建第三方配送单。
-  return { ok: true, delivery_fee_cents, delivery_time_window, error_message: undefined };
+  return {
+    ok: true,
+    delivery_fee_cents,
+    delivery_time_window,
+    delivery_rule: rule,
+    error_message: undefined,
+  };
 }
 
 export async function listDeliveryRuleConfigs(query?: { pickup_store_id?: string | null }) {

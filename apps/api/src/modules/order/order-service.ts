@@ -3,6 +3,7 @@ import { prisma } from '../../db.js';
 import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } from '../audit/audit-service.js';
 import { markCommissionPendingForCompletedOrder } from '../finance/finance-service.js';
 import { deliveryTimeWindowText, getDeliveryRule, validateDeliveryRuleForOrder } from '../delivery/delivery-rule-service.js';
+import { buildFulfillmentPromise } from '../fulfillment/fulfillment-promise.js';
 
 type CreateGroupOrderInput = {
   group_buy_id?: string;
@@ -103,6 +104,15 @@ function maskReceiverPhone(phone?: string | null) {
   return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
 }
 
+function fulfillmentPromiseRuleSource(rule: {
+  id?: string;
+  updated_at?: Date;
+}) {
+  return typeof rule.id === 'string' && rule.updated_at instanceof Date
+    ? { id: rule.id, updated_at: rule.updated_at }
+    : undefined;
+}
+
 function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number; delivery_time_window_text?: string; service_radius_text?: string }) {
   // L38: product_amount_cents 为商品金额，delivery_fee_cents 为配送费，pay_amount_cents 为应付金额；不接真实支付/退款。
   const product = order.product ?? order.group_buy?.product ?? null;
@@ -133,6 +143,11 @@ function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number;
     receiver_address_masked: order.receiver_address ? `${String(order.receiver_address).slice(0, 6)}***` : null,
     delivery_time_window_code: order.pickup_type === 'delivery' ? (order.delivery_time_window_code ?? null) : null,
     delivery_time_window_text: order.pickup_type === 'delivery' ? (order.delivery_time_window_text ?? deliveryMeta?.delivery_time_window_text ?? '以门店确认时段为准') : null,
+    delivery_status: order.delivery_status ?? null,
+    delivery_status_updated_at: order.delivery_status_updated_at ?? null,
+    fulfillment_promise_snapshot: order.fulfillment_promise_snapshot ?? null,
+    promised_fulfillment_start_at: order.promised_fulfillment_start_at ?? null,
+    promised_fulfillment_end_at: order.promised_fulfillment_end_at ?? null,
     service_radius_text: order.pickup_type === 'delivery' ? (deliveryMeta?.service_radius_text ?? null) : null,
     created_at: order.created_at,
     paid_at: order.paid_at,
@@ -200,6 +215,22 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
     const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
     const payAmountCentsBeforeCredit = productAmountCents + deliveryFeeCents;
     const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
+    const capturedAt = new Date();
+    const fulfillmentPromise =
+      pickupType === PickupType.delivery && deliveryValidation?.delivery_time_window
+        ? buildFulfillmentPromise({
+            kind: 'delivery',
+            capturedAt,
+            window: deliveryValidation.delivery_time_window,
+            sourceRule: fulfillmentPromiseRuleSource(
+              deliveryValidation.delivery_rule,
+            ),
+          })
+        : buildFulfillmentPromise({
+            kind: 'group_buy_pickup',
+            capturedAt,
+            pickupTime: groupBuy.pickup_time,
+          });
     const amount = productAmountCents;
     const creditAmount = Number(input.credit_amount_cents ?? 0);
     if (!Number.isInteger(creditAmount) || creditAmount < 0) throw orderRequestError('消费额度抵扣金额不合法');
@@ -227,6 +258,11 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
         delivery_fee_cents: deliveryFeeCents,
         delivery_time_window_code: pickupType === PickupType.delivery ? input.delivery_time_window_code : null,
         delivery_time_window_text: deliveryTimeWindowTextValue,
+        delivery_status:
+          pickupType === PickupType.delivery ? 'pending_dispatch' : null,
+        delivery_status_updated_at:
+          pickupType === PickupType.delivery ? capturedAt : null,
+        ...fulfillmentPromise,
         pay_amount_cents: payAmountCentsBeforeCredit - creditAmount,
         quantity: saleQuantity,
         credit_amount_cents: creditAmount,
@@ -287,6 +323,21 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
     const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
     const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
     const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
+    const capturedAt = new Date();
+    const fulfillmentPromise =
+      pickupType === PickupType.delivery && deliveryValidation?.delivery_time_window
+        ? buildFulfillmentPromise({
+            kind: 'delivery',
+            capturedAt,
+            window: deliveryValidation.delivery_time_window,
+            sourceRule: fulfillmentPromiseRuleSource(
+              deliveryValidation.delivery_rule,
+            ),
+          })
+        : buildFulfillmentPromise({
+            kind: 'normal_pickup',
+            capturedAt,
+          });
     const amount = productAmountCents;
     const order = await tx.order.create({
       data: {
@@ -300,6 +351,11 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
         delivery_fee_cents: deliveryFeeCents,
         delivery_time_window_code: pickupType === PickupType.delivery ? input.delivery_time_window_code : null,
         delivery_time_window_text: deliveryTimeWindowTextValue,
+        delivery_status:
+          pickupType === PickupType.delivery ? 'pending_dispatch' : null,
+        delivery_status_updated_at:
+          pickupType === PickupType.delivery ? capturedAt : null,
+        ...fulfillmentPromise,
         pay_amount_cents: productAmountCents + deliveryFeeCents,
         quantity: saleQuantity,
         pickup_type: pickupType,
