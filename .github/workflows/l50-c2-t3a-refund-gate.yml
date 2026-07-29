@@ -48,7 +48,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-          cache: pnpm
       - name: Select isolated PostgreSQL port
         run: |
           port=$((40000 + GITHUB_RUN_NUMBER % 10000))
