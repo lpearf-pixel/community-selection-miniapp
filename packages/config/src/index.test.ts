@@ -3,6 +3,11 @@ import { validateRuntimeConfig } from './index.js';
 
 const validProductionEnv: NodeJS.ProcessEnv = {
   NODE_ENV: 'production',
+  FIRST_LAUNCH_MODE: 'true',
+  MEMBERSHIP_ENABLED: 'false',
+  COUPONS_ENABLED: 'false',
+  CASH_REWARDS_ENABLED: 'false',
+  WITHDRAWALS_ENABLED: 'false',
   PORT: '13080',
   DATABASE_URL:
     'postgresql://community_selection:strong_database_password@postgres:5432/community_selection?schema=public',
@@ -40,6 +45,39 @@ const validProductionEnv: NodeJS.ProcessEnv = {
 describe('production runtime configuration', () => {
   it('accepts the complete real-payment single-server contract', () => {
     expect(() => validateRuntimeConfig(validProductionEnv)).not.toThrow();
+  });
+
+  it('requires the explicit first-launch operating mode in production', () => {
+    for (const value of [undefined, 'false']) {
+      expect(() =>
+        validateRuntimeConfig({
+          ...validProductionEnv,
+          FIRST_LAUNCH_MODE: value,
+        }),
+      ).toThrow(/FIRST_LAUNCH_MODE/);
+    }
+  });
+
+  it.each([
+    ['MEMBERSHIP_ENABLED', 'true'],
+    ['COUPONS_ENABLED', 'true'],
+    ['CASH_REWARDS_ENABLED', 'true'],
+    ['WITHDRAWALS_ENABLED', 'true'],
+  ])('rejects first-launch capability %s=%s', (key, value) => {
+    expect(() =>
+      validateRuntimeConfig({ ...validProductionEnv, [key]: value }),
+    ).toThrow(new RegExp(key));
+  });
+
+  it.each([
+    'MEMBERSHIP_ENABLED',
+    'COUPONS_ENABLED',
+    'CASH_REWARDS_ENABLED',
+    'WITHDRAWALS_ENABLED',
+  ])('fails closed when %s is missing', (key) => {
+    const env = { ...validProductionEnv };
+    delete env[key];
+    expect(() => validateRuntimeConfig(env)).toThrow(new RegExp(key));
   });
 
   it.each([
