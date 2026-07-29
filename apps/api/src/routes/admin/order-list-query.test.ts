@@ -41,6 +41,13 @@ const orderFixture = {
   },
   pickup_store: null,
   community: null,
+  wechat_shipping_intent: {
+    status: 'retryable' as const,
+    attempt_count: 2,
+    last_error_code: 'WECHAT_SHIPPING_HTTP_503',
+    next_retry_at: new Date('2026-07-29T12:02:00.000Z'),
+    succeeded_at: null,
+  },
 };
 
 describe('Admin order list query', () => {
@@ -167,8 +174,15 @@ describe('Admin order list query', () => {
       receiver_phone_masked: '138****8000',
       receiver_address_masked: '南京市玄武区***',
       version: 1,
+      shipping_sync: {
+        status: 'retryable',
+        attempts: 2,
+        last_error_code: 'WECHAT_SHIPPING_HTTP_503',
+      },
     });
     expect(item).not.toHaveProperty('receiver_phone');
     expect(item).not.toHaveProperty('receiver_address');
+    expect(item.shipping_sync).not.toHaveProperty('transaction_id');
+    expect(item.shipping_sync).not.toHaveProperty('openid');
   });
 });

@@ -6,6 +6,7 @@ import type {
   AdminOrderStatusResult,
   AdminPickupVerificationResult,
   AiContext,
+  WechatShippingSyncSummary,
 } from './types';
 
 function buildAdminOrderListSearch(query: AdminOrderListQuery): string {
@@ -78,6 +79,19 @@ export function verifyOrderPickup(
         idempotency_key: idempotencyKey,
         admin_remark: adminRemark,
       }),
+    },
+  );
+}
+
+export function retryWechatShipping(
+  orderId: string,
+  request: JsonRequester = adminJsonRequest,
+): Promise<WechatShippingSyncSummary> {
+  return request<WechatShippingSyncSummary>(
+    `/api/admin/orders/${orderId}/wechat-shipping-retry`,
+    {
+      method: 'POST',
+      body: '{}',
     },
   );
 }

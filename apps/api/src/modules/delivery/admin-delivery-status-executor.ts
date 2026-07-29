@@ -23,6 +23,10 @@ import {
   allowedNextDeliveryStatuses,
   validateDeliveryTransition,
 } from './delivery-state-machine.js';
+import {
+  createWechatShippingIntent,
+  resolveDeliveryShippingIntent,
+} from '../wechat-shipping/wechat-shipping-intent.js';
 
 const OPERATION = 'admin.delivery.status.update.v1';
 const closedOrderStatuses = new Set<OrderStatus>([
@@ -287,6 +291,16 @@ export async function executeAdminDeliveryStatusCommand(input: {
       const after = await tx.order.findUniqueOrThrow({
         where: { id: input.order_id },
       });
+      const shippingIntent = resolveDeliveryShippingIntent(
+        before.delivery_status!,
+        after.delivery_status!,
+      );
+      if (shippingIntent) {
+        await createWechatShippingIntent(tx, {
+          orderId: input.order_id,
+          intent: shippingIntent,
+        });
+      }
       await recordBusinessEvent(tx, {
         event_type: 'delivery_status_updated',
         event_source: 'admin-delivery-status-command',

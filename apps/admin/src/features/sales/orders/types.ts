@@ -27,6 +27,20 @@ export type AdminOrderRefundStatus =
   | 'failed'
   | 'rejected';
 
+export type WechatShippingSyncSummary = {
+  status:
+    | 'not_applicable'
+    | 'pending'
+    | 'processing'
+    | 'retryable'
+    | 'succeeded'
+    | 'manual_required';
+  attempts: number;
+  last_error_code: string | null;
+  next_retry_at: string | null;
+  succeeded_at: string | null;
+};
+
 export type AdminOrderListQuery = {
   keyword?: string;
   order_type?: 'normal' | 'group_buy';
@@ -80,6 +94,7 @@ export type AdminOrderListItem = {
   receiver_name: string;
   receiver_phone_masked: string | null;
   receiver_address_masked: string | null;
+  shipping_sync: WechatShippingSyncSummary;
   created_at: string;
   paid_at: string | null;
 };
@@ -131,6 +146,7 @@ export type AiContext = {
     message?: string | null;
   }>;
   alerts: OpsAlert[];
+  shipping_sync: WechatShippingSyncSummary;
   credit_usage?: {
     used_credit: boolean;
     amount_cents: number;

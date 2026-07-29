@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { fail, ok } from '@community-selection/shared';
 import { prisma } from '../db.js';
 import { resolveOpsAlert, sanitizePayload } from '../services/logging-service.js';
+import { toAdminWechatShippingSummary } from '../modules/wechat-shipping/admin-wechat-shipping-retry.js';
 
 type BusinessEventQuery = {
   order_id?: string;
@@ -142,7 +143,7 @@ export function registerLogRoutes(app: FastifyInstance) {
       reply.code(404);
       return fail('订单不存在');
     }
-    const [timeline, businessEvents, alerts, creditLedgers, rewardConversion] = await Promise.all([
+    const [timeline, businessEvents, alerts, creditLedgers, rewardConversion, shippingIntent] = await Promise.all([
       prisma.orderTimelineLog.findMany({ where: { order_id }, orderBy: { created_at: 'asc' } }),
       prisma.businessEventLog.findMany({ where: { order_id }, orderBy: { created_at: 'asc' } }),
       prisma.opsAlertLog.findMany({ where: { order_id }, orderBy: { created_at: 'desc' } }),
@@ -152,7 +153,8 @@ export function registerLogRoutes(app: FastifyInstance) {
       }),
       order.credit_source_type === 'reward_conversion' && order.credit_source_id
         ? prisma.rewardConversion.findUnique({ where: { id: order.credit_source_id } })
-        : null
+        : null,
+      prisma.wechatShippingIntent.findUnique({ where: { order_id } })
     ]);
     const taxRecord = rewardConversion?.tax_record_id ? await prisma.taxRecord.findUnique({ where: { id: rewardConversion.tax_record_id } }) : null;
     const creditUsage = {
@@ -172,6 +174,7 @@ export function registerLogRoutes(app: FastifyInstance) {
       business_events: businessEvents,
       alerts,
       credit_usage: sanitizePayload(creditUsage),
+      shipping_sync: toAdminWechatShippingSummary(shippingIntent),
       suggested_focus: focusFrom(businessEvents, alerts, order.commissions, creditUsage)
     });
   });

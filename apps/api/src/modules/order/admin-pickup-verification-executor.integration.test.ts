@@ -99,6 +99,9 @@ async function sideEffectCounts() {
 
 async function resetOrder() {
   await prisma.$transaction([
+    prisma.wechatShippingIntent.deleteMany({
+      where: { order_id: orderId },
+    }),
     prisma.adminCommandReceipt.deleteMany({
       where: { admin_user_id: ids.admin },
     }),
@@ -182,6 +185,9 @@ beforeEach(resetOrder);
 
 afterAll(async () => {
   if (orderId) {
+    await prisma.wechatShippingIntent.deleteMany({
+      where: { order_id: orderId },
+    });
     await prisma.adminCommandReceipt.deleteMany({
       where: { admin_user_id: ids.admin },
     });
@@ -237,6 +243,16 @@ describe.sequential('Admin pickup verification executor on PostgreSQL', () => {
       response_http_status: 200,
       response_code: 'ADMIN_PICKUP_VERIFIED',
       completed_at: expect.any(Date),
+    });
+    await expect(
+      prisma.wechatShippingIntent.findUnique({
+        where: { order_id: orderId },
+      }),
+    ).resolves.toMatchObject({
+      trigger: 'pickup_verified',
+      logistics_type: 4,
+      status: 'pending',
+      attempt_count: 0,
     });
   });
 
@@ -344,6 +360,9 @@ describe.sequential('Admin pickup verification executor on PostgreSQL', () => {
       audits: 1,
       receipts: 1,
     });
+    await expect(
+      prisma.wechatShippingIntent.count({ where: { order_id: orderId } }),
+    ).resolves.toBe(1);
   });
 
   it('coalesces same-key concurrency and replays without duplicates', async () => {
@@ -471,5 +490,8 @@ describe.sequential('Admin pickup verification executor on PostgreSQL', () => {
       audits: 0,
       receipts: 0,
     });
+    await expect(
+      prisma.wechatShippingIntent.count({ where: { order_id: orderId } }),
+    ).resolves.toBe(0);
   });
 });

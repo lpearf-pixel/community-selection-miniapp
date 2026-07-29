@@ -9,6 +9,12 @@ on:
       - apps/api/src/modules/refund/**
       - apps/api/src/services/refund-service.ts
       - apps/api/src/modules/after-sale/after-sale-service.ts
+      - apps/api/src/modules/delivery/**
+      - apps/api/src/modules/wechat-shipping/**
+      - apps/api/src/modules/wechat/wechat-access-token-client.ts
+      - apps/api/src/modules/wechat/wechat-access-token-client.test.ts
+      - apps/api/src/services/wechat-shipping-jobs.ts
+      - apps/api/src/services/wechat-shipping-jobs.test.ts
       - apps/api/src/routes/after-sales.ts
       - apps/api/src/routes/refunds.ts
       - apps/api/src/routes/admin-refund-route.integration.test.ts
@@ -76,6 +82,10 @@ jobs:
             src/modules/refund/wechat-refund-notification.test.ts \
             src/routes/refunds.test.ts \
             src/modules/after-sale/after-sale-service.test.ts
+          pnpm --filter @community-selection/api test -- \
+            src/modules/wechat/wechat-access-token-client.test.ts \
+            src/modules/wechat-shipping \
+            src/services/wechat-shipping-jobs.test.ts
           pnpm --filter @community-selection/admin test -- \
             src/features/sales/after-sales
       - name: Start isolated PostgreSQL
@@ -92,7 +102,9 @@ jobs:
           pnpm --filter @community-selection/api test -- \
             src/modules/refund/admin-refund-executor.integration.test.ts \
             src/routes/admin-refund-route.test.ts \
-            src/modules/order/admin-pickup-verification-executor.integration.test.ts
+            src/modules/order/admin-pickup-verification-executor.integration.test.ts \
+            src/modules/delivery/admin-delivery-status-executor.integration.test.ts \
+            src/modules/wechat-shipping/admin-wechat-shipping-retry.integration.test.ts
       - name: Verify API types
         run: |
           pnpm --filter @community-selection/api typecheck

@@ -39,6 +39,11 @@ import {
   AdminPickupVerificationError,
   executeAdminPickupVerificationCommand,
 } from '../../modules/order/admin-pickup-verification-executor.js';
+import {
+  AdminWechatShippingRetryError,
+  executeAdminWechatShippingRetry,
+  toAdminWechatShippingSummary,
+} from '../../modules/wechat-shipping/admin-wechat-shipping-retry.js';
 
 function maskPhone(phone?: string | null) {
   return phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : null;
@@ -152,6 +157,84 @@ function adminPickupVerificationV1ErrorHandler(
 }
 
 export function registerAdminOrderRoutes(app: FastifyInstance) {
+  app.post(
+    '/api/admin/orders/:id/wechat-shipping-retry',
+    {
+      config: { adminContractV1: true },
+      preHandler: requireAdminPermissionV1('order.manage'),
+    },
+    async (request, reply) => {
+      const traceId = String(request.id);
+      const context = resolveAdminAccessContext(request);
+      if (!context) {
+        reply.code(401);
+        return contractFail({
+          code: 'ADMIN_UNAUTHORIZED',
+          message: '管理员身份无效',
+          traceId,
+        });
+      }
+      const body = request.body;
+      if (
+        body !== undefined &&
+        (body === null ||
+          typeof body !== 'object' ||
+          Array.isArray(body) ||
+          Object.keys(body as Record<string, unknown>).length > 0)
+      ) {
+        reply.code(400);
+        return contractFail({
+          code: 'INVALID_ADMIN_WECHAT_SHIPPING_RETRY_COMMAND',
+          message: '微信发货同步重试命令不合法',
+          traceId,
+        });
+      }
+      const { id } = request.params as { id: string };
+      try {
+        const result = await executeAdminWechatShippingRetry({
+          orderId: id,
+          context,
+          adminMeta: {
+            ipAddress: request.ip,
+            userAgent:
+              typeof request.headers['user-agent'] === 'string'
+                ? request.headers['user-agent']
+                : null,
+          },
+        });
+        return contractOk(result, {
+          code: 'ADMIN_WECHAT_SHIPPING_RETRY_QUEUED',
+          message: '已重新加入微信发货同步队列',
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AdminWechatShippingRetryError) {
+          reply.code(error.statusCode);
+          return contractFail({
+            code: error.code,
+            message: error.message,
+            traceId,
+          });
+        }
+        request.log.error(
+          {
+            error_name:
+              error instanceof Error ? error.name : 'UnknownError',
+            order_id: id,
+            trace_id: traceId,
+          },
+          'Admin WeChat shipping retry failed',
+        );
+        reply.code(500);
+        return contractFail({
+          code: 'ADMIN_WECHAT_SHIPPING_RETRY_FAILED',
+          message: '微信发货同步重试失败',
+          traceId,
+        });
+      }
+    },
+  );
+
   app.post(
     '/api/admin/orders/:id/pickup-verify',
     {
@@ -371,6 +454,7 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
               group_buy: { include: { product: true, community: true } },
               pickup_store: true,
               community: true,
+              wechat_shipping_intent: true,
             },
             orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
             skip: (parsed.value.page - 1) * parsed.value.page_size,
@@ -434,6 +518,7 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
             orderBy: { created_at: 'desc' },
           },
           payments: { orderBy: { created_at: 'asc' } },
+          wechat_shipping_intent: true,
         },
       });
       if (!order) {
@@ -482,6 +567,9 @@ export function registerAdminOrderRoutes(app: FastifyInstance) {
         refund_status: order.refund_status,
         pickup_type: order.pickup_type,
         delivery_method: order.pickup_type,
+        shipping_sync: toAdminWechatShippingSummary(
+          order.wechat_shipping_intent,
+        ),
         delivery_time_window_code: order.delivery_time_window_code,
         delivery_time_window_text: order.delivery_time_window_text,
         pickup_store: order.pickup_store

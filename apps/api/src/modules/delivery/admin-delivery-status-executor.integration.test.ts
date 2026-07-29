@@ -172,6 +172,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await prisma.$transaction([
+    prisma.wechatShippingIntent.deleteMany({
+      where: { order_id: deliveryOrderId },
+    }),
     prisma.adminCommandReceipt.deleteMany({
       where: {
         admin_user_id: {
@@ -201,6 +204,9 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await prisma.wechatShippingIntent.deleteMany({
+    where: { order_id: deliveryOrderId },
+  });
   await prisma.adminCommandReceipt.deleteMany({
     where: {
       admin_user_id: { in: [ids.admin, `missing-${ids.admin}`] },
@@ -260,6 +266,16 @@ describe.sequential('L53-B admin delivery status executor on PostgreSQL', () => 
     expect(after.promised_fulfillment_start_at).toEqual(
       before.promised_fulfillment_start_at,
     );
+    await expect(
+      prisma.wechatShippingIntent.findUnique({
+        where: { order_id: deliveryOrderId },
+      }),
+    ).resolves.toMatchObject({
+      trigger: 'delivery_started',
+      logistics_type: 2,
+      status: 'pending',
+      attempt_count: 0,
+    });
     await expect(sideEffectCounts()).resolves.toEqual({
       events: 2,
       audits: 2,
@@ -281,6 +297,11 @@ describe.sequential('L53-B admin delivery status executor on PostgreSQL', () => 
     await expect(
       prisma.adminCommandReceipt.count({
         where: { admin_user_id: ids.admin },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.wechatShippingIntent.count({
+        where: { order_id: deliveryOrderId },
       }),
     ).resolves.toBe(1);
   });
@@ -384,6 +405,11 @@ describe.sequential('L53-B admin delivery status executor on PostgreSQL', () => 
     await expect(
       prisma.adminCommandReceipt.count({
         where: { admin_user_id: `missing-${ids.admin}` },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.wechatShippingIntent.count({
+        where: { order_id: deliveryOrderId },
       }),
     ).resolves.toBe(0);
   });

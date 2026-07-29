@@ -1,12 +1,19 @@
 import { Card, Table, Typography } from 'antd';
 import { formatYuan } from '@community-selection/shared';
 import type { AiContext } from './types';
+import { WechatShippingSyncCard } from './WechatShippingSyncCard';
 
 export type OrderDetailsCardProps = {
   context: AiContext;
+  retryingShipping: boolean;
+  onRetryShipping: () => void;
 };
 
-export function OrderDetailsCard({ context }: OrderDetailsCardProps) {
+export function OrderDetailsCard({
+  context,
+  retryingShipping,
+  onRetryShipping,
+}: OrderDetailsCardProps) {
   return (
     <Card title="订单全链路详情">
       <Typography.Title level={4}>订单基础信息</Typography.Title>
@@ -16,6 +23,11 @@ export function OrderDetailsCard({ context }: OrderDetailsCardProps) {
         {context.order.pay_status}；实付：¥
         {formatYuan(context.order.pay_amount_cents)}
       </Typography.Paragraph>
+      <WechatShippingSyncCard
+        summary={context.shipping_sync}
+        retrying={retryingShipping}
+        onRetry={onRetryShipping}
+      />
       <Typography.Paragraph>
         消费额度抵扣：¥
         {formatYuan(context.credit_usage?.amount_cents ?? 0)}

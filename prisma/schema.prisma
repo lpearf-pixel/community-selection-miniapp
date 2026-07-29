@@ -91,6 +91,19 @@ enum DeliveryFulfillmentStatus {
   exception
 }
 
+enum WechatShippingIntentStatus {
+  pending
+  processing
+  retryable
+  succeeded
+  manual_required
+}
+
+enum WechatShippingTrigger {
+  delivery_started
+  pickup_verified
+}
+
 enum WithdrawalStatus {
   pending
   approved
@@ -300,12 +313,30 @@ model Order {
   refunds             Refund[]
   commissions         Commission[]
   after_sale_cases    AfterSaleCase[]
+  wechat_shipping_intent WechatShippingIntent?
 
   @@index([user_id])
   @@index([group_buy_id])
   @@index([product_id])
   @@index([delivery_status])
   @@index([promised_fulfillment_start_at])
+}
+
+model WechatShippingIntent {
+  id                String                     @id @default(cuid())
+  order_id          String                     @unique
+  trigger           WechatShippingTrigger
+  logistics_type    Int
+  status            WechatShippingIntentStatus @default(pending)
+  attempt_count     Int                        @default(0)
+  last_error_code   String?
+  next_retry_at     DateTime?
+  succeeded_at      DateTime?
+  created_at        DateTime                   @default(now())
+  updated_at        DateTime                   @updatedAt
+  order             Order                      @relation(fields: [order_id], references: [id])
+
+  @@index([status, next_retry_at, created_at])
 }
 
 model Payment {

@@ -4,6 +4,7 @@ import {
   getPickingExportUrl,
   loadOrderAiContext,
   loadOrders,
+  retryWechatShipping,
   updateOrderStatus,
   verifyOrderPickup,
 } from './api';
@@ -76,6 +77,7 @@ describe('orders API boundary', () => {
       '后台核销自提',
       request,
     );
+    await retryWechatShipping('o1', request);
 
     expect(request).toHaveBeenCalledWith('/api/admin/logs/orders/o1/ai-context', {
       signal: undefined,
@@ -96,6 +98,13 @@ describe('orders API boundary', () => {
         admin_remark: '后台核销自提',
       }),
     });
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/orders/o1/wechat-shipping-retry',
+      {
+        method: 'POST',
+        body: '{}',
+      },
+    );
     expect(getPickingExportUrl('detail')).toMatch(
       /\/api\/admin\/orders\/export\/picking\.csv\?format=detail$/,
     );
