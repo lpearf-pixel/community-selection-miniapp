@@ -76,6 +76,7 @@ const files = [
   'apps/api/src/modules/order/admin-pickup-verification-executor.ts',
   'apps/api/src/routes/admin/delivery.ts',
   'apps/api/src/modules/delivery/delivery-service.ts',
+  'apps/api/src/modules/delivery/admin-delivery-status-executor.ts',
   'apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx',
   'apps/admin/src/pages/delivery/DeliveryReservationPage.tsx',
   'scripts/verify-l34-admin-data-scope-baseline-local.ts',
@@ -105,7 +106,10 @@ const pickupVerification = read('apps/api/src/routes/admin/orders.ts')
 includesAll(pickupVerification, ["requireAdminPermissionV1('pickup.verify')",'resolveAdminAccessContext','canAccessOrderDataScope','assertOrderScope','ADMIN_FORBIDDEN','replayReceipt'], 'pickup verification command');
 
 const delivery = read('apps/api/src/routes/admin/delivery.ts') + read('apps/api/src/modules/delivery/delivery-service.ts');
-includesAll(delivery, ['requireAdminPermission','scope 检查','pickup_store_id 过滤','community_id 过滤','detail scope 检查','reserve scope 检查','status scope 检查'], 'delivery route/service');
+includesAll(delivery, ['requireAdminPermission','scope 检查','pickup_store_id 过滤','community_id 过滤','detail scope 检查','reserve scope 检查'], 'delivery route/service');
+const deliveryStatusCommand = read('apps/api/src/routes/admin/delivery.ts')
+  + read('apps/api/src/modules/delivery/admin-delivery-status-executor.ts');
+includesAll(deliveryStatusCommand, ['requireAdminPermissionV1','resolveAdminAccessContext','executeAdminDeliveryStatusCommand','canAccessOrderDataScope','assertScope','ADMIN_DELIVERY_SCOPE_FORBIDDEN','replayReceipt'], 'delivery status command');
 
 const frontend = read('apps/admin/src/pages/pickup/PickupWorkbenchPage.tsx') + read('apps/admin/src/pages/delivery/DeliveryReservationPage.tsx') + read('apps/admin/src/access/adminAccess.ts');
 includesAll(frontend, ['当前数据范围','未配置自提点/社区范围','ADMIN_PICKUP_STORE_ID','ADMIN_COMMUNITY_ID','x-admin-pickup-store-id','x-admin-community-id'], 'frontend');
