@@ -261,3 +261,26 @@ Expected: release gate and whitespace check exit 0.
 - [ ] **Step 4: Record the next boundary**
 
 L53-A completion only establishes production configuration guardrails. API endpoint denial and miniapp entry hiding must be implemented in the next L53-A plan after the exact server navigation and authorization files are inspected from a complete source workspace.
+
+
+---
+
+### Task 4: Close reward and withdrawal API/UI surfaces
+
+**Files:**
+- Add: `apps/api/src/modules/first-launch/first-launch-capability-guard.ts`
+- Add: `apps/api/src/modules/first-launch/first-launch-capability-guard.test.ts`
+- Modify: `apps/api/src/app.ts`
+- Modify: `apps/miniapp/config.js`
+- Modify: `apps/miniapp/pages/leader/center/index.js`
+- Modify: `apps/miniapp/pages/leader/center/index.wxml`
+- Modify: `apps/miniapp/pages/mine/index.wxml`
+- Add: `apps/miniapp/utils/first-launch.test.cjs`
+
+- [x] Return the stable V1 `503 CAPABILITY_DISABLED` envelope for leader and admin reward/withdrawal route families while `FIRST_LAUNCH_MODE=true`.
+- [x] Stop disabled routes before reward or withdrawal database operations.
+- [x] Keep health, normal purchase, and group-buy order routes outside the disabled route families.
+- [x] Hide reward balances, withdrawal actions, and withdrawal history in the miniapp while retaining the group-buy overview.
+- [x] Keep historical route and page implementations recoverable when first-launch mode is inactive.
+- [x] Verify red-green behavior, miniapp theme contracts, lint, and workspace typecheck.
+- [ ] Verify the complete PostgreSQL, production image, migration, build, and release gates on the Community Runner.
