@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Form, Input, Select, Space, Table, Typography } from "antd";
 import { getAdminScopeSummary } from "../../access/adminAccess";
-import { getAdminDeliveryRulesByStore, getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryRule, type DeliveryStatus } from "../../api/delivery";
+import { getAdminDeliveryRulesByStore, getDeliveryOrders, getDeliveryProviders, reserveDeliveryOrder, updateDeliveryOrderStatus, type DeliveryProviderItem, type DeliveryReservation, type DeliveryRule, type PersistedDeliveryStatus } from "../../api/delivery";
+import { buildDeliveryStatusCommandInput } from "./delivery-command";
 
 function formatYuan(cents?: number | null) { return ((cents ?? 0) / 100).toFixed(2); }
-const statusOptions: Exclude<DeliveryStatus, "none">[] = ["pending_dispatch", "assigned", "delivering", "delivered", "delivery_failed", "canceled"];
+const statusLabels: Record<PersistedDeliveryStatus, string> = { pending_dispatch: "待配送", delivering: "配送中", delivered: "已送达", exception: "配送异常" };
 
 export function DeliveryReservationPage() {
   const [providers, setProviders] = useState<DeliveryProviderItem[]>([]);
@@ -42,9 +43,15 @@ export function DeliveryReservationPage() {
     await load();
   }
   async function updateStatus(row: DeliveryReservation) {
-    const delivery_status = window.prompt(`delivery_status: ${statusOptions.join(" / ")}`, row.delivery_status === "none" ? "pending_dispatch" : row.delivery_status) as Exclude<DeliveryStatus, "none"> | null;
+    if (!row.allowed_next_statuses.length) {
+      setErrorMessage("当前配送状态已结束，不能继续变更");
+      return;
+    }
+    const delivery_status = window.prompt(`下一状态: ${row.allowed_next_statuses.map((status) => `${status}(${statusLabels[status]})`).join(" / ")}`, row.allowed_next_statuses[0]) as PersistedDeliveryStatus | null;
     if (!delivery_status) return;
-    await updateDeliveryOrderStatus(row.order_id, { delivery_status, remark: "后台手工更新配送状态" });
+    const remark = delivery_status === "exception" ? (window.prompt("请输入配送异常原因") || "") : "后台手工更新配送状态";
+    const command = buildDeliveryStatusCommandInput(row, delivery_status, remark || undefined);
+    await updateDeliveryOrderStatus(row.order_id, command);
     setSuccessMessage("配送状态已更新");
     await load();
   }
@@ -72,7 +79,7 @@ export function DeliveryReservationPage() {
         { title: "订单号", dataIndex: "order_no" }, { title: "pickup_type", dataIndex: "pickup_type", render: (_: unknown, row: DeliveryReservation) => row.delivery_mode === "store_delivery" ? "门店配送" : "到店自提" }, { title: "收货人", dataIndex: "receiver_name" }, { title: "receiver_phone_masked", dataIndex: "receiver_phone_masked" },
         { title: "自提点", dataIndex: "pickup_store_name" }, { title: "sender_address / 自提点地址", dataIndex: "sender_address" }, { title: "receiver_address_masked", dataIndex: "receiver_address_masked" },
         { title: "商品金额", dataIndex: "product_amount_cents", render: (v: number) => `¥${formatYuan(v)}` }, { title: "配送费", dataIndex: "delivery_fee_cents", render: (v: number) => `¥${formatYuan(v)}` }, { title: "应付金额", dataIndex: "pay_amount_cents", render: (v: number) => `¥${formatYuan(v)}` }, { title: "配送时段", dataIndex: "delivery_time_window_text" },
-        { title: "delivery_status", dataIndex: "delivery_status" }, { title: "provider", dataIndex: "provider" },
+        { title: "配送状态", dataIndex: "delivery_status", render: (value: PersistedDeliveryStatus | "none") => value === "none" ? "不适用" : statusLabels[value] }, { title: "承诺时段", render: (_: unknown, row: DeliveryReservation) => (row.fulfillment_promise_snapshot as { display_text?: string } | null)?.display_text ?? "历史订单未保存承诺时段" }, { title: "provider", dataIndex: "provider" },
         { title: "操作", render: (_: unknown, row: DeliveryReservation) => <Space><Button disabled={!row.can_create_delivery} onClick={() => reserve(row)}>预留配送</Button><Button onClick={() => updateStatus(row)}>更新状态</Button></Space> }
       ]} />
     </Card>

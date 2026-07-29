@@ -115,12 +115,83 @@ function fulfillmentText(order: any) {
   return order.pickup_type === 'delivery' ? '门店配送' : '到店自提';
 }
 
+const deliveryStatusLabels: Record<string, string> = {
+  pending_dispatch: '待配送',
+  delivering: '配送中',
+  delivered: '已送达',
+  exception: '配送异常',
+};
+
+function isoValue(value: unknown) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
+    return new Date(value).toISOString();
+  }
+  return null;
+}
+
+function promiseSnapshot(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function toUserFulfillment(order: {
+  pickup_type: string;
+  order_status: string;
+  delivery_status?: string | null;
+  fulfillment_promise_snapshot?: unknown;
+  promised_fulfillment_start_at?: Date | string | null;
+  promised_fulfillment_end_at?: Date | string | null;
+}) {
+  const snapshot = promiseSnapshot(order.fulfillment_promise_snapshot);
+  const fulfillmentPromise = {
+    display_text:
+      typeof snapshot?.display_text === 'string'
+        ? snapshot.display_text
+        : '历史订单未保存承诺时段',
+    promised_start_at: isoValue(order.promised_fulfillment_start_at),
+    promised_end_at: isoValue(order.promised_fulfillment_end_at),
+    snapshot,
+  };
+  if (order.pickup_type === 'delivery') {
+    const status =
+      order.delivery_status ??
+      (['delivered', 'completed'].includes(order.order_status)
+        ? 'delivered'
+        : 'pending_dispatch');
+    return {
+      fulfillment_status: status,
+      fulfillment_status_text: deliveryStatusLabels[status] ?? '待配送',
+      fulfillment_promise: fulfillmentPromise,
+    };
+  }
+
+  if (order.order_status === 'picked' || order.order_status === 'completed') {
+    return {
+      fulfillment_status: 'picked_up',
+      fulfillment_status_text: '已自提',
+      fulfillment_promise: fulfillmentPromise,
+    };
+  }
+  if (order.order_status === 'ready') {
+    return {
+      fulfillment_status: 'ready_for_pickup',
+      fulfillment_status_text: '待自提',
+      fulfillment_promise: fulfillmentPromise,
+    };
+  }
+  return {
+    fulfillment_status: 'preparing_pickup',
+    fulfillment_status_text: '备货中',
+    fulfillment_promise: fulfillmentPromise,
+  };
+}
+
 function deliveryStatusText(order: any) {
-  if (order.order_status === 'preparing') return '备货中';
-  if (order.order_status === 'delivered') return '已送达';
-  if (order.order_status === 'completed') return '已完成';
-  if (order.order_status === 'ready' || order.order_status === 'paid') return '待配送';
-  return order.pickup_type === 'delivery' ? '待配送' : null;
+  return order.pickup_type === 'delivery'
+    ? toUserFulfillment(order).fulfillment_status_text
+    : null;
 }
 
 function mapAfterSale(item: any) {
@@ -147,6 +218,7 @@ function mapAfterSale(item: any) {
 function listItem(order: any) {
   const product = productOf(order);
   const latestAfterSale = order.after_sale_cases?.[0];
+  const fulfillment = toUserFulfillment(order);
   return {
     order_id: order.id,
     order_no: order.order_no,
@@ -181,6 +253,7 @@ function listItem(order: any) {
     group_buy_status: order.group_buy?.status ?? null,
     pickup_type: order.pickup_type,
     fulfillment_type_text: fulfillmentText(order),
+    ...fulfillment,
     delivery_status_text: deliveryStatusText(order),
     delivery_time_window_code:
       order.pickup_type === 'delivery'
@@ -300,6 +373,11 @@ export async function getUserOrderDetail(userId: string, orderId: string) {
     },
     delivery: {
       delivery_status_text: deliveryStatusText(order),
+      delivery_status: order.delivery_status ?? null,
+      fulfillment_status: toUserFulfillment(order).fulfillment_status,
+      fulfillment_status_text:
+        toUserFulfillment(order).fulfillment_status_text,
+      fulfillment_promise: toUserFulfillment(order).fulfillment_promise,
       delivery_fee_cents: order.delivery_fee_cents ?? 0,
       delivery_time_window_code:
         order.pickup_type === 'delivery'
