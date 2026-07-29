@@ -32,6 +32,9 @@ function headers(role: string) {
 
 async function reset() {
   await prisma.$transaction([
+    prisma.wechatShippingIntent.deleteMany({
+      where: { order_id: orderId },
+    }),
     prisma.adminCommandReceipt.deleteMany({
       where: { admin_user_id: ids.admin },
     }),
@@ -116,6 +119,9 @@ beforeEach(reset);
 
 afterAll(async () => {
   if (orderId) {
+    await prisma.wechatShippingIntent.deleteMany({
+      where: { order_id: orderId },
+    });
     await prisma.adminCommandReceipt.deleteMany({
       where: { admin_user_id: ids.admin },
     });
