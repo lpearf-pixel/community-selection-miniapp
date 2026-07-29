@@ -5,8 +5,18 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
+const productionCompose = fs.readFileSync(
+  path.resolve(__dirname, '../../docker-compose.production.yml'),
+  'utf8',
+);
+
 const validEnv = {
   NODE_ENV: 'production',
+  FIRST_LAUNCH_MODE: 'true',
+  MEMBERSHIP_ENABLED: 'false',
+  COUPONS_ENABLED: 'false',
+  CASH_REWARDS_ENABLED: 'false',
+  WITHDRAWALS_ENABLED: 'false',
   IMAGE_TAG: '0123456789abcdef',
   PORT: '13080',
   API_DOMAIN: 'api.example.com',
@@ -299,4 +309,19 @@ test('parses an explicit CI fixture owner without changing the production defaul
   assert.equal(parseApiRuntimeUid('1001'), 1001);
   assert.throws(() => parseApiRuntimeUid('-1'), /runtime uid/i);
   assert.throws(() => parseApiRuntimeUid('not-a-number'), /runtime uid/i);
+});
+
+test('pins every first-launch capability off in the production API environment', () => {
+  for (const line of [
+    'FIRST_LAUNCH_MODE: "true"',
+    'MEMBERSHIP_ENABLED: "false"',
+    'COUPONS_ENABLED: "false"',
+    'CASH_REWARDS_ENABLED: "false"',
+    'WITHDRAWALS_ENABLED: "false"',
+  ]) {
+    assert.ok(
+      productionCompose.includes(line),
+      `missing production Compose contract: ${line}`,
+    );
+  }
 });
