@@ -4,6 +4,7 @@ import { registerPublicRoutes } from './routes/public/index.js';
 import { registerAdminRoutes } from './routes/admin/index.js';
 import { requireAdminSession } from './routes/admin-auth.js';
 import { HTTP_LOGGER_OPTIONS } from './services/http-log-privacy.js';
+import { enforceFirstLaunchCapabilityGuard } from './modules/first-launch/first-launch-capability-guard.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -65,6 +66,7 @@ export function buildApp() {
     }
     request.adminUser = adminUser;
   });
+  app.addHook('preHandler', enforceFirstLaunchCapabilityGuard);
 
   app.get('/health', async () => ok({ status: 'ok' }));
   app.get('/api/health', async () => ok({ status: 'ok' }));

@@ -33,7 +33,7 @@
     </view>
 
     <view wx:if="{{leaderCenterAvailable}}" class="cq-card leader-entry" bindtap="goLeaderCenter">
-      <view><view class="action-title">团长中心</view><view class="cq-muted action-hint">查看开团、奖励与人工提现</view></view>
+      <view><view class="action-title">团长中心</view><view class="cq-muted action-hint">查看开团进度与团购记录</view></view>
       <view class="cq-emphasis arrow">›</view>
     </view>
 
