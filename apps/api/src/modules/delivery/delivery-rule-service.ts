@@ -1,6 +1,12 @@
 import { prisma } from '../../db.js';
 
-export type DeliveryTimeWindow = { code: string; label: string; start_time: string; end_time: string };
+export type DeliveryTimeWindow = {
+  code: string;
+  label: string;
+  start_time: string;
+  end_time: string;
+  day_offset?: number;
+};
 export type DeliveryRule = {
   enabled: boolean;
   delivery_mode: 'store_delivery';
@@ -39,9 +45,23 @@ export function validateTimeWindows(value: unknown): DeliveryTimeWindow[] {
     const row = item as Partial<DeliveryTimeWindow>;
     if (!row.code?.trim() || !row.label?.trim() || !row.start_time?.trim() || !row.end_time?.trim()) throw new Error('配送时段需包含 code/label/start_time/end_time');
     if (!hhmm(row.start_time) || !hhmm(row.end_time)) throw new Error('配送时段时间格式必须为 HH:mm');
+    if (
+      row.day_offset !== undefined &&
+      (!Number.isSafeInteger(row.day_offset) ||
+        row.day_offset < 0 ||
+        row.day_offset > 30)
+    ) {
+      throw new Error('配送时段 day_offset 必须是 0-30 的整数');
+    }
     if (seen.has(row.code)) throw new Error('配送时段 code 唯一');
     seen.add(row.code);
-    return { code: row.code, label: row.label, start_time: row.start_time, end_time: row.end_time };
+    return {
+      code: row.code,
+      label: row.label,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      ...(row.day_offset === undefined ? {} : { day_offset: row.day_offset }),
+    };
   });
 }
 function validateConfig(input: any) {
