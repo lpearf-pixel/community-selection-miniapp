@@ -5,6 +5,11 @@ on:
     paths:
       - .github/workflows/l53-d2-compliance-gate.yml
       - scripts/production/l53-d2-compliance-gate-contract.test.cjs
+      - scripts/production/l53-d2-release-registration.contract.test.cjs
+      - scripts/verify-l53-d2-compliance-release-local.ts
+      - scripts/verify-l53-d2-compliance-release-local.test.ts
+      - scripts/verification-baseline-manifest.ts
+      - scripts/verify-all-local.sh
       - apps/api/src/modules/compliance/supplier-qualification-command.ts
       - apps/api/src/modules/compliance/supplier-qualification-command.test.ts
       - apps/api/src/modules/compliance/supplier-qualification-executor.ts
@@ -25,6 +30,9 @@ on:
       - apps/api/src/modules/compliance/product-compliance-executor.ts
       - apps/api/src/modules/compliance/product-compliance-executor.test.ts
       - apps/api/src/modules/compliance/product-compliance-executor.integration.test.ts
+      - apps/api/src/modules/compliance/compliance-release-evaluator.ts
+      - apps/api/src/modules/compliance/compliance-release-evaluator.test.ts
+      - apps/api/src/modules/compliance/compliance-release-evaluator.integration.test.ts
       - apps/api/src/routes/admin/compliance.ts
       - apps/api/src/routes/admin/compliance.test.ts
       - apps/api/src/routes/admin/index.ts
@@ -102,6 +110,17 @@ jobs:
             src/modules/compliance/product-compliance-executor.test.ts \
             src/routes/admin/compliance.test.ts \
             src/modules/compliance/product-compliance-executor.integration.test.ts
+      - name: Verify fail-closed compliance release evidence
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/compliance-release-evaluator.test.ts \
+            src/modules/compliance/compliance-release-evaluator.integration.test.ts
+          pnpm exec vitest run scripts/verify-l53-d2-compliance-release-local.test.ts
+          node --test \
+            scripts/production/l53-d2-compliance-gate-contract.test.cjs \
+            scripts/production/l53-d2-release-registration.contract.test.cjs
+          GIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" \
+            pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts
       - name: Verify API types
         run: pnpm --filter @community-selection/api typecheck
       - name: Verify lightweight lint
