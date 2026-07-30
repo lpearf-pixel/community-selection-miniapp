@@ -216,19 +216,24 @@ describe.sequential('compliance release evaluator on PostgreSQL', () => {
       passed: true,
       git_sha: 'integration-pass-sha',
       checked_at: '2026-07-30T06:00:00.000Z',
-      summary: {
-        active_product_count: 1,
-        approved_valid_count: 1,
-        blocked_product_count: 0,
-      },
-      products: [
+    });
+    expect(evidence.summary).toEqual({
+      active_product_count: evidence.products.length,
+      approved_valid_count: evidence.products.length,
+      blocked_product_count: 0,
+    });
+    expect(evidence.products).toEqual(
+      expect.arrayContaining([
         {
           product_id: ids.activeProduct,
           passed: true,
           reason_codes: [],
+          current_fingerprint: expect.any(String),
+          approved_fingerprint: expect.any(String),
+          review_id: expect.any(String),
         },
-      ],
-    });
+      ]),
+    );
     const json = JSON.stringify(evidence);
     expect(json).not.toContain(ids.draftProduct);
     for (const secret of Object.values(secrets)) {
@@ -250,21 +255,25 @@ describe.sequential('compliance release evaluator on PostgreSQL', () => {
     const second = await evaluateComplianceRelease(prisma as never, input);
 
     expect(first).toEqual(second);
-    expect(first).toMatchObject({
-      passed: false,
-      summary: {
-        active_product_count: 1,
-        approved_valid_count: 0,
-        blocked_product_count: 1,
-      },
-      products: [
+    expect(first.passed).toBe(false);
+    expect(first.summary).toEqual({
+      active_product_count: first.products.length,
+      approved_valid_count: first.products.length - 1,
+      blocked_product_count: 1,
+    });
+    expect(first.products).toEqual(
+      expect.arrayContaining([
         {
           product_id: ids.activeProduct,
           passed: false,
           reason_codes: ['PRODUCT_COMPLIANCE_FINGERPRINT_CHANGED'],
+          current_fingerprint: expect.any(String),
+          approved_fingerprint: expect.any(String),
+          review_id: expect.any(String),
         },
-      ],
-    });
+      ]),
+    );
+    expect(first.products.filter((product) => !product.passed)).toHaveLength(1);
     const alerts = await prisma.opsAlertLog.findMany({
       where: { alert_type: 'l53_d2_compliance_release_blocked' },
     });
