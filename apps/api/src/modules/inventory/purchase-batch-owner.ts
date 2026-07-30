@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import type { ValidatedReceiptItem } from '../purchase/purchase-plan-owner.js';
 import type { PurchaseInventoryResult } from './purchase-inventory-owner.js';
+import { persistProductBatchEvidence } from '../compliance/product-batch-evidence.js';
 
 export type SupplierSnapshot = {
   id: string;
@@ -12,6 +13,8 @@ export type PurchaseBatchResult = {
   batch_id: string;
   batch_no: string;
   batch_ledger_id: string;
+  evidence_ids?: string[];
+  evidence_hashes?: string[];
 };
 
 function makeBatchNo() {
@@ -61,6 +64,7 @@ export async function createPurchaseBatch(
       initial_quantity: input.item.received_quantity,
       remaining_quantity: input.item.received_quantity,
       cost_price_cents: input.item.cost_price_cents,
+      origin_text: input.item.origin_text ?? null,
       production_date: input.item.production_date,
       arrival_date: input.item.arrival_date,
       shelf_life_days: input.item.shelf_life_days ?? null,
@@ -72,6 +76,25 @@ export async function createPurchaseBatch(
         purchase_quantity: input.item.purchase_quantity,
         stock_in_quantity: input.item.stock_in_quantity,
       },
+    },
+  });
+  const evidence = await persistProductBatchEvidence(tx, {
+    batch_id: batch.id,
+    created_by_admin_id: input.admin_user_id,
+    fields: {
+      ...(input.item.origin_text
+        ? { origin_text: input.item.origin_text }
+        : {}),
+      ...(input.item.purchase_voucher_type
+        ? { purchase_voucher_type: input.item.purchase_voucher_type }
+        : {}),
+      ...(input.item.payment_reference_hash
+        ? { payment_reference_hash: input.item.payment_reference_hash }
+        : {}),
+      ...(input.item.invoice_evidence_status
+        ? { invoice_evidence_status: input.item.invoice_evidence_status }
+        : {}),
+      ...(input.item.evidence ? { evidence: input.item.evidence } : {}),
     },
   });
   const ledger = await tx.batchStockLedger.create({
@@ -101,5 +124,6 @@ export async function createPurchaseBatch(
     batch_id: batch.id,
     batch_no: batch.batch_no,
     batch_ledger_id: ledger.id,
+    ...(evidence.evidence_ids.length === 0 ? {} : evidence),
   };
 }
