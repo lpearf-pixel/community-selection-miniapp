@@ -27,7 +27,7 @@ const evidence = (passed: boolean) => ({
   rule_versions: {
     category: 'l53-d2-category-v1',
     qualification: 'l53-d2-supplier-qualification-v1',
-    fingerprint: 'l53-d2-product-compliance-v2',
+    fingerprint: 'l53-d2-product-fingerprint-v2',
   },
 });
 
