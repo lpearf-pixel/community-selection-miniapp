@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerAdminComplianceRoutes } from './compliance.js';
 
 const db = vi.hoisted(() => ({
+  adminUserFind: vi.fn(),
   productFind: vi.fn(),
   supplierFind: vi.fn(),
   evidenceFind: vi.fn(),
@@ -14,6 +15,7 @@ const executor = vi.hoisted(() => ({
 
 vi.mock('../../db.js', () => ({
   prisma: {
+    adminUser: { findUnique: db.adminUserFind },
     product: { findUnique: db.productFind },
     supplier: { findUnique: db.supplierFind },
     productBatchEvidence: { findMany: db.evidenceFind },
@@ -58,6 +60,7 @@ const authorized = {
 describe('audited compliance evidence access boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.adminUserFind.mockResolvedValue({ status: 'active' });
     db.productFind.mockResolvedValue(null);
     db.supplierFind.mockResolvedValue(null);
     db.evidenceFind.mockResolvedValue([]);
