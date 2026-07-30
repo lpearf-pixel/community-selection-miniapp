@@ -82,9 +82,19 @@ const registeredStages = STAGE_REGISTRY
     ),
   ]);
 
+const releaseGates: VerificationAuditCheck[] = [
+  command(
+    'l53-d2-compliance-release',
+    'L53-D2 product compliance release gate',
+    'historical-stage',
+    'pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts',
+  ),
+];
+
 export const VERIFICATION_BASELINE_CHECKS: readonly VerificationAuditCheck[] = [
   ...foundation,
   ...legacyStages,
   ...globalStatic,
   ...registeredStages,
+  ...releaseGates,
 ];
