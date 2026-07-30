@@ -12,6 +12,10 @@ const verifyAll = fs.readFileSync(
   path.join(root, 'verify-all-local.sh'),
   'utf8',
 );
+const complianceCli = fs.readFileSync(
+  path.join(root, 'verify-l53-d2-compliance-release-local.ts'),
+  'utf8',
+);
 
 test('registers the L53-D2 compliance release verifier without removing baselines', () => {
   const command =
@@ -63,4 +67,14 @@ test('registers the L53-D2 compliance release verifier without removing baseline
   }
   assert.match(manifest, /\.\.\.globalStatic/);
   assert.match(manifest, /\.\.\.registeredStages/);
+  assert.doesNotMatch(
+    complianceCli,
+    /^\s*await\s+main\(\);/m,
+    "the release CLI must remain executable through tsx's CJS output",
+  );
+  assert.match(
+    complianceCli,
+    /main\(\)\.catch\(/,
+    'the release CLI must fail closed when its entrypoint rejects',
+  );
 });
