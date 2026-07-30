@@ -18,6 +18,16 @@ on:
       - apps/api/src/modules/inventory/purchase-batch-owner.test.ts
       - apps/api/src/modules/purchase/admin-purchase-receive-command.ts
       - apps/api/src/modules/purchase/admin-purchase-receive-command.test.ts
+      - apps/api/src/modules/compliance/product-compliance-command.ts
+      - apps/api/src/modules/compliance/product-compliance-command.test.ts
+      - apps/api/src/modules/compliance/product-compliance-fingerprint.ts
+      - apps/api/src/modules/compliance/product-compliance-fingerprint.test.ts
+      - apps/api/src/modules/compliance/product-compliance-executor.ts
+      - apps/api/src/modules/compliance/product-compliance-executor.test.ts
+      - apps/api/src/modules/compliance/product-compliance-executor.integration.test.ts
+      - apps/api/src/routes/admin/compliance.ts
+      - apps/api/src/routes/admin/compliance.test.ts
+      - apps/api/src/routes/admin/index.ts
       - docker-compose.yml
       - prisma/schema.prisma
       - prisma/migrations/202607290002_l53_d2_product_compliance/**
@@ -84,8 +94,18 @@ jobs:
             src/modules/inventory/purchase-batch-owner.test.ts \
             src/modules/purchase/admin-purchase-receive-command.test.ts \
             src/modules/purchase/purchase-domain-ownership.contract.test.ts
+      - name: Verify product compliance workflow
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/product-compliance-fingerprint.test.ts \
+            src/modules/compliance/product-compliance-command.test.ts \
+            src/modules/compliance/product-compliance-executor.test.ts \
+            src/routes/admin/compliance.test.ts \
+            src/modules/compliance/product-compliance-executor.integration.test.ts
       - name: Verify API types
         run: pnpm --filter @community-selection/api typecheck
+      - name: Verify lightweight lint
+        run: pnpm lint
       - name: Cleanup isolated PostgreSQL
         if: always()
         run: |
