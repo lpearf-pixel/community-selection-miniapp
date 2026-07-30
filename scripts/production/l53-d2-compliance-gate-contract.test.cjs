@@ -111,12 +111,12 @@ test('defines a focused L53-D2 PostgreSQL compliance gate on GitHub-hosted runne
 
   assert.doesNotMatch(workflow, /verify:all/);
   assert.doesNotMatch(workflow, /e2e:admin|browser/i);
-  assert.match(workflow, /uses:\\s*actions\\/upload-artifact@v4/);
-  assert.match(workflow, /name:\\s*l53-d2-compliance-evidence/);
+  assert.match(workflow, /uses:\s*actions\/upload-artifact@v4/);
+  assert.match(workflow, /name:\s*l53-d2-compliance-evidence/);
   assert.match(
     workflow,
-    /path:\\s*\\.github\\/l53-d2-compliance-evidence\\.json/,
+    /path:\s*\.github\/l53-d2-compliance-evidence\.json/,
   );
-  assert.match(workflow, /if-no-files-found:\\s*error/);
+  assert.match(workflow, /if-no-files-found:\s*error/);
   assert.doesNotMatch(workflow, /source snapshot/i);
 });
