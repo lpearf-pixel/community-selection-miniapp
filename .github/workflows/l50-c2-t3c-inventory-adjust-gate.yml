@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   focused:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       NODE_OPTIONS: --max-old-space-size=3072
@@ -47,7 +47,7 @@ jobs:
         run: |
           port=$((30000 + GITHUB_RUN_NUMBER % 10000))
           echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm db:generate
