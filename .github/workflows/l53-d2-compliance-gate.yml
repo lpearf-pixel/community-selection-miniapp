@@ -132,6 +132,14 @@ jobs:
             scripts/production/l53-d2-release-registration.contract.test.cjs
           GIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" \
             pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts
+      - name: Upload sanitized compliance release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l53-d2-compliance-evidence
+          path: .github/l53-d2-compliance-evidence.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify compliance admin workbench and evidence access
         run: |
           pnpm --filter @community-selection/api test -- \

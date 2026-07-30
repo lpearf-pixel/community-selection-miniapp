@@ -109,5 +109,12 @@ test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
 
   assert.doesNotMatch(workflow, /verify:all/);
   assert.doesNotMatch(workflow, /e2e:admin|browser/i);
-  assert.doesNotMatch(workflow, /upload-artifact|source snapshot/i);
+  assert.match(workflow, /uses:\\s*actions\\/upload-artifact@v4/);
+  assert.match(workflow, /name:\\s*l53-d2-compliance-evidence/);
+  assert.match(
+    workflow,
+    /path:\\s*\\.github\\/l53-d2-compliance-evidence\\.json/,
+  );
+  assert.match(workflow, /if-no-files-found:\\s*error/);
+  assert.doesNotMatch(workflow, /source snapshot/i);
 });

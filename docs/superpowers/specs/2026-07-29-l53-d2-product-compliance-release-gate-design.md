@@ -223,3 +223,13 @@ D2 不开发完整开票系统，但数据关系必须支持：
 7. 现有 active 商品不被迁移脚本下架，但缺少批准会阻止生产发布。
 8. 发布 JSON 不含敏感原文，失败会创建去重的 critical 告警。
 9. Focused PostgreSQL Gate 只使用 `community` Runner。
+
+
+## CI 发布证据 Artifact
+
+Task 8 固定生成并上传名为 `l53-d2-compliance-evidence` 的 GitHub Actions Artifact：
+
+- 唯一文件为 `.github/l53-d2-compliance-evidence.json`，保留 7 天。
+- 无论门禁成功或失败均尝试上传；证据文件缺失时上传步骤失败，不允许静默跳过。
+- JSON 只包含 Git SHA、检查时间、计数、稳定原因码、规则版本、审核 ID 与合规指纹；不得包含对象键、原始 URL、证件原文、明文身份信息或联系方式。
+- Artifact 不包含源码快照，且 D2 workflow 仍不运行浏览器、完整生产镜像或 `verify:all`；这些保留给 L53 最终生产收口。
