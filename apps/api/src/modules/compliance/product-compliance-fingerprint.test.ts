@@ -9,6 +9,9 @@ const base = (): ProductComplianceFingerprintInput => ({
   description: '当天采摘',
   category_code: 'vegetable',
   supplier_id: 'supplier-1',
+  supplier_subject_type: 'company',
+  supplier_profile_fingerprint: 'supplier-profile-hash-1',
+  supplier_profile_version: 1,
   origin_text: '南京市江宁区',
   qualification_hashes: ['qualification-b', 'qualification-a'],
   batch_evidence_hashes: ['batch-b', 'batch-a'],
@@ -23,11 +26,22 @@ describe('L53-D2 product compliance fingerprint', () => {
     ['description', '次日采摘'],
     ['category_code', 'fruit'],
     ['supplier_id', 'supplier-2'],
+    ['supplier_subject_type', 'cooperative'],
+    ['supplier_profile_fingerprint', 'supplier-profile-hash-2'],
     ['origin_text', '南京市六合区'],
     ['cover_image', 'images/tomato-cover-v2.jpg'],
   ] as const)('changes when compliance field %s changes', (field, value) => {
     expect(
       buildProductComplianceFingerprint({ ...base(), [field]: value }),
+    ).not.toBe(buildProductComplianceFingerprint(base()));
+  });
+
+  it('changes when the supplier profile version changes', () => {
+    expect(
+      buildProductComplianceFingerprint({
+        ...base(),
+        supplier_profile_version: 2,
+      }),
     ).not.toBe(buildProductComplianceFingerprint(base()));
   });
 
