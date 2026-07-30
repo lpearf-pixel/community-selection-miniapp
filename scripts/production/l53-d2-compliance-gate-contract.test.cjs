@@ -34,6 +34,10 @@ test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
   assert.match(workflow, /supplier-qualification-command\.test\.ts/);
   assert.match(workflow, /supplier-qualification-route\.test\.ts/);
   assert.match(workflow, /supplier-qualification-executor\.integration\.test\.ts/);
+  assert.match(workflow, /product-batch-evidence\.test\.ts/);
+  assert.match(workflow, /purchase-batch-owner\.test\.ts/);
+  assert.match(workflow, /admin-purchase-receive-command\.test\.ts/);
+  assert.match(workflow, /purchase-domain-ownership\.contract\.test\.ts/);
   assert.match(workflow, /pnpm --filter @community-selection\/api typecheck/);
   assert.match(workflow, /if: always\(\)/);
   assert.match(workflow, /down --volumes --remove-orphans \|\| true/);
@@ -47,6 +51,12 @@ test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
     'apps/api/src/modules/supplier/supplier-service.ts',
     'apps/api/src/routes/suppliers.ts',
     'apps/api/src/routes/supplier-qualification-route.test.ts',
+    'apps/api/src/modules/compliance/product-batch-evidence.ts',
+    'apps/api/src/modules/compliance/product-batch-evidence.test.ts',
+    'apps/api/src/modules/inventory/purchase-batch-owner.ts',
+    'apps/api/src/modules/inventory/purchase-batch-owner.test.ts',
+    'apps/api/src/modules/purchase/admin-purchase-receive-command.ts',
+    'apps/api/src/modules/purchase/admin-purchase-receive-command.test.ts',
     'docker-compose.yml',
     'prisma/schema.prisma',
     'prisma/migrations/202607290002_l53_d2_product_compliance/**',
