@@ -21,7 +21,7 @@ test('GitHub-hosted gates select isolated PostgreSQL ports', () => {
     assert.match(source, /POSTGRES_HOST_PORT=\$\{port\}/);
     assert.match(
       source,
-      /DATABASE_URL=postgresql:\/\/postgres:postgres@host\.docker\.internal:\$\{port\}/,
+      /DATABASE_URL=postgresql:\/\/postgres:postgres@127\.0\.0\.1:\$\{port\}/,
     );
     assert.doesNotMatch(source, /host\.docker\.internal:15432/);
   }
