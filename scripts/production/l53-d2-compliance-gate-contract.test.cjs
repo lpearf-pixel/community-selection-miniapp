@@ -20,10 +20,12 @@ test('defines a focused L53-D2 PostgreSQL compliance gate on GitHub-hosted runne
   );
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
-  assert.match(workflow, /runs-on:\s*\[\s*self-hosted\s*,\s*community\s*\]/);
+  assert.match(workflow, /runs-on:\s*ubuntu-latest/);
+  assert.doesNotMatch(workflow, /runs-on:\s*\[?\s*self-hosted/);
   assert.doesNotMatch(workflow, /community-w01/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
-  assert.match(workflow, /host\.docker\.internal:\$\{port\}/);
+  assert.match(workflow, /127\.0\.0\.1:\$\{port\}/);
+  assert.doesNotMatch(workflow, /host\.docker\.internal/);
   assert.match(workflow, /POSTGRES_HOST_PORT=\$\{port\}/);
   assert.match(
     workflow,
