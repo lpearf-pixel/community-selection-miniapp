@@ -14,6 +14,18 @@ vi.mock('../../db.js', () => ({
     adminUser: {
       findUnique: vi.fn(async () => ({ status: 'active' })),
     },
+    product: {
+      findUnique: vi.fn(async () => null),
+    },
+    supplier: {
+      findUnique: vi.fn(async () => null),
+    },
+    productBatchEvidence: {
+      findMany: vi.fn(async () => []),
+    },
+    complianceEvidenceAccessLog: {
+      create: vi.fn(async () => ({ id: 'access-log-1' })),
+    },
   },
 }));
 
@@ -86,6 +98,12 @@ afterAll(async () => {
 describe('product compliance Admin V1 route contracts', () => {
   it.each([
     ['GET', '/api/admin/products/product-1/compliance', undefined],
+    ['GET', '/api/admin/suppliers/supplier-1/compliance', undefined],
+    [
+      'POST',
+      '/api/admin/compliance-evidence/supplier_qualification/qualification-1/access',
+      { purpose: '复核供应商营业执照' },
+    ],
     [
       'POST',
       '/api/admin/products/product-1/compliance/submit',

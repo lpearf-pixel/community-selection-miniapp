@@ -6,6 +6,7 @@ on:
       - .github/workflows/l53-d2-compliance-gate.yml
       - scripts/production/l53-d2-compliance-gate-contract.test.cjs
       - scripts/production/l53-d2-release-registration.contract.test.cjs
+      - scripts/production/l53-d2-task7-registration.contract.test.cjs
       - scripts/verify-l53-d2-compliance-release-local.ts
       - scripts/verify-l53-d2-compliance-release-local.test.ts
       - scripts/verification-baseline-manifest.ts
@@ -35,6 +36,16 @@ on:
       - apps/api/src/modules/compliance/compliance-release-evaluator.integration.test.ts
       - apps/api/src/routes/admin/compliance.ts
       - apps/api/src/routes/admin/compliance.test.ts
+      - apps/api/src/routes/admin/compliance-access.test.ts
+      - apps/api/src/routes/admin/compliance-evidence-access.integration.test.ts
+      - apps/admin/src/features/inventory/shared/types.ts
+      - apps/admin/src/features/supply/suppliers/api.ts
+      - apps/admin/src/features/supply/suppliers/api.test.ts
+      - apps/admin/src/features/supply/suppliers/SuppliersPage.tsx
+      - apps/admin/src/features/supply/suppliers/supplier-compliance-card.test.tsx
+      - apps/admin/src/features/catalog/compliance/**
+      - apps/admin/src/features/catalog/products/CatalogProductsPage.tsx
+      - apps/admin/src/features/catalog/products/catalog-compliance-mount.contract.test.ts
       - apps/api/src/routes/admin/index.ts
       - docker-compose.yml
       - prisma/schema.prisma
@@ -121,6 +132,19 @@ jobs:
             scripts/production/l53-d2-release-registration.contract.test.cjs
           GIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" \
             pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts
+      - name: Verify compliance admin workbench and evidence access
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/routes/admin/compliance-access.test.ts \
+            src/routes/admin/compliance-evidence-access.integration.test.ts
+          pnpm --filter @community-selection/admin test -- \
+            src/features/catalog/compliance/api.test.ts \
+            src/features/catalog/compliance/product-compliance-panel.test.tsx \
+            src/features/supply/suppliers/api.test.ts \
+            src/features/supply/suppliers/supplier-compliance-card.test.tsx \
+            src/features/catalog/products/catalog-compliance-mount.contract.test.ts
+          pnpm --filter @community-selection/admin typecheck
+          node --test scripts/production/l53-d2-task7-registration.contract.test.cjs
       - name: Verify API types
         run: pnpm --filter @community-selection/api typecheck
       - name: Verify lightweight lint

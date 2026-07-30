@@ -4,6 +4,7 @@ import {
   featureErrorMessage,
   initialFeatureResourceState,
 } from '../../../shared/state/feature-resource';
+import { ProductCompliancePanel } from '../compliance/ProductCompliancePanel';
 import { loadCatalogProducts } from './api';
 import { CatalogProductForm } from './CatalogProductForm';
 import { CatalogProductsTable } from './CatalogProductsTable';
@@ -115,6 +116,12 @@ export function CatalogProductsPage(props: CatalogProductsPageProps) {
           setMessage('保存接口将在后续阶段接入，当前仅完成 L3 基础页面。')
         }
       />
+      {editingProduct.id ? (
+        <ProductCompliancePanel
+          productId={editingProduct.id}
+          onMessage={setMessage}
+        />
+      ) : null}
     </Space>
   );
 }
