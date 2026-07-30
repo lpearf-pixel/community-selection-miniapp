@@ -11,7 +11,7 @@ vi.mock('./product-compliance-executor.js', () => ({
   SUPPLIER_QUALIFICATION_RULE_VERSION:
     'l53-d2-supplier-qualification-v1',
   PRODUCT_COMPLIANCE_FINGERPRINT_VERSION:
-    'l53-d2-product-compliance-v2',
+    'l53-d2-product-fingerprint-v2',
   loadCurrentComplianceFacts: compliance.loadCurrentComplianceFacts,
   evaluateProductComplianceState: compliance.evaluateProductComplianceState,
 }));
@@ -77,7 +77,7 @@ describe('evaluateComplianceRelease', () => {
               rule_versions: {
                 category: 'l53-d2-category-v1',
                 qualification: 'l53-d2-supplier-qualification-v1',
-                fingerprint: 'l53-d2-product-compliance-v2',
+                fingerprint: 'l53-d2-product-fingerprint-v2',
               },
             }
           : {
@@ -93,7 +93,7 @@ describe('evaluateComplianceRelease', () => {
               rule_versions: {
                 category: 'l53-d2-category-v1',
                 qualification: 'l53-d2-supplier-qualification-v1',
-                fingerprint: 'l53-d2-product-compliance-v2',
+                fingerprint: 'l53-d2-product-fingerprint-v2',
               },
             },
     );
@@ -146,7 +146,7 @@ describe('evaluateComplianceRelease', () => {
       rule_versions: {
         category: 'l53-d2-category-v1',
         qualification: 'l53-d2-supplier-qualification-v1',
-        fingerprint: 'l53-d2-product-compliance-v2',
+        fingerprint: 'l53-d2-product-fingerprint-v2',
       },
     });
     const json = JSON.stringify(result);
@@ -181,7 +181,7 @@ describe('evaluateComplianceRelease', () => {
       rule_versions: {
         category: 'l53-d2-category-v1',
         qualification: 'l53-d2-supplier-qualification-v1',
-        fingerprint: 'l53-d2-product-compliance-v2',
+        fingerprint: 'l53-d2-product-fingerprint-v2',
       },
     };
     expect(call.where.dedupe_key).toBe(
