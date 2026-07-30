@@ -70,3 +70,4 @@ node scripts/verify-l50-c3-refund-domain-ownership.mjs
 node scripts/verify-l50-c3-purchase-receive-domain-ownership.mjs
 node scripts/verify-l50-c3-withdrawal-domain-ownership.mjs
 pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L47
+pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts
