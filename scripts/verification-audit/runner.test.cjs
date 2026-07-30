@@ -10,7 +10,7 @@ const {
   runVerificationAudit,
 } = require('../lib/verification-audit.cjs');
 
-test('concurrent self-hosted gates select isolated PostgreSQL ports', () => {
+test('GitHub-hosted gates select isolated PostgreSQL ports', () => {
   const root = resolve(__dirname, '..', '..');
   for (const workflow of [
     '.github/workflows/verification-baseline-audit.yml',
