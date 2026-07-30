@@ -123,6 +123,7 @@ jobs:
       - name: Verify real Admin browser
         run: |
           pnpm setup:admin:e2e
+          pnpm --dir scripts/admin-e2e exec playwright install --with-deps chromium
           pnpm e2e:admin
 
       - name: Start baseline audit PostgreSQL
