@@ -12,7 +12,7 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test('registers Task 7 in the focused community compliance gate', () => {
+test('registers Task 7 in the focused GitHub-hosted compliance gate', () => {
   assert.equal(fs.existsSync(workflowPath), true, 'workflow must exist');
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
