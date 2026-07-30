@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   collect:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       NODE_OPTIONS: --max-old-space-size=3072
@@ -67,7 +67,7 @@ jobs:
             "
           )"
           echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
       - run: pnpm install --frozen-lockfile
 
       - name: Verify consumer identity contract
