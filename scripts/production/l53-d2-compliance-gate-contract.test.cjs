@@ -30,19 +30,34 @@ test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
     /docker compose\s+\\?\s*\n?\s*-p community-selection-l53-d2-\$\{\{ github\.run_id \}\}/,
   );
   assert.match(workflow, /up -d --wait postgres/);
-  assert.match(workflow, /pnpm exec prisma migrate deploy --schema prisma\/schema\.prisma/);
-  assert.match(workflow, /supplier-qualification-command\.test\.ts/);
-  assert.match(workflow, /supplier-qualification-route\.test\.ts/);
-  assert.match(workflow, /supplier-qualification-executor\.integration\.test\.ts/);
-  assert.match(workflow, /product-batch-evidence\.test\.ts/);
-  assert.match(workflow, /purchase-batch-owner\.test\.ts/);
-  assert.match(workflow, /admin-purchase-receive-command\.test\.ts/);
-  assert.match(workflow, /purchase-domain-ownership\.contract\.test\.ts/);
-  assert.match(workflow, /product-compliance-command\.test\.ts/);
-  assert.match(workflow, /product-compliance-executor\.test\.ts/);
-  assert.match(workflow, /product-compliance-executor\.integration\.test\.ts/);
-  assert.match(workflow, /routes\/admin\/compliance\.test\.ts/);
-  assert.match(workflow, /product-compliance-fingerprint\.test\.ts/);
+  assert.match(
+    workflow,
+    /pnpm exec prisma migrate deploy --schema prisma\/schema\.prisma/,
+  );
+  for (const testFile of [
+    'supplier-qualification-command.test.ts',
+    'supplier-qualification-route.test.ts',
+    'supplier-qualification-executor.integration.test.ts',
+    'product-batch-evidence.test.ts',
+    'purchase-batch-owner.test.ts',
+    'admin-purchase-receive-command.test.ts',
+    'purchase-domain-ownership.contract.test.ts',
+    'product-compliance-command.test.ts',
+    'product-compliance-executor.test.ts',
+    'product-compliance-executor.integration.test.ts',
+    'routes/admin/compliance.test.ts',
+    'product-compliance-fingerprint.test.ts',
+    'compliance-release-evaluator.test.ts',
+    'compliance-release-evaluator.integration.test.ts',
+    'verify-l53-d2-compliance-release-local.test.ts',
+    'l53-d2-release-registration.contract.test.cjs',
+  ]) {
+    assert.match(workflow, new RegExp(escapeRegex(testFile)));
+  }
+  assert.match(
+    workflow,
+    /pnpm exec tsx scripts\/verify-l53-d2-compliance-release-local\.ts/,
+  );
   assert.match(workflow, /pnpm --filter @community-selection\/api typecheck/);
   assert.match(workflow, /pnpm lint/);
   assert.match(workflow, /if: always\(\)/);
@@ -51,6 +66,11 @@ test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
   for (const requiredPath of [
     '.github/workflows/l53-d2-compliance-gate.yml',
     'scripts/production/l53-d2-compliance-gate-contract.test.cjs',
+    'scripts/production/l53-d2-release-registration.contract.test.cjs',
+    'scripts/verify-l53-d2-compliance-release-local.ts',
+    'scripts/verify-l53-d2-compliance-release-local.test.ts',
+    'scripts/verification-baseline-manifest.ts',
+    'scripts/verify-all-local.sh',
     'apps/api/src/modules/compliance/supplier-qualification-command.ts',
     'apps/api/src/modules/compliance/supplier-qualification-executor.ts',
     'apps/api/src/modules/compliance/supplier-qualification-executor.integration.test.ts',
@@ -68,6 +88,9 @@ test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
     'apps/api/src/modules/compliance/product-compliance-executor.ts',
     'apps/api/src/modules/compliance/product-compliance-executor.test.ts',
     'apps/api/src/modules/compliance/product-compliance-executor.integration.test.ts',
+    'apps/api/src/modules/compliance/compliance-release-evaluator.ts',
+    'apps/api/src/modules/compliance/compliance-release-evaluator.test.ts',
+    'apps/api/src/modules/compliance/compliance-release-evaluator.integration.test.ts',
     'apps/api/src/routes/admin/compliance.ts',
     'apps/api/src/routes/admin/compliance.test.ts',
     'apps/api/src/routes/admin/index.ts',
