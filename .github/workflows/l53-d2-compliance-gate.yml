@@ -1,4 +1,4 @@
-name: L53 D2 Supplier Qualification Gate
+name: L53 D2 Compliance Gate
 
 on:
   pull_request:
@@ -12,6 +12,12 @@ on:
       - apps/api/src/modules/supplier/supplier-service.ts
       - apps/api/src/routes/suppliers.ts
       - apps/api/src/routes/supplier-qualification-route.test.ts
+      - apps/api/src/modules/compliance/product-batch-evidence.ts
+      - apps/api/src/modules/compliance/product-batch-evidence.test.ts
+      - apps/api/src/modules/inventory/purchase-batch-owner.ts
+      - apps/api/src/modules/inventory/purchase-batch-owner.test.ts
+      - apps/api/src/modules/purchase/admin-purchase-receive-command.ts
+      - apps/api/src/modules/purchase/admin-purchase-receive-command.test.ts
       - docker-compose.yml
       - prisma/schema.prisma
       - prisma/migrations/202607290002_l53_d2_product_compliance/**
@@ -71,6 +77,13 @@ jobs:
             src/modules/compliance/supplier-qualification-command.test.ts \
             src/routes/supplier-qualification-route.test.ts \
             src/modules/compliance/supplier-qualification-executor.integration.test.ts
+      - name: Verify batch traceability and purchase evidence
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/product-batch-evidence.test.ts \
+            src/modules/inventory/purchase-batch-owner.test.ts \
+            src/modules/purchase/admin-purchase-receive-command.test.ts \
+            src/modules/purchase/purchase-domain-ownership.contract.test.ts
       - name: Verify API types
         run: pnpm --filter @community-selection/api typecheck
       - name: Cleanup isolated PostgreSQL
