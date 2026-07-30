@@ -12,7 +12,7 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test('defines a focused L53-D2 PostgreSQL compliance gate', () => {
+test('defines a focused L53-D2 PostgreSQL compliance gate on GitHub-hosted runner', () => {
   assert.equal(
     fs.existsSync(workflowPath),
     true,
