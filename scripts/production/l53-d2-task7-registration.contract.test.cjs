@@ -16,7 +16,8 @@ test('registers Task 7 in the focused GitHub-hosted compliance gate', () => {
   assert.equal(fs.existsSync(workflowPath), true, 'workflow must exist');
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
-  assert.match(workflow, /runs-on:\s*\[\s*self-hosted\s*,\s*community\s*\]/);
+  assert.match(workflow, /runs-on:\s*ubuntu-latest/);
+  assert.doesNotMatch(workflow, /runs-on:\s*\[?\s*self-hosted/);
   assert.doesNotMatch(workflow, /community-w01/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 
