@@ -1,0 +1,82 @@
+name: Configure CI PostgreSQL
+description: Load the canonical CI PostgreSQL profile and emit one derived connection URL.
+
+inputs:
+  profile:
+    description: Repository-relative PostgreSQL profile.
+    required: false
+    default: .github/config/ci-postgres.env
+
+runs:
+  using: composite
+  steps:
+    - name: Load canonical PostgreSQL profile
+      shell: bash
+      run: |
+        set -euo pipefail
+        profile="${{ inputs.profile }}"
+        if [[ ! -f "${profile}" ]]; then
+          echo "PostgreSQL profile not found: ${profile}" >&2
+          exit 1
+        fi
+
+        while IFS='=' read -r key value || [[ -n "${key}" ]]; do
+          [[ -z "${key}" || "${key}" == \#* ]] && continue
+          case "${key}" in
+            POSTGRES_HOST|POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_DB|POSTGRES_SCHEMA)
+              printf -v "${key}" '%s' "${value}"
+              export "${key}"
+              ;;
+            *)
+              echo "Unsupported PostgreSQL profile key: ${key}" >&2
+              exit 1
+              ;;
+          esac
+        done < "${profile}"
+
+        for key in POSTGRES_HOST POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_SCHEMA; do
+          if [[ -z "${!key:-}" ]]; then
+            echo "Missing PostgreSQL profile key: ${key}" >&2
+            exit 1
+          fi
+        done
+        [[ "${POSTGRES_HOST}" =~ ^[A-Za-z0-9.-]+$ ]] || {
+          echo "Invalid POSTGRES_HOST" >&2
+          exit 1
+        }
+        for key in POSTGRES_USER POSTGRES_DB POSTGRES_SCHEMA; do
+          [[ "${!key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+            echo "Invalid ${key}" >&2
+            exit 1
+          }
+        done
+
+        port="$(
+          node -e "
+            const net = require('node:net');
+            const server = net.createServer();
+            server.unref();
+            server.on('error', (error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            server.listen(0, '127.0.0.1', () => {
+              process.stdout.write(String(server.address().port));
+              server.close();
+            });
+          "
+        )"
+        encoded_user="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "${POSTGRES_USER}")"
+        encoded_password="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "${POSTGRES_PASSWORD}")"
+        encoded_db="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "${POSTGRES_DB}")"
+        encoded_schema="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "${POSTGRES_SCHEMA}")"
+
+        {
+          echo "POSTGRES_HOST=${POSTGRES_HOST}"
+          echo "POSTGRES_HOST_PORT=${port}"
+          echo "POSTGRES_USER=${POSTGRES_USER}"
+          echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+          echo "POSTGRES_DB=${POSTGRES_DB}"
+          echo "POSTGRES_SCHEMA=${POSTGRES_SCHEMA}"
+          echo "DATABASE_URL=postgresql://${encoded_user}:${encoded_password}@${POSTGRES_HOST}:${port}/${encoded_db}?schema=${encoded_schema}"
+        } >> "${GITHUB_ENV}"
