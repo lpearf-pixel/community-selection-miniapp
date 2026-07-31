@@ -5,6 +5,8 @@ on:
     branches:
       - stable/l50-a3-4-business-base
     paths:
+      - .github/actions/configure-ci-postgres/action.yml
+      - .github/config/ci-postgres.env
       - .github/workflows/verification-baseline-audit.yml
       - scripts/lib/verification-audit.cjs
       - scripts/lib/consumer-verifier-request.ts
@@ -49,25 +51,8 @@ jobs:
         with:
           node-version: 20.19.0
           cache: pnpm
-      - name: Select isolated PostgreSQL port
-        run: |
-          port="$(
-            node -e "
-              const net = require('node:net');
-              const server = net.createServer();
-              server.unref();
-              server.on('error', (error) => {
-                console.error(error);
-                process.exit(1);
-              });
-              server.listen(0, '0.0.0', () => {
-                console.log(server.address().port);
-                server.close();
-              });
-            "
-          )"
-          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
       - run: pnpm install --frozen-lockfile
 
       - name: Verify consumer identity contract
