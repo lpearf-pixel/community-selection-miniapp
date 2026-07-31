@@ -16,7 +16,11 @@ declare module 'fastify' {
   }
 }
 
-export function buildApp() {
+export type BuildAppOptions = {
+  memberPhoneHmacSecret?: string;
+};
+
+export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: HTTP_LOGGER_OPTIONS });
   void app.register(multipart, {
     limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4 },
@@ -78,7 +82,12 @@ export function buildApp() {
   app.get('/health', async () => ok({ status: 'ok' }));
   app.get('/api/health', async () => ok({ status: 'ok' }));
   registerPublicRoutes(app);
-  registerAdminRoutes(app);
+  registerAdminRoutes(app, {
+    memberPhoneHmacSecret:
+      options.memberPhoneHmacSecret
+      ?? process.env.MEMBER_PHONE_HMAC_SECRET
+      ?? '',
+  });
 
   return app;
 }
