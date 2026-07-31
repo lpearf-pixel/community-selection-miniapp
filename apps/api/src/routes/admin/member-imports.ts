@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { config } from '@community-selection/config';
 import { contractFail, contractOk } from '@community-selection/shared';
 import { parseMemberImportFile } from '../../modules/member-import/member-file-parser.js';
 import { PrismaMemberImportRepository } from '../../modules/member-import/member-import-repository.js';
@@ -11,6 +10,13 @@ import {
 } from '../../modules/admin-access/admin-access-control.js';
 
 type MemberImportService = ReturnType<typeof createMemberImportService>;
+
+export function createAdminMemberImportService(secret: string) {
+  return createMemberImportService(
+    new PrismaMemberImportRepository(),
+    { secret },
+  );
+}
 
 function traceId(request: FastifyRequest) {
   return String(request.id);
@@ -47,10 +53,7 @@ function handleError(request: FastifyRequest, reply: { code(status: number): unk
 
 export function registerAdminMemberImportRoutes(
   app: FastifyInstance,
-  service: MemberImportService = createMemberImportService(
-    new PrismaMemberImportRepository(),
-    { secret: config.memberPhoneHmacSecret },
-  ),
+  service: MemberImportService,
 ) {
   const guard = requireAdminPermissionV1('admin.full_access');
 
