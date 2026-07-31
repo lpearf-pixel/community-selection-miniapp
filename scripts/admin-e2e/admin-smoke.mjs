@@ -204,6 +204,7 @@ try {
     '销售与履约',
     '商品与价格',
     '库存与供应链',
+    '会员与营销',
     '财务与结算',
     '数据分析',
     '运维与风控',
@@ -216,7 +217,7 @@ try {
     .getByRole('heading')
     .allTextContents();
   assert.deepEqual(visibleNavigationSections, expectedNavigationSections);
-  const hiddenNavigationSections = ['会员与营销', '门店与渠道', '系统管理'];
+  const hiddenNavigationSections = ['门店与渠道', '系统管理'];
   for (const label of hiddenNavigationSections) {
     assert.equal(
       await groupedNavigation.getByText(label, { exact: true }).count(),
