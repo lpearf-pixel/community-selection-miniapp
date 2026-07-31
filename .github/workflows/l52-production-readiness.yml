@@ -84,6 +84,7 @@ jobs:
           WECHAT_REFUND_NOTIFY_URL=https://api.ci.invalid/api/refunds/wechat/notify
           MINIAPP_API_BASE_URL=https://api.ci.invalid
           USER_SESSION_TOKEN_SECRET=ci-user-session-secret-abcdefghijklmnopqrstuvwxyz
+          MEMBER_PHONE_HMAC_SECRET=ci-member-phone-hmac-secret-abcdefghijklmnopqrstuvwxyzabcdef
           FIRST_LAUNCH_MODE=true
           MEMBERSHIP_ENABLED=false
           COUPONS_ENABLED=false
@@ -241,4 +242,3 @@ jobs:
             .github/l52-compose.production.json \
             .github/l52-compose.rendered.json
           rm -rf secrets
-
