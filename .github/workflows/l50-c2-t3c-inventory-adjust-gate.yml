@@ -5,6 +5,8 @@ on:
     branches:
       - stable/l50-a3-4-business-base
     paths:
+      - .github/actions/configure-ci-postgres/action.yml
+      - .github/config/ci-postgres.env
       - .github/workflows/l50-c2-t3c-inventory-adjust-gate.yml
       - apps/api/src/modules/inventory/**
       - apps/api/src/routes/inventory.ts
@@ -43,11 +45,8 @@ jobs:
         with:
           node-version: 20.19.0
           cache: pnpm
-      - name: Select isolated PostgreSQL port
-        run: |
-          port=$((30000 + GITHUB_RUN_NUMBER % 10000))
-          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm db:generate
