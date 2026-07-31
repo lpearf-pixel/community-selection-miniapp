@@ -67,16 +67,23 @@ assert(verifyAll.includes('scripts/verify-report-publish-local.ts'), 'verify:all
 const complianceReleaseIndex = verifyAll.indexOf(
   'pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts',
 );
+const seedCheckIndex = verifyAll.indexOf('pnpm seed:check');
+const repositoryTypecheckIndex = verifyAll.indexOf('pnpm typecheck');
 const mutatingHistoricalVerifierIndex = verifyAll.indexOf(
   'pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L47',
 );
 assert(
-  complianceReleaseIndex >= 0 && mutatingHistoricalVerifierIndex >= 0,
-  'verify:all must register both the L53 release gate and historical stage verifiers',
+  seedCheckIndex >= 0 &&
+    complianceReleaseIndex >= 0 &&
+    repositoryTypecheckIndex >= 0 &&
+    mutatingHistoricalVerifierIndex >= 0,
+  'verify:all must register the seed check, L53 release gate, repository checks and historical stage verifiers',
 );
 assert(
-  complianceReleaseIndex < mutatingHistoricalVerifierIndex,
-  'verify:all must evaluate the production seed before database-mutating historical verifiers',
+  seedCheckIndex < complianceReleaseIndex &&
+    complianceReleaseIndex < repositoryTypecheckIndex &&
+    complianceReleaseIndex < mutatingHistoricalVerifierIndex,
+  'verify:all must evaluate the production seed immediately after seed validation and before repository or historical checks can mutate it',
 );
 
 console.log('Report Markdown, artifact normalization, and verify:all routing checks passed.');

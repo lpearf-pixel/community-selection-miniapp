@@ -36,12 +36,17 @@ test('baseline evaluates the production compliance seed before database-mutating
     /VERIFICATION_BASELINE_CHECKS[^=]*=\s*\[([\s\S]*?)\];/,
   )?.[1] ?? '';
 
-  assert.match(checks, /\.\.\.foundation/);
+  assert.match(checks, /\.\.\.seedFoundation/);
   assert.match(checks, /\.\.\.releaseGates/);
+  assert.match(checks, /\.\.\.repositoryFoundation/);
   assert.match(checks, /\.\.\.registeredStages/);
   assert.ok(
-    checks.indexOf('...releaseGates') < checks.indexOf('...registeredStages'),
-    'L53 release gates must inspect the seeded production catalog before historical verifiers mutate the database',
+    checks.indexOf('...seedFoundation') <
+      checks.indexOf('...releaseGates') &&
+      checks.indexOf('...releaseGates') <
+        checks.indexOf('...repositoryFoundation') &&
+      checks.indexOf('...releaseGates') < checks.indexOf('...registeredStages'),
+    'L53 release gates must run immediately after the production seed and before repository or historical checks can mutate the database',
   );
 });
 
