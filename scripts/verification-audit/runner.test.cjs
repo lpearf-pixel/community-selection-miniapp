@@ -26,6 +26,40 @@ test('GitHub-hosted gates select isolated PostgreSQL ports', () => {
   }
 });
 
+test('baseline evaluates the production compliance seed before database-mutating historical verifiers', () => {
+  const root = resolve(__dirname, '..', '..');
+  const source = readFileSync(
+    resolve(root, 'scripts/verification-baseline-manifest.ts'),
+    'utf8',
+  );
+  const checks = source.match(
+    /VERIFICATION_BASELINE_CHECKS[^=]*=\s*\[([\s\S]*?)\];/,
+  )?.[1] ?? '';
+
+  assert.match(checks, /\.\.\.foundation/);
+  assert.match(checks, /\.\.\.releaseGates/);
+  assert.match(checks, /\.\.\.registeredStages/);
+  assert.ok(
+    checks.indexOf('...releaseGates') < checks.indexOf('...registeredStages'),
+    'L53 release gates must inspect the seeded production catalog before historical verifiers mutate the database',
+  );
+});
+
+test('L48 verifier rejects body identity fields instead of treating them as a successful withdrawal', () => {
+  const root = resolve(__dirname, '..', '..');
+  const source = readFileSync(
+    resolve(root, 'scripts/verify-l48-security-privacy-docker-e2e-local.ts'),
+    'utf8',
+  );
+  const scenario = source.match(
+    /const withdrawalRequestId = `\$\{prefix\}-body-conflict-withdrawal`;([\s\S]*?)await requestJson\(`\/api\/leaders\/me\/withdrawals\/\$\{fixtures\.withdrawalB\.id\}`/,
+  )?.[1] ?? '';
+
+  assert.match(scenario, /expectedStatus:\s*400/);
+  assert.doesNotMatch(scenario, /createdWithdrawal\.body\.data\.applied/);
+  assert.match(scenario, /persistedWithdrawal\s*===\s*null/);
+});
+
 test('records every check after a middle failure and preserves isolated evidence', () => {
   const outputDir = mkdtempSync(join(tmpdir(), 'verification-audit-'));
   const executed = [];

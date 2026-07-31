@@ -93,8 +93,8 @@ const releaseGates: VerificationAuditCheck[] = [
 
 export const VERIFICATION_BASELINE_CHECKS: readonly VerificationAuditCheck[] = [
   ...foundation,
+  ...releaseGates,
   ...legacyStages,
   ...globalStatic,
   ...registeredStages,
-  ...releaseGates,
 ];
