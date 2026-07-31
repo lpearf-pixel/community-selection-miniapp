@@ -68,6 +68,7 @@ export const config = {
     process.env.WECHAT_PAY_MODE !== 'wechat',
   adminAuthEnabled: process.env.ADMIN_AUTH_ENABLED === 'true',
   adminToken: process.env.ADMIN_TOKEN ?? '',
+  memberPhoneHmacSecret: process.env.MEMBER_PHONE_HMAC_SECRET ?? '',
 } as const;
 
 export function validateRuntimeConfig(env: RuntimeEnv = process.env) {
@@ -143,6 +144,7 @@ export function validateRuntimeConfig(env: RuntimeEnv = process.env) {
     requireLength(env, 'ADMIN_TOKEN', 32, problems);
     requireLength(env, 'ADMIN_TOTP_ENCRYPTION_KEY', 32, problems);
     requireLength(env, 'USER_SESSION_TOKEN_SECRET', 32, problems);
+    requireLength(env, 'MEMBER_PHONE_HMAC_SECRET', 32, problems);
     if ((env.WECHAT_API_V3_KEY?.length ?? 0) !== 32) {
       problems.push('WECHAT_API_V3_KEY must be exactly 32 characters');
     }
