@@ -189,13 +189,8 @@ jobs:
           docker volume rm \
             community-selection-l52-${GITHUB_RUN_ID}-secrets
 
-      - name: Select isolated verification PostgreSQL port
-        shell: bash
-        run: |
-          port=$((47000 + GITHUB_RUN_NUMBER % 2000))
-          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
-
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
       - name: Start verification PostgreSQL
         run: |
           docker compose \
