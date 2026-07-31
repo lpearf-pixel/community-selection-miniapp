@@ -73,6 +73,7 @@ describe('admin feature registry', () => {
         ['pickupWorkbench', '自提工作台'],
         ['deliveryReservation', '配送预留'],
         ['deliveryRuleConfig', '管理配送规则'],
+        ['memberImports', '老会员导入'],
       ]);
   });
 });

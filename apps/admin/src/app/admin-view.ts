@@ -23,6 +23,7 @@ export const ADMIN_VIEW_KEYS = [
   'deliveryReservation',
   'deliveryRuleConfig',
   'dashboardV2',
+  'memberImports',
 ] as const;
 
 export type AdminViewKey = (typeof ADMIN_VIEW_KEYS)[number];

@@ -35,6 +35,8 @@ const validProductionEnv: NodeJS.ProcessEnv = {
   MINIAPP_API_BASE_URL: 'https://api.example.com',
   USER_SESSION_TOKEN_SECRET:
     'user-session-secret-abcdefghijklmnopqrstuvwxyz',
+  MEMBER_PHONE_HMAC_SECRET:
+    'member-phone-secret-abcdefghijklmnopqrstuvwxyz',
   CURRENT_USER_MOCK_HEADERS_ENABLED: 'false',
   AUTO_PAYOUT_ENABLED: 'false',
   AUTO_TAX_FILING_ENABLED: 'false',
@@ -109,10 +111,19 @@ describe('production runtime configuration', () => {
     ['ADMIN_TOTP_ENCRYPTION_KEY', 'short', /ADMIN_TOTP_ENCRYPTION_KEY/],
     ['USER_SESSION_TOKEN_SECRET', 'short', /USER_SESSION_TOKEN_SECRET/],
     ['WECHAT_API_V3_KEY', 'short', /WECHAT_API_V3_KEY/],
+    ['MEMBER_PHONE_HMAC_SECRET', 'short', /MEMBER_PHONE_HMAC_SECRET/],
   ])('rejects weak production secret %s', (key, value, message) => {
     expect(() =>
       validateRuntimeConfig({ ...validProductionEnv, [key]: value }),
     ).toThrow(message);
+  });
+
+  it('requires the member phone identity secret in production', () => {
+    const env = { ...validProductionEnv };
+    delete env.MEMBER_PHONE_HMAC_SECRET;
+    expect(() => validateRuntimeConfig(env)).toThrow(
+      /MEMBER_PHONE_HMAC_SECRET/,
+    );
   });
 
   it('rejects reused Admin token and TOTP encryption key', () => {

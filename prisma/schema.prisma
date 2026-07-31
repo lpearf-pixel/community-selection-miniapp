@@ -111,6 +111,25 @@ enum WithdrawalStatus {
   rejected
 }
 
+enum MemberImportBatchStatus {
+  preview
+  confirmed
+}
+
+enum MemberImportRowStatus {
+  invalid
+  duplicate
+  matched
+  pending
+}
+
+enum LegacyMemberEligibilityStatus {
+  pending
+  active
+  used
+  revoked
+}
+
 model User {
   id                  String              @id @default(cuid())
   openid              String              @unique
@@ -131,6 +150,70 @@ model User {
   audit_logs          AuditLog[]          @relation("AuditActor")
   after_sale_cases    AfterSaleCase[]
   sessions            UserSession[]
+  legacy_member_import_rows LegacyMemberImportRow[]
+  legacy_member_eligibility LegacyMemberEligibility?
+}
+
+model LegacyMemberImportBatch {
+  id                 String                   @id
+  source_name        String
+  file_name          String
+  file_sha256        String
+  status             MemberImportBatchStatus @default(preview)
+  total_rows         Int
+  valid_rows         Int
+  duplicate_rows     Int
+  invalid_rows       Int
+  matched_rows       Int
+  pending_rows       Int
+  operator_admin_id  String
+  confirmed_admin_id String?
+  confirmed_at       DateTime?
+  created_at         DateTime                 @default(now())
+  rows               LegacyMemberImportRow[]
+  eligibilities      LegacyMemberEligibility[]
+
+  @@index([status, created_at])
+  @@index([file_sha256])
+}
+
+model LegacyMemberImportRow {
+  id                String                  @id
+  batch_id          String
+  row_number        Int
+  phone_fingerprint String?
+  masked_phone      String?
+  status            MemberImportRowStatus
+  invalid_reason    String?
+  matched_user_id   String?
+  created_at        DateTime                @default(now())
+  batch             LegacyMemberImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  matched_user      User?                   @relation(fields: [matched_user_id], references: [id])
+
+  @@unique([batch_id, row_number])
+  @@index([batch_id, status])
+  @@index([phone_fingerprint])
+}
+
+model LegacyMemberEligibility {
+  id                    String                        @id
+  batch_id              String
+  phone_fingerprint     String                        @unique
+  masked_phone          String
+  user_id               String?                       @unique
+  grant_type            String                        @default("LEGACY_FIRST_YEAR_FREE")
+  status                LegacyMemberEligibilityStatus @default(pending)
+  claimed_at            DateTime?
+  used_at               DateTime?
+  revoked_at            DateTime?
+  revoked_by_admin_id   String?
+  created_at            DateTime                      @default(now())
+  updated_at            DateTime                      @updatedAt
+  batch                 LegacyMemberImportBatch       @relation(fields: [batch_id], references: [id])
+  user                  User?                         @relation(fields: [user_id], references: [id])
+
+  @@index([batch_id, status])
+  @@index([status, created_at])
 }
 
 model UserSession {

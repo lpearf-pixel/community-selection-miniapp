@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import multipart from '@fastify/multipart';
 import { contractFail, fail, ok } from '@community-selection/shared';
 import { registerPublicRoutes } from './routes/public/index.js';
 import { registerAdminRoutes } from './routes/admin/index.js';
@@ -10,10 +11,16 @@ declare module 'fastify' {
   interface FastifyRequest {
     rawBody?: Buffer;
   }
+  interface FastifyContextConfig {
+    adminContractV1?: boolean;
+  }
 }
 
 export function buildApp() {
   const app = Fastify({ logger: HTTP_LOGGER_OPTIONS });
+  void app.register(multipart, {
+    limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4 },
+  });
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser(
     'application/json',

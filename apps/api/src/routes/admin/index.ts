@@ -15,6 +15,7 @@ import { registerAdminDeliveryRoutes } from './delivery.js';
 import { registerAdminOrderRoutes } from './orders.js';
 import { registerAdminDashboardV2Routes } from './dashboard-v2.js';
 import { registerAdminComplianceRoutes } from './compliance.js';
+import { registerAdminMemberImportRoutes } from './member-imports.js';
 
 export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminAuthRoutes(app);
@@ -33,4 +34,5 @@ export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminOrderRoutes(app);
   registerAdminDashboardV2Routes(app);
   registerAdminComplianceRoutes(app);
+  registerAdminMemberImportRoutes(app);
 }

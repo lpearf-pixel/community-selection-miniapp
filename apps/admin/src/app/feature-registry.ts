@@ -61,4 +61,5 @@ export const ADMIN_FEATURES = [
   { key: 'pickupWorkbench', label: '自提工作台', section: 'sales-fulfillment', requiredPermissions: ['pickup.read'] },
   { key: 'deliveryReservation', label: '配送预留', section: 'sales-fulfillment', requiredPermissions: ['delivery.read'] },
   { key: 'deliveryRuleConfig', label: '管理配送规则', section: 'sales-fulfillment', requiredPermissions: ['delivery.rule.read'] },
+  { key: 'memberImports', label: '老会员导入', section: 'membership-marketing', requiredPermissions: ['admin.full_access'] },
 ] as const satisfies readonly AdminFeatureDefinition[];

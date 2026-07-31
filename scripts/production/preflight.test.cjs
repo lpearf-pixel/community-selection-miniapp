@@ -50,6 +50,8 @@ const validEnv = {
   MINIAPP_API_BASE_URL: 'https://api.example.com',
   USER_SESSION_TOKEN_SECRET:
     'user-session-secret-abcdefghijklmnopqrstuvwxyz',
+  MEMBER_PHONE_HMAC_SECRET:
+    'member-phone-secret-abcdefghijklmnopqrstuvwxyz',
   AUTO_PAYOUT_ENABLED: 'false',
   AUTO_TAX_FILING_ENABLED: 'false',
   WECHAT_TRANSFER_ENABLED: 'false',
