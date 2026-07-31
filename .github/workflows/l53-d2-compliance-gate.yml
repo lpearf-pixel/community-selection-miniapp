@@ -3,6 +3,8 @@ name: L53 D2 Compliance Gate
 on:
   pull_request:
     paths:
+      - .github/actions/configure-ci-postgres/action.yml
+      - .github/config/ci-postgres.env
       - .github/workflows/l53-d2-compliance-gate.yml
       - scripts/production/l53-d2-compliance-gate-contract.test.cjs
       - scripts/production/l53-d2-release-registration.contract.test.cjs
@@ -79,11 +81,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-      - name: Select isolated PostgreSQL port
-        run: |
-          port=$((40000 + GITHUB_RUN_NUMBER % 10000))
-          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm db:generate
