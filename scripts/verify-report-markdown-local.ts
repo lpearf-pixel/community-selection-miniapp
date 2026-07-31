@@ -64,4 +64,19 @@ assert(l46Case.includes('scripts/stage-workflow.ts') && l46Case.includes('--stag
 assert(!l46Case.includes('scripts/verify-report-publish-local.ts'), 'verify:all must not route L46 through the historical report verifier');
 assert(verifyAll.includes('scripts/verify-report-publish-local.ts'), 'verify:all must preserve historical report publish verification');
 
+const complianceReleaseIndex = verifyAll.indexOf(
+  'pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts',
+);
+const mutatingHistoricalVerifierIndex = verifyAll.indexOf(
+  'pnpm exec tsx scripts/run-registered-stage-verifiers.ts --from=L24 --to=L47',
+);
+assert(
+  complianceReleaseIndex >= 0 && mutatingHistoricalVerifierIndex >= 0,
+  'verify:all must register both the L53 release gate and historical stage verifiers',
+);
+assert(
+  complianceReleaseIndex < mutatingHistoricalVerifierIndex,
+  'verify:all must evaluate the production seed before database-mutating historical verifiers',
+);
+
 console.log('Report Markdown, artifact normalization, and verify:all routing checks passed.');
