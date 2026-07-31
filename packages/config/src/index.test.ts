@@ -3,6 +3,11 @@ import { validateRuntimeConfig } from './index.js';
 
 const validProductionEnv: NodeJS.ProcessEnv = {
   NODE_ENV: 'production',
+  FIRST_LAUNCH_MODE: 'true',
+  MEMBERSHIP_ENABLED: 'false',
+  COUPONS_ENABLED: 'false',
+  CASH_REWARDS_ENABLED: 'false',
+  WITHDRAWALS_ENABLED: 'false',
   PORT: '13080',
   DATABASE_URL:
     'postgresql://community_selection:strong_database_password@postgres:5432/community_selection?schema=public',
@@ -30,6 +35,8 @@ const validProductionEnv: NodeJS.ProcessEnv = {
   MINIAPP_API_BASE_URL: 'https://api.example.com',
   USER_SESSION_TOKEN_SECRET:
     'user-session-secret-abcdefghijklmnopqrstuvwxyz',
+  MEMBER_PHONE_HMAC_SECRET:
+    'member-phone-secret-abcdefghijklmnopqrstuvwxyz',
   CURRENT_USER_MOCK_HEADERS_ENABLED: 'false',
   AUTO_PAYOUT_ENABLED: 'false',
   AUTO_TAX_FILING_ENABLED: 'false',
@@ -40,6 +47,39 @@ const validProductionEnv: NodeJS.ProcessEnv = {
 describe('production runtime configuration', () => {
   it('accepts the complete real-payment single-server contract', () => {
     expect(() => validateRuntimeConfig(validProductionEnv)).not.toThrow();
+  });
+
+  it('requires the explicit first-launch operating mode in production', () => {
+    for (const value of [undefined, 'false']) {
+      expect(() =>
+        validateRuntimeConfig({
+          ...validProductionEnv,
+          FIRST_LAUNCH_MODE: value,
+        }),
+      ).toThrow(/FIRST_LAUNCH_MODE/);
+    }
+  });
+
+  it.each([
+    ['MEMBERSHIP_ENABLED', 'true'],
+    ['COUPONS_ENABLED', 'true'],
+    ['CASH_REWARDS_ENABLED', 'true'],
+    ['WITHDRAWALS_ENABLED', 'true'],
+  ])('rejects first-launch capability %s=%s', (key, value) => {
+    expect(() =>
+      validateRuntimeConfig({ ...validProductionEnv, [key]: value }),
+    ).toThrow(new RegExp(key));
+  });
+
+  it.each([
+    'MEMBERSHIP_ENABLED',
+    'COUPONS_ENABLED',
+    'CASH_REWARDS_ENABLED',
+    'WITHDRAWALS_ENABLED',
+  ])('fails closed when %s is missing', (key) => {
+    const env = { ...validProductionEnv };
+    delete env[key];
+    expect(() => validateRuntimeConfig(env)).toThrow(new RegExp(key));
   });
 
   it.each([
@@ -71,10 +111,19 @@ describe('production runtime configuration', () => {
     ['ADMIN_TOTP_ENCRYPTION_KEY', 'short', /ADMIN_TOTP_ENCRYPTION_KEY/],
     ['USER_SESSION_TOKEN_SECRET', 'short', /USER_SESSION_TOKEN_SECRET/],
     ['WECHAT_API_V3_KEY', 'short', /WECHAT_API_V3_KEY/],
+    ['MEMBER_PHONE_HMAC_SECRET', 'short', /MEMBER_PHONE_HMAC_SECRET/],
   ])('rejects weak production secret %s', (key, value, message) => {
     expect(() =>
       validateRuntimeConfig({ ...validProductionEnv, [key]: value }),
     ).toThrow(message);
+  });
+
+  it('requires the member phone identity secret in production', () => {
+    const env = { ...validProductionEnv };
+    delete env.MEMBER_PHONE_HMAC_SECRET;
+    expect(() => validateRuntimeConfig(env)).toThrow(
+      /MEMBER_PHONE_HMAC_SECRET/,
+    );
   });
 
   it('rejects reused Admin token and TOTP encryption key', () => {

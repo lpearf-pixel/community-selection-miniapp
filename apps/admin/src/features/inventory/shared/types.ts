@@ -63,6 +63,30 @@ export type Supplier = {
   contact_phone?: string | null;
   status: string;
   remark?: string | null;
+  subject_type?: string | null;
+  source_address?: string | null;
+  market_name?: string | null;
+  stall_no?: string | null;
+  profile_version?: number;
+};
+
+export type SupplierQualificationSummary = {
+  id: string;
+  qualification_type: string;
+  version: number;
+  status: string;
+  valid_from: string | null;
+  expires_at: string | null;
+  masked_summary: Record<string, string>;
+};
+
+export type SupplierComplianceState = {
+  id: string;
+  name: string;
+  subject_type: string | null;
+  status: string;
+  source_complete: boolean;
+  qualifications: SupplierQualificationSummary[];
 };
 
 export type ProductBatch = {

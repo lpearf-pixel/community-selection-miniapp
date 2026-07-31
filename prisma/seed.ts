@@ -1,13 +1,38 @@
-import { PrismaClient, CommissionType, ProductStatus, UserRole } from '@prisma/client';
+import { CommissionType, ProductStatus, UserRole } from '@prisma/client';
+import { prisma } from '../apps/api/src/db.js';
+import type { AdminAccessContext } from '../apps/api/src/modules/admin-access/admin-access-control.js';
+import {
+  executeReviewProductCompliance,
+  executeSubmitProductCompliance,
+  getProductComplianceState,
+} from '../apps/api/src/modules/compliance/product-compliance-executor.js';
 
-const prisma = new PrismaClient();
+const complianceAdminId = 'seed-compliance-admin';
+const complianceSupplierId = 'seed-compliance-supplier';
+const complianceContext: AdminAccessContext = {
+  admin_user_id: complianceAdminId,
+  role: 'super_admin',
+  permissions: ['admin.full_access'],
+  is_super_admin: true,
+  data_scope: {
+    pickup_store_ids: [],
+    community_ids: [],
+    can_access_all_pickup_stores: true,
+    can_access_all_communities: true,
+  },
+  data_scope_source: 'session',
+};
+const complianceAdminMeta = {
+  ip_address: '127.0.0.1',
+  user_agent: 'community-selection-seed',
+};
 
 const categories = [
-  { name: '有机蔬菜', sort_order: 1 },
-  { name: '鸡蛋', sort_order: 2 },
-  { name: '水果', sort_order: 3 },
-  { name: '杂粮', sort_order: 4 },
-  { name: '干货', sort_order: 5 }
+  { name: '有机蔬菜', compliance_code: 'vegetable', sort_order: 1 },
+  { name: '鸡蛋', compliance_code: 'egg', sort_order: 2 },
+  { name: '水果', compliance_code: 'fruit', sort_order: 3 },
+  { name: '杂粮', compliance_code: 'grain', sort_order: 4 },
+  { name: '干货', compliance_code: 'primary_dried_goods', sort_order: 5 }
 ];
 
 const products = [
@@ -79,6 +104,70 @@ async function main() {
     }
   });
 
+  await prisma.adminUser.upsert({
+    where: { username: complianceAdminId },
+    update: { status: 'active', role: 'super_admin' },
+    create: {
+      id: complianceAdminId,
+      username: complianceAdminId,
+      password_hash: 'seed-compliance-only',
+      role: 'super_admin',
+      status: 'active',
+    },
+  });
+
+  await prisma.supplier.upsert({
+    where: { name: '社区甄选演示供应商' },
+    update: {
+      subject_type: 'company',
+      profile_fingerprint: 'seed-supplier-profile-v1',
+      profile_version: 1,
+      status: 'active',
+    },
+    create: {
+      id: complianceSupplierId,
+      name: '社区甄选演示供应商',
+      subject_type: 'company',
+      profile_fingerprint: 'seed-supplier-profile-v1',
+      profile_version: 1,
+      status: 'active',
+    },
+  });
+
+  await prisma.supplierQualification.upsert({
+    where: {
+      supplier_id_qualification_type_version: {
+        supplier_id: complianceSupplierId,
+        qualification_type: 'business_license',
+        version: 1,
+      },
+    },
+    update: {
+      status: 'approved',
+      critical_fingerprint: 'seed-business-license-v1',
+      reviewed_by_admin_id: complianceAdminId,
+      reviewed_at: new Date('2026-01-01T00:00:00.000Z'),
+      valid_from: new Date('2025-01-01T00:00:00.000Z'),
+      expires_at: new Date('2035-01-01T00:00:00.000Z'),
+    },
+    create: {
+      supplier_id: complianceSupplierId,
+      qualification_type: 'business_license',
+      version: 1,
+      status: 'approved',
+      object_key: 'demo/compliance/business-license.pdf',
+      file_sha256: 'a'.repeat(64),
+      masked_summary: { holder: '社***商' },
+      critical_fingerprint: 'seed-business-license-v1',
+      submitted_by_admin_id: complianceAdminId,
+      reviewed_by_admin_id: complianceAdminId,
+      reviewed_at: new Date('2026-01-01T00:00:00.000Z'),
+      review_note: '演示种子资质',
+      valid_from: new Date('2025-01-01T00:00:00.000Z'),
+      expires_at: new Date('2035-01-01T00:00:00.000Z'),
+    },
+  });
+
   for (const category of categories) {
     await prisma.category.upsert({
       where: { name: category.name },
@@ -91,10 +180,11 @@ async function main() {
     (await prisma.category.findMany()).map((category) => [category.name, category.id])
   );
 
-  for (const product of products) {
+  const seededProducts = [];
+  for (const [productIndex, product] of products.entries()) {
     const category_id = categoryMap.get(product.category);
     if (!category_id) throw new Error(`Missing category: ${product.category}`);
-    await prisma.product.upsert({
+    const seededProduct = await prisma.product.upsert({
       where: { name: product.name },
       update: {
         category_id,
@@ -102,6 +192,9 @@ async function main() {
         cost_price_cents: product.cost_price_cents,
         stock: product.stock,
         unit: product.unit,
+        primary_supplier_id: complianceSupplierId,
+        origin_text: '社区甄选演示产地',
+        labels: ['演示商品'],
         stock_unit: 'piece',
         sale_unit: product.unit,
         sale_spec_name: product.unit === '盒' ? product.name.replace(/.*?(\d+\s*枚.*)/, '$1') : null,
@@ -121,6 +214,9 @@ async function main() {
         cost_price_cents: product.cost_price_cents,
         stock: product.stock,
         unit: product.unit,
+        primary_supplier_id: complianceSupplierId,
+        origin_text: '社区甄选演示产地',
+        labels: ['演示商品'],
         stock_unit: 'piece',
         sale_unit: product.unit,
         sale_spec_name: product.unit === '盒' ? product.name.replace(/.*?(\d+\s*枚.*)/, '$1') : null,
@@ -131,6 +227,86 @@ async function main() {
         status: ProductStatus.active
       }
     });
+    seededProducts.push({ product: seededProduct, index: productIndex });
+  }
+
+  for (const seeded of seededProducts) {
+    const batchId = `seed-compliance-batch-${seeded.index + 1}`;
+    const batchNo = `SEED-COMPLIANCE-${seeded.index + 1}`;
+    const evidenceId = `seed-compliance-evidence-${seeded.index + 1}`;
+    await prisma.productBatch.upsert({
+      where: { batch_no: batchNo },
+      update: {
+        product_id: seeded.product.id,
+        supplier_id: complianceSupplierId,
+        product_name_snapshot: seeded.product.name,
+        supplier_name_snapshot: '社区甄选演示供应商',
+        stock_unit: 'piece',
+        initial_quantity: seeded.product.stock,
+        remaining_quantity: seeded.product.stock,
+        origin_text: '社区甄选演示产地',
+        arrival_date: new Date('2026-01-01T00:00:00.000Z'),
+        status: 'active',
+      },
+      create: {
+        id: batchId,
+        batch_no: batchNo,
+        product_id: seeded.product.id,
+        supplier_id: complianceSupplierId,
+        product_name_snapshot: seeded.product.name,
+        supplier_name_snapshot: '社区甄选演示供应商',
+        stock_unit: 'piece',
+        initial_quantity: seeded.product.stock,
+        remaining_quantity: seeded.product.stock,
+        origin_text: '社区甄选演示产地',
+        arrival_date: new Date('2026-01-01T00:00:00.000Z'),
+        status: 'active',
+      },
+    });
+    await prisma.productBatchEvidence.upsert({
+      where: { id: evidenceId },
+      update: {
+        batch_id: batchId,
+        status: 'active',
+        evidence_fingerprint: `seed-purchase-evidence-v1-${seeded.index + 1}`,
+      },
+      create: {
+        id: evidenceId,
+        batch_id: batchId,
+        evidence_type: 'purchase_voucher',
+        status: 'active',
+        object_key: `demo/compliance/purchase-voucher-${seeded.index + 1}.pdf`,
+        file_sha256: 'b'.repeat(64),
+        masked_summary: { voucher: `演***${seeded.index + 1}` },
+        evidence_fingerprint: `seed-purchase-evidence-v1-${seeded.index + 1}`,
+        created_by_admin_id: complianceAdminId,
+      },
+    });
+
+    const state = await getProductComplianceState(seeded.product.id);
+    if (!state.latest_review?.effective_valid) {
+      const submitted = await executeSubmitProductCompliance({
+        product_id: seeded.product.id,
+        context: complianceContext,
+        admin_meta: complianceAdminMeta,
+        command: {
+          expected_fingerprint: state.current_fingerprint,
+          expected_updated_at: null,
+          idempotency_key: `seed-product-${seeded.index + 1}-submit-v1`,
+        },
+      });
+      await executeReviewProductCompliance({
+        review_id: submitted.id,
+        context: complianceContext,
+        admin_meta: complianceAdminMeta,
+        command: {
+          decision: 'approve',
+          expected_status: 'submitted',
+          review_note: '演示种子商品合规通过',
+          idempotency_key: `seed-product-${seeded.index + 1}-review-v1`,
+        },
+      });
+    }
   }
 
   for (const community of communities) {

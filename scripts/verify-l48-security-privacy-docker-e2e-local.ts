@@ -810,7 +810,7 @@ async function runScenario(): Promise<void> {
     );
 
     const withdrawalRequestId = `${prefix}-body-conflict-withdrawal`;
-    const createdWithdrawal = await requestJson<any>(
+    const rejectedWithdrawal = await requestJson<any>(
       '/api/leaders/me/withdrawals',
       {
         method: 'POST',
@@ -822,19 +822,19 @@ async function runScenario(): Promise<void> {
           commission_ids: [fixtures.withdrawableCommissionA.id],
           amount_cents: 300,
         },
+        expectedStatus: 400,
       },
     );
     assert(
-      createdWithdrawal.body.data.applied === true &&
-        createdWithdrawal.body.data.amount_cents === 300,
-      'Leader withdrawal body-conflict request did not create the expected withdrawal',
+      rejectedWithdrawal.body.message === '提现申请命令不合法',
+      'Leader withdrawal body-conflict request must reject identity fields',
     );
     const persistedWithdrawal = await prisma.withdrawal.findUnique({
       where: { client_request_id: withdrawalRequestId },
     });
     assert(
-      persistedWithdrawal?.leader_user_id === fixtures.leaderA.id,
-      'Body identity changed persisted withdrawal owner',
+      persistedWithdrawal === null,
+      'Rejected body identity fields must not create a withdrawal',
     );
 
     await requestJson(`/api/leaders/me/withdrawals/${fixtures.withdrawalB.id}`, {
@@ -892,7 +892,7 @@ async function runScenario(): Promise<void> {
           cookie: `session=${HTTP_LOG_MARKER}`,
           'x-admin-token': HTTP_LOG_MARKER,
         },
-        expectedStatus: 404,
+        expectedStatus: 401,
       },
     );
     await requestJson('/api/leaders/me/rewards/convert-credit', {

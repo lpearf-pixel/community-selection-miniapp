@@ -93,6 +93,18 @@ type AdminOrderListRecord = {
     address: string;
   } | null;
   community?: { id: string; name: string } | null;
+  wechat_shipping_intent?: {
+    status:
+      | 'pending'
+      | 'processing'
+      | 'retryable'
+      | 'succeeded'
+      | 'manual_required';
+    attempt_count: number;
+    last_error_code: string | null;
+    next_retry_at: Date | string | null;
+    succeeded_at: Date | string | null;
+  } | null;
 };
 
 function stringValue(value: unknown): string | undefined {
@@ -275,6 +287,24 @@ export function toAdminOrderListItem(order: AdminOrderListRecord) {
     receiver_name: order.receiver_name,
     receiver_phone_masked: maskPhone(order.receiver_phone),
     receiver_address_masked: maskAddress(order.receiver_address),
+    shipping_sync: order.wechat_shipping_intent
+      ? {
+          status: order.wechat_shipping_intent.status,
+          attempts: order.wechat_shipping_intent.attempt_count,
+          last_error_code:
+            order.wechat_shipping_intent.last_error_code,
+          next_retry_at:
+            order.wechat_shipping_intent.next_retry_at,
+          succeeded_at:
+            order.wechat_shipping_intent.succeeded_at,
+        }
+      : {
+          status: 'not_applicable' as const,
+          attempts: 0,
+          last_error_code: null,
+          next_retry_at: null,
+          succeeded_at: null,
+        },
     created_at: order.created_at,
     paid_at: order.paid_at ?? null,
   };

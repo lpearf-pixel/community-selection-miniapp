@@ -1,7 +1,15 @@
 import { prisma } from '../../db.js';
 
-export type DeliveryTimeWindow = { code: string; label: string; start_time: string; end_time: string };
+export type DeliveryTimeWindow = {
+  code: string;
+  label: string;
+  start_time: string;
+  end_time: string;
+  day_offset?: number;
+};
 export type DeliveryRule = {
+  id?: string;
+  updated_at?: Date;
   enabled: boolean;
   delivery_mode: 'store_delivery';
   base_fee_cents: number;
@@ -39,9 +47,23 @@ export function validateTimeWindows(value: unknown): DeliveryTimeWindow[] {
     const row = item as Partial<DeliveryTimeWindow>;
     if (!row.code?.trim() || !row.label?.trim() || !row.start_time?.trim() || !row.end_time?.trim()) throw new Error('配送时段需包含 code/label/start_time/end_time');
     if (!hhmm(row.start_time) || !hhmm(row.end_time)) throw new Error('配送时段时间格式必须为 HH:mm');
+    if (
+      row.day_offset !== undefined &&
+      (!Number.isSafeInteger(row.day_offset) ||
+        row.day_offset < 0 ||
+        row.day_offset > 30)
+    ) {
+      throw new Error('配送时段 day_offset 必须是 0-30 的整数');
+    }
     if (seen.has(row.code)) throw new Error('配送时段 code 唯一');
     seen.add(row.code);
-    return { code: row.code, label: row.label, start_time: row.start_time, end_time: row.end_time };
+    return {
+      code: row.code,
+      label: row.label,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      ...(row.day_offset === undefined ? {} : { day_offset: row.day_offset }),
+    };
   });
 }
 function validateConfig(input: any) {
@@ -85,7 +107,13 @@ export async function validateDeliveryRuleForOrder(input: { delivery_time_window
   const orderAmount = Number(input.order_amount_cents ?? 0);
   const delivery_fee_cents = rule.free_threshold_cents != null && orderAmount >= rule.free_threshold_cents ? 0 : rule.base_fee_cents;
   // 不计算距离，不请求用户定位，不调用第三方配送 API，不调用达达，不创建第三方配送单。
-  return { ok: true, delivery_fee_cents, delivery_time_window, error_message: undefined };
+  return {
+    ok: true,
+    delivery_fee_cents,
+    delivery_time_window,
+    delivery_rule: rule,
+    error_message: undefined,
+  };
 }
 
 export async function listDeliveryRuleConfigs(query?: { pickup_store_id?: string | null }) {

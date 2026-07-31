@@ -9,6 +9,10 @@ export type AfterSaleCase = {
     order_no: string;
     version: number;
     user?: { nickname: string } | null;
+    product_amount_cents?: number | null;
+    product_refund_amount_cents?: number;
+    delivery_fee_cents?: number;
+    delivery_refund_amount_cents?: number;
   } | null;
   type: string;
   status: string;
@@ -16,6 +20,8 @@ export type AfterSaleCase = {
   reason: string;
   description?: string | null;
   requested_refund_cents?: number | null;
+  requested_product_refund_cents?: number | null;
+  requested_delivery_refund_cents?: number | null;
   approved_refund_cents?: number | null;
   approved_product_refund_cents?: number | null;
   approved_delivery_refund_cents?: number | null;
@@ -42,6 +48,8 @@ export type AfterSaleRefundExecutionResult = {
 export type AfterSaleReviewInput = {
   status: 'approved' | 'rejected' | 'reviewing';
   approved_refund_cents?: number;
+  approved_product_refund_cents?: number;
+  approved_delivery_refund_cents?: number;
   resolution_type: string;
   responsibility?: string | null;
   admin_note: string;

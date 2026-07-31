@@ -9,7 +9,7 @@ const navigation = [
   '库存管理', '采购计划', '供应商管理', '批次库存', '临期提醒',
   '库存盘点', '售后客服', '提现管理', '告警中心', '税务人工 Review',
   '经营驾驶舱 V2', '财务对账', '退款台账', '开团服务奖励', '运营看板',
-  '自提工作台', '配送预留', '管理配送规则',
+  '自提工作台', '配送预留', '管理配送规则', '老会员导入',
 ];
 
 async function waitForCount(page, readCount, minimum, label) {
@@ -204,6 +204,7 @@ try {
     '销售与履约',
     '商品与价格',
     '库存与供应链',
+    '会员与营销',
     '财务与结算',
     '数据分析',
     '运维与风控',
@@ -216,7 +217,7 @@ try {
     .getByRole('heading')
     .allTextContents();
   assert.deepEqual(visibleNavigationSections, expectedNavigationSections);
-  const hiddenNavigationSections = ['会员与营销', '门店与渠道', '系统管理'];
+  const hiddenNavigationSections = ['门店与渠道', '系统管理'];
   for (const label of hiddenNavigationSections) {
     assert.equal(
       await groupedNavigation.getByText(label, { exact: true }).count(),

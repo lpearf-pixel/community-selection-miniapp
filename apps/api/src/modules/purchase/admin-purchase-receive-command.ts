@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import {
+  parseProductBatchEvidenceCommandFields,
+  type ProductBatchEvidenceCommandFields,
+} from '../compliance/product-batch-evidence.js';
 
 const OPERATION = 'admin.purchase-plan.receive.v1';
 const INVALID_MESSAGE = '采购入库命令不合法';
@@ -13,9 +17,14 @@ const ITEM_KEYS = new Set([
   'arrival_date',
   'shelf_life_days',
   'remark',
+  'origin_text',
+  'purchase_voucher_type',
+  'payment_reference_hash',
+  'invoice_evidence_status',
+  'evidence',
 ]);
 
-export type AdminPurchaseReceiveItem = {
+export type AdminPurchaseReceiveItem = ProductBatchEvidenceCommandFields & {
   item_id: string;
   received_quantity: number;
   supplier_id?: string;
@@ -127,11 +136,13 @@ export function parseAdminPurchaseReceiveCommand(
     const productionDate = optionalDate(item.production_date);
     const arrivalDate = optionalDate(item.arrival_date);
     const itemRemark = optionalText(item.remark, { max: 500, empty: true });
+    const evidenceFields = parseProductBatchEvidenceCommandFields(item);
     if (
       supplierId === null ||
       productionDate === null ||
       arrivalDate === null ||
       itemRemark === null ||
+      evidenceFields === null ||
       (item.shelf_life_days !== undefined &&
         (!Number.isSafeInteger(item.shelf_life_days) ||
           Number(item.shelf_life_days) <= 0))
@@ -150,6 +161,7 @@ export function parseAdminPurchaseReceiveCommand(
           ? undefined
           : Number(item.shelf_life_days),
       remark: itemRemark,
+      ...evidenceFields,
     });
   }
 

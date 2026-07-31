@@ -10,21 +10,68 @@ const {
   runVerificationAudit,
 } = require('../lib/verification-audit.cjs');
 
-test('concurrent self-hosted gates select isolated PostgreSQL ports', () => {
+test('GitHub-hosted gates select isolated PostgreSQL ports', () => {
   const root = resolve(__dirname, '..', '..');
   for (const workflow of [
     '.github/workflows/verification-baseline-audit.yml',
     '.github/workflows/l50-c2-t3a-refund-gate.yml',
   ]) {
     const source = readFileSync(resolve(root, workflow), 'utf8');
-    assert.match(source, /name: Select isolated PostgreSQL port/);
-    assert.match(source, /POSTGRES_HOST_PORT=\$\{port\}/);
     assert.match(
       source,
-      /DATABASE_URL=postgresql:\/\/postgres:postgres@host\.docker\.internal:\$\{port\}/,
+      /uses:\s*\.\/\.github\/actions\/configure-ci-postgres/,
     );
-    assert.doesNotMatch(source, /host\.docker\.internal:15432/);
+    assert.doesNotMatch(source, /DATABASE_URL=postgresql:\/\//);
+    assert.doesNotMatch(source, /host\.docker\.internal/);
   }
+});
+
+test('baseline evaluates the production compliance seed before database-mutating historical verifiers', () => {
+  const root = resolve(__dirname, '..', '..');
+  const source = readFileSync(
+    resolve(root, 'scripts/verification-baseline-manifest.ts'),
+    'utf8',
+  );
+  const checks = source.match(
+    /VERIFICATION_BASELINE_CHECKS[^=]*=\s*\[([\s\S]*?)\];/,
+  )?.[1] ?? '';
+
+  assert.match(checks, /\.\.\.seedFoundation/);
+  assert.match(checks, /\.\.\.releaseGates/);
+  assert.match(checks, /\.\.\.repositoryFoundation/);
+  assert.match(checks, /\.\.\.registeredStages/);
+  assert.ok(
+    checks.indexOf('...seedFoundation') <
+      checks.indexOf('...releaseGates') &&
+      checks.indexOf('...releaseGates') <
+        checks.indexOf('...repositoryFoundation') &&
+      checks.indexOf('...releaseGates') < checks.indexOf('...registeredStages'),
+    'L53 release gates must run immediately after the production seed and before repository or historical checks can mutate the database',
+  );
+});
+
+test('L48 verifier rejects body identity fields instead of treating them as a successful withdrawal', () => {
+  const root = resolve(__dirname, '..', '..');
+  const source = readFileSync(
+    resolve(root, 'scripts/verify-l48-security-privacy-docker-e2e-local.ts'),
+    'utf8',
+  );
+  const scenario = source.match(
+    /const withdrawalRequestId = `\$\{prefix\}-body-conflict-withdrawal`;([\s\S]*?)await requestJson\(`\/api\/leaders\/me\/withdrawals\/\$\{fixtures\.withdrawalB\.id\}`/,
+  )?.[1] ?? '';
+
+  assert.match(scenario, /expectedStatus:\s*400/);
+  assert.doesNotMatch(scenario, /createdWithdrawal\.body\.data\.applied/);
+  assert.match(scenario, /persistedWithdrawal\s*===\s*null/);
+
+  const logProbe = source.match(
+    /encodeURIComponent\(HTTP_LOG_MARKER\)\}\&phone=\$\{HTTP_LOG_PHONE\}`([\s\S]*?)await requestJson\('\/api\/leaders\/me\/rewards\/convert-credit'/,
+  )?.[1] ?? '';
+  assert.match(
+    logProbe,
+    /expectedStatus:\s*401/,
+    'the unknown identity log probe must stop at the current-user boundary',
+  );
 });
 
 test('records every check after a middle failure and preserves isolated evidence', () => {

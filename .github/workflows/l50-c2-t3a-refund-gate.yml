@@ -5,10 +5,18 @@ on:
     branches:
       - stable/l50-a3-4-business-base
     paths:
+      - .github/actions/configure-ci-postgres/action.yml
+      - .github/config/ci-postgres.env
       - .github/workflows/l50-c2-t3a-refund-gate.yml
       - apps/api/src/modules/refund/**
       - apps/api/src/services/refund-service.ts
       - apps/api/src/modules/after-sale/after-sale-service.ts
+      - apps/api/src/modules/delivery/**
+      - apps/api/src/modules/wechat-shipping/**
+      - apps/api/src/modules/wechat/wechat-access-token-client.ts
+      - apps/api/src/modules/wechat/wechat-access-token-client.test.ts
+      - apps/api/src/services/wechat-shipping-jobs.ts
+      - apps/api/src/services/wechat-shipping-jobs.test.ts
       - apps/api/src/routes/after-sales.ts
       - apps/api/src/routes/refunds.ts
       - apps/api/src/routes/admin-refund-route.integration.test.ts
@@ -30,13 +38,14 @@ concurrency:
 
 jobs:
   focused:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       NODE_OPTIONS: --max-old-space-size=3072
       VITEST_MAX_THREADS: "2"
       VITEST_MIN_THREADS: "1"
       MOCK_WECHAT_PAY: "true"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,12 +57,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-          cache: pnpm
-      - name: Select isolated PostgreSQL port
-        run: |
-          port=$((40000 + GITHUB_RUN_NUMBER % 10000))
-          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
       - run: pnpm install --frozen-lockfile
       - name: Verify consumer identity contract
         run: |
@@ -76,6 +81,14 @@ jobs:
             src/modules/refund/wechat-refund-notification.test.ts \
             src/routes/refunds.test.ts \
             src/modules/after-sale/after-sale-service.test.ts
+          pnpm --filter @community-selection/api test -- \
+            src/modules/wechat/wechat-access-token-client.test.ts \
+            src/modules/wechat-shipping/admin-wechat-shipping-retry.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-client.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-intent.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-policy.test.ts \
+            src/modules/wechat-shipping/wechat-shipping-worker.test.ts \
+            src/services/wechat-shipping-jobs.test.ts
           pnpm --filter @community-selection/admin test -- \
             src/features/sales/after-sales
       - name: Start isolated PostgreSQL
@@ -92,7 +105,9 @@ jobs:
           pnpm --filter @community-selection/api test -- \
             src/modules/refund/admin-refund-executor.integration.test.ts \
             src/routes/admin-refund-route.test.ts \
-            src/modules/order/admin-pickup-verification-executor.integration.test.ts
+            src/modules/order/admin-pickup-verification-executor.integration.test.ts \
+            src/modules/delivery/admin-delivery-status-executor.integration.test.ts \
+            src/modules/wechat-shipping/admin-wechat-shipping-retry.integration.test.ts
       - name: Verify API types
         run: |
           pnpm --filter @community-selection/api typecheck
@@ -107,6 +122,7 @@ jobs:
       - name: Verify real Admin browser
         run: |
           pnpm setup:admin:e2e
+          pnpm --dir scripts/admin-e2e exec playwright install --with-deps chromium
           pnpm e2e:admin
 
       - name: Start baseline audit PostgreSQL

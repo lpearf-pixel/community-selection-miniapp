@@ -17,12 +17,15 @@ const command = (
   value: string,
 ): VerificationAuditCheck => ({ id, title, layer, command: value });
 
-const foundation: VerificationAuditCheck[] = [
+const seedFoundation: VerificationAuditCheck[] = [
   command('raw-compliance-terms', 'Raw compliance terms', 'foundation', 'pnpm exec tsx scripts/verify-no-raw-compliance-terms-local.ts'),
   command('db-generate', 'Generate Prisma client', 'foundation', 'pnpm db:generate'),
   command('db-migrate', 'Apply development migrations', 'foundation', 'pnpm db:migrate'),
   command('db-seed', 'Seed audit database', 'foundation', 'pnpm db:seed'),
   command('seed-check', 'Seed data contract', 'foundation', 'pnpm seed:check'),
+];
+
+const repositoryFoundation: VerificationAuditCheck[] = [
   command('typecheck', 'Workspace typecheck', 'foundation', 'pnpm typecheck'),
   command('lint', 'Workspace lint', 'foundation', 'pnpm lint'),
   command('test', 'Workspace tests', 'foundation', 'pnpm test'),
@@ -82,8 +85,19 @@ const registeredStages = STAGE_REGISTRY
     ),
   ]);
 
+const releaseGates: VerificationAuditCheck[] = [
+  command(
+    'l53-d2-compliance-release',
+    'L53-D2 product compliance release gate',
+    'historical-stage',
+    'pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts',
+  ),
+];
+
 export const VERIFICATION_BASELINE_CHECKS: readonly VerificationAuditCheck[] = [
-  ...foundation,
+  ...seedFoundation,
+  ...releaseGates,
+  ...repositoryFoundation,
   ...legacyStages,
   ...globalStatic,
   ...registeredStages,

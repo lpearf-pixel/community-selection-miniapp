@@ -14,8 +14,17 @@ import { registerAdminPickupRoutes } from './pickup.js';
 import { registerAdminDeliveryRoutes } from './delivery.js';
 import { registerAdminOrderRoutes } from './orders.js';
 import { registerAdminDashboardV2Routes } from './dashboard-v2.js';
+import { registerAdminComplianceRoutes } from './compliance.js';
+import {
+  createAdminMemberImportService,
+  registerAdminMemberImportRoutes,
+} from './member-imports.js';
 
-export function registerAdminRoutes(app: FastifyInstance) {
+export type AdminRouteOptions = {
+  memberPhoneHmacSecret: string;
+};
+
+export function registerAdminRoutes(app: FastifyInstance, options: AdminRouteOptions) {
   registerAdminAuthRoutes(app);
   registerLogRoutes(app);
   registerFulfillmentRoutes(app);
@@ -31,4 +40,9 @@ export function registerAdminRoutes(app: FastifyInstance) {
   registerAdminDeliveryRoutes(app);
   registerAdminOrderRoutes(app);
   registerAdminDashboardV2Routes(app);
+  registerAdminComplianceRoutes(app);
+  registerAdminMemberImportRoutes(
+    app,
+    createAdminMemberImportService(options.memberPhoneHmacSecret),
+  );
 }

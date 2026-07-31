@@ -1,11 +1,12 @@
 import { getAdminScopeHeaders } from "../access/adminAccess";
 export type DeliveryProvider = "self" | "dada" | "manual";
-export type DeliveryStatus = "none" | "pending_dispatch" | "assigned" | "delivering" | "delivered" | "delivery_failed" | "canceled";
+export type PersistedDeliveryStatus = "pending_dispatch" | "delivering" | "delivered" | "exception";
+export type DeliveryStatus = "none" | PersistedDeliveryStatus | "assigned" | "delivery_failed" | "canceled";
 export type DeliveryMode = "store_pickup" | "store_delivery" | "third_party_delivery";
 export type DeliveryReservation = {
-  order_id: string; order_no: string; provider: DeliveryProvider; delivery_status: DeliveryStatus; delivery_mode: DeliveryMode; pickup_type?: "store" | "delivery";
+  order_id: string; order_no: string; provider: DeliveryProvider; delivery_status: "none" | PersistedDeliveryStatus; delivery_mode: DeliveryMode; pickup_type?: "store" | "delivery"; version: number; allowed_next_statuses: PersistedDeliveryStatus[];
   pickup_store_id: string | null; pickup_store_name: string | null; sender_address: string | null; receiver_address_masked: string | null;
-  receiver_name: string; receiver_phone_masked: string; estimated_distance_km: number | null; product_amount_cents?: number; delivery_fee_cents: number | null; pay_amount_cents?: number; delivery_time_window_text?: string | null;
+  receiver_name: string; receiver_phone_masked: string; estimated_distance_km: number | null; product_amount_cents?: number; delivery_fee_cents: number | null; pay_amount_cents?: number; delivery_time_window_text?: string | null; fulfillment_promise_snapshot?: unknown; promised_fulfillment_start_at?: string | null; promised_fulfillment_end_at?: string | null;
   third_party_provider: "dada" | null; third_party_order_no: string | null; can_create_delivery: boolean; created_at: string | null; updated_at: string | null;
 };
 export type DeliveryProviderItem = { provider: DeliveryProvider; name: string; enabled: boolean; mode: "mock" | "reserved"; description?: string };
@@ -16,8 +17,8 @@ async function readJson<T>(path: string, init?: RequestInit): Promise<T> { const
 export function getDeliveryProviders() { return readJson<{ items: DeliveryProviderItem[] }>("/api/admin/delivery/providers"); }
 export function getDeliveryOrders(params: { status?: DeliveryStatus; provider?: DeliveryProvider; pickup_type?: "store" | "delivery"; delivery_mode?: DeliveryMode; pickup_store_id?: string; keyword?: string; page?: number; page_size?: number }) { const query = buildQuery(params); return readJson<{ total: number; page: number; page_size: number; items: DeliveryReservation[] }>(`/api/admin/delivery/orders${query ? `?${query}` : ""}`); }
 export function reserveDeliveryOrder(orderId: string, body: { provider: DeliveryProvider; delivery_mode: Exclude<DeliveryMode, "store_pickup">; remark?: string }) { return readJson<DeliveryReservation>(`/api/admin/delivery/orders/${orderId}/reserve`, { method: "POST", body: JSON.stringify(body) }); }
-export function updateDeliveryOrderStatus(orderId: string, body: { delivery_status: Exclude<DeliveryStatus, "none">; remark?: string }) { return readJson<DeliveryReservation>(`/api/admin/delivery/orders/${orderId}/status`, { method: "POST", body: JSON.stringify(body) }); }
-export type DeliveryRule = { enabled: boolean; delivery_mode: "store_delivery"; base_fee_cents: number; free_threshold_cents: number | null; max_distance_km: number | null; service_radius_text: string; available_time_windows: Array<{ code: string; label: string; start_time: string; end_time: string }>; notice: string; mode?: "static_baseline"; editable?: boolean; source?: "pickup_store" | "global_default" | "fallback" };
+export function updateDeliveryOrderStatus(orderId: string, body: { delivery_status: PersistedDeliveryStatus; expected_version: number; idempotency_key: string; remark?: string }) { return readJson<DeliveryReservation>(`/api/admin/delivery/orders/${orderId}/status`, { method: "POST", body: JSON.stringify(body) }); }
+export type DeliveryRule = { enabled: boolean; delivery_mode: "store_delivery"; base_fee_cents: number; free_threshold_cents: number | null; max_distance_km: number | null; service_radius_text: string; available_time_windows: Array<{ code: string; label: string; start_time: string; end_time: string; day_offset?: number }>; notice: string; mode?: "static_baseline"; editable?: boolean; source?: "pickup_store" | "global_default" | "fallback" };
 export function getDeliveryRules() { return readJson<DeliveryRule>("/api/delivery/rules"); }
 export function getAdminDeliveryRules() { return readJson<DeliveryRule>("/api/admin/delivery/rules"); }
 export type DeliveryRuleConfig = DeliveryRule & { id: string; pickup_store_id: string | null; source?: "pickup_store" | "global_default" | "fallback"; created_at: string; updated_at: string };

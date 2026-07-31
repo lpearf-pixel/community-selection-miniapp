@@ -11,11 +11,12 @@ describe('shell navigation model', () => {
       ['sales-fulfillment', '销售与履约'],
       ['catalog-pricing', '商品与价格'],
       ['inventory-supply', '库存与供应链'],
+      ['membership-marketing', '会员与营销'],
       ['finance-settlement', '财务与结算'],
       ['analytics', '数据分析'],
       ['operations-risk', '运维与风控'],
     ]);
-    expect(groups.flatMap((group) => group.items)).toHaveLength(23);
+    expect(groups.flatMap((group) => group.items)).toHaveLength(24);
   });
 
   it('marks the active module and view and delegates navigation', () => {

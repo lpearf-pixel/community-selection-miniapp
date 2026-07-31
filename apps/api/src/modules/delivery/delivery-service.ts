@@ -3,29 +3,39 @@ import { prisma } from '../../db.js';
 import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } from '../audit/audit-service.js';
 import { ADMIN_SCOPE_FORBIDDEN, canAccessOrderDataScope, getScopedOrderWhere, type AdminAccessContext } from '../admin-access/admin-access-control.js';
 import { createDadaDeliveryOrderMock } from './dada-adapter.js';
-import type { DeliveryMode, DeliveryProvider, DeliveryReservation, DeliveryStatus } from './delivery-types.js';
+import { allowedNextDeliveryStatuses } from './delivery-state-machine.js';
+import type { DeliveryMode, DeliveryProvider, DeliveryReservation, DeliveryStatus, PersistedDeliveryStatus } from './delivery-types.js';
 
 type Query = { status?: DeliveryStatus; provider?: DeliveryProvider; pickup_type?: string; delivery_mode?: string; pickup_store_id?: string; community_id?: string; keyword?: string; page?: string | number; page_size?: string | number };
 type Actor = { admin_user_id?: string | null; ip_address?: string | null; user_agent?: string | null };
 const closedStatuses = new Set<OrderStatus>([OrderStatus.refunded, OrderStatus.closed]);
 const activeStatuses = new Set<OrderStatus>([OrderStatus.paid, OrderStatus.grouped, OrderStatus.preparing, OrderStatus.ready, OrderStatus.picked, OrderStatus.completed]);
-const deliveryStatuses: DeliveryStatus[] = ['none', 'pending_dispatch', 'assigned', 'delivering', 'delivered', 'delivery_failed', 'canceled'];
-const mutableDeliveryStatuses: Array<Exclude<DeliveryStatus, 'none'>> = ['pending_dispatch', 'assigned', 'delivering', 'delivered', 'delivery_failed', 'canceled'];
 const providers: DeliveryProvider[] = ['self', 'dada', 'manual'];
 
 function positiveInt(value: unknown, fallback: number, max = 100) { const parsed = Number(value ?? fallback); return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback; }
 function maskPhone(value?: string | null) { return value ? value.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : ''; }
 function maskAddress(value?: string | null) { if (!value) return null; return value.length <= 10 ? value : `${value.slice(0, 10)}…`; }
-function inferStatus(order: any): DeliveryStatus { if (order.order_status === OrderStatus.completed) return 'delivered'; if (order.order_status === OrderStatus.picked) return 'delivered'; if (closedStatuses.has(order.order_status)) return 'canceled'; return 'none'; }
+function inferStatus(order: any): 'none' | PersistedDeliveryStatus {
+  if (order.pickup_type !== 'delivery') return 'none';
+  if (order.delivery_status) return order.delivery_status;
+  if (order.order_status === OrderStatus.completed || order.order_status === OrderStatus.delivered) return 'delivered';
+  return 'pending_dispatch';
+}
 function inferMode(order: any): DeliveryMode { return order.pickup_type === 'delivery' ? 'store_delivery' : 'store_pickup'; }
 function toReservation(order: any, override?: Partial<DeliveryReservation>): DeliveryReservation {
   const mode = override?.delivery_mode ?? inferMode(order);
   const provider = override?.provider ?? (mode === 'third_party_delivery' ? 'dada' : mode === 'store_delivery' ? 'self' : 'manual');
+  const deliveryStatus = override?.delivery_status ?? inferStatus(order);
   return {
     order_id: order.id,
     order_no: order.order_no,
     provider,
-    delivery_status: override?.delivery_status ?? inferStatus(order),
+    delivery_status: deliveryStatus as DeliveryReservation['delivery_status'],
+    version: order.version,
+    allowed_next_statuses:
+      deliveryStatus === 'none'
+        ? []
+        : allowedNextDeliveryStatuses(deliveryStatus as PersistedDeliveryStatus),
     delivery_mode: mode,
     pickup_store_id: order.pickup_store_id ?? null,
     pickup_store_name: order.pickup_store?.name ?? null,
@@ -38,6 +48,11 @@ function toReservation(order: any, override?: Partial<DeliveryReservation>): Del
     delivery_fee_cents: order.delivery_fee_cents ?? 0,
     pay_amount_cents: order.pay_amount_cents,
     delivery_time_window_text: order.delivery_time_window_text ?? null,
+    fulfillment_promise_snapshot: order.fulfillment_promise_snapshot ?? null,
+    promised_fulfillment_start_at:
+      order.promised_fulfillment_start_at?.toISOString?.() ?? null,
+    promised_fulfillment_end_at:
+      order.promised_fulfillment_end_at?.toISOString?.() ?? null,
     third_party_provider: provider === 'dada' ? 'dada' : null,
     third_party_order_no: null,
     can_create_delivery: order.pay_status === PayStatus.paid && activeStatuses.has(order.order_status),
@@ -55,7 +70,10 @@ function whereOf(query: Query, context: AdminAccessContext): Prisma.OrderWhereIn
   if (query.community_id) and.push({ community_id: query.community_id }); // community_id 过滤
   if (query.keyword?.trim()) and.push({ OR: [{ order_no: { contains: query.keyword.trim() } }, { receiver_name: { contains: query.keyword.trim() } }] });
   if (query.status === 'canceled') and.push({ order_status: { in: [OrderStatus.closed, OrderStatus.refunded] } });
-  else if (query.status === 'delivered') and.push({ order_status: { in: [OrderStatus.picked, OrderStatus.completed] } });
+  else if (query.status === 'delivered') and.push({ delivery_status: 'delivered' });
+  else if (query.status === 'assigned' || query.status === 'delivering') and.push({ delivery_status: 'delivering' });
+  else if (query.status === 'delivery_failed' || query.status === 'exception') and.push({ delivery_status: 'exception' });
+  else if (query.status === 'pending_dispatch') and.push({ delivery_status: 'pending_dispatch' });
   else and.push({ order_status: { in: Array.from(activeStatuses) } });
   return { AND: and };
 }
@@ -77,12 +95,5 @@ export async function reserveDelivery(id: string, input: { provider: DeliveryPro
   await safeRecordBusinessEvent(prisma, { event_type: 'delivery_reserved', event_source: 'delivery-reservation', order_id: id, payload: { provider: input.provider, delivery_mode: input.delivery_mode, remark: input.remark ?? null } });
   await recordAdminAudit(prisma, { admin_user_id: actor.admin_user_id ?? null, action: 'delivery_reserved', target_type: 'Order', target_id: id, ip_address: actor.ip_address ?? null, user_agent: actor.user_agent ?? null, payload: { provider: input.provider, delivery_mode: input.delivery_mode, remark: input.remark ?? null } });
   return toReservation(order, { provider: input.provider, delivery_mode: input.delivery_mode, delivery_status: 'pending_dispatch' });
-}
-export async function updateDeliveryStatus(id: string, input: { delivery_status: DeliveryStatus; remark?: string }, actor: Actor, context: AdminAccessContext) {
-  if (!mutableDeliveryStatuses.includes(input.delivery_status as Exclude<DeliveryStatus, 'none'>)) throw new Error('配送状态不支持');
-  const order = await prisma.order.findUnique({ where: { id }, include: { pickup_store: true, community: true } }); if (!order) throw new Error('订单不存在'); if (!canAccessOrderDataScope(context, order)) throw Object.assign(new Error(ADMIN_SCOPE_FORBIDDEN), { statusCode: 403 }); /* status scope 检查 */
-  await safeRecordOrderTimeline(prisma, { order_id: id, event_type: 'delivery_status_updated', title: '配送状态手工更新', from_status: order.order_status, to_status: order.order_status, actor_type: 'admin', actor_user_id: actor.admin_user_id ?? null, payload: { delivery_status: input.delivery_status, remark: input.remark ?? null } });
-  await recordAdminAudit(prisma, { admin_user_id: actor.admin_user_id ?? null, action: 'delivery_status_updated', target_type: 'Order', target_id: id, ip_address: actor.ip_address ?? null, user_agent: actor.user_agent ?? null, payload: { delivery_status: input.delivery_status, remark: input.remark ?? null } });
-  return toReservation(order, { delivery_status: input.delivery_status });
 }
 export function listDeliveryProviders() { return { items: [{ provider: 'self', name: '门店配送', enabled: true, mode: 'mock' }, { provider: 'dada', name: '达达配送', enabled: false, mode: 'reserved', description: '接口已预留，暂未启用真实 API' }, { provider: 'manual', name: '人工配送', enabled: true, mode: 'mock' }] }; }

@@ -642,13 +642,13 @@ function assertA32SmokeContract(smoke) {
   ].map((match) => match[1]);
   assert.equal(
     navigationLabels.length,
-    23,
-    'navigation exclusion/count contract: 23 total',
+    24,
+    'navigation exclusion/count contract: 24 total',
   );
   assert.equal(
     new Set(navigationLabels).size,
-    23,
-    'navigation exclusion/count contract: 23 unique',
+    24,
+    'navigation exclusion/count contract: 24 unique',
   );
   const remainingNavigation = sourceBetween(
     smoke,
@@ -680,8 +680,8 @@ function assertA32SmokeContract(smoke) {
   );
   assert.equal(
     navigationLabels.filter((label) => !exclusions.includes(label)).length,
-    11,
-    'navigation exclusion/count contract: 11 remaining destinations',
+    12,
+    'navigation exclusion/count contract: 12 remaining destinations',
   );
   assertSourceOrder(
     smoke,
@@ -703,7 +703,7 @@ function assertA32SmokeContract(smoke) {
         /for \(const label of remainingNavigation\) \{\s*const button = groupedNavigation\.getByRole\('button', \{ name: label, exact: true \}\);\s*await button\.click\(\);/,
       ],
       [
-        '23/23 result',
+        '24/24 result',
         /`L50 Admin browser smoke passed: \$\{navigation\.length\}\/\$\{navigation\.length\} navigation items;/,
       ],
     ],
@@ -1331,7 +1331,7 @@ function assertB1ShellContract(smoke) {
       ],
       [
         'empty group contract',
-        /const hiddenNavigationSections = \['会员与营销', '门店与渠道', '系统管理'\];/,
+        /const hiddenNavigationSections = \['门店与渠道', '系统管理'\];/,
       ],
       [
         'empty groups absent',

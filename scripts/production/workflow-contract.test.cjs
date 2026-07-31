@@ -17,6 +17,13 @@ test('uses the checked-out commit as the production image tag', () => {
   assert.doesNotMatch(workflow, /IMAGE_TAG=0123456789abcdef/);
 });
 
+test('provides the member phone HMAC secret in the synthetic production fixture', () => {
+  assert.match(
+    workflow,
+    /MEMBER_PHONE_HMAC_SECRET=ci-member-phone-hmac-secret-[a-z]{32,}/,
+  );
+});
+
 test('stages API-owned fixture secrets without requiring host root', () => {
   assert.match(workflow, /docker volume create[\s\S]*docker create[\s\S]*docker cp/);
   assert.match(workflow, /chown 1000:1000[\s\S]*wechat_private_key\.pem/);

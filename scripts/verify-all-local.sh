@@ -24,6 +24,7 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
 pnpm seed:check
+pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts
 pnpm typecheck
 pnpm lint
 pnpm test

@@ -13,8 +13,11 @@
   "dependencies": {
     "@community-selection/config": "workspace:*",
     "@community-selection/shared": "workspace:*",
+    "@fastify/multipart": "10.1.0",
     "@prisma/client": "6.19.3",
     "bcryptjs": "^2.4.3",
+    "csv-parse": "6.1.0",
+    "exceljs": "4.4.0",
     "fastify": "^5.2.1"
   },
   "devDependencies": {

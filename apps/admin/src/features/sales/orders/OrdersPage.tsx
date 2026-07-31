@@ -1,13 +1,5 @@
 import { useEffect, useReducer, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Form,
-  Space,
-  Spin,
-  Typography,
-} from 'antd';
+import { Alert, Button, Card, Form, Space, Spin, Typography } from 'antd';
 import { AdminApiError } from '../../../shared/api/errors';
 import {
   featureErrorMessage,
@@ -24,11 +16,8 @@ import { OrderDetailsCard } from './OrderDetailsCard';
 import { OrdersFilters } from './OrdersFilters';
 import { OrdersTable } from './OrdersTable';
 import { usePickupVerification } from './usePickupVerification';
-import {
-  applyOrderFilters,
-  changeOrderPage,
-  DEFAULT_ADMIN_ORDER_QUERY,
-} from './page-model';
+import { useWechatShippingRetry } from './useWechatShippingRetry';
+import { applyOrderFilters, changeOrderPage, DEFAULT_ADMIN_ORDER_QUERY } from './page-model';
 import type { AdminOrderFilters } from './page-model';
 import type {
   AdminOrderListItem,
@@ -87,6 +76,12 @@ export function OrdersPage(props: OrdersPageProps) {
     onMessage: props.onMessage,
     onMutationCommitted: props.onMutationCommitted,
     onConflict: () => setRetryVersion((value) => value + 1),
+  });
+  const shippingRetry = useWechatShippingRetry({
+    context: selectedOrderContext,
+    setContext: setSelectedOrderContext,
+    onMessage: props.onMessage,
+    onMutationCommitted: props.onMutationCommitted,
   });
 
   const markOrder = async (order: AdminOrderListItem, nextStatus: string) => {
@@ -192,7 +187,11 @@ export function OrdersPage(props: OrdersPageProps) {
         </Space>
       </Card>
       {selectedOrderContext ? (
-        <OrderDetailsCard context={selectedOrderContext} />
+        <OrderDetailsCard
+          context={selectedOrderContext}
+          retryingShipping={shippingRetry.retrying}
+          onRetryShipping={shippingRetry.retry}
+        />
       ) : null}
     </Space>
   );

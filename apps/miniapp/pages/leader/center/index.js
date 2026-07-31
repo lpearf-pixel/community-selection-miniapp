@@ -2,6 +2,7 @@ const {
   getLeaderCenterSummary,
   toLeaderCenterViewModel,
 } = require('../../../utils/center');
+const { firstLaunchMode } = require('../../../config');
 
 function withdrawalStatusTone(status) {
   const value = String(status || '').toLowerCase();
@@ -32,6 +33,8 @@ Page({
     loading: false,
     error: '',
     forbidden: false,
+    rewardFeaturesVisible: !firstLaunchMode,
+    withdrawalFeaturesVisible: !firstLaunchMode,
   },
 
   summaryRequestId: 0,
@@ -86,6 +89,7 @@ Page({
   },
 
   goWithdrawals() {
+    if (!this.data.withdrawalFeaturesVisible) return;
     const navigation = this.data.summary && this.data.summary.navigation;
     if (!navigation || !navigation.withdrawal_entry_available) return;
     wx.navigateTo({ url: '/pages/leader/withdrawals/index' });

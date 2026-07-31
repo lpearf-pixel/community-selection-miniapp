@@ -11,9 +11,10 @@
     <textarea class="cq-input text-field e2e-after-sale-reason" data-testid="after-sale-reason" data-field="reason" value="{{reason}}" bindinput="onInput" placeholder="请描述遇到的问题"/>
     <view class="field-label">补充说明</view>
     <textarea class="cq-input text-field" data-field="description" value="{{description}}" bindinput="onInput" placeholder="可选"/>
-    <view class="field-label">本次申请退款</view>
-    <view class="cq-price refund-amount">¥{{refund_amount_yuan}}</view>
-    <view class="cq-muted refund-hint">申请金额按订单当前剩余可退金额确定，最终退款金额以平台审核结果为准</view>
+    <view class="field-label">申请商品退款金额（元）</view>
+    <input class="cq-input" type="digit" data-field="product_refund_amount_yuan" value="{{product_refund_amount_yuan}}" bindinput="onInput" />
+    <view class="cq-muted refund-hint">商品剩余最多可退 ¥{{refund_amount_yuan}}</view>
+    <view class="cq-muted refund-hint">{{delivery_refund_notice}}</view>
   </view>
   <view class="cq-action-bar">
     <button class="cq-button cq-button--primary submit-button e2e-after-sale-submit" data-testid="after-sale-submit" loading="{{submitting}}" disabled="{{!can_submit || submitting || loading}}" bindtap="submit">提交售后申请</button>

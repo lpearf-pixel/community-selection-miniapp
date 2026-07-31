@@ -94,7 +94,7 @@ function isInsideRequestThen(node: ts.Node, submit: ts.MethodDeclaration) {
   }
   return false;
 }
-function directlySetsFormattedResponseAmount(requestCall: ts.CallExpression) {
+function directlySetsProductRefundLimit(requestCall: ts.CallExpression) {
   const access = requestCall.parent;
   const thenCall = access && ts.isPropertyAccessExpression(access) && access.name.text === 'then' ? access.parent : undefined;
   const callback = thenCall && ts.isCallExpression(thenCall) ? thenCall.arguments[0] : undefined;
@@ -110,7 +110,7 @@ function directlySetsFormattedResponseAmount(requestCall: ts.CallExpression) {
     const argument = amount && ts.isCallExpression(amount) && ts.isIdentifier(amount.expression)
       && amount.expression.text === 'formatOrderAmount' ? amount.arguments[0] : undefined;
     return !!argument && ts.isPropertyAccessExpression(argument)
-      && argument.name.text === 'remaining_refundable_amount_cents'
+      && argument.name.text === 'remaining_product_refundable_amount_cents'
       && ts.isIdentifier(argument.expression) && argument.expression.text === response;
   });
 }
@@ -139,7 +139,7 @@ function controlAttributes(raw: string, semantic: string[]) {
   return attributes;
 }
 
-function verifyReadOnlyRefundMiniapp() {
+function verifyProductRefundApplicationMiniapp() {
   const orderDetail = ast('apps/miniapp/pages/orders/detail/index.js');
   const apply = ast('apps/miniapp/pages/after-sales/apply/index.js');
   const failures: string[] = [];
@@ -200,8 +200,8 @@ function verifyReadOnlyRefundMiniapp() {
     && !data.properties.some((item) => ts.isSpreadAssignment(item) || (ts.isComputedPropertyName(item.name) && !key(item)))
     && initialRefund.length === 1 && ts.isPropertyAssignment(initialRefund[0]) && literal(initialRefund[0].initializer) === '0.00';
   if (unsafeSetData) failures.push('after-sale page setData calls must be explicit and fail closed');
-  if (!safeInitialRefund || refundAssignments.length !== 1 || !safeGet || !directlySetsFormattedResponseAmount(loadRequests[0])) {
-    failures.push('refund_amount_yuan must initialize once and have one direct formatOrderAmount(order.remaining_refundable_amount_cents) assignment');
+  if (!safeInitialRefund || refundAssignments.length !== 1 || !safeGet || !directlySetsProductRefundLimit(loadRequests[0])) {
+    failures.push('refund_amount_yuan must initialize once and display only order.remaining_product_refundable_amount_cents');
   }
 
   const submitMethod = pageMethod(apply, 'submit');
@@ -227,7 +227,14 @@ function verifyReadOnlyRefundMiniapp() {
           if (nested) failures.push('after-sales POST data must be flat');
         }
       }
-      if (names.sort().join(',') !== 'description,reason,type') failures.push('after-sales POST data must contain only type, reason, and description');
+      if (names.sort().join(',') !== 'description,reason,requested_product_refund_cents,type') {
+        failures.push('after-sales POST data must contain only type, reason, description, and requested_product_refund_cents');
+      }
+      const requestedProductRefund = value(data, 'requested_product_refund_cents');
+      if (!requestedProductRefund || !ts.isIdentifier(requestedProductRefund)
+        || requestedProductRefund.text !== 'requestedProductRefundCents') {
+        failures.push('requested_product_refund_cents must use the validated local amount');
+      }
     }
   }
   let redirectCount = 0;
@@ -240,6 +247,12 @@ function verifyReadOnlyRefundMiniapp() {
       return;
     }
     if (isDirectThisCall(node, 'setData')) return;
+    if (ts.isIdentifier(node.expression) && node.expression.text === 'parseRefundYuan'
+      && node.arguments.length === 1 && ts.isPropertyAccessExpression(node.arguments[0])
+      && node.arguments[0].name.text === 'product_refund_amount_yuan'
+      && ts.isPropertyAccessExpression(node.arguments[0].expression)
+      && node.arguments[0].expression.name.text === 'data'
+      && node.arguments[0].expression.expression.kind === ts.SyntaxKind.ThisKeyword) return;
     if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'redirectTo'
       && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'wx'
       && !!node.arguments[0] && ts.isObjectLiteralExpression(node.arguments[0]) && hasOnlyKeys(node.arguments[0], 'url')
@@ -251,9 +264,13 @@ function verifyReadOnlyRefundMiniapp() {
 
   const wxml = source('apps/miniapp/pages/after-sales/apply/index.wxml').replace(/<!--[\s\S]*?-->/g, '');
   const displayText = [...wxml.matchAll(/<(view|text)\b[^>]*>([^<]*)<\/\1>/gi)].map((match) => match[2]);
-  if (!displayText.some((text) => text.trim() === '本次申请退款')) failures.push('after-sale page must render the 本次申请退款 label');
-  if (!displayText.some((text) => /^¥\s*\{\{\s*refund_amount_yuan\s*\}\}$/.test(text.trim()))) failures.push('after-sale page must render ¥{{refund_amount_yuan}} in a read-only node');
-  if (/<(?:input|editor|slider|switch|checkbox(?:-group)?|radio(?:-group)?|form|navigator|picker-view(?:-column)?)\b/i.test(wxml)) {
+  if (!displayText.some((text) => text.trim() === '申请商品退款金额（元）')) {
+    failures.push('after-sale page must label the editable product refund amount');
+  }
+  if (!displayText.some((text) => /^商品剩余最多可退\s*¥\s*\{\{\s*refund_amount_yuan\s*\}\}$/.test(text.trim()))) {
+    failures.push('after-sale page must display the server-owned product refund limit');
+  }
+  if (/<(?:editor|slider|switch|checkbox(?:-group)?|radio(?:-group)?|form|navigator|picker-view(?:-column)?)\b/i.test(wxml)) {
     failures.push('after-sale page contains a forbidden interactive control');
   }
   const pickers = [...wxml.matchAll(/<picker\b([^>]*)>/gi)];
@@ -261,9 +278,21 @@ function verifyReadOnlyRefundMiniapp() {
   if (!picker || picker.get('range') !== '{{types}}' || picker.get('range-key') !== 'label'
     || picker.get('value') !== '{{typeIndex}}' || picker.get('bindchange') !== 'onTypeChange'
     || (picker.has('class') && !/^[\w -]+$/.test(picker.get('class')!))) failures.push('after-sale page must contain exactly one approved type picker');
+  const inputs = [...wxml.matchAll(/<input\b([^>]*)\/?>/gi)];
+  const input = inputs.length === 1
+    ? controlAttributes(inputs[0][1], ['type', 'data-field', 'value', 'bindinput'])
+    : undefined;
+  if (!input || input.get('type') !== 'digit'
+    || input.get('data-field') !== 'product_refund_amount_yuan'
+    || input.get('value') !== '{{product_refund_amount_yuan}}'
+    || input.get('bindinput') !== 'onInput') {
+    failures.push('after-sale page must contain exactly one approved product refund amount input');
+  }
   const textareas = [...wxml.matchAll(/<textarea\b([^>]*)\/?>/gi)];
-  const withoutTextareas = wxml.replace(/<textarea\b[^>]*\/?>/gi, '');
-  if (/\bdata-field\s*=/i.test(withoutTextareas)) failures.push('only approved textareas may declare data-field');
+  const withoutApprovedInputs = wxml
+    .replace(/<textarea\b[^>]*\/?>/gi, '')
+    .replace(/<input\b[^>]*\/?>/gi, '');
+  if (/\bdata-field\s*=/i.test(withoutApprovedInputs)) failures.push('only approved refund form controls may declare data-field');
   const expectedTextarea = new Map([['reason', ['{{reason}}', '请描述遇到的问题']], ['description', ['{{description}}', '可选']]]);
   const textareaFields: string[] = [];
   for (const textarea of textareas) {
@@ -286,16 +315,16 @@ function verifyReadOnlyRefundMiniapp() {
   }
   const events = [...wxml.matchAll(/\b((?:bind|catch|capture-bind:|capture-catch:)[\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)]
     .map((match) => `${match[1]}:${match[2] ?? match[3] ?? match[4]}`).sort();
-  if (events.join(',') !== ['bindchange:onTypeChange', 'bindinput:onInput', 'bindinput:onInput', 'bindtap:submit'].sort().join(',')) {
+  if (events.join(',') !== ['bindchange:onTypeChange', 'bindinput:onInput', 'bindinput:onInput', 'bindinput:onInput', 'bindtap:submit'].sort().join(',')) {
     failures.push('after-sale page contains a non-approved event binding');
   }
-  assert(failures.length === 0, `Miniapp read-only refund gate failed:\n- ${[...new Set(failures)].join('\n- ')}`);
+  assert(failures.length === 0, `Miniapp product refund application gate failed:\n- ${[...new Set(failures)].join('\n- ')}`);
 }
 
 async function main() {
-  verifyReadOnlyRefundMiniapp();
+  verifyProductRefundApplicationMiniapp();
   if (process.argv.includes('--static-only')) {
-    console.log('L22 miniapp read-only refund static verification passed.');
+    console.log('L22 miniapp product refund application static verification passed.');
     return;
   }
   const category = await prisma.category.create({ data: { name: `${prefix}-category`, sort_order: 2200, status: 'active' } });
@@ -372,7 +401,7 @@ async function main() {
     message: string;
   };
   assert(zeroRemainderResponse.statusCode === 400, 'zero remainder after-sale must return 400');
-  assert(zeroRemainderBody.message === '订单没有可退金额', 'zero remainder message mismatch');
+  assert(zeroRemainderBody.message === '订单没有可退商品金额', 'zero product remainder message mismatch');
   assert(
     !(await prisma.afterSaleCase.findFirst({ where: { order_id: zeroRemainderOrder.id } })),
     'zero remainder after-sale must not create a case',
@@ -390,12 +419,9 @@ async function main() {
       requested_delivery_refund_cents: 99,
     },
   }));
-  assert(
-    afterSale.requested_refund_cents === expectedFullRefundCents,
-    'user after-sale must derive the full remaining refundable amount on the server',
-  );
-  assert(afterSale.requested_product_refund_cents == null, 'user after-sale must ignore product split amount');
-  assert(afterSale.requested_delivery_refund_cents == null, 'user after-sale must ignore delivery split amount');
+  assert(afterSale.requested_refund_cents === 1, 'user after-sale must preserve the requested product amount');
+  assert(afterSale.requested_product_refund_cents === 1, 'user after-sale must preserve the product split amount');
+  assert(afterSale.requested_delivery_refund_cents === 0, 'user after-sale must ignore the client delivery split amount');
   assert(afterSale.status === 'submitted', 'after sale should submit');
   assertNotExposed(afterSale, 'after sale create');
   const afterSales = await json(await app.inject({ method: 'GET', url: `/api/me/orders/${normalOrder.id}/after-sales`, headers: { 'x-user-id': customer.id } }));

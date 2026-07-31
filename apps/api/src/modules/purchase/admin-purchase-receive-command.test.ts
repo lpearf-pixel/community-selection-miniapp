@@ -11,6 +11,26 @@ const validBody = {
   items: [{ item_id: 'item-1', received_quantity: 4 }],
 };
 
+const evidenceHash = 'a'.repeat(64);
+const paymentHash = 'b'.repeat(64);
+const traceableItem = {
+  item_id: 'item-1',
+  received_quantity: 4,
+  supplier_id: 'supplier-1',
+  origin_text: '南京市江宁区',
+  purchase_voucher_type: 'farmer_purchase_record',
+  payment_reference_hash: paymentHash,
+  invoice_evidence_status: 'agricultural_purchase_record',
+  evidence: [
+    {
+      evidence_type: 'batch_proof',
+      object_key: 'compliance/batches/proof.pdf',
+      file_sha256: evidenceHash,
+      masked_summary: { document_no: '***1234' },
+    },
+  ],
+};
+
 describe('admin purchase receive command', () => {
   it.each([null, [], 'body', 1])('rejects a non-object body: %j', (body) => {
     expect(parseAdminPurchaseReceiveCommand(body)).toEqual({
@@ -109,6 +129,65 @@ describe('admin purchase receive command', () => {
     });
   });
 
+  it('accepts and normalizes controlled batch traceability evidence', () => {
+    expect(
+      parseAdminPurchaseReceiveCommand({
+        ...validBody,
+        items: [traceableItem],
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        idempotency_key: 'purchase-receive-0001',
+        remark: '后台采购入库',
+        items: [
+          {
+            ...traceableItem,
+            production_date: undefined,
+            arrival_date: undefined,
+            shelf_life_days: undefined,
+            remark: undefined,
+          },
+        ],
+      },
+    });
+  });
+
+  it.each([
+    { payment_reference_hash: 'raw-payment-reference' },
+    {
+      evidence: [
+        {
+          ...traceableItem.evidence[0],
+          object_key: 'https://files.test/proof.pdf',
+        },
+      ],
+    },
+    {
+      evidence: [
+        {
+          ...traceableItem.evidence[0],
+          object_key: 'compliance/../secret.pdf',
+        },
+      ],
+    },
+    {
+      evidence: [
+        {
+          ...traceableItem.evidence[0],
+          masked_summary: { signed_url: 'https://files.test/proof.pdf' },
+        },
+      ],
+    },
+  ])('rejects unsafe batch evidence fields: %j', (changes) => {
+    expect(
+      parseAdminPurchaseReceiveCommand({
+        ...validBody,
+        items: [{ ...traceableItem, ...changes }],
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
   it('preserves item order and hashes every semantic field', () => {
     const base = {
       purchase_plan_id: 'plan-1',
@@ -154,6 +233,23 @@ describe('admin purchase receive command', () => {
           ...base.command,
           items: [
             { ...base.command.items[0], received_quantity: 3 },
+            base.command.items[1],
+          ],
+        },
+      },
+      {
+        ...base,
+        command: {
+          ...base.command,
+          items: [
+            {
+              ...base.command.items[0],
+              origin_text: '南京市江宁区',
+              purchase_voucher_type: 'invoice',
+              payment_reference_hash: paymentHash,
+              invoice_evidence_status: 'available',
+              evidence: traceableItem.evidence,
+            },
             base.command.items[1],
           ],
         },

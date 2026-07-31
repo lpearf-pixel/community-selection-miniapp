@@ -1,18 +1,30 @@
 import Fastify from 'fastify';
+import multipart from '@fastify/multipart';
 import { contractFail, fail, ok } from '@community-selection/shared';
 import { registerPublicRoutes } from './routes/public/index.js';
 import { registerAdminRoutes } from './routes/admin/index.js';
 import { requireAdminSession } from './routes/admin-auth.js';
 import { HTTP_LOGGER_OPTIONS } from './services/http-log-privacy.js';
+import { enforceFirstLaunchCapabilityGuard } from './modules/first-launch/first-launch-capability-guard.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     rawBody?: Buffer;
   }
+  interface FastifyContextConfig {
+    adminContractV1?: boolean;
+  }
 }
 
-export function buildApp() {
+export type BuildAppOptions = {
+  memberPhoneHmacSecret?: string;
+};
+
+export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: HTTP_LOGGER_OPTIONS });
+  void app.register(multipart, {
+    limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4 },
+  });
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser(
     'application/json',
@@ -65,11 +77,17 @@ export function buildApp() {
     }
     request.adminUser = adminUser;
   });
+  app.addHook('preHandler', enforceFirstLaunchCapabilityGuard);
 
   app.get('/health', async () => ok({ status: 'ok' }));
   app.get('/api/health', async () => ok({ status: 'ok' }));
   registerPublicRoutes(app);
-  registerAdminRoutes(app);
+  registerAdminRoutes(app, {
+    memberPhoneHmacSecret:
+      options.memberPhoneHmacSecret
+      ?? process.env.MEMBER_PHONE_HMAC_SECRET
+      ?? '',
+  });
 
   return app;
 }

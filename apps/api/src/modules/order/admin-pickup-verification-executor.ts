@@ -18,6 +18,10 @@ import {
   type AdminPickupVerificationResult,
   buildAdminPickupVerificationRequestHash,
 } from './admin-pickup-verification-command.js';
+import {
+  createWechatShippingIntent,
+  resolvePickupShippingIntent,
+} from '../wechat-shipping/wechat-shipping-intent.js';
 
 const OPERATION = 'admin.order.pickup.verify.v1';
 
@@ -251,6 +255,11 @@ export async function executeAdminPickupVerificationCommand(input: {
 
       const after = await tx.order.findUniqueOrThrow({
         where: { id: input.order_id },
+      });
+
+      await createWechatShippingIntent(tx, {
+        orderId: input.order_id,
+        intent: resolvePickupShippingIntent(),
       });
 
       await recordBusinessEvent(tx, {

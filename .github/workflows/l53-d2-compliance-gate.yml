@@ -1,0 +1,164 @@
+name: L53 D2 Compliance Gate
+
+on:
+  pull_request:
+    paths:
+      - .github/actions/configure-ci-postgres/action.yml
+      - .github/config/ci-postgres.env
+      - .github/workflows/l53-d2-compliance-gate.yml
+      - scripts/production/l53-d2-compliance-gate-contract.test.cjs
+      - scripts/production/l53-d2-release-registration.contract.test.cjs
+      - scripts/production/l53-d2-task7-registration.contract.test.cjs
+      - scripts/verify-l53-d2-compliance-release-local.ts
+      - scripts/verify-l53-d2-compliance-release-local.test.ts
+      - scripts/verification-baseline-manifest.ts
+      - scripts/verify-all-local.sh
+      - apps/api/src/modules/compliance/supplier-qualification-command.ts
+      - apps/api/src/modules/compliance/supplier-qualification-command.test.ts
+      - apps/api/src/modules/compliance/supplier-qualification-executor.ts
+      - apps/api/src/modules/compliance/supplier-qualification-executor.integration.test.ts
+      - apps/api/src/modules/supplier/supplier-service.ts
+      - apps/api/src/routes/suppliers.ts
+      - apps/api/src/routes/supplier-qualification-route.test.ts
+      - apps/api/src/modules/compliance/product-batch-evidence.ts
+      - apps/api/src/modules/compliance/product-batch-evidence.test.ts
+      - apps/api/src/modules/inventory/purchase-batch-owner.ts
+      - apps/api/src/modules/inventory/purchase-batch-owner.test.ts
+      - apps/api/src/modules/purchase/admin-purchase-receive-command.ts
+      - apps/api/src/modules/purchase/admin-purchase-receive-command.test.ts
+      - apps/api/src/modules/compliance/product-compliance-command.ts
+      - apps/api/src/modules/compliance/product-compliance-command.test.ts
+      - apps/api/src/modules/compliance/product-compliance-fingerprint.ts
+      - apps/api/src/modules/compliance/product-compliance-fingerprint.test.ts
+      - apps/api/src/modules/compliance/product-compliance-executor.ts
+      - apps/api/src/modules/compliance/product-compliance-executor.test.ts
+      - apps/api/src/modules/compliance/product-compliance-executor.integration.test.ts
+      - apps/api/src/modules/compliance/compliance-release-evaluator.ts
+      - apps/api/src/modules/compliance/compliance-release-evaluator.test.ts
+      - apps/api/src/modules/compliance/compliance-release-evaluator.integration.test.ts
+      - apps/api/src/routes/admin/compliance.ts
+      - apps/api/src/routes/admin/compliance.test.ts
+      - apps/api/src/routes/admin/compliance-access.test.ts
+      - apps/api/src/routes/admin/compliance-evidence-access.integration.test.ts
+      - apps/admin/src/features/inventory/shared/types.ts
+      - apps/admin/src/features/supply/suppliers/api.ts
+      - apps/admin/src/features/supply/suppliers/api.test.ts
+      - apps/admin/src/features/supply/suppliers/SuppliersPage.tsx
+      - apps/admin/src/features/supply/suppliers/supplier-compliance-card.test.tsx
+      - apps/admin/src/features/catalog/compliance/**
+      - apps/admin/src/features/catalog/products/CatalogProductsPage.tsx
+      - apps/admin/src/features/catalog/products/catalog-compliance-mount.contract.test.ts
+      - apps/api/src/routes/admin/index.ts
+      - docker-compose.yml
+      - prisma/schema.prisma
+      - prisma/migrations/202607290002_l53_d2_product_compliance/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l53-d2-compliance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Build API workspace dependencies
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-l53-d2-${{ github.run_id }} \
+            -f docker-compose.yml up -d --wait postgres
+      - name: Prepare PostgreSQL
+        run: |
+          pnpm db:generate
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Verify supplier qualification workflow
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/supplier-qualification-command.test.ts \
+            src/routes/supplier-qualification-route.test.ts \
+            src/modules/compliance/supplier-qualification-executor.integration.test.ts
+      - name: Verify batch traceability and purchase evidence
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/product-batch-evidence.test.ts \
+            src/modules/inventory/purchase-batch-owner.test.ts \
+            src/modules/purchase/admin-purchase-receive-command.test.ts \
+            src/modules/purchase/purchase-domain-ownership.contract.test.ts
+      - name: Verify product compliance workflow
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/product-compliance-fingerprint.test.ts \
+            src/modules/compliance/product-compliance-command.test.ts \
+            src/modules/compliance/product-compliance-executor.test.ts \
+            src/routes/admin/compliance.test.ts \
+            src/modules/compliance/product-compliance-executor.integration.test.ts
+      - name: Verify fail-closed compliance release evidence
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/compliance/compliance-release-evaluator.test.ts \
+            src/modules/compliance/compliance-release-evaluator.integration.test.ts
+          pnpm exec vitest run scripts/verify-l53-d2-compliance-release-local.test.ts
+          node --test \
+            scripts/production/l53-d2-compliance-gate-contract.test.cjs \
+            scripts/production/l53-d2-release-registration.contract.test.cjs
+          GIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" \
+            pnpm exec tsx scripts/verify-l53-d2-compliance-release-local.ts
+      - name: Upload sanitized compliance release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l53-d2-compliance-evidence
+          path: .github/l53-d2-compliance-evidence.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Verify compliance admin workbench and evidence access
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/routes/admin/compliance-access.test.ts \
+            src/routes/admin/compliance-evidence-access.integration.test.ts
+          pnpm --filter @community-selection/admin test -- \
+            src/features/catalog/compliance/api.test.ts \
+            src/features/catalog/compliance/product-compliance-panel.test.tsx \
+            src/features/supply/suppliers/api.test.ts \
+            src/features/supply/suppliers/supplier-compliance-card.test.tsx \
+            src/features/catalog/products/catalog-compliance-mount.contract.test.ts
+          pnpm --filter @community-selection/admin typecheck
+          node --test scripts/production/l53-d2-task7-registration.contract.test.cjs
+      - name: Verify API types
+        run: pnpm --filter @community-selection/api typecheck
+      - name: Verify lightweight lint
+        run: pnpm lint
+      - name: Cleanup isolated PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-l53-d2-${{ github.run_id }} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
