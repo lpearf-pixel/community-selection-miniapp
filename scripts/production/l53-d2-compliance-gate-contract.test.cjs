@@ -24,9 +24,12 @@ test('defines a focused L53-D2 PostgreSQL compliance gate on GitHub-hosted runne
   assert.doesNotMatch(workflow, /runs-on:\s*\[?\s*self-hosted/);
   assert.doesNotMatch(workflow, /community-w01/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
-  assert.match(workflow, /127\.0\.0\.1:\$\{port\}/);
+  assert.match(
+    workflow,
+    /uses:\s*\.\/\.github\/actions\/configure-ci-postgres/,
+  );
+  assert.doesNotMatch(workflow, /DATABASE_URL=postgresql:\/\//);
   assert.doesNotMatch(workflow, /host\.docker\.internal/);
-  assert.match(workflow, /POSTGRES_HOST_PORT=\$\{port\}/);
   assert.match(
     workflow,
     /docker compose\s+\\?\s*\n?\s*-p community-selection-l53-d2-\$\{\{ github\.run_id \}\}/,
