@@ -17,13 +17,12 @@ test('GitHub-hosted gates select isolated PostgreSQL ports', () => {
     '.github/workflows/l50-c2-t3a-refund-gate.yml',
   ]) {
     const source = readFileSync(resolve(root, workflow), 'utf8');
-    assert.match(source, /name: Select isolated PostgreSQL port/);
-    assert.match(source, /POSTGRES_HOST_PORT=\$\{port\}/);
     assert.match(
       source,
-      /DATABASE_URL=postgresql:\/\/postgres:postgres@127\.0\.0\.1:\$\{port\}/,
+      /uses:\s*\.\/\.github\/actions\/configure-ci-postgres/,
     );
-    assert.doesNotMatch(source, /host\.docker\.internal:15432/);
+    assert.doesNotMatch(source, /DATABASE_URL=postgresql:\/\//);
+    assert.doesNotMatch(source, /host\.docker\.internal/);
   }
 });
 
