@@ -1331,7 +1331,7 @@ function assertB1ShellContract(smoke) {
       ],
       [
         'empty group contract',
-        /const hiddenNavigationSections = \['会员与营销', '门店与渠道', '系统管理'\];/,
+        /const hiddenNavigationSections = \['门店与渠道', '系统管理'\];/,
       ],
       [
         'empty groups absent',
