@@ -63,6 +63,15 @@ test('L48 verifier rejects body identity fields instead of treating them as a su
   assert.match(scenario, /expectedStatus:\s*400/);
   assert.doesNotMatch(scenario, /createdWithdrawal\.body\.data\.applied/);
   assert.match(scenario, /persistedWithdrawal\s*===\s*null/);
+
+  const logProbe = source.match(
+    /encodeURIComponent\(HTTP_LOG_MARKER\)\}\&phone=\$\{HTTP_LOG_PHONE\}`([\s\S]*?)await requestJson\('\/api\/leaders\/me\/rewards\/convert-credit'/,
+  )?.[1] ?? '';
+  assert.match(
+    logProbe,
+    /expectedStatus:\s*401/,
+    'the unknown identity log probe must stop at the current-user boundary',
+  );
 });
 
 test('records every check after a middle failure and preserves isolated evidence', () => {

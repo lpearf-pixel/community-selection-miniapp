@@ -892,7 +892,7 @@ async function runScenario(): Promise<void> {
           cookie: `session=${HTTP_LOG_MARKER}`,
           'x-admin-token': HTTP_LOG_MARKER,
         },
-        expectedStatus: 404,
+        expectedStatus: 401,
       },
     );
     await requestJson('/api/leaders/me/rewards/convert-credit', {
