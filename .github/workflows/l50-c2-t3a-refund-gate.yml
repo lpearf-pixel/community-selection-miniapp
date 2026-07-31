@@ -5,6 +5,8 @@ on:
     branches:
       - stable/l50-a3-4-business-base
     paths:
+      - .github/actions/configure-ci-postgres/action.yml
+      - .github/config/ci-postgres.env
       - .github/workflows/l50-c2-t3a-refund-gate.yml
       - apps/api/src/modules/refund/**
       - apps/api/src/services/refund-service.ts
@@ -55,11 +57,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-      - name: Select isolated PostgreSQL port
-        run: |
-          port=$((40000 + GITHUB_RUN_NUMBER % 10000))
-          echo "POSTGRES_HOST_PORT=${port}" >> "${GITHUB_ENV}"
-          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:${port}/community_selection?schema=public" >> "${GITHUB_ENV}"
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
       - run: pnpm install --frozen-lockfile
       - name: Verify consumer identity contract
         run: |
