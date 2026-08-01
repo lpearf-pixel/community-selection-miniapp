@@ -70,6 +70,36 @@ jobs:
             -p community-selection-l57-${{ github.run_id }} \
             -f docker-compose.yml up -d --wait postgres
 
+      - name: Resolve PostgreSQL endpoint for runner topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_host="${POSTGRES_HOST}"
+          if docker inspect "${HOSTNAME}" >/dev/null 2>&1; then
+            runner_networks="$(docker inspect --format '{{json .NetworkSettings.Networks}}' "${HOSTNAME}")"
+            db_host="$(
+              node -e '
+                const networks = JSON.parse(process.argv[1]);
+                const gateway = Object.values(networks)
+                  .map((network) => network.Gateway)
+                  .find(Boolean);
+                if (!gateway) process.exit(1);
+                process.stdout.write(gateway);
+              ' "${runner_networks}"
+            )"
+          fi
+          database_url="$(
+            node -e '
+              const url = new URL(process.argv[1]);
+              url.hostname = process.argv[2];
+              process.stdout.write(url.toString());
+            ' "${DATABASE_URL}" "${db_host}"
+          )"
+          {
+            echo "POSTGRES_HOST=${db_host}"
+            echo "DATABASE_URL=${database_url}"
+          } >> "${GITHUB_ENV}"
+
       - name: Apply production migrations
         run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
 

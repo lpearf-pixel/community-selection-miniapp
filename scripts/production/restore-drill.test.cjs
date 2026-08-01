@@ -34,10 +34,12 @@ function fixture() {
     path.join(bin, 'node'),
     'printf "node %s\\n" "$*" >> "${COMMAND_LOG}"\nif [[ "$*" == *"restore-drill-release.mjs"* ]]; then printf "ac5c7cce158f5314db976ff2d130185292c46cad\\n"; fi',
   );
+  const inheritedEnv = { ...process.env };
+  delete inheritedEnv.IMAGE_TAG;
   return {
     log,
     env: {
-      ...process.env,
+      ...inheritedEnv,
       PATH: `${bin}:${process.env.PATH}`,
       COMMAND_LOG: log,
       ENV_FILE: envFile,

@@ -41,6 +41,12 @@ test('runs production, migration, lint, type, test, and build gates', () => {
 
   assert.match(source, /uses: \.\/\.github\/actions\/configure-ci-postgres/);
   assert.match(source, /up -d --wait postgres/);
+  assert.match(source, /Resolve PostgreSQL endpoint for runner topology/);
+  assert.match(source, /docker inspect .*\$\{HOSTNAME\}/);
+  assert.match(source, /\.NetworkSettings\.Networks/);
+  assert.match(source, /POSTGRES_HOST=\$\{db_host\}/);
+  assert.match(source, /DATABASE_URL=\$\{database_url\}/);
+  assert.doesNotMatch(source, /172\.1[6-9]\.0\.1/);
   assert.match(source, /prisma migrate deploy --schema prisma\/schema\.prisma/);
   assert.match(source, /if: always\(\)/);
   assert.match(source, /down --volumes --remove-orphans/);
