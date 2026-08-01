@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "releaseSha": "0000000000000000000000000000000000000000",
+  "phase": "core_gray",
+  "operatorAlias": "ops-01",
+  "scenarios": [
+    { "id": "P01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/P01.png"], "notes": "微信登录" },
+    { "id": "P02", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/P02.png"], "notes": "普通购买" },
+    { "id": "P03", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/P03.png"], "notes": "支付通知" },
+    { "id": "P04", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/P04.png"], "notes": "通知重放" },
+    { "id": "G01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/G01.png"], "notes": "发起拼团" },
+    { "id": "G02", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/G02.png"], "notes": "真实用户参团" },
+    { "id": "G03", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/G03.png"], "notes": "成团" },
+    { "id": "G04", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/G04.png"], "notes": "支付不确定" },
+    { "id": "G05", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/G05.png"], "notes": "拼团失败" },
+    { "id": "R01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/R01.png"], "notes": "退款通知" },
+    { "id": "F01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": "0000", "evidenceRefs": ["screenshots/F01.png"], "notes": "自提核销" },
+    { "id": "A01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/A01.png"], "notes": "后台登录" },
+    { "id": "A02", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/A02.png"], "notes": "告警中心" },
+    { "id": "O01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/O01.png"], "notes": "单实例任务" },
+    { "id": "O02", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/O02.png"], "notes": "应用回滚" },
+    { "id": "B01", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/B01.png"], "notes": "加密备份" },
+    { "id": "B02", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/B02.png"], "notes": "隔离恢复演练" },
+    { "id": "M00", "executedAt": "2026-07-31T18:00:00.000Z", "result": "pending", "orderSuffix": null, "evidenceRefs": ["screenshots/M00.png"], "notes": "首轮会员能力保持关闭" }
+  ]
+}
