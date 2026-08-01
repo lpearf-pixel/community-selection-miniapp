@@ -1,0 +1,15 @@
+services:
+  postgres:
+    volumes:
+      - restore-drill-postgres:/var/lib/postgresql/data
+
+  restore:
+    volumes:
+      - production-backups:/var/backups/community-selection:ro
+      - ./secrets/backup_passphrase:/run/secrets/backup_passphrase:ro
+
+volumes:
+  restore-drill-postgres:
+  production-backups:
+    name: ${PRODUCTION_BACKUP_VOLUME:?PRODUCTION_BACKUP_VOLUME is required}
+    external: true

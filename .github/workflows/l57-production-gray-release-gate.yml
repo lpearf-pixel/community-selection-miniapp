@@ -1,0 +1,99 @@
+name: L57 Production Gray Release Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - '.gitignore'
+      - '.env.production.example'
+      - '.github/workflows/l57-production-gray-release-gate.yml'
+      - 'docker-compose.production.yml'
+      - 'docker-compose.restore-drill.yml'
+      - 'deploy/l57/**'
+      - 'docs/ops/**'
+      - 'docs/production-checklist.md'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/production/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l57-production-gray-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-gray-release-gate:
+    runs-on: [self-hosted, community]
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
+      MOCK_WECHAT_PAY: "true"
+      MEMBERSHIP_ENABLED: "true"
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build shared runtime config
+        run: pnpm --filter @community-selection/config build
+
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-l57-${{ github.run_id }} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Apply production migrations
+        run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Verify production and L57 contracts
+        run: node --test scripts/production/*.test.cjs
+
+      - name: Verify migrations
+        run: pnpm migrations:check
+
+      - name: Verify lint
+        run: pnpm lint
+
+      - name: Verify types
+        run: pnpm typecheck
+
+      - name: Verify tests
+        run: pnpm test
+
+      - name: Verify production builds
+        run: pnpm build
+
+      - name: Cleanup isolated PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-l57-${{ github.run_id }} \
+            -f docker-compose.yml down --volumes --remove-orphans || true

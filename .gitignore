@@ -66,3 +66,9 @@ backups/
 # Final reports are published to the independent stage-reports branch.
 /reports/
 /.tmp/
+
+# L57 production acceptance evidence must remain local and redacted.
+deploy/l57/*.json
+!deploy/l57/acceptance.example.json
+deploy/l57/screenshots/
+deploy/l57/evidence/

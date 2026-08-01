@@ -52,7 +52,11 @@ pnpm verify:l51
 
 ## 上线验收
 
+- 在腾讯云上海生产机执行 `pnpm prod:l57:readiness`，确认 Ubuntu 22.04/24.04、元数据绑定的实例 ID/规格/公网 IP、4C8G、100GB、10Mbps、固定 SHA 和精确 DNS。
 - 执行 [购买与拼团生产验收](ops/purchase-group-production-acceptance.md)。
+- 执行 `pnpm prod:restore:drill`，确认加密备份可在隔离数据库恢复。
+- 用 `pnpm prod:l57:acceptance -- --file <脱敏文件> --sha <部署SHA>` 校验核心灰度证据。
+- 按 [L57 腾讯云上海生产上线手册](ops/l57-tencent-cloud-launch.md) 配置 COS 副本和云监控告警。
 - `BusinessEventLog`、`OrderTimelineLog`、`OpsAlertLog` 可查询。
 - 微信主动对账和拼团到期扫描只有一个 API 实例；数据库 advisory lock 能阻止重复执行。
 - 购买、成团、失败退款和自提证据均已脱敏归档。

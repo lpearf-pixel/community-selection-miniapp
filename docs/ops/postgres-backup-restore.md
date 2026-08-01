@@ -53,3 +53,15 @@ bash scripts/pg-restore.sh
 - 每次生产迁移前额外备份；部署脚本检测到已有数据库卷时自动执行。
 - 每月至少在独立演练库恢复一次，记录备份名、开始/结束时间、迁移版本、表数量抽查和验收人。
 - 不允许把恢复演练直接指向生产库。
+
+## L57 独立恢复演练
+
+生产备份卷只读挂载到唯一的 Compose project，数据库使用独立临时卷。成功后只清理该演练 project 和临时数据库卷；外部生产备份卷不会被删除。
+
+```bash
+export BACKUP_FILE=/var/backups/community-selection/community_selection_YYYYMMDDTHHMMSSZ.dump.gpg
+export RESTORE_DRILL_CONFIRM=RESTORE_IN_ISOLATED_DRILL
+ENV_FILE=.env.production pnpm prod:restore:drill
+```
+
+脚本会从 `.env.production` 安全解析并验证固定 `IMAGE_TAG`，恢复备份、执行向前迁移并抽查 `_prisma_migrations`、订单、支付、退款和拼团表。成功证据以 `L57_RESTORE_DRILL release_sha=<SHA> backup_file=<文件名> project=<隔离项目>` 开头，后续计数全部带字段名。失败时默认清理隔离资源；只有需要保留现场排查时才设置 `RESTORE_DRILL_KEEP_ON_FAILURE=true`，排查后必须用日志中的唯一 project 名手工清理。
