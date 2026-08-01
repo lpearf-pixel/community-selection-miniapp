@@ -51,6 +51,9 @@ async function cleanup() {
     await prisma.orderTimelineLog.deleteMany({
       where: { order_id: { in: orderIds } },
     });
+    await prisma.wechatShippingIntent.deleteMany({
+      where: { order_id: { in: orderIds } },
+    });
     await prisma.order.deleteMany({
       where: { order_no: { in: [orderNo, pickupOrderNo, refundOrderNo] } },
     });
