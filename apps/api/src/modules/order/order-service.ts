@@ -4,6 +4,8 @@ import { recordAdminAudit, safeRecordBusinessEvent, safeRecordOrderTimeline } fr
 import { markCommissionPendingForCompletedOrder } from '../finance/finance-service.js';
 import { deliveryTimeWindowText, getDeliveryRule, validateDeliveryRuleForOrder } from '../delivery/delivery-rule-service.js';
 import { buildFulfillmentPromise } from '../fulfillment/fulfillment-promise.js';
+import { quoteMemberPrice } from '../membership/member-pricing.js';
+import { getMembershipEntitlement } from '../membership/membership-repository.js';
 
 type CreateGroupOrderInput = {
   group_buy_id?: string;
@@ -129,6 +131,10 @@ function toPublicOrder(order: any, deliveryMeta?: { delivery_fee_cents?: number;
     product_amount_cents: order.product_amount_cents ?? order.total_amount_cents,
     delivery_fee_cents: order.delivery_fee_cents ?? (order.pickup_type === 'delivery' ? (deliveryMeta?.delivery_fee_cents ?? 0) : 0),
     pay_amount_cents: order.pay_amount_cents,
+    unit_price_cents: order.unit_price_cents ?? null,
+    price_source: order.price_source ?? null,
+    pricing_snapshot: order.pricing_snapshot ?? null,
+    membership_period_id: order.membership_period_id ?? null,
     refund_amount_cents: order.refund_amount_cents,
     quantity: order.quantity,
     pay_status: order.pay_status,
@@ -210,7 +216,23 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
     if (groupBuy.status !== 'pending' && groupBuy.status !== 'success') throw orderRequestError('当前团购不可下单');
     if (groupBuy.end_time.getTime() <= Date.now()) throw orderRequestError('团购已截止');
 
-    const productAmountCents = groupBuy.price_cents * saleQuantity;
+    const membership = await getMembershipEntitlement(userId, new Date(), tx);
+    const priceQuote = quoteMemberPrice({
+      enabled: process.env.MEMBERSHIP_ENABLED === 'true' && groupBuy.product.member_pricing_enabled,
+      channel: 'group',
+      listPriceCents: groupBuy.product.price_cents,
+      channelPriceCents: groupBuy.price_cents,
+      costPriceCents: groupBuy.product.cost_price_cents,
+      memberDiscountBps: groupBuy.product.member_discount_bps,
+      groupMemberDiscountBps: groupBuy.product.group_member_discount_bps,
+      minimumMarginBps: groupBuy.product.minimum_member_margin_bps,
+      minimumMarginCents: groupBuy.product.minimum_member_margin_cents,
+      ruleVersion: groupBuy.product.member_pricing_rule_version,
+      membership: membership.active
+        ? { active: true, accountId: membership.accountId, periodId: membership.periodId }
+        : { active: false },
+    });
+    const productAmountCents = priceQuote.unitPriceCents * saleQuantity;
     const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
     const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
     const payAmountCentsBeforeCredit = productAmountCents + deliveryFeeCents;
@@ -264,6 +286,10 @@ export async function createGroupOrder(input: CreateGroupOrderInput) {
           pickupType === PickupType.delivery ? capturedAt : null,
         ...fulfillmentPromise,
         pay_amount_cents: payAmountCentsBeforeCredit - creditAmount,
+        unit_price_cents: priceQuote.unitPriceCents,
+        price_source: priceQuote.priceSource,
+        pricing_snapshot: priceQuote,
+        membership_period_id: priceQuote.membershipPeriodId,
         quantity: saleQuantity,
         credit_amount_cents: creditAmount,
         credit_source_type: creditAmount > 0 ? 'reward_conversion' : undefined,
@@ -319,7 +345,23 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
       if (!pickupStore) throw orderRequestError('自提点不存在');
     }
 
-    const productAmountCents = product.price_cents * saleQuantity;
+    const membership = await getMembershipEntitlement(userId, new Date(), tx);
+    const priceQuote = quoteMemberPrice({
+      enabled: process.env.MEMBERSHIP_ENABLED === 'true' && product.member_pricing_enabled,
+      channel: 'regular',
+      listPriceCents: product.price_cents,
+      channelPriceCents: product.price_cents,
+      costPriceCents: product.cost_price_cents,
+      memberDiscountBps: product.member_discount_bps,
+      groupMemberDiscountBps: product.group_member_discount_bps,
+      minimumMarginBps: product.minimum_member_margin_bps,
+      minimumMarginCents: product.minimum_member_margin_cents,
+      ruleVersion: product.member_pricing_rule_version,
+      membership: membership.active
+        ? { active: true, accountId: membership.accountId, periodId: membership.periodId }
+        : { active: false },
+    });
+    const productAmountCents = priceQuote.unitPriceCents * saleQuantity;
     const deliveryValidation = pickupType === 'delivery' ? await validateDeliveryRuleForOrder({ pickup_store_id: input.pickup_store_id, receiver_name: receiverName, receiver_phone: receiverPhone, receiver_address: input.receiver_address, delivery_time_window_code: input.delivery_time_window_code, order_amount_cents: productAmountCents }) : null;
     const deliveryFeeCents = pickupType === 'delivery' ? (deliveryValidation?.delivery_fee_cents ?? 0) : 0;
     const deliveryTimeWindowTextValue = pickupType === 'delivery' && deliveryValidation?.delivery_time_window ? deliveryTimeWindowText(deliveryValidation.delivery_time_window) : null;
@@ -357,6 +399,10 @@ export async function createNormalOrder(input: CreateNormalOrderInput) {
           pickupType === PickupType.delivery ? capturedAt : null,
         ...fulfillmentPromise,
         pay_amount_cents: productAmountCents + deliveryFeeCents,
+        unit_price_cents: priceQuote.unitPriceCents,
+        price_source: priceQuote.priceSource,
+        pricing_snapshot: priceQuote,
+        membership_period_id: priceQuote.membershipPeriodId,
         quantity: saleQuantity,
         pickup_type: pickupType,
         pickup_store_id: input.pickup_store_id,

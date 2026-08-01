@@ -18,6 +18,7 @@ export type AdminRefreshTarget =
   | 'alerts'
   | 'tax-review'
   | 'member-imports'
+  | 'member-benefits'
   | 'legacy';
 
 export function adminRefreshTarget(view: AdminViewKey): AdminRefreshTarget {
@@ -37,6 +38,7 @@ export function adminRefreshTarget(view: AdminViewKey): AdminRefreshTarget {
   if (view === 'alerts') return 'alerts';
   if (view === 'taxRecords') return 'tax-review';
   if (view === 'memberImports') return 'member-imports';
+  if (view === 'memberBenefits') return 'member-benefits';
   if (view === 'products') return 'catalog';
   if (view === 'finance' || view === 'operations') return view;
   return 'legacy';

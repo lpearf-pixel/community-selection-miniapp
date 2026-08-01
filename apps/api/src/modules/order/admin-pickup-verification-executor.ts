@@ -22,6 +22,7 @@ import {
   createWechatShippingIntent,
   resolvePickupShippingIntent,
 } from '../wechat-shipping/wechat-shipping-intent.js';
+import { applyOrderGiftFulfillmentEvent } from '../membership/member-gift-fulfillment.js';
 
 const OPERATION = 'admin.order.pickup.verify.v1';
 
@@ -255,6 +256,14 @@ export async function executeAdminPickupVerificationCommand(input: {
 
       const after = await tx.order.findUniqueOrThrow({
         where: { id: input.order_id },
+      });
+
+      await applyOrderGiftFulfillmentEvent(tx, {
+        orderId: input.order_id,
+        event: 'pickup_verified',
+        actorAdminUserId: input.context.admin_user_id,
+        idempotencyKey: `${input.command.idempotency_key}:member-gift:pickup`,
+        now: new Date(),
       });
 
       await createWechatShippingIntent(tx, {

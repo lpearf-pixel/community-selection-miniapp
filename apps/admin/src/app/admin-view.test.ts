@@ -33,6 +33,7 @@ describe('admin view contract', () => {
       'deliveryRuleConfig',
       'dashboardV2',
       'memberImports',
+      'memberBenefits',
     ]);
     expect(new Set(ADMIN_VIEW_KEYS).size).toBe(ADMIN_VIEW_KEYS.length);
   });

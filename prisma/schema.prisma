@@ -130,6 +130,55 @@ enum LegacyMemberEligibilityStatus {
   revoked
 }
 
+enum MembershipAccountStatus {
+  active
+  expired
+  suspended
+}
+
+enum MembershipPeriodSource {
+  legacy_free
+  annual_paid
+  manual
+}
+
+enum MembershipOrderStatus {
+  pending_payment
+  paid
+  payment_exception
+  closed
+  refunded
+  chargeback
+}
+
+enum MemberGiftCampaignStatus {
+  draft
+  active
+  ended
+  cancelled
+}
+
+enum MemberGiftClaimStatus {
+  reserved
+  released
+  delivered
+  written_off
+}
+
+enum MemberGiftInventoryEventType {
+  reserve
+  fulfillment_start
+  release
+  deliver
+  write_off
+}
+
+enum MemberGiftLossReason {
+  damaged
+  lost
+  unsellable
+}
+
 model User {
   id                  String              @id @default(cuid())
   openid              String              @unique
@@ -152,6 +201,11 @@ model User {
   sessions            UserSession[]
   legacy_member_import_rows LegacyMemberImportRow[]
   legacy_member_eligibility LegacyMemberEligibility?
+  membership_account       MembershipAccount?
+  membership_periods       MembershipPeriod[]
+  membership_orders        MembershipOrder[]
+  member_gift_claims       MemberGiftClaim[]
+  member_gift_events       MemberGiftInventoryEvent[] @relation("MemberGiftEventActor")
 }
 
 model LegacyMemberImportBatch {
@@ -207,13 +261,95 @@ model LegacyMemberEligibility {
   used_at               DateTime?
   revoked_at            DateTime?
   revoked_by_admin_id   String?
+  membership_period_id  String?                       @unique
   created_at            DateTime                      @default(now())
   updated_at            DateTime                      @updatedAt
   batch                 LegacyMemberImportBatch       @relation(fields: [batch_id], references: [id])
   user                  User?                         @relation(fields: [user_id], references: [id])
+  membership_period     MembershipPeriod?             @relation(fields: [membership_period_id], references: [id])
 
   @@index([batch_id, status])
   @@index([status, created_at])
+}
+
+model MembershipAccount {
+  id                String                  @id
+  user_id           String                  @unique
+  status            MembershipAccountStatus @default(active)
+  starts_at         DateTime
+  ends_at           DateTime
+  suspension_reason String?
+  created_at        DateTime                @default(now())
+  updated_at        DateTime                @updatedAt
+  user              User                    @relation(fields: [user_id], references: [id])
+  periods           MembershipPeriod[]
+  gift_claims       MemberGiftClaim[]
+
+  @@index([status, ends_at])
+}
+
+model MembershipPeriod {
+  id                 String                 @id
+  account_id         String
+  user_id            String
+  source             MembershipPeriodSource
+  source_id          String?
+  idempotency_key    String                 @unique
+  starts_at          DateTime
+  ends_at            DateTime
+  created_at         DateTime               @default(now())
+  account            MembershipAccount      @relation(fields: [account_id], references: [id])
+  user               User                   @relation(fields: [user_id], references: [id])
+  legacy_eligibility LegacyMemberEligibility?
+  orders             Order[]
+  gift_claims        MemberGiftClaim[]
+  paid_order         MembershipOrder?
+
+  @@unique([source, source_id])
+  @@index([user_id, starts_at, ends_at])
+  @@index([account_id, created_at])
+}
+
+model MembershipOrder {
+  id                   String                @id @default(cuid())
+  order_no             String                @unique
+  user_id              String
+  amount_cents         Int                   @default(8800)
+  status               MembershipOrderStatus @default(pending_payment)
+  idempotency_key      String                @unique
+  membership_period_id String?               @unique
+  paid_payment_id      String?               @unique
+  paid_at              DateTime?
+  closed_at            DateTime?
+  created_at           DateTime              @default(now())
+  updated_at           DateTime              @updatedAt
+  user                 User                  @relation(fields: [user_id], references: [id])
+  membership_period    MembershipPeriod?     @relation(fields: [membership_period_id], references: [id])
+  payments             MembershipPayment[]   @relation("MembershipOrderPayments")
+  paid_payment         MembershipPayment?     @relation("MembershipOrderPaidPayment", fields: [paid_payment_id], references: [id])
+
+  @@index([user_id, status, created_at])
+}
+
+model MembershipPayment {
+  id                       String          @id @default(cuid())
+  membership_order_id      String
+  attempt_no               Int             @default(1)
+  out_trade_no             String          @unique
+  transaction_id           String?         @unique
+  prepay_id                String?
+  prepay_expires_at        DateTime?
+  provider_success_at      DateTime?
+  amount_cents             Int             @default(8800)
+  trade_state              String          @default("created")
+  last_provider_error_code String?
+  created_at               DateTime        @default(now())
+  updated_at               DateTime        @updatedAt
+  membership_order         MembershipOrder @relation("MembershipOrderPayments", fields: [membership_order_id], references: [id])
+  paid_order               MembershipOrder? @relation("MembershipOrderPaidPayment")
+
+  @@unique([membership_order_id, attempt_no])
+  @@index([trade_state, created_at])
 }
 
 model UserSession {
@@ -257,6 +393,12 @@ model Product {
   labels               Json            @default("[]")
   price_cents          Int
   cost_price_cents     Int
+  member_pricing_enabled Boolean         @default(false)
+  member_discount_bps    Int             @default(9000)
+  group_member_discount_bps Int          @default(8000)
+  minimum_member_margin_bps Int          @default(0)
+  minimum_member_margin_cents Int        @default(0)
+  member_pricing_rule_version Int        @default(1)
   stock                Int             @default(0)
   unit                 String
   stock_unit           String          @default("piece")
@@ -281,8 +423,79 @@ model Product {
   orders               Order[]
   after_sale_cases     AfterSaleCase[]
   compliance_reviews   ProductComplianceReview[]
+  member_gift_campaigns MemberGiftCampaign[]
 
   @@index([primary_supplier_id])
+}
+
+model MemberGiftCampaign {
+  id                       String                   @id
+  name                     String
+  gift_product_id          String
+  status                   MemberGiftCampaignStatus @default(draft)
+  starts_at                DateTime
+  ends_at                  DateTime
+  max_claims_per_member    Int                      @default(1)
+  inventory_total          Int
+  inventory_reserved       Int                      @default(0)
+  inventory_delivered      Int                      @default(0)
+  inventory_written_off    Int                      @default(0)
+  created_at               DateTime                 @default(now())
+  updated_at               DateTime                 @updatedAt
+  gift_product             Product                  @relation(fields: [gift_product_id], references: [id])
+  claims                   MemberGiftClaim[]
+  inventory_events         MemberGiftInventoryEvent[]
+
+  @@index([status, starts_at, ends_at])
+  @@index([gift_product_id])
+}
+
+model MemberGiftClaim {
+  id                    String                @id
+  campaign_id           String
+  user_id               String
+  order_id              String                 @unique
+  membership_account_id String
+  membership_period_id  String
+  quantity              Int                   @default(1)
+  status                MemberGiftClaimStatus  @default(reserved)
+  claim_idempotency_key String                 @unique
+  released_at           DateTime?
+  delivered_at          DateTime?
+  written_off_at        DateTime?
+  fulfillment_started_at DateTime?
+  loss_reason           MemberGiftLossReason?
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
+  campaign              MemberGiftCampaign     @relation(fields: [campaign_id], references: [id])
+  user                  User                   @relation(fields: [user_id], references: [id])
+  order                 Order                  @relation(fields: [order_id], references: [id])
+  membership_account    MembershipAccount      @relation(fields: [membership_account_id], references: [id])
+  membership_period     MembershipPeriod       @relation(fields: [membership_period_id], references: [id])
+  inventory_events      MemberGiftInventoryEvent[]
+
+  @@index([campaign_id, membership_account_id, status])
+  @@index([user_id, created_at])
+}
+
+model MemberGiftInventoryEvent {
+  id              String                       @id
+  campaign_id     String
+  claim_id        String
+  actor_user_id   String?
+  actor_admin_user_id String?
+  event_type      MemberGiftInventoryEventType
+  quantity        Int
+  idempotency_key String                       @unique
+  reason          MemberGiftLossReason?
+  created_at      DateTime                     @default(now())
+  campaign        MemberGiftCampaign           @relation(fields: [campaign_id], references: [id])
+  claim           MemberGiftClaim              @relation(fields: [claim_id], references: [id])
+  actor_user      User?                        @relation("MemberGiftEventActor", fields: [actor_user_id], references: [id])
+  actor_admin_user AdminUser?                  @relation(fields: [actor_admin_user_id], references: [id])
+
+  @@index([campaign_id, created_at])
+  @@index([claim_id, created_at])
 }
 
 model Community {
@@ -376,6 +589,10 @@ model Order {
   promised_fulfillment_start_at DateTime?
   promised_fulfillment_end_at DateTime?
   pay_amount_cents    Int
+  unit_price_cents    Int?
+  price_source        String?
+  pricing_snapshot    Json?
+  membership_period_id String?
   quantity            Int          @default(1)
   refund_amount_cents Int          @default(0)
   product_refund_amount_cents Int   @default(0)
@@ -407,12 +624,15 @@ model Order {
   commissions         Commission[]
   after_sale_cases    AfterSaleCase[]
   wechat_shipping_intent WechatShippingIntent?
+  membership_period   MembershipPeriod? @relation(fields: [membership_period_id], references: [id])
+  member_gift_claim   MemberGiftClaim?
 
   @@index([user_id])
   @@index([group_buy_id])
   @@index([product_id])
   @@index([delivery_status])
   @@index([promised_fulfillment_start_at])
+  @@index([membership_period_id])
 }
 
 model WechatShippingIntent {
@@ -1197,6 +1417,7 @@ model AdminUser {
   stock_checks_operated     StockCheck[]    @relation("StockCheckOperatorAdmin")
   after_sales_reviewed      AfterSaleCase[] @relation("AfterSaleReviewedByAdmin")
   after_sales_resolved      AfterSaleCase[] @relation("AfterSaleResolvedByAdmin")
+  member_gift_events        MemberGiftInventoryEvent[]
 }
 
 model AdminSession {

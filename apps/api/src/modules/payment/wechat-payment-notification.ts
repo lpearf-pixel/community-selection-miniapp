@@ -169,8 +169,26 @@ export async function processWechatPaymentNotification(input: {
       order: { user: { openid: string } };
     } | null>;
   };
+  membershipPayments?: {
+    findByOutTradeNo(outTradeNo: string): Promise<{
+      id: string;
+      membership_order_id: string;
+      out_trade_no: string;
+      amount_cents: number;
+      membership_order: { user: { openid: string } };
+    } | null>;
+  };
   markOrderPaid(
     orderId: string,
+    info: {
+      payment_id: string;
+      out_trade_no: string;
+      transaction_id: string;
+      provider_success_at: Date;
+    },
+  ): Promise<unknown>;
+  markMembershipOrderPaid?(
+    membershipOrderId: string,
     info: {
       payment_id: string;
       out_trade_no: string;
@@ -211,34 +229,44 @@ export async function processWechatPaymentNotification(input: {
     ) {
       throw new Error('WECHAT_PAYMENT_MERCHANT_INVALID');
     }
-    const payment = await input.payments.findByOutTradeNo(
-      requireString(resource, 'out_trade_no'),
-    );
-    if (!payment) throw new Error('WECHAT_PAYMENT_NOT_FOUND');
+    const requestedOutTradeNo = requireString(resource, 'out_trade_no');
+    const payment = await input.payments.findByOutTradeNo(requestedOutTradeNo);
+    const membershipPayment = payment || !input.membershipPayments
+      ? null
+      : await input.membershipPayments.findByOutTradeNo(requestedOutTradeNo);
+    if (!payment && !membershipPayment) throw new Error('WECHAT_PAYMENT_NOT_FOUND');
+    const expectedAmount = payment?.amount_cents ?? membershipPayment!.amount_cents;
     const amount = object(resource.amount);
     if (
       !amount ||
       amount.currency !== 'CNY' ||
       amount.payer_currency !== 'CNY' ||
-      amount.total !== payment.amount_cents ||
-      amount.payer_total !== payment.amount_cents
+      amount.total !== expectedAmount ||
+      amount.payer_total !== expectedAmount
     ) {
       throw new Error('WECHAT_PAYMENT_AMOUNT_INVALID');
     }
     const payer = object(resource.payer);
-    if (!payer || payer.openid !== payment.order.user.openid) {
+    const expectedOpenid = payment?.order.user.openid ?? membershipPayment!.membership_order.user.openid;
+    if (!payer || payer.openid !== expectedOpenid) {
       throw new Error('WECHAT_PAYMENT_OPENID_INVALID');
     }
     const successAt = new Date(requireString(resource, 'success_time'));
     if (Number.isNaN(successAt.getTime())) {
       throw new Error('WECHAT_PAYMENT_SUCCESS_TIME_INVALID');
     }
-    await input.markOrderPaid(payment.order_id, {
-      payment_id: payment.id,
-      out_trade_no: payment.out_trade_no,
+    const paymentInfo = {
+      payment_id: payment?.id ?? membershipPayment!.id,
+      out_trade_no: payment?.out_trade_no ?? membershipPayment!.out_trade_no,
       transaction_id: requireString(resource, 'transaction_id'),
       provider_success_at: successAt,
-    });
+    };
+    if (payment) {
+      await input.markOrderPaid(payment.order_id, paymentInfo);
+    } else {
+      if (!input.markMembershipOrderPaid) throw new Error('WECHAT_PAYMENT_TARGET_UNSUPPORTED');
+      await input.markMembershipOrderPaid(membershipPayment!.membership_order_id, paymentInfo);
+    }
     await input.receipts.complete(
       input.verified.notificationId,
       claimToken,

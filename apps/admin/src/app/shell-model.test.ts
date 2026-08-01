@@ -16,7 +16,7 @@ describe('shell navigation model', () => {
       ['analytics', '数据分析'],
       ['operations-risk', '运维与风控'],
     ]);
-    expect(groups.flatMap((group) => group.items)).toHaveLength(24);
+    expect(groups.flatMap((group) => group.items)).toHaveLength(25);
   });
 
   it('marks the active module and view and delegates navigation', () => {

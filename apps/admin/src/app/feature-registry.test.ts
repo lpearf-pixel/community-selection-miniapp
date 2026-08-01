@@ -74,6 +74,7 @@ describe('admin feature registry', () => {
         ['deliveryReservation', '配送预留'],
         ['deliveryRuleConfig', '管理配送规则'],
         ['memberImports', '老会员导入'],
+        ['memberBenefits', '会员权益履约'],
       ]);
   });
 });

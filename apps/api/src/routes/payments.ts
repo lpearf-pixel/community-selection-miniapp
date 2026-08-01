@@ -19,6 +19,10 @@ import {
 } from '../modules/wechat/wechat-pay-v3-client.js';
 import { verifyAndDecryptWechatNotification } from '../modules/wechat/wechat-notify-verifier.js';
 import { markOrderPaid } from '../services/payment-service.js';
+import {
+  createPrismaMembershipPaymentLookup,
+  markMembershipOrderPaidFromNotification,
+} from '../modules/membership/membership-paid-order.js';
 import { safeRecordBusinessEvent } from '../services/logging-service.js';
 import { withCurrentUser } from './current-user-route.js';
 
@@ -126,7 +130,9 @@ function defaultWechatDependencies() {
         expectedMerchantId: config.merchantId,
         receipts: createPrismaWechatReceiptStore(),
         payments: createPrismaWechatPaymentLookup(),
+        membershipPayments: createPrismaMembershipPaymentLookup(),
         markOrderPaid,
+        markMembershipOrderPaid: markMembershipOrderPaidFromNotification,
       });
     },
   };

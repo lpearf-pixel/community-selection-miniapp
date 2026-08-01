@@ -46,6 +46,7 @@ describe('admin refresh policy', () => {
     ['alerts', 'alerts'],
     ['taxRecords', 'tax-review'],
     ['memberImports', 'member-imports'],
+    ['memberBenefits', 'member-benefits'],
   ] as const)('routes %s refresh to %s', (view, target) => {
     expect(adminRefreshTarget(view)).toBe(target);
   });
@@ -234,6 +235,7 @@ describe('admin refresh policy', () => {
       ['alerts', 'alertsRefreshVersion', 'OperationsAlertsPage'],
       ['taxRecords', 'taxReviewRefreshVersion', 'TaxReviewPage'],
       ['memberImports', 'memberImportsRefreshVersion', 'MemberImportsPage'],
+      ['memberBenefits', 'memberBenefitsRefreshVersion', 'MemberBenefitsPage'],
     ] as const;
 
     expect(source).toMatch(
@@ -247,7 +249,7 @@ describe('admin refresh policy', () => {
       );
     }
 
-    expect(source.match(/<AdminErrorBoundary\b/g)).toHaveLength(15);
+    expect(source.match(/<AdminErrorBoundary\b/g)).toHaveLength(16);
     expect(source).toMatch(
       /<AdminErrorBoundary resetKey=\{view\}>\s*<AdminFeatureWorkspace render=\{renderFeatureContent\} \/>\s*<\/AdminErrorBoundary>/,
     );

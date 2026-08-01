@@ -88,6 +88,40 @@ describe('verified WeChat payment notification', () => {
     expect(deps.markOrderPaid).not.toHaveBeenCalled();
   });
 
+  it('dispatches an independently priced membership payment to its lifecycle owner', async () => {
+    const deps = dependencies();
+    deps.payments.findByOutTradeNo.mockResolvedValueOnce(null as never);
+    const membershipVerified = {
+      ...verified,
+      resource: {
+        ...verified.resource,
+        amount: { ...verified.resource.amount, total: 8_800, payer_total: 8_800 },
+      },
+    };
+    const membershipPayments = {
+      findByOutTradeNo: vi.fn(async () => ({
+        id: 'membership-payment-a', membership_order_id: 'membership-order-a',
+        out_trade_no: 'PAYORDERA001', amount_cents: 8_800,
+        membership_order: { user: { openid: 'openid-a' } },
+      })),
+    };
+    const markMembershipOrderPaid = vi.fn(async () => ({
+      manual_refund_required: true,
+      code: 'MEMBERSHIP_DUPLICATE_CHARGE_REQUIRES_REFUND',
+    }));
+    await expect(processWechatPaymentNotification({
+      verified: membershipVerified, expectedAppId: 'wx-app', expectedMerchantId: 'merchant-a',
+      ...deps, membershipPayments, markMembershipOrderPaid,
+    })).resolves.toEqual({ replay: false });
+    expect(deps.markOrderPaid).not.toHaveBeenCalled();
+    expect(markMembershipOrderPaid).toHaveBeenCalledWith('membership-order-a', {
+      payment_id: 'membership-payment-a', out_trade_no: 'PAYORDERA001',
+      transaction_id: 'transaction-a', provider_success_at: new Date('2026-07-26T16:00:00.000Z'),
+    });
+    expect(deps.receipts.complete).toHaveBeenCalledWith('notification-a', expect.any(String));
+    expect(deps.receipts.fail).not.toHaveBeenCalled();
+  });
+
   it('fails closed on receipt collision, amount, merchant, or openid mismatch', async () => {
     const collision = dependencies('collision');
     await expect(

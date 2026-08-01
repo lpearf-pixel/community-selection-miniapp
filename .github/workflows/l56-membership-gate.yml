@@ -1,0 +1,105 @@
+name: L56 Membership Pricing and Gifts Gate
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/l56-membership-gate.yml
+      - apps/api/src/modules/membership/**
+      - apps/api/src/modules/delivery/admin-delivery-status-executor.ts
+      - apps/api/src/modules/order/admin-pickup-verification-executor.ts
+      - apps/api/src/modules/order/order-service.ts
+      - apps/api/src/modules/payment/wechat-payment-notification.ts
+      - apps/api/src/modules/refund/admin-refund-executor.ts
+      - apps/api/src/routes/membership.ts
+      - apps/api/src/routes/membership.test.ts
+      - apps/api/src/routes/payments.ts
+      - apps/api/src/routes/admin/member-gifts.ts
+      - apps/api/src/routes/admin/member-gifts.test.ts
+      - apps/api/src/routes/admin/index.ts
+      - apps/admin/src/features/membership/**
+      - apps/admin/src/app/**
+      - apps/miniapp/pages/membership/**
+      - apps/miniapp/pages/mine/**
+      - apps/miniapp/pages/orders/detail/**
+      - apps/miniapp/utils/membership.js
+      - apps/miniapp/app.json
+      - prisma/schema.prisma
+      - prisma/migrations/202607310001_l56_membership_pricing_gifts/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l56-membership-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
+      MEMBERSHIP_ENABLED: "true"
+      MOCK_WECHAT_PAY: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-l56-${{ github.run_id }} \
+            -f docker-compose.yml up -d --wait postgres
+      - name: Apply and verify migrations
+        run: |
+          pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm exec prisma migrate status --schema prisma/schema.prisma
+      - name: Verify L56 domain, API and PostgreSQL concurrency
+        run: |
+          pnpm --filter @community-selection/api test -- \
+            src/modules/membership/membership-lifecycle.test.ts \
+            src/modules/membership/membership-paid-order.test.ts \
+            src/modules/membership/membership-paid-order.integration.test.ts \
+            src/modules/membership/member-pricing.test.ts \
+            src/modules/membership/member-gift-service.test.ts \
+            src/modules/membership/member-gift-fulfillment.test.ts \
+            src/modules/membership/member-gift-fulfillment.integration.test.ts \
+            src/modules/payment/wechat-payment-notification.test.ts \
+            src/routes/membership.test.ts \
+            src/routes/admin/member-gifts.test.ts
+      - name: Verify L56 admin and miniapp surfaces
+        run: |
+          pnpm --filter @community-selection/admin test -- \
+            src/features/membership/benefits/MemberBenefitsPage.test.tsx \
+            src/features/membership/member-imports/MemberImportsPage.test.tsx \
+            src/app/feature-registry.test.ts \
+            src/app/refresh-policy.test.ts
+          node --test apps/miniapp/pages/membership/membership-model.test.cjs
+      - name: Verify full repository release gate
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+      - name: Cleanup isolated PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-l56-${{ github.run_id }} \
+            -f docker-compose.yml down --volumes --remove-orphans || true

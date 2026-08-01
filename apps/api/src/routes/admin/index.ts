@@ -19,6 +19,8 @@ import {
   createAdminMemberImportService,
   registerAdminMemberImportRoutes,
 } from './member-imports.js';
+import { createAdminMemberGiftService } from '../../modules/membership/member-gift-fulfillment.js';
+import { registerAdminMemberGiftRoutes } from './member-gifts.js';
 
 export type AdminRouteOptions = {
   memberPhoneHmacSecret: string;
@@ -45,4 +47,5 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRouteOpt
     app,
     createAdminMemberImportService(options.memberPhoneHmacSecret),
   );
+  registerAdminMemberGiftRoutes(app, createAdminMemberGiftService());
 }
