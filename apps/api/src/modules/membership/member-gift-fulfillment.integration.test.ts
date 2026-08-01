@@ -168,7 +168,7 @@ describe.sequential('member gift fulfillment on PostgreSQL', () => {
     const item = await createReservedClaim('refund-release');
     const afterSale = await prisma.afterSaleCase.create({ data: {
       order_id: item.orderId, user_id: ids.user, type: 'refund', status: 'approved',
-      resolution_type: 'full_refund', reason: 'L56 全额退款释放赠品',
+      resolution_type: 'refund', reason: 'L56 全额退款释放赠品',
       requested_refund_cents: 1_000, approved_refund_cents: 1_000,
       approved_product_refund_cents: 1_000, approved_delivery_refund_cents: 0,
       reviewed_by_admin_id: ids.admin, reviewed_at: now,
