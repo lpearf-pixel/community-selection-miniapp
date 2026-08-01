@@ -66,6 +66,10 @@ Page({
     wx.navigateTo({ url: '/pages/orders/index' });
   },
 
+  goMembership() {
+    wx.navigateTo({ url: '/pages/membership/index' });
+  },
+
   goAfterSales() {
     wx.navigateTo({ url: '/pages/orders/index' });
   },
@@ -87,4 +91,3 @@ Page({
     wx.navigateTo({ url: '/pages/pickup/select/index' });
   }
 });
-

@@ -22,6 +22,11 @@ import {
   type AdminRefundResult,
   buildAdminRefundRequestHash,
 } from './admin-refund-command.js';
+import {
+  applyOrderGiftFulfillmentEvent,
+  GiftFulfillmentBlockError,
+  isFullRemainingRefund,
+} from '../membership/member-gift-fulfillment.js';
 
 const OPERATION = 'admin.after_sale.refund.execute.v1';
 const SUCCESS_CODE = 'ADMIN_REFUND_EXECUTED';
@@ -37,6 +42,7 @@ export class AdminRefundCommandError extends Error {
       | 'ADMIN_REFUND_STATE_CONFLICT'
       | 'ADMIN_REFUND_AMOUNT_CONFLICT'
       | 'ADMIN_REFUND_PROVIDER_UNAVAILABLE'
+      | 'ADMIN_MEMBER_GIFT_MANUAL_REFUND_REQUIRED'
       | 'ADMIN_REFUND_EXECUTION_FAILED',
     message: string,
   ) {
@@ -269,6 +275,19 @@ export async function executeAdminRefundCommand(input: {
         before,
         input.command.expected_version,
       );
+      if (isFullRemainingRefund({
+        payAmountCents: before.order.pay_amount_cents,
+        refundedCents: before.order.refund_amount_cents,
+        requestedCents: currentApproved.approved_refund_cents,
+      })) {
+        await applyOrderGiftFulfillmentEvent(tx, {
+          orderId: before.order_id,
+          event: 'full_refund',
+          actorAdminUserId: input.context.admin_user_id,
+          idempotencyKey: `${input.command.idempotency_key}:member-gift:full-refund`,
+          now: new Date(),
+        });
+      }
       const refund = await applyMockRefundInTransaction(
         tx,
         {
@@ -354,6 +373,13 @@ export async function executeAdminRefundCommand(input: {
       return result;
     });
   } catch (error) {
+    if (error instanceof GiftFulfillmentBlockError) {
+      throw commandError(
+        error.statusCode,
+        'ADMIN_MEMBER_GIFT_MANUAL_REFUND_REQUIRED',
+        error.message,
+      );
+    }
     if (error instanceof RefundOrderVersionConflictError) {
       throw commandError(
         409,

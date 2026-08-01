@@ -1,0 +1,7 @@
+.page { padding: 28rpx; }
+.membership-card, .gift-card { margin-bottom: 18rpx; padding: 24rpx; }
+.membership-card button { margin-top: 20rpx; }
+.section-title { margin: 26rpx 0 14rpx; }
+.gift-card { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
+.gift-name { font-weight: 700; margin-bottom: 8rpx; }
+.gift-card button { margin: 0; flex: none; }

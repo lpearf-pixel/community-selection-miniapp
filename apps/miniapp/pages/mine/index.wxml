@@ -39,6 +39,7 @@
 
     <view class="cq-section-title section-title">常用服务</view>
     <view class="cq-card service-actions">
+      <button class="cq-button cq-button--secondary" bindtap="goMembership">会员权益与新品赠品</button>
       <button class="cq-button cq-button--secondary" bindtap="goCart">我的购物车（{{cartCount}}）</button>
       <button class="cq-button cq-button--secondary" bindtap="goCommunities">当前社区：{{community.name || '未选择'}}</button>
       <button class="cq-button cq-button--secondary" bindtap="goPickupStores">当前自提点：{{pickupStore.name || '未选择'}}</button>

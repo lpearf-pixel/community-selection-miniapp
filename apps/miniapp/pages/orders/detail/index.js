@@ -12,7 +12,7 @@ function orderStatusTone(order) {
 function decorate(order) {
   const normalized = normalizeOrder(order);
   const receiver = order.receiver || {};
-  const pickup = order.pickup || {}; const delivery = order.delivery || {}; const fulfillment_type_text = order.fulfillment_type_text || pickup.fulfillment_type_text || (order.pickup_type === "delivery" ? "门店配送" : "到店自提"); return { ...normalized, pickup, delivery, product_refund_yuan: formatOrderAmount(order.product_refund_amount_cents || 0), delivery_refund_yuan: formatOrderAmount(order.delivery_refund_amount_cents || 0), remaining_refundable_yuan: formatOrderAmount(order.remaining_refundable_amount_cents || 0), fulfillment_type_text, receiver, receiver_phone_masked: receiver.receiver_phone_masked || order.receiver_phone_masked || '', after_sales: order.after_sales || [], timeline: order.timeline || [], theme_status_tone: orderStatusTone(normalized) };
+  const pickup = order.pickup || {}; const delivery = order.delivery || {}; const fulfillment_type_text = order.fulfillment_type_text || pickup.fulfillment_type_text || (order.pickup_type === "delivery" ? "门店配送" : "到店自提"); const terminal = ['closed', 'refunded'].includes(String(order.order_status || '').toLowerCase()); return { ...normalized, pickup, delivery, product_refund_yuan: formatOrderAmount(order.product_refund_amount_cents || 0), delivery_refund_yuan: formatOrderAmount(order.delivery_refund_amount_cents || 0), remaining_refundable_yuan: formatOrderAmount(order.remaining_refundable_amount_cents || 0), fulfillment_type_text, receiver, receiver_phone_masked: receiver.receiver_phone_masked || order.receiver_phone_masked || '', after_sales: order.after_sales || [], timeline: order.timeline || [], theme_status_tone: orderStatusTone(normalized), can_claim_member_gift: order.pay_status === 'paid' && !terminal };
 }
 Page({
   data: { order: null, order_id: '', loading: false, error: '' },
@@ -31,6 +31,7 @@ Page({
   goPickupCode() { wx.navigateTo({ url: `/pages/pickup/code/index?id=${this.data.order_id}` }); },
   applyAfterSale() { wx.navigateTo({ url: `/pages/after-sales/apply/index?order_id=${this.data.order_id}` }); },
   goAfterSale() { wx.navigateTo({ url: `/pages/after-sales/detail/index?order_id=${this.data.order_id}` }); },
+  goMembership() { wx.navigateTo({ url: `/pages/membership/index?order_id=${this.data.order_id}` }); },
   backList() { wx.navigateTo({ url: '/pages/orders/index' }); }
 });
 

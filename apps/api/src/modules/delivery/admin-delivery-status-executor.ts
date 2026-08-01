@@ -27,6 +27,10 @@ import {
   createWechatShippingIntent,
   resolveDeliveryShippingIntent,
 } from '../wechat-shipping/wechat-shipping-intent.js';
+import {
+  applyOrderGiftFulfillmentEvent,
+  giftEventForDeliveryStatus,
+} from '../membership/member-gift-fulfillment.js';
 
 const OPERATION = 'admin.delivery.status.update.v1';
 const closedOrderStatuses = new Set<OrderStatus>([
@@ -291,6 +295,16 @@ export async function executeAdminDeliveryStatusCommand(input: {
       const after = await tx.order.findUniqueOrThrow({
         where: { id: input.order_id },
       });
+      const giftEvent = giftEventForDeliveryStatus(input.command.delivery_status);
+      if (giftEvent) {
+        await applyOrderGiftFulfillmentEvent(tx, {
+          orderId: input.order_id,
+          event: giftEvent,
+          actorAdminUserId: input.context.admin_user_id,
+          idempotencyKey: `${input.command.idempotency_key}:member-gift:${giftEvent}`,
+          now: new Date(),
+        });
+      }
       const shippingIntent = resolveDeliveryShippingIntent(
         before.delivery_status!,
         after.delivery_status!,

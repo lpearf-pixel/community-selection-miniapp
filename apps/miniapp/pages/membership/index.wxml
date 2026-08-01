@@ -1,0 +1,26 @@
+<view class="cq-page page">
+  <state-panel wx:if="{{loading && !membership}}" state="loading" message="正在加载会员权益…" />
+  <state-panel wx:elif="{{error && !membership}}" state="error" message="{{error}}" retryable bind:retry="loadMembership" />
+  <block wx:if="{{membership}}">
+    <view class="cq-card membership-card">
+      <view class="cq-section-title">{{membership.membershipStatusText}}</view>
+      <view wx:if="{{membership.active}}" class="cq-muted">有效期至 {{membership.ends_at}}</view>
+      <view wx:else class="cq-muted">年费 88 元；老会员首年资格可免费激活 365 天。</view>
+      <button wx:if="{{membership.feature_enabled}}" class="cq-button cq-button--primary" bindtap="purchaseAnnual">{{membership.active ? '88 元续费一年' : '88 元开通一年'}}</button>
+      <button wx:if="{{membership.canActivateLegacy}}" class="cq-button cq-button--primary" bindtap="activateLegacy">激活老会员首年资格</button>
+    </view>
+    <view wx:if="{{error}}" class="cq-card cq-tone-warning">{{error}}</view>
+    <view class="cq-section-title section-title">新品赠品</view>
+    <view wx:if="{{!orderId}}" class="cq-card cq-muted">请从已支付订单详情进入本页领取赠品，赠品将随该订单配送或自提。</view>
+    <view wx:for="{{membership.campaigns}}" wx:key="id" class="cq-card gift-card">
+      <view><view class="gift-name">{{item.name}}</view><view class="cq-muted">{{item.gift_product_name}}</view></view>
+      <button wx:if="{{orderId && membership.active}}" size="mini" class="cq-button cq-button--primary" data-id="{{item.id}}" bindtap="claimGift">领取</button>
+    </view>
+    <view class="cq-section-title section-title">领取记录</view>
+    <view wx:if="{{!membership.giftClaims.length}}" class="cq-card cq-muted">暂无赠品领取记录</view>
+    <view wx:for="{{membership.giftClaims}}" wx:key="id" class="cq-card gift-card">
+      <view><view class="gift-name">{{item.campaign_name}}</view><view class="cq-muted">{{item.statusText}}</view></view>
+      <button wx:if="{{item.status === 'reserved' && !item.fulfillment_started_at}}" size="mini" class="cq-button cq-button--secondary" data-id="{{item.id}}" bindtap="releaseGift">取消领取</button>
+    </view>
+  </block>
+</view>

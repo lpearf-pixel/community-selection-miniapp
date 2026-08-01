@@ -262,6 +262,15 @@ test('proves eligible pickup UI and deterministic real browser conflict', () => 
   assert.match(smoke, /ADMIN_PICKUP_STATE_CONFLICT/);
 });
 
+test('fixture cleanup removes WeChat shipping intents before their orders', () => {
+  const fixture = read('scripts/admin-e2e/fixture.ts');
+  const intentDelete = fixture.indexOf('prisma.wechatShippingIntent.deleteMany');
+  const orderDelete = fixture.indexOf('prisma.order.deleteMany');
+  assert.notEqual(intentDelete, -1);
+  assert.notEqual(orderDelete, -1);
+  assert.ok(intentDelete < orderDelete);
+});
+
 
 test('routes the pickup workbench through the reliable command', () => {
   const pickupRoutes = read('apps/api/src/routes/admin/pickup.ts');

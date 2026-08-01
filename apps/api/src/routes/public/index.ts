@@ -12,9 +12,11 @@ import { registerLeaderCenterRoutes } from '../leaders/center.js';
 import { registerPublicLocationRoutes } from './locations.js';
 import { registerPublicDeliveryRoutes } from './delivery.js';
 import { registerWechatAuthRoutes } from '../wechat-auth.js';
+import { registerMembershipRoutes } from '../membership.js';
 
 export function registerPublicRoutes(app: FastifyInstance) {
   registerWechatAuthRoutes(app);
+  registerMembershipRoutes(app);
   registerCatalogRoutes(app);
   registerUserProductRoutes(app);
   registerPublicLocationRoutes(app);

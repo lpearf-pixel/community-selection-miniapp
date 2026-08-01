@@ -62,4 +62,5 @@ export const ADMIN_FEATURES = [
   { key: 'deliveryReservation', label: '配送预留', section: 'sales-fulfillment', requiredPermissions: ['delivery.read'] },
   { key: 'deliveryRuleConfig', label: '管理配送规则', section: 'sales-fulfillment', requiredPermissions: ['delivery.rule.read'] },
   { key: 'memberImports', label: '老会员导入', section: 'membership-marketing', requiredPermissions: ['admin.full_access'] },
+  { key: 'memberBenefits', label: '会员权益履约', section: 'membership-marketing', requiredPermissions: ['order.manage'] },
 ] as const satisfies readonly AdminFeatureDefinition[];

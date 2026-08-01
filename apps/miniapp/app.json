@@ -2,6 +2,7 @@
   "pages": [
     "pages/index/index",
     "pages/mine/index",
+    "pages/membership/index",
     "pages/communities/index",
     "pages/pickup/select/index",
     "pages/products/index",

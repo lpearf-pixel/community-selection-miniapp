@@ -31,6 +31,7 @@ import { InventoryBatchesPage } from "../features/inventory/batches/InventoryBat
 import { ExpiryAlertsPage } from "../features/inventory/expiry-alerts/ExpiryAlertsPage";
 import { StockChecksPage } from "../features/inventory/stock-checks/StockChecksPage";
 import { MemberImportsPage } from "../features/membership/member-imports/MemberImportsPage";
+import { MemberBenefitsPage } from "../features/membership/benefits/MemberBenefitsPage";
 import type { InventoryProductReference } from "../features/inventory/shared/types";
 import { DEFAULT_ADMIN_VIEW, type AdminViewKey } from "./admin-view";
 import { AdminErrorBoundary } from "./AdminErrorBoundary";
@@ -85,6 +86,7 @@ export function AdminApp() {
   const [alertsRefreshVersion, setAlertsRefreshVersion] = useState(0);
   const [taxReviewRefreshVersion, setTaxReviewRefreshVersion] = useState(0);
   const [memberImportsRefreshVersion, setMemberImportsRefreshVersion] = useState(0);
+  const [memberBenefitsRefreshVersion, setMemberBenefitsRefreshVersion] = useState(0);
 
   function refreshBusinessFeatures() {
     setGroupBuysRefreshVersion((version) => version + 1);
@@ -170,6 +172,10 @@ export function AdminApp() {
     }
     if (target === "member-imports") {
       setMemberImportsRefreshVersion((version) => version + 1);
+      return;
+    }
+    if (target === "member-benefits") {
+      setMemberBenefitsRefreshVersion((version) => version + 1);
     }
   }
 
@@ -416,6 +422,11 @@ export function AdminApp() {
         <div hidden={view !== "memberImports"}>
           <AdminErrorBoundary resetKey={String(memberImportsRefreshVersion)}>
             <MemberImportsPage />
+          </AdminErrorBoundary>
+        </div>
+        <div hidden={view !== "memberBenefits"}>
+          <AdminErrorBoundary resetKey={String(memberBenefitsRefreshVersion)}>
+            <MemberBenefitsPage refreshVersion={memberBenefitsRefreshVersion} />
           </AdminErrorBoundary>
         </div>
     </>

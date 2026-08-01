@@ -39,6 +39,7 @@
       <button wx:if="{{order.can_show_pickup_code}}" class="cq-button cq-button--secondary" bindtap="goPickupCode">查看自提凭证</button>
       <button wx:if="{{order.can_apply_after_sale}}" class="cq-button cq-button--primary e2e-after-sale-apply" data-testid="after-sale-apply" bindtap="applyAfterSale">申请售后</button>
       <button wx:if="{{order.has_after_sale}}" class="cq-button cq-button--secondary" bindtap="goAfterSale">查看售后进度</button>
+      <button wx:if="{{order.can_claim_member_gift}}" class="cq-button cq-button--secondary" bindtap="goMembership">会员赠品</button>
       <button class="cq-button cq-button--secondary" bindtap="backList">返回订单列表</button>
     </view>
   </block>
