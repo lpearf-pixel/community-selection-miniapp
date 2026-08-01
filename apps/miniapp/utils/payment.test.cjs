@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createPaymentController } = require('./payment');
+const paymentAdapterSource = require('node:fs').readFileSync(require('node:path').join(__dirname, 'payment.js'), 'utf8');
+const membershipSource = require('node:fs').readFileSync(require('node:path').join(__dirname, 'membership.js'), 'utf8');
+
+test('keeps every wx.requestPayment call inside the payment adapter', () => {
+  assert.match(paymentAdapterSource, /wx\.requestPayment/);
+  assert.doesNotMatch(membershipSource, /wx\.requestPayment/);
+  assert.match(membershipSource, /requestWechatPayment/);
+});
 
 test('real mode invokes JSAPI then wx.requestPayment and polls backend state', async () => {
   const calls = [];

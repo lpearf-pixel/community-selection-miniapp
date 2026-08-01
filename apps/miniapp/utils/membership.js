@@ -1,4 +1,5 @@
 const { request } = require('./api');
+const { requestWechatPayment } = require('./payment');
 
 const getMembership = () => request({ url: '/api/me/membership' });
 const activateLegacyMembership = (eligibilityId, idempotencyKey) => request({
@@ -15,10 +16,6 @@ const releaseMemberGift = (claimId, idempotencyKey) => request({
 
 const createPaidMembershipOrder = (idempotencyKey) => request({
   url: '/api/me/membership/orders', method: 'POST', data: { idempotency_key: idempotencyKey },
-});
-
-const requestPayment = (options) => new Promise((resolve, reject) => {
-  wx.requestPayment({ ...options, success: resolve, fail: reject });
 });
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -47,7 +44,7 @@ async function purchaseAnnualMembership(idempotencyKey) {
   const initialized = await request({
     url: `/api/me/membership/orders/${order.membership_order_id}/wechat-jsapi`, method: 'POST', data: {},
   });
-  await requestPayment(initialized.wx_request_payment);
+  await requestWechatPayment(initialized.wx_request_payment);
   return waitForMembershipOrderPaid(order.membership_order_id);
 }
 

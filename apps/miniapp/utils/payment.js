@@ -76,5 +76,6 @@ function payOrder(orderId) {
 
 module.exports = {
   createPaymentController,
+  requestWechatPayment: defaultRequestPayment,
   payOrder,
 };
