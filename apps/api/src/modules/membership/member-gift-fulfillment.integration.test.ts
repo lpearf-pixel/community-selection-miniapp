@@ -25,6 +25,7 @@ const ids = {
 const now = new Date('2026-07-31T12:00:00.000Z');
 const orderIds: string[] = [];
 const afterSaleCaseIds: string[] = [];
+let productId = '';
 const repository = new PrismaMemberGiftRepository();
 const originalMockWechatPay = process.env.MOCK_WECHAT_PAY;
 const adminContext: AdminAccessContext = {
@@ -49,6 +50,7 @@ async function createPaidOrder(label: string) {
   const order = await prisma.order.create({ data: {
     order_no: `L56-GIFT-${label}-${suffix}`,
     user_id: ids.user,
+    product_id: productId,
     total_amount_cents: 1_000, product_amount_cents: 1_000,
     pay_amount_cents: 1_000, pay_status: 'paid', order_status: 'paid',
     pickup_type: label.includes('pickup') ? 'store' : 'delivery',
@@ -83,6 +85,7 @@ beforeAll(async () => {
     name: ids.product, category_id: category.id, price_cents: 500, cost_price_cents: 300,
     stock: 100, unit: '份', status: 'active',
   } });
+  productId = product.id;
   await prisma.membershipAccount.create({ data: {
     id: ids.account, user_id: ids.user, status: 'active',
     starts_at: new Date('2026-07-01T00:00:00.000Z'), ends_at: new Date('2027-07-01T00:00:00.000Z'),
