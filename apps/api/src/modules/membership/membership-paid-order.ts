@@ -10,6 +10,11 @@ import type { PaymentInfo } from '../payment/payment-record-service.js';
 import type { WechatPaymentStore } from '../payment/wechat-payment-command.js';
 import { MembershipPolicyError } from './membership-lifecycle.js';
 import { upsertOpsAlert } from '../operations/ops-alert-owner.js';
+import {
+  isPrismaRetryableConflict,
+  isPrismaSerializationConflict,
+  isPrismaUniqueConflict,
+} from './prisma-conflict.js';
 
 const MEMBERSHIP_YEAR_MS = 365 * 24 * 60 * 60 * 1_000;
 export const MEMBERSHIP_ANNUAL_PRICE_CENTS = 8_800;
@@ -158,7 +163,14 @@ export function createPrismaMembershipPaymentStore(
         try {
           return await execute();
         } catch (error) {
-          if (!isPrismaCode(error, 'P2034') || attempt === 2) throw error;
+          if (isPrismaUniqueConflict(error)) {
+            throw new MembershipPolicyError(
+              'MEMBERSHIP_PAYMENT_INITIALIZATION_IN_PROGRESS',
+              '会员支付正在初始化，请勿重复提交',
+              409,
+            );
+          }
+          if (!isPrismaSerializationConflict(error) || attempt === 2) throw error;
         }
       }
       throw new Error('MEMBERSHIP_PAYMENT_PREPARE_RETRY_EXHAUSTED');
@@ -346,7 +358,7 @@ export async function markMembershipOrderPaid(
       }
       return result;
     } catch (error) {
-      if (!isPrismaCode(error, 'P2034') && !isPrismaCode(error, 'P2002')) throw error;
+      if (!isPrismaRetryableConflict(error)) throw error;
       const replay = await prisma.membershipOrder.findUnique({
         where: { id: membershipOrderId }, include: { membership_period: true },
       });

@@ -61,6 +61,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
         run: pnpm db:generate
+      - name: Build API workspace dependencies
+        run: |
+          pnpm --filter @community-selection/shared build
+          pnpm --filter @community-selection/config build
       - name: Start isolated PostgreSQL
         run: |
           docker compose \
@@ -74,6 +78,7 @@ jobs:
         run: |
           pnpm --filter @community-selection/api test -- \
             src/modules/membership/membership-lifecycle.test.ts \
+            src/modules/membership/prisma-conflict.test.ts \
             src/modules/membership/membership-paid-order.test.ts \
             src/modules/membership/membership-paid-order.integration.test.ts \
             src/modules/membership/member-pricing.test.ts \

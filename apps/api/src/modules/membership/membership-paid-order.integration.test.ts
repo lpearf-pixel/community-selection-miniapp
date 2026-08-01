@@ -38,7 +38,10 @@ afterAll(async () => {
   await prisma.opsAlertLog.deleteMany({ where: { dedupe_key: { in: alertDedupeKeys } } });
   await prisma.membershipOrder.updateMany({
     where: { id: { in: membershipOrderIds } },
-    data: { paid_payment_id: null },
+    data: {
+      status: 'pending_payment', paid_at: null,
+      membership_period_id: null, paid_payment_id: null,
+    },
   });
   await prisma.membershipPayment.deleteMany({ where: { membership_order_id: { in: membershipOrderIds } } });
   await prisma.membershipOrder.deleteMany({ where: { id: { in: membershipOrderIds } } });

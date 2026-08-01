@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type MemberGiftClaimStatus } from '@prisma/client';
 import { prisma } from '../../db.js';
+import { isPrismaRetryableConflict } from './prisma-conflict.js';
 import {
   ADMIN_SCOPE_FORBIDDEN,
   canAccessOrderDataScope,
@@ -227,9 +228,7 @@ async function executeAdminClaimAction(input: {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      const retryable = !!error && typeof error === 'object' && 'code' in error &&
-        (error.code === 'P2034' || error.code === 'P2002');
-      if (!retryable) throw error;
+      if (!isPrismaRetryableConflict(error)) throw error;
       const previous = await prisma.$transaction((tx) => replayEvent(tx, command));
       if (previous) return previous;
       if (attempt === 2) throw error;

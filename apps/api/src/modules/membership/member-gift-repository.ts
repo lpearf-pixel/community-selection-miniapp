@@ -9,10 +9,7 @@ import {
   type GiftCommandIdentity,
   type GiftPorts,
 } from './member-gift-service.js';
-
-function prismaCode(error: unknown, code: string) {
-  return !!error && typeof error === 'object' && 'code' in error && error.code === code;
-}
+import { isPrismaRetryableConflict } from './prisma-conflict.js';
 
 function assertEventIdentity(
   event: MemberGiftInventoryEventWithClaim,
@@ -58,7 +55,7 @@ async function runGiftCommand(
     try {
       return await operation();
     } catch (error) {
-      if (!prismaCode(error, 'P2034') && !prismaCode(error, 'P2002')) throw error;
+      if (!isPrismaRetryableConflict(error)) throw error;
       const previous = await replay(prisma, idempotencyKey, identity);
       if (previous) return previous;
       if (attempt === 2) throw error;

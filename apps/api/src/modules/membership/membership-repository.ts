@@ -8,6 +8,7 @@ import {
   type MembershipActivationResult,
   type PersistLegacyActivationInput,
 } from './membership-lifecycle.js';
+import { isPrismaRetryableConflict } from './prisma-conflict.js';
 
 function mapActivation(period: MembershipPeriod, idempotent: boolean): MembershipActivationResult {
   return {
@@ -118,9 +119,7 @@ export class PrismaMembershipRepository implements MembershipActivationPorts {
       try {
         return await execute();
       } catch (error) {
-        const retryable = !!error && typeof error === 'object' && 'code' in error &&
-          (error.code === 'P2034' || error.code === 'P2002');
-        if (!retryable) throw error;
+        if (!isPrismaRetryableConflict(error)) throw error;
         const previous = await prisma.membershipPeriod.findUnique({
           where: { idempotency_key: input.idempotencyKey },
         });
