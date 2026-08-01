@@ -642,13 +642,13 @@ function assertA32SmokeContract(smoke) {
   ].map((match) => match[1]);
   assert.equal(
     navigationLabels.length,
-    24,
-    'navigation exclusion/count contract: 24 total',
+    25,
+    'navigation exclusion/count contract: 25 total',
   );
   assert.equal(
     new Set(navigationLabels).size,
-    24,
-    'navigation exclusion/count contract: 24 unique',
+    25,
+    'navigation exclusion/count contract: 25 unique',
   );
   const remainingNavigation = sourceBetween(
     smoke,
@@ -680,8 +680,8 @@ function assertA32SmokeContract(smoke) {
   );
   assert.equal(
     navigationLabels.filter((label) => !exclusions.includes(label)).length,
-    12,
-    'navigation exclusion/count contract: 12 remaining destinations',
+    13,
+    'navigation exclusion/count contract: 13 remaining destinations',
   );
   assertSourceOrder(
     smoke,
@@ -703,7 +703,7 @@ function assertA32SmokeContract(smoke) {
         /for \(const label of remainingNavigation\) \{\s*const button = groupedNavigation\.getByRole\('button', \{ name: label, exact: true \}\);\s*await button\.click\(\);/,
       ],
       [
-        '24/24 result',
+        'complete navigation result',
         /`L50 Admin browser smoke passed: \$\{navigation\.length\}\/\$\{navigation\.length\} navigation items;/,
       ],
     ],
