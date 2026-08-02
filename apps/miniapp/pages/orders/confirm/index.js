@@ -2,6 +2,7 @@ const {
   request,
   formatYuan,
 } = require("../../../utils/api");
+const config = require("../../../config");
 const { payOrder } = require("../../../utils/payment");
 const { getCurrentUser } = require("../../../utils/user");
 const {
@@ -49,6 +50,11 @@ Page({
     stock_label: "库存以门店确认为准",
     can_submit: false,
     submit_hint: "请选择自提点",
+    remote_demo: config.remoteDemo === true,
+    payment_notice:
+      config.remoteDemo === true ? "演示支付，不会真实扣款" : "",
+    payment_submit_label:
+      config.remoteDemo === true ? "提交并演示支付" : "提交并支付",
   },
   onLoad(query) {
     const user = getCurrentUser();

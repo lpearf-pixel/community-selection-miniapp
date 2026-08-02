@@ -68,10 +68,11 @@
       <input class="cq-input delivery-input e2e-receiver-address" data-testid="receiver-address" data-field="receiver_address" value="{{receiver_address}}" bindinput="onInput" placeholder="收货地址" />
     </view>
     <view wx:else class="cq-muted section">到店自提：提交校验需要先选择自提点。</view>
+    <view wx:if="{{payment_notice}}" class="cq-muted demo-payment-notice">{{payment_notice}}</view>
     <view wx:if="{{submit_hint}}" class="cq-muted submit-hint">{{submit_hint}}</view>
     <state-panel wx:if="{{error}}" state="error" message="{{error}}" />
   </view>
   <view class="cq-action-bar">
-    <button class="cq-button cq-button--primary submit-button e2e-checkout-submit" data-testid="checkout-submit" loading="{{submitting}}" disabled="{{submitting || (product && product.stock <= 0)}}" bindtap="submit">{{submitting ? '提交中...' : '提交并 MOCK 支付'}}</button>
+    <button class="cq-button cq-button--primary submit-button e2e-checkout-submit" data-testid="checkout-submit" loading="{{submitting}}" disabled="{{submitting || (product && product.stock <= 0)}}" bindtap="submit">{{submitting ? '提交中...' : payment_submit_label}}</button>
   </view>
 </view>

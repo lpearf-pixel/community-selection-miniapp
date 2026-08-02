@@ -3,6 +3,7 @@ import {
   createJsonRequester,
   type JsonRequestOptions,
 } from "../shared/api/client";
+import { demoAdminAuthHeaders } from "../shared/api/demo-admin-auth";
 
 export const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? "";
 
@@ -21,6 +22,10 @@ export function getAdminRequestHeaders(json = true): Record<string, string> {
   const devRole = readDevHeader("ADMIN_ROLE", "finance");
   return {
     ...(json ? { "content-type": "application/json" } : {}),
+    ...demoAdminAuthHeaders({
+      dev: import.meta.env?.DEV === true,
+      token: import.meta.env?.VITE_ADMIN_TOKEN,
+    }),
     ...(devUserId ? { "x-admin-user-id": devUserId } : {}),
     ...(devRole ? { "x-admin-role": devRole } : {}),
     ...(isAdminMockHeadersEnabled() ? getAdminScopeHeaders() : {}),
