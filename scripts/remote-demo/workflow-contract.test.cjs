@@ -51,9 +51,10 @@ test('uses isolated PostgreSQL and runs the complete L58 candidate gate', () => 
   assert.doesNotMatch(source, /secrets\.[A-Za-z0-9_]+|prod:deploy|prod:rollback|\bssh\b|\bscp\b/);
 });
 
-test('keeps L58 concerns out of the existing L57 community-runner gate', () => {
+test('keeps L58 concerns out of the existing GitHub-hosted L57 gate', () => {
   const source = readWorkflow(l57WorkflowFile, 'L57');
 
-  assert.match(source, /runs-on:\s*\[self-hosted, community\]/);
+  assert.match(source, /runs-on:\s*ubuntu-latest/);
+  assert.doesNotMatch(source, /self-hosted|community-w01/);
   assert.doesNotMatch(source, /scripts\/remote-demo|demo:remote:verify-topology/);
 });

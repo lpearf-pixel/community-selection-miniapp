@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   production-gray-release-gate:
-    runs-on: [self-hosted, community]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       NODE_OPTIONS: --max-old-space-size=3072

@@ -14,14 +14,14 @@ function workflow() {
   return fs.readFileSync(workflowFile, 'utf8');
 }
 
-test('runs the L57 gate for stable-branch pull requests on the community runner pool', () => {
+test('runs the L57 gate for stable-branch pull requests on a GitHub-hosted runner', () => {
   const source = workflow();
 
   assert.match(source, /pull_request:/);
   assert.match(source, /stable\/l50-a3-4-business-base/);
-  assert.match(source, /runs-on:\s*\[self-hosted, community\]/);
+  assert.match(source, /runs-on:\s*ubuntu-latest/);
+  assert.doesNotMatch(source, /runs-on:\s*\[?\s*self-hosted/);
   assert.doesNotMatch(source, /community-w01/);
-  assert.doesNotMatch(source, /runs-on:\s*ubuntu-/);
   assert.match(source, /contents: read/);
 });
 
