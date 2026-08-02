@@ -2,7 +2,7 @@
 
 ## 范围
 
-L58 只提供 Mac 本地短时演示能力：独立 PostgreSQL、API、Quick Tunnel、小程序一次性副本和本机 Admin。服务器、DNS、生产数据库、真实微信支付/退款与会员生产启用均保持冻结。
+L58 只提供 Mac 本地短时演示能力：独立 PostgreSQL、API、Quick Tunnel、小程序一次性副本和本机 Admin。服务器、DNS、生产数据库、真实微信支付/退款与付费权益生产启用均保持冻结。
 
 ## 已实现的自动化边界
 
