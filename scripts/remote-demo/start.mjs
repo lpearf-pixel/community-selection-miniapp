@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { Resolver } from 'node:dns/promises';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -24,6 +25,12 @@ const WECHAT_DEVTOOLS_APPS = [
   '/Applications/wechatwebdevtools.app',
   '/Applications/微信开发者工具.app',
 ];
+const quickTunnelResolver = new Resolver();
+quickTunnelResolver.setServers(['1.1.1.1', '1.0.0.1']);
+
+function defaultResolveQuickTunnelHostname(hostname) {
+  return quickTunnelResolver.resolve4(hostname);
+}
 
 function supportedNodeVersion(version) {
   const [major, minor] = String(version)
@@ -109,14 +116,27 @@ export function composeDownArgs(composePath) {
   ];
 }
 
-export function waitForQuickTunnel(child, { timeoutMs = 30_000 } = {}) {
+export function waitForQuickTunnel(
+  child,
+  {
+    timeoutMs = 30_000,
+    dnsRetryIntervalMs = 500,
+    resolveHostname = defaultResolveQuickTunnelHostname,
+  } = {},
+) {
   return new Promise((resolve, reject) => {
     const urls = new Set();
+    let output = '';
+    let registered = false;
+    let dnsCheckPending = false;
+    let dnsRetryTimer = null;
     let settled = false;
+    let timer = null;
     const finish = (error, value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(dnsRetryTimer);
       child.stdout?.removeListener('data', onData);
       child.stderr?.removeListener('data', onData);
       child.removeListener('error', onError);
@@ -124,15 +144,39 @@ export function waitForQuickTunnel(child, { timeoutMs = 30_000 } = {}) {
       if (error) reject(error);
       else resolve(value);
     };
+    const checkDns = async () => {
+      if (settled || dnsCheckPending || !registered || urls.size !== 1) return;
+      dnsCheckPending = true;
+      const url = [...urls][0];
+      try {
+        const addresses = await resolveHostname(new URL(url).hostname);
+        dnsCheckPending = false;
+        if (settled) return;
+        if (!Array.isArray(addresses) || addresses.length === 0) {
+          throw new Error('Quick Tunnel public DNS returned no addresses');
+        }
+        finish(null, { pid: child.pid, url });
+      } catch {
+        dnsCheckPending = false;
+        if (!settled) {
+          dnsRetryTimer = setTimeout(
+            () => void checkDns(),
+            dnsRetryIntervalMs,
+          );
+        }
+      }
+    };
     const onData = (chunk) => {
       try {
-        for (const url of extractQuickTunnelUrls(chunk.toString('utf8'))) {
+        output = `${output}${chunk.toString('utf8')}`.slice(-65_536);
+        for (const url of extractQuickTunnelUrls(output)) {
           urls.add(url);
         }
+        registered ||= output.includes('Registered tunnel connection');
         if (urls.size > 1) {
           finish(new Error('cloudflared emitted multiple Quick Tunnel URLs'));
-        } else if (urls.size === 1) {
-          finish(null, { pid: child.pid, url: [...urls][0] });
+        } else {
+          void checkDns();
         }
       } catch (error) {
         finish(error);
@@ -142,11 +186,17 @@ export function waitForQuickTunnel(child, { timeoutMs = 30_000 } = {}) {
     const onExit = (code, signal) =>
       finish(
         new Error(
-          `cloudflared exited before issuing a tunnel URL (code ${code}, signal ${signal ?? 'none'})`,
+          `cloudflared exited before the Quick Tunnel became ready ` +
+            `(code ${code}, signal ${signal ?? 'none'})`,
         ),
       );
-    const timer = setTimeout(
-      () => finish(new Error('Timed out waiting for a Quick Tunnel URL')),
+    timer = setTimeout(
+      () =>
+        finish(
+          new Error(
+            'Timed out waiting for Quick Tunnel URL, registration, and public DNS',
+          ),
+        ),
       timeoutMs,
     );
     child.stdout?.on('data', onData);

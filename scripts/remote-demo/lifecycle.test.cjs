@@ -452,21 +452,88 @@ function createExpectedPaths() {
   };
 }
 
-test('CLI accepts a tunnel URL from the owned cloudflared child', async () => {
+test('CLI exposes a Quick Tunnel only after URL, registration, and public DNS', async () => {
   const { waitForQuickTunnel } = await import('./start.mjs');
   const child = new EventEmitter();
   child.pid = 345;
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
+  let releaseDns;
+  const dnsReady = new Promise((resolve) => {
+    releaseDns = resolve;
+  });
+  const dnsHosts = [];
+  let settled = false;
 
-  const pending = waitForQuickTunnel(child, { timeoutMs: 1_000 });
-  child.stderr.write('INF quick tunnel ready\n');
-  child.stderr.write('INF https://demo-child.trycloudflare.com\n');
+  const pending = waitForQuickTunnel(child, {
+    timeoutMs: 1_000,
+    resolveHostname: async (hostname) => {
+      dnsHosts.push(hostname);
+      return dnsReady;
+    },
+  });
+  void pending.then(() => {
+    settled = true;
+  });
 
+  child.stderr.write('INF https://demo-child.trycloud');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.deepEqual(dnsHosts, []);
+
+  child.stderr.write('flare.com\n');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.deepEqual(dnsHosts, []);
+
+  child.stderr.write('INF Registered tunnel con');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.deepEqual(dnsHosts, []);
+
+  child.stderr.write('nection connIndex=0\n');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.deepEqual(dnsHosts, ['demo-child.trycloudflare.com']);
+
+  releaseDns(['104.16.230.132']);
   assert.deepEqual(await pending, {
     pid: 345,
     url: 'https://demo-child.trycloudflare.com',
   });
+});
+
+test('CLI retries a transient Quick Tunnel DNS miss before exposing the URL', async () => {
+  const { waitForQuickTunnel } = await import('./start.mjs');
+  const child = new EventEmitter();
+  child.pid = 346;
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  let attempts = 0;
+
+  const pending = waitForQuickTunnel(child, {
+    timeoutMs: 1_000,
+    dnsRetryIntervalMs: 1,
+    resolveHostname: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('not published');
+        error.code = 'ENOTFOUND';
+        throw error;
+      }
+      return ['104.16.230.132'];
+    },
+  });
+  child.stderr.write(
+    'INF https://demo-child.trycloudflare.com\n' +
+      'INF Registered tunnel connection connIndex=0\n',
+  );
+
+  assert.deepEqual(await pending, {
+    pid: 346,
+    url: 'https://demo-child.trycloudflare.com',
+  });
+  assert.equal(attempts, 2);
 });
 
 test('CLI rejects cloudflared exit before a tunnel URL is issued', async () => {
