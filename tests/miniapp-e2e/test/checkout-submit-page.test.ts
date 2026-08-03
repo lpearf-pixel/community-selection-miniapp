@@ -34,6 +34,7 @@ function loadPage() {
         request,
         formatYuan: (cents: number) => (Number(cents || 0) / 100).toFixed(2),
       };
+      if (requestPath === '../../../config') return { remoteDemo: false };
       if (requestPath === '../../../utils/payment') return { payOrder };
       if (requestPath === '../../../utils/user') return {
         getCurrentUser: () => ({ openid: 'buyer-1', nickname: '测试用户' }),

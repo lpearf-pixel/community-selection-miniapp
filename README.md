@@ -93,6 +93,18 @@
 
 详见 `docs/09_ACCEPTANCE_TESTS.md`。
 
+## Mac 本地远端微信演示
+
+需要让远端体验成员用手机微信扫码、但暂不使用服务器和域名时，使用 L58 短时演示流程：
+
+```bash
+pnpm demo:remote:start
+pnpm demo:remote:admin
+pnpm demo:remote:stop
+```
+
+该流程固定使用独立临时数据库和 MOCK 支付，只把 API 暴露到短时 Quick Tunnel；PostgreSQL 与 Admin 不进入隧道。开始前必须阅读 [`docs/runbooks/l58-remote-wechat-demo.md`](docs/runbooks/l58-remote-wechat-demo.md)。
+
 ## 小程序主题开发规范
 
 小程序端 19 个页面共用同一套主题令牌、共享组件和换肤门禁。新增页面或切换模板前，请先阅读 [`docs/architecture/miniapp-global-theme-system.md`](docs/architecture/miniapp-global-theme-system.md)。后台管理端主题化不在 L50 阶段范围内。

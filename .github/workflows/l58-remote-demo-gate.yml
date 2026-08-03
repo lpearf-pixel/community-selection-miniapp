@@ -1,0 +1,110 @@
+name: L58 Remote Demo Gate
+
+on:
+  pull_request:
+    branches:
+      - stable/l50-a3-4-business-base
+    paths:
+      - '.env.demo.example'
+      - '.github/actions/configure-ci-postgres/action.yml'
+      - '.github/config/ci-postgres.env'
+      - '.github/workflows/l58-remote-demo-gate.yml'
+      - '.gitignore'
+      - 'README.md'
+      - 'apps/admin/src/api/adminRequest.ts'
+      - 'apps/admin/src/shared/api/**'
+      - 'apps/admin/src/types.d.ts'
+      - 'apps/miniapp/config.js'
+      - 'apps/miniapp/pages/orders/confirm/**'
+      - 'docker-compose.yml'
+      - 'docs/runbooks/l58-remote-wechat-demo.md'
+      - 'docs/reviews/l58-remote-wechat-demo.md'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'prisma/**'
+      - 'scripts/remote-demo/**'
+      - 'tests/miniapp-e2e/test/checkout-submit-page.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l58-remote-demo-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  remote-demo-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+      VITEST_MAX_THREADS: "2"
+      VITEST_MIN_THREADS: "1"
+      CURRENT_USER_MOCK_HEADERS_ENABLED: "true"
+      MOCK_WECHAT_PAY: "true"
+      MEMBERSHIP_ENABLED: "true"
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Load CI PostgreSQL configuration
+        uses: ./.github/actions/configure-ci-postgres
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build shared runtime config
+        run: pnpm --filter @community-selection/config build
+
+      - name: Start isolated PostgreSQL
+        run: |
+          docker compose \
+            -p community-selection-l58-${{ github.run_id }} \
+            -f docker-compose.yml up -d --wait postgres
+
+      - name: Apply migrations
+        run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Verify L58 focused contracts
+        run: pnpm test:remote-demo
+
+      - name: Verify L58 Docker topology
+        run: pnpm demo:remote:verify-topology
+
+      - name: Verify migrations
+        run: pnpm migrations:check
+
+      - name: Verify lint
+        run: pnpm lint
+
+      - name: Verify types
+        run: pnpm typecheck
+
+      - name: Verify full test suite
+        run: pnpm test
+
+      - name: Verify production builds
+        run: pnpm build
+
+      - name: Cleanup isolated PostgreSQL
+        if: always()
+        run: |
+          docker compose \
+            -p community-selection-l58-${{ github.run_id }} \
+            -f docker-compose.yml down --volumes --remove-orphans || true
