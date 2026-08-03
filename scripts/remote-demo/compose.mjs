@@ -2,6 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+export const DEMO_CACHE_VOLUME_NAMES = Object.freeze([
+  'community-selection-l58-api-node-modules-cache',
+  'community-selection-l58-pnpm-store-cache',
+]);
+
 function derivedSecret(label, source) {
   return crypto
     .createHash('sha256')
@@ -143,8 +148,14 @@ export function renderDemoCompose(config, { repoRoot }) {
     },
     volumes: {
       postgres_data: {},
-      api_node_modules: {},
-      api_package_store: {},
+      api_node_modules: {
+        external: true,
+        name: DEMO_CACHE_VOLUME_NAMES[0],
+      },
+      api_package_store: {
+        external: true,
+        name: DEMO_CACHE_VOLUME_NAMES[1],
+      },
     },
   };
 }

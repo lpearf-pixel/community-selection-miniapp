@@ -93,11 +93,11 @@ pnpm demo:remote:start
 2. 启动专用 `community-selection-l58-demo` PostgreSQL 与 API；
 3. 运行现有迁移和确定性演示种子；
 4. 验证本地 `/api/health` 与 `/api/public/runtime`，后者必须报告 `payment_mode=mock`；
-5. 启动 Quick Tunnel，并从公网再次验证健康与 MOCK 模式；
+5. 启动 Quick Tunnel，并在有界等待窗口内从公网验证健康与 MOCK 模式；Quick Tunnel 地址刚生成时若路由尚未就绪，启动器只重试网络错误与 HTTP 5xx，发现非 MOCK 模式立即失败；
 6. 生成 `.tmp/remote-demo/miniapp`；
 7. 输出临时 API、小程序目录、截止时间和本机 Admin 地址。
 
-任何一步失败，脚本都会停止已启动资源；在本地/公网 MOCK 校验通过前不会生成可上传副本。
+任何一步失败，脚本都会停止已启动资源；在本地/公网 MOCK 校验通过前不会生成可上传副本。失败信息会区分本机或公网探测、请求路径与安全网络错误码，不输出密钥。
 
 ## 5. 上传新的体验版
 
@@ -162,7 +162,8 @@ pnpm demo:remote:stop
 
 - 验证并停止记录的 `cloudflared` PID；
 - 停止 `community-selection-l58-demo` Compose project；
-- 删除该 project 的临时卷；
+- 删除该 project 的临时 PostgreSQL 数据卷；
+- 保留只含公开依赖的 pnpm Store 与 `node_modules` 缓存卷，供下一次 L58 启动复用；
 - 删除 `.tmp/remote-demo` 中生成的 Compose、状态和小程序副本。
 
 若 PID 命令与记录不匹配，停止器不会发送信号，并会要求人工检查。它不使用 `pkill`、全局 Docker prune 或模糊卷名。

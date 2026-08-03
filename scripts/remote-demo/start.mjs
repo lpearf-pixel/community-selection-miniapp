@@ -2,9 +2,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadDemoConfig } from './config.mjs';
-import { renderDemoCompose, writeDemoCompose } from './compose.mjs';
+import {
+  DEMO_CACHE_VOLUME_NAMES,
+  renderDemoCompose,
+  writeDemoCompose,
+} from './compose.mjs';
 import {
   createRuntimePaths,
   DEMO_PROJECT_NAME,
@@ -36,6 +41,16 @@ function defaultRunCommand(command, args) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+export function ensureDemoCacheVolumes({ runCommand = defaultRunCommand } = {}) {
+  for (const volumeName of DEMO_CACHE_VOLUME_NAMES) {
+    const result = runCommand('docker', ['volume', 'create', volumeName]);
+    if (result.error || result.status !== 0) {
+      throw new Error('Unable to prepare the L58 dependency cache');
+    }
+  }
+  return [...DEMO_CACHE_VOLUME_NAMES];
 }
 
 export function assertDemoPrerequisites({
@@ -141,37 +156,101 @@ export function waitForQuickTunnel(child, { timeoutMs = 30_000 } = {}) {
   });
 }
 
-async function readJsonResponse(fetchImpl, url, timeoutMs) {
+class RetryableDemoApiError extends Error {}
+
+function apiStageLabel(stage) {
+  return stage === 'local' ? 'Local' : 'Public';
+}
+
+function safeNetworkErrorCode(error) {
+  for (const candidate of [error?.cause?.code, error?.code, error?.name]) {
+    if (
+      typeof candidate === 'string' &&
+      /^[A-Za-z][A-Za-z0-9_]{1,63}$/.test(candidate)
+    ) {
+      return candidate;
+    }
+  }
+  return 'NETWORK_ERROR';
+}
+
+async function readJsonResponse(fetchImpl, url, timeoutMs, stage) {
+  const pathName = new URL(url).pathname;
   let response;
   try {
     response = await fetchImpl(url, {
       signal: AbortSignal.timeout(timeoutMs),
       redirect: 'error',
     });
-  } catch {
-    throw new Error('Demo API request failed');
+  } catch (error) {
+    throw new RetryableDemoApiError(
+      `${apiStageLabel(stage)} Demo API request to ${pathName} failed ` +
+        `(${safeNetworkErrorCode(error)})`,
+    );
   }
-  if (!response.ok) throw new Error(`Demo API returned HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(
+      `${apiStageLabel(stage)} Demo API request to ${pathName} ` +
+        `returned HTTP ${response.status}`,
+    );
+    if (response.status >= 500) {
+      throw new RetryableDemoApiError(error.message);
+    }
+    throw error;
+  }
   try {
     return await response.json();
   } catch {
-    throw new Error('Demo API returned invalid JSON');
+    throw new Error(
+      `${apiStageLabel(stage)} Demo API request to ${pathName} ` +
+        'returned invalid JSON',
+    );
   }
+}
+
+function requestTimeoutWithinDeadline({
+  requestTimeoutMs,
+  deadlineAt,
+  now,
+  stage,
+}) {
+  if (deadlineAt === undefined) return requestTimeoutMs;
+  const remainingMs = deadlineAt - now();
+  if (remainingMs <= 0) {
+    throw new RetryableDemoApiError(
+      `${apiStageLabel(stage)} Demo API readiness deadline expired`,
+    );
+  }
+  return Math.max(1, Math.min(requestTimeoutMs, Math.floor(remainingMs)));
 }
 
 export async function probeDemoApi(
   origin,
-  { fetchImpl = fetch, timeoutMs = 5_000 } = {},
+  {
+    fetchImpl = fetch,
+    timeoutMs = 5_000,
+    stage,
+    deadlineAt,
+    now = () => performance.now(),
+  } = {},
 ) {
   const parsed = new URL(origin);
   if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
     throw new Error('Demo API origin is invalid');
   }
   const normalized = parsed.origin;
+  const resolvedStage =
+    stage ?? (parsed.hostname === '127.0.0.1' ? 'local' : 'public');
   const health = await readJsonResponse(
     fetchImpl,
     `${normalized}/api/health`,
-    timeoutMs,
+    requestTimeoutWithinDeadline({
+      requestTimeoutMs: timeoutMs,
+      deadlineAt,
+      now,
+      stage: resolvedStage,
+    }),
+    resolvedStage,
   );
   if (
     health?.success !== true ||
@@ -182,13 +261,62 @@ export async function probeDemoApi(
   const runtime = await readJsonResponse(
     fetchImpl,
     `${normalized}/api/public/runtime`,
-    timeoutMs,
+    requestTimeoutWithinDeadline({
+      requestTimeoutMs: timeoutMs,
+      deadlineAt,
+      now,
+      stage: resolvedStage,
+    }),
+    resolvedStage,
   );
   if (
     runtime?.success !== true ||
     runtime?.data?.payment_mode !== 'mock'
   ) {
     throw new Error('Demo API payment_mode must remain mock');
+  }
+}
+
+function defaultSleep(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+export async function waitForDemoApi(
+  origin,
+  {
+    fetchImpl = fetch,
+    requestTimeoutMs = 5_000,
+    readinessTimeoutMs = 60_000,
+    retryIntervalMs = 2_000,
+    stage,
+    now = () => performance.now(),
+    sleep = defaultSleep,
+  } = {},
+) {
+  const deadlineAt = now() + readinessTimeoutMs;
+  let lastError = null;
+  while (true) {
+    if (deadlineAt - now() <= 0) {
+      if (lastError) throw lastError;
+      throw new RetryableDemoApiError(
+        `${apiStageLabel(stage)} Demo API readiness deadline expired`,
+      );
+    }
+    try {
+      return await probeDemoApi(origin, {
+        fetchImpl,
+        timeoutMs: requestTimeoutMs,
+        stage,
+        deadlineAt,
+        now,
+      });
+    } catch (error) {
+      if (!(error instanceof RetryableDemoApiError)) throw error;
+      lastError = error;
+      const remainingMs = deadlineAt - now();
+      if (remainingMs <= 0) throw error;
+      await sleep(Math.min(retryIntervalMs, remainingMs));
+    }
   }
 }
 
@@ -298,6 +426,7 @@ export function createConcreteDeps({ config, paths, shutdown }) {
       if (fs.existsSync(paths.miniappOutputDir)) {
         throw new Error('Stale L58 Mini Program output exists; run demo:remote:stop');
       }
+      ensureDemoCacheVolumes();
       writeDemoCompose(
         renderDemoCompose(config, { repoRoot: paths.repoRoot }),
         paths.composePath,
@@ -311,7 +440,12 @@ export function createConcreteDeps({ config, paths, shutdown }) {
       runChecked('docker', composeDownArgs(paths.composePath), {
         cwd: paths.repoRoot,
       }),
-    probeLocalApi: (origin) => probeDemoApi(origin, { timeoutMs: 10_000 }),
+    probeLocalApi: (origin) =>
+      waitForDemoApi(origin, {
+        requestTimeoutMs: 10_000,
+        readinessTimeoutMs: 30_000,
+        stage: 'local',
+      }),
     startTunnel: async (localOrigin) => {
       const child = spawn(
         'cloudflared',
@@ -334,7 +468,12 @@ export function createConcreteDeps({ config, paths, shutdown }) {
         throw error;
       }
     },
-    probePublicApi: (origin) => probeDemoApi(origin, { timeoutMs: 15_000 }),
+    probePublicApi: (origin) =>
+      waitForDemoApi(origin, {
+        requestTimeoutMs: 15_000,
+        readinessTimeoutMs: 90_000,
+        stage: 'public',
+      }),
     generateCopy: ({ tunnelUrl }) =>
       generateMiniappCopy({
         sourceDir: path.join(paths.repoRoot, 'apps/miniapp'),

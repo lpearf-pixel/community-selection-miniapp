@@ -26,6 +26,15 @@ test('renders only an unpublished database and a loopback API', async () => {
     'api_package_store',
     'postgres_data',
   ]);
+  assert.deepEqual(model.volumes.api_node_modules, {
+    external: true,
+    name: 'community-selection-l58-api-node-modules-cache',
+  });
+  assert.deepEqual(model.volumes.api_package_store, {
+    external: true,
+    name: 'community-selection-l58-pnpm-store-cache',
+  });
+  assert.deepEqual(model.volumes.postgres_data, {});
   assert.equal(model.services.postgres.image, 'postgres:16');
   assert.equal(model.services.postgres.ports, undefined);
   assert.deepEqual(model.services.postgres.volumes, [

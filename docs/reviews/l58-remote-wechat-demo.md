@@ -10,6 +10,8 @@ L58 只提供 Mac 本地短时演示能力：独立 PostgreSQL、API、Quick Tun
 - Compose 模型只有 PostgreSQL 与 API；数据库无宿主机端口，API 只绑定 `127.0.0.1`。
 - 支付固定 MOCK，用户伪造头、自动提现、自动报税和首发禁用能力均 fail-closed。
 - Quick Tunnel 只接受唯一 `https://*.trycloudflare.com` origin。
+- Quick Tunnel URL 生成后使用有界条件重试等待公网路由就绪；只重试网络错误与 HTTP 5xx，非 MOCK 模式立即失败。
+- PostgreSQL 演示卷在停止或回滚时删除；只含公开依赖的 pnpm Store 与 `node_modules` 使用外部缓存卷复用，不保存演示数据或密钥。
 - 小程序随机 URL 与 `remoteDemo=true` 只进入 `.tmp/remote-demo/miniapp`；源树不写入随机 URL。
 - AppSecret、Admin token 与用户会话密钥会扫描并拒绝进入小程序副本。
 - 启动失败、信号、显式停止和 TTL 均走有界清理；PID 不匹配时不误杀进程。
@@ -20,7 +22,7 @@ L58 只提供 Mac 本地短时演示能力：独立 PostgreSQL、API、Quick Tun
 
 本地候选验证：
 
-- `pnpm test:remote-demo`：42/42 通过；
+- `pnpm test:remote-demo`：57/57 通过；
 - Admin token 新旧请求入口集成测试：2/2 通过；
 - `pnpm lint`：通过；
 - `pnpm typecheck`：通过；
@@ -45,7 +47,7 @@ L58 只提供 Mac 本地短时演示能力：独立 PostgreSQL、API、Quick Tun
 4. 订单身份隔离；
 5. Mac 本机 Admin 审核并完成 MOCK 退款；
 6. 远端不能访问 Admin，数据库没有公网/局域网端口；
-7. 停止后旧 Quick Tunnel 地址失效，演示卷和副本删除，日常开发环境不受影响。
+7. 停止后旧 Quick Tunnel 地址失效，演示数据库卷和副本删除，依赖缓存保留，日常开发环境不受影响。
 
 ## 停止条件
 

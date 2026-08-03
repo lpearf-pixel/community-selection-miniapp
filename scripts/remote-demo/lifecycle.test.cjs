@@ -150,6 +150,33 @@ test('rolls back when a stop signal is observed during startup', async () => {
   assert.equal(events.includes('runtime-remove'), true);
 });
 
+test('rolls back Compose resources when up creates them and then returns nonzero', async () => {
+  const { createRuntimePaths, startRemoteDemo } = await moduleUnderTest();
+  const { deps, events } = harness({
+    composeUp: async () => {
+      events.push('compose-up');
+      throw new Error('docker exited with status 1');
+    },
+  });
+
+  await assert.rejects(
+    startRemoteDemo({
+      config,
+      paths: createRuntimePaths(repoRoot),
+      deps,
+    }),
+    /docker exited with status 1/i,
+  );
+  assert.deepEqual(events, [
+    'prerequisites',
+    'ports',
+    'compose-prepare',
+    'compose-up',
+    'compose-down',
+    'runtime-remove',
+  ]);
+});
+
 test('redacts configured secrets from dependency failures', async () => {
   const { createRuntimePaths, startRemoteDemo } = await moduleUnderTest();
   const { deps } = harness({
@@ -390,6 +417,32 @@ test('CLI builds exact bounded Compose commands', async () => {
   ]);
 });
 
+test('CLI creates only the two reusable dependency cache volumes', async () => {
+  const { ensureDemoCacheVolumes } = await import('./start.mjs');
+  const calls = [];
+  const names = ensureDemoCacheVolumes({
+    runCommand: (command, args) => {
+      calls.push([command, args]);
+      return { status: 0, stdout: `${args.at(-1)}\n`, stderr: '' };
+    },
+  });
+
+  assert.deepEqual(names, [
+    'community-selection-l58-api-node-modules-cache',
+    'community-selection-l58-pnpm-store-cache',
+  ]);
+  assert.deepEqual(calls, [
+    [
+      'docker',
+      ['volume', 'create', 'community-selection-l58-api-node-modules-cache'],
+    ],
+    [
+      'docker',
+      ['volume', 'create', 'community-selection-l58-pnpm-store-cache'],
+    ],
+  ]);
+});
+
 function createExpectedPaths() {
   const runtimeRoot = path.join(repoRoot, '.tmp', 'remote-demo');
   return {
@@ -477,6 +530,242 @@ test('CLI verifies health and mock runtime before allowing a demo endpoint', asy
     }),
     /payment_mode.*mock/i,
   );
+});
+
+test('CLI waits for a transient public tunnel failure and succeeds once the route is ready', async () => {
+  const { waitForDemoApi } = await import('./start.mjs');
+  let healthAttempts = 0;
+  let nowMs = 0;
+  const sleepCalls = [];
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/api/health')) {
+      healthAttempts += 1;
+      if (healthAttempts < 3) {
+        const error = new TypeError('fetch failed');
+        error.cause = { code: 'ECONNRESET' };
+        throw error;
+      }
+      return new Response(
+        JSON.stringify({ success: true, data: { status: 'ok' }, message: '' }),
+        { status: 200 },
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: { payment_mode: 'mock', version: 'l51' },
+        message: '',
+      }),
+      { status: 200 },
+    );
+  };
+
+  await assert.doesNotReject(
+    waitForDemoApi('https://demo-child.trycloudflare.com', {
+      fetchImpl,
+      requestTimeoutMs: 1_000,
+      readinessTimeoutMs: 5_000,
+      retryIntervalMs: 100,
+      stage: 'public',
+      now: () => nowMs,
+      sleep: async (delayMs) => {
+        sleepCalls.push(delayMs);
+        nowMs += delayMs;
+      },
+    }),
+  );
+  assert.equal(healthAttempts, 3);
+  assert.deepEqual(sleepCalls, [100, 100]);
+});
+
+test('CLI reports the failed API stage, path, and safe network code', async () => {
+  const { probeDemoApi } = await import('./start.mjs');
+  const fetchImpl = async () => {
+    const error = new TypeError('fetch failed');
+    error.cause = { code: 'ECONNREFUSED' };
+    throw error;
+  };
+
+  await assert.rejects(
+    probeDemoApi('http://127.0.0.1:13180', {
+      fetchImpl,
+      timeoutMs: 1_000,
+      stage: 'local',
+    }),
+    /Local Demo API request to \/api\/health failed \(ECONNREFUSED\)/,
+  );
+});
+
+test('CLI never retries a non-mock payment mode', async () => {
+  const { waitForDemoApi } = await import('./start.mjs');
+  let runtimeRequests = 0;
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/api/health')) {
+      return new Response(
+        JSON.stringify({ success: true, data: { status: 'ok' }, message: '' }),
+        { status: 200 },
+      );
+    }
+    runtimeRequests += 1;
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: { payment_mode: 'wechat' },
+        message: '',
+      }),
+      { status: 200 },
+    );
+  };
+
+  await assert.rejects(
+    waitForDemoApi('https://demo-child.trycloudflare.com', {
+      fetchImpl,
+      requestTimeoutMs: 1_000,
+      readinessTimeoutMs: 5_000,
+      retryIntervalMs: 100,
+      stage: 'public',
+      sleep: async () => {
+        throw new Error('payment mode failures must not sleep or retry');
+      },
+    }),
+    /payment_mode.*mock/i,
+  );
+  assert.equal(runtimeRequests, 1);
+});
+
+test('CLI never starts another request at or after the readiness deadline', async () => {
+  const { waitForDemoApi } = await import('./start.mjs');
+  let nowMs = 0;
+  let requests = 0;
+  const fetchImpl = async () => {
+    requests += 1;
+    nowMs += 60;
+    const error = new TypeError('fetch failed');
+    error.cause = { code: 'ECONNRESET' };
+    throw error;
+  };
+
+  await assert.rejects(
+    waitForDemoApi('https://demo-child.trycloudflare.com', {
+      fetchImpl,
+      requestTimeoutMs: 1_000,
+      readinessTimeoutMs: 100,
+      retryIntervalMs: 100,
+      stage: 'public',
+      now: () => nowMs,
+      sleep: async (delayMs) => {
+        nowMs += delayMs;
+      },
+    }),
+    /Public Demo API request to \/api\/health failed \(ECONNRESET\)/,
+  );
+  assert.equal(requests, 1);
+  assert.equal(nowMs, 100);
+});
+
+test('CLI does not request runtime after health consumes the readiness budget', async () => {
+  const { waitForDemoApi } = await import('./start.mjs');
+  let nowMs = 0;
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    nowMs = 100;
+    return new Response(
+      JSON.stringify({ success: true, data: { status: 'ok' }, message: '' }),
+      { status: 200 },
+    );
+  };
+
+  await assert.rejects(
+    waitForDemoApi('https://demo-child.trycloudflare.com', {
+      fetchImpl,
+      requestTimeoutMs: 1_000,
+      readinessTimeoutMs: 100,
+      retryIntervalMs: 10,
+      stage: 'public',
+      now: () => nowMs,
+      sleep: async () => {},
+    }),
+    /Public Demo API readiness deadline expired/,
+  );
+  assert.deepEqual(calls, [
+    'https://demo-child.trycloudflare.com/api/health',
+  ]);
+});
+
+test('CLI retries HTTP 5xx but immediately rejects HTTP 4xx and invalid responses', async (t) => {
+  const { waitForDemoApi } = await import('./start.mjs');
+
+  await t.test('retries a temporary HTTP 502', async () => {
+    let healthAttempts = 0;
+    const fetchImpl = async (url) => {
+      if (url.endsWith('/api/health')) {
+        healthAttempts += 1;
+        if (healthAttempts === 1) {
+          return new Response('temporary edge failure', { status: 502 });
+        }
+        return new Response(
+          JSON.stringify({ success: true, data: { status: 'ok' }, message: '' }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: { payment_mode: 'mock' },
+          message: '',
+        }),
+        { status: 200 },
+      );
+    };
+
+    await waitForDemoApi('https://demo-child.trycloudflare.com', {
+      fetchImpl,
+      stage: 'public',
+      sleep: async () => {},
+    });
+    assert.equal(healthAttempts, 2);
+  });
+
+  for (const scenario of [
+    {
+      name: 'HTTP 401',
+      response: () => new Response('unauthorized', { status: 401 }),
+      expected: /Public Demo API request to \/api\/health returned HTTP 401/,
+    },
+    {
+      name: 'invalid JSON',
+      response: () => new Response('not-json', { status: 200 }),
+      expected: /Public Demo API request to \/api\/health returned invalid JSON/,
+    },
+    {
+      name: 'invalid health contract',
+      response: () =>
+        new Response(
+          JSON.stringify({ success: true, data: { status: 'starting' } }),
+          { status: 200 },
+        ),
+      expected: /Demo API health response is invalid/,
+    },
+  ]) {
+    await t.test(`immediately rejects ${scenario.name}`, async () => {
+      let requests = 0;
+      await assert.rejects(
+        waitForDemoApi('https://demo-child.trycloudflare.com', {
+          fetchImpl: async () => {
+            requests += 1;
+            return scenario.response();
+          },
+          stage: 'public',
+          sleep: async () => {
+            throw new Error('non-retryable responses must not sleep');
+          },
+        }),
+        scenario.expected,
+      );
+      assert.equal(requests, 1);
+    });
+  }
 });
 
 test('CLI persists runtime state as a private atomic file', async () => {

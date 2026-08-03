@@ -160,7 +160,7 @@ async function rollbackStart(partial, deps) {
       firstError ??= error;
     }
   }
-  if (partial.composeStarted) {
+  if (partial.composeAttempted) {
     try {
       await deps.composeDown(partial);
     } catch (error) {
@@ -195,7 +195,7 @@ export async function startRemoteDemo({ config, paths, deps }) {
     composePath: paths.composePath,
     miniappOutputDir: paths.miniappOutputDir,
     apiPort: config.apiPort,
-    composeStarted: false,
+    composeAttempted: false,
     tunnelPid: null,
   };
   let runtimeState;
@@ -206,8 +206,8 @@ export async function startRemoteDemo({ config, paths, deps }) {
     deps.assertActive?.();
     await deps.prepareCompose(config, paths);
     deps.assertActive?.();
+    partial.composeAttempted = true;
     await deps.composeUp(partial);
-    partial.composeStarted = true;
     deps.assertActive?.();
     await deps.probeLocalApi(`http://127.0.0.1:${config.apiPort}`);
     deps.assertActive?.();
